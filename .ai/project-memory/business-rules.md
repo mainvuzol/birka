@@ -5852,3 +5852,73 @@ spec's differ: «Видано й внесено після закриття», �
   with the cursor on its title; a sheet closing on a button that waits
   for its answer gives it to the screen's title. The ink tag's focus ring
   is drawn over its face in the thread's lime.
+
+## Chosen in chat — 2026-11-04 (search on «Сьогодні»; frame P2-2)
+
+Chosen in chat on 2026-11-04 («Yes, start P2-2»), after #167: the frame
+task list's P2-2 (`all-on-the-tag-today-search-report.md`). The design's
+questions stay «if no». No right, no server rule and no figure changes:
+each group is read with the request and the right its own section reads
+it by, in the store open in Бірка only (the TZ's deviation: no «№», К15);
+every figure is the server's.
+- **The field, decided here:** the app's search field (spec §6.6), named
+  and placeholdered «Модель, покупець або ТТН», under «Сьогодні»'s title
+  line and over the day-tag (S04 #3), for whoever has one of the groups'
+  rights in the open store — none, no field, «Сьогодні» as before. Under
+  two letters nothing is searched; from two, ≈ 300 ms after the last key
+  (Enter at once), the groups stand where the day-tag and «Чекає на вас»
+  stood; «×» or fewer than two letters brings those back.
+- **The groups, decided here:** in the TZ's order, each under its heading
+  as «Чекає на вас» is headed, shown while it is read, failed or found
+  something:
+  - «Товар» (`inventory:view`): `/catalog/stock-options` of every
+    warehouse the store sells from, by the till's own matching; a row a
+    model, in the server's order — its name, and under it what is free by
+    size, «S 2 · M 1», the store's warehouses summed and held units not
+    counted, or «Усе в резерві»; a model whose rows may go on past the
+    page's hundred is not shown (no number made up). It opens the model's
+    detail (S23), read by what found it.
+  - «Покупці» (`sale:credit`): `/credits/customers` with no status, as the
+    customer's card reads them; «Покупці»'s own rows. An erased customer
+    has neither name nor phone to be found by, and is not shown. It opens
+    the customer's card (S20).
+  - «Замовлення» (`sale:view`): `/orders?waybill=`, asked only while what
+    is typed can be a waybill — Latin letters and digits, spaces or
+    hyphens between, at least one digit, 64 at most — since the server
+    keeps a waybill's letters and digits alone, and any other text would
+    match every order. A row: the card's title, «Нова пошта · ТТН … ·
+    Відправлено»; never its sum, its way of payment nor its id (G32, В1).
+    It opens the order's card (S17) in «Замовлення».
+  - Each group five at most; more found: «Знайдено більше — уточніть
+    пошук.» under it. Read: grey rows in its place, never a spinner, never
+    an earlier search's rows. Failed: why and «Спробувати ще раз» in its
+    place, the others standing. Every group asked answered with nothing:
+    «Нічого не знайшли за «…»», what was typed in it.
+- **Opening a result, decided here:** the keyboard goes; held while a kept
+  operation holds «Сьогодні»'s verbs. The model's detail and the
+  customer's card say «← Сьогодні» and go back there (what the detail
+  opens comes back to it as before); the order's card keeps «← До
+  замовлень», as the parcels' verb opens «Замовлення». The menu marks
+  what a result opened as a tag's verb does: the model «Продаж», the card
+  «Ще», the order «Замовлення»; the cursor on the menu's «Сьогодні», on
+  «Замовлення» for an order. What was typed is kept while «Сьогодні» or
+  what a result opened stands — back there, the field and its groups as
+  left — and forgotten anywhere else, so «Сьогодні» opens on the day. A
+  card with nothing left to show goes to «Покупці»'s list as before, with
+  what was done said, «← Сьогодні» over it.
+- **After the independent review (2026-11-04):** what Enter searched
+  stands while more is typed, until the next pause — never the day nor an
+  earlier search in between. What a reader hears — «Шукаємо…», or that
+  nothing was found — is said in one line that stands from the start.
+  Each group is read afresh whenever it is shown again, nothing read before
+  shown meanwhile: what a row opened may have changed it. «Повернути» on
+  a toast while searched brings the tag back unseen, the cursor staying by
+  the search. What is typed is «Сьогодні»'s own until a row opens, the app
+  keeping it then. Recorded, left as built: with only «Замовлення»'s right
+  and text that can be no waybill, nothing is asked, and «Нічого не
+  знайшли за «…»» says so; a single model in more than a page's hundred
+  rows shows «Знайдено більше» alone; a model opened in a store that does
+  not trade marks «Ще», as the till's own does there; «Ще»'s other store
+  forgets the search, as any section does. P0-6's reading of two tags on
+  the first screen, open since P0-6, is not changed by the field: still
+  an owner's reading.

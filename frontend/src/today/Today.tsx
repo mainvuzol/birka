@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
-import type { JSX, MouseEvent } from "react";
+import type { JSX, MouseEvent, RefObject } from "react";
 import type { UseQueryResult } from "@tanstack/react-query";
 import type { Drawer } from "@/cash/types";
 import { timeOf } from "@/cash/errors";
@@ -29,6 +29,8 @@ import {
   useOpenOrders,
 } from "./reads";
 import type { OpenOrders } from "./reads";
+import { Found, Search, useFound, useSearched } from "./Search";
+import type { Searched } from "./Search";
 import { see, unsee } from "./seen";
 import { useWaiting, whenText } from "./waiting";
 import type { Kind, Tag, Waiting as Work } from "./waiting";
@@ -291,6 +293,8 @@ function WaitingTags({
   verbs,
   held,
   now,
+  searched,
+  field,
 }: {
   work: Work;
   open: Store;
@@ -299,6 +303,10 @@ function WaitingTags({
   verbs: Partial<Record<Kind, () => void>>;
   held: boolean;
   now: number;
+  /** «Сьогодні» searched: kept as it was, unseen, its toast standing. */
+  searched: boolean;
+  /** The search's field: the cursor's place while the tags are unseen. */
+  field: RefObject<HTMLInputElement>;
 }): JSX.Element | null {
   const label = useId();
   const [all, setAll] = useState(false);
@@ -374,7 +382,11 @@ function WaitingTags({
   return (
     <>
       {empty ? (
-        <section className="today-empty" aria-labelledby={label}>
+        <section
+          className="today-empty"
+          aria-labelledby={label}
+          hidden={searched}
+        >
           <Icon name="mark-lg" className="today-empty-mark" />
           <h2 ref={heading} id={label} className="t-row" tabIndex={-1}>
             Вас нічого не чекає.
@@ -383,7 +395,11 @@ function WaitingTags({
           {doneLink}
         </section>
       ) : (
-        <section className="today-waiting" aria-labelledby={label}>
+        <section
+          className="today-waiting"
+          aria-labelledby={label}
+          hidden={searched}
+        >
           <div className="today-waiting-head">
             <h2 ref={heading} id={label} className="t-label" tabIndex={-1}>
               Чекає на вас{tags.length > 0 && ` · ${String(tags.length)}`}
@@ -439,7 +455,7 @@ function WaitingTags({
         </section>
       )}
       {work.backupsOk && (
-        <p className="t-meta today-backups">
+        <p className="t-meta today-backups" hidden={searched}>
           <Icon name="backup" size={16} />
           <span>
             Копії в порядку · {whenText(work.backupsOk.at, now)}
@@ -476,7 +492,10 @@ function WaitingTags({
           action="Повернути"
           act={() => {
             unsee(scopeKey, hidden.seen);
-            cursor.current = { key: hidden.tag.key };
+            // Back unseen while searched: the cursor stays by the search
+            // (review, 2026-11-04).
+            if (searched) field.current?.focus();
+            else cursor.current = { key: hidden.tag.key };
             seenAt.current = -Infinity;
             setHidden(null);
           }}
@@ -582,7 +601,9 @@ function StoreColumn({
  * every store this person reads the report in, in one look — what was sold
  * and returned, the money through the tills and outside them, each store's
  * drawer and debts, the parcels on their way. Every figure is a field the
- * server answered; debts are a store's own, never summed.
+ * server answered; debts are a store's own, never summed. Over the day, its
+ * search of the open store (frame task list, P2-2), the day in its place
+ * while nothing is searched.
  */
 export function Today({
   token,
@@ -593,6 +614,7 @@ export function Today({
   verbs,
   held,
   toOrders,
+  search,
 }: {
   token: string;
   /** Whose reads these are: the organisation and the person. */
@@ -609,6 +631,9 @@ export function Today({
   held: boolean;
   /** «Замовлення», where this person reads the open store's orders. */
   toOrders?: (() => void) | undefined;
+  /** Its search, for whoever has one of its groups' rights in the open
+   * store (frame task list, P2-2). */
+  search?: Searched | undefined;
 }): JSX.Element {
   const report = useDayReport(token, scopeKey);
   const shown = dayStores(stores);
@@ -624,6 +649,13 @@ export function Today({
     ...orders,
   ]);
   const now = useNow();
+  // What is typed stays here, so a key redraws «Сьогодні» alone; the app
+  // keeps it as a row opens (review, 2026-11-04).
+  const [typed, setTyped] = useState(search?.typed ?? "");
+  const { query, press } = useSearched(search ? typed : "");
+  const field = useRef<HTMLInputElement>(null);
+  const found = useFound({ token, store: open, query, typed, held, search });
+  const searched = search !== undefined && query !== "";
   const steady = useSteadyHeight();
   const [opened, setOpened] = useState(false);
   const folded = steady < FOLDED_BELOW && !opened;
@@ -652,7 +684,25 @@ export function Today({
   return (
     <>
       <ScreenHeader title="Сьогодні" lead={dayLine(data?.today)} />
-      <section className="today" aria-label="Сьогодні">
+      {search && (
+        <Search
+          typed={typed}
+          type={setTyped}
+          press={press}
+          said={
+            !searched
+              ? ""
+              : found.reading
+                ? "Шукаємо…"
+                : found.none
+                  ? `Нічого не знайшли за «${visible(query)}»`
+                  : ""
+          }
+          field={field}
+        />
+      )}
+      {searched && <Found found={found} query={query} />}
+      <section className="today" aria-label="Сьогодні" hidden={searched}>
         {folded ? (
           <button
             type="button"
@@ -788,6 +838,8 @@ export function Today({
         verbs={verbs}
         held={held}
         now={now}
+        searched={searched}
+        field={field}
       />
     </>
   );

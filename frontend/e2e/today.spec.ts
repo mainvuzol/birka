@@ -753,12 +753,19 @@ test("whoever reads the report opens on «Сьогодні»: the day of «Це�
   await expect(tag.locator(".day-online")).toHaveText(
     "Онлайн: відправити 3 · в дорозі 2 · на пошті 2",
   );
-  // Whole over the menu with room kept for the search to come (P2-2,
-  // 64 px); nothing on the screen says «⚠».
+  // Whole over the menu under the search (frame task list, P2-2); nothing
+  // on the screen says «⚠».
   const box = await tag.boundingBox();
   const bar = await menu(page).boundingBox();
+  const find = await page
+    .getByRole("searchbox", { name: "Модель, покупець або ТТН" })
+    .boundingBox();
   expect(
-    box && bar && box.y >= 0 && box.y + box.height + 64 <= bar.y,
+    box &&
+      bar &&
+      find &&
+      find.y + find.height <= box.y &&
+      box.y + box.height <= bar.y,
   ).toBe(true);
   await expect(page.locator(".screen-header")).not.toContainText("⚠");
   await expect(page.locator("section.today")).not.toContainText("⚠");
@@ -1700,6 +1707,21 @@ test("«Бачу»: the tag goes, «Бірку сховано.» with «Пове
   await expect(tags(page).first()).toBeFocused();
   await expect(toast(page)).toHaveCount(0);
   await expect(badge).toHaveAttribute("data-badge", "2");
+  // Seen, then searched while its toast stands: «Повернути» brings it back
+  // unseen, the cursor by the search, not lost with the tags (review,
+  // 2026-11-04).
+  await tags(page).first().getByRole("button", { name: "Бачу" }).click();
+  const find = page.getByRole("searchbox", {
+    name: "Модель, покупець або ТТН",
+  });
+  await find.fill("кокон");
+  await expect(page.locator(".today-waiting")).toBeHidden();
+  await toast(page).getByRole("button", { name: "Повернути" }).click();
+  await expect(find).toBeFocused();
+  await expect(toast(page)).toHaveCount(0);
+  await expect(badge).toHaveAttribute("data-badge", "2");
+  await find.fill("");
+  await expect(tags(page).locator("h3")).toHaveText([short, counted]);
   // Seen again: held while the cursor is in it, and five seconds after it
   // leaves, the toast goes, the tag for good.
   await tags(page).first().getByRole("button", { name: "Бачу" }).click();
@@ -1808,7 +1830,10 @@ test("a double tap on «Бачу» sees one tag: its second half is let go, on t
   page,
 }) => {
   await page.clock.install({ time: noon() });
-  await page.setViewportSize({ width: 390, height: 844 });
+  // The search's 64 px over the tags given back (frame task list, P2-2):
+  // the tag the cursor goes to stays whole on the screen, unscrolled, in
+  // CI's wider face too.
+  await page.setViewportSize({ width: 390, height: 844 + 64 });
   await twoStores(page);
   await orders(page, centre, [0, 1, 0]);
   await orders(page, market, [0, 1, 0]);
@@ -1845,8 +1870,9 @@ test("a double tap on «Бачу» sees one tag: its second half is let go, on t
   await toast(page).getByRole("button", { name: "Повернути" }).click();
   await expect(tags(page)).toHaveCount(2);
   // Lower, the toast rises where «Бачу» was: the second half lands on
-  // «Повернути», and is let go too.
-  await page.setViewportSize({ width: 390, height: 741 });
+  // «Повернути», and is let go too — the search's 64 px over the tags
+  // (frame task list, P2-2).
+  await page.setViewportSize({ width: 390, height: 741 + 64 });
   await first.scrollIntoViewIfNeeded();
   await expect(toast(page)).toHaveCount(0);
   const tapped = await first.boundingBox();
