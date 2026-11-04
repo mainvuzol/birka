@@ -5213,6 +5213,51 @@ button.day-folded {
 .today-done-row .t-meta {
   color: var(--pencil);
 }
+/* «Сьогодні»'s search (spec S04 #3, §6.6; frame task list, P2-2): the
+   field under the title's line, 52 high; once searched, the groups in the
+   day's place, each headed as «Чекає на вас» is, its rows 64 with a
+   chevron of 16 in pencil. The day, kept as it was, is unseen meanwhile. */
+.today-find {
+  margin: 12px 0 0;
+}
+.today-found {
+  margin: 12px 0 18px;
+}
+.found-group {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+}
+.found-group + .found-group {
+  margin-top: 20px;
+}
+.found-group h2 {
+  margin: 0 0 4px;
+  color: var(--pencil);
+}
+.found-group .sale-row {
+  min-height: var(--h-row);
+}
+.found-row > .icon {
+  flex-shrink: 0;
+  color: var(--pencil);
+}
+.found-group .notice.read-failure {
+  margin: 8px 0 0;
+}
+.found-more,
+.found-none {
+  margin: 8px 0 0;
+  font-size: 14px;
+}
+.today[hidden],
+.today-waiting[hidden],
+.today-empty[hidden],
+.today-backups[hidden] {
+  display: none;
+}
 /* A toast (spec §6.23): over the menu by 16 px, ink on light, its one way
    back in the thread's colour. */
 .toast {

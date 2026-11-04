@@ -11,6 +11,8 @@ import { usePanelRoom } from "@/shared/panel";
 import { buzz, useMainButton } from "@/shared/telegram";
 import { Sum } from "@/shared/Sum";
 import { Back } from "@/shared/Back";
+import { BackToMore } from "@/shared/More";
+import type { MoreBack } from "@/shared/More";
 import { Icon } from "@/shared/Icon";
 import { Sheet } from "@/shared/Sheet";
 import { Toast } from "@/shared/Toast";
@@ -81,6 +83,7 @@ export function Customer({
   choose,
   deposit,
   back,
+  away,
 }: {
   /** The open store. */
   store: Store;
@@ -111,6 +114,9 @@ export function Customer({
   /** Back to the list; with what was done, once the card has nothing
    * left to show. */
   back: (said?: string) => void;
+  /** Opened from «Сьогодні»: its «←» goes back there, as `back` does only
+   * once the card has nothing left to show (frame task list, P2-2). */
+  away?: MoreBack | undefined;
 }): JSX.Element {
   const cache = useQueryClient();
   const phone = first.phone_digits;
@@ -253,14 +259,20 @@ export function Customer({
       <ScreenHeader
         title={name}
         back={
-          <Back
-            go={() => {
-              back();
-            }}
-            held={working || erasing}
-          >
-            <span aria-hidden="true">← </span>Покупці
-          </Back>
+          away ? (
+            <BackToMore
+              back={{ ...away, held: away.held || working || erasing }}
+            />
+          ) : (
+            <Back
+              go={() => {
+                back();
+              }}
+              held={working || erasing}
+            >
+              <span aria-hidden="true">← </span>Покупці
+            </Back>
+          )
         }
       />
       <section className="credits customer-card">

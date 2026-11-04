@@ -30,12 +30,15 @@ export function CustomerRow({
   customer,
   here,
   open,
+  held = false,
 }: {
   customer: Customer;
   /** This store: another's debt is named by its store. */
   here: string;
   /** Opens the debt; or, for another store's, that store's name. */
   open: (() => void) | { takenAt: string };
+  /** Found on «Сьогодні» while a kept operation holds its verbs. */
+  held?: boolean;
 }): JSX.Element {
   const meta = useId();
   const name = visible(customer.customer_name ?? erasedCustomer);
@@ -120,6 +123,7 @@ export function CustomerRow({
       className="sale-row debt-row"
       aria-label={`Відкрити борг: ${name}, ${said}`}
       aria-describedby={meta}
+      disabled={held}
       onClick={open}
     >
       {inside}

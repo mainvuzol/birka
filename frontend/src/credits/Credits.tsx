@@ -96,6 +96,7 @@ export function Credits({
   sell,
   mode = null,
   back,
+  opened,
   till,
   stores = [],
   payTask,
@@ -126,6 +127,11 @@ export function Credits({
   mode?: JSX.Element | null;
   /** «← Ще» over the heading: «Ще» › «Люди» › «Покупці» (S19). */
   back?: MoreBack | undefined;
+  /**
+   * A customer found on «Сьогодні» (frame task list, P2-2): «Покупці»
+   * opens on their card, whose «←» is `back`'s.
+   */
+  opened?: Phoned | undefined;
   /**
    * The till's «Внесок» (spec S08, S21; «Усе на бірці» task list, P0-3):
    * under «Продаж», those who owe this store, and a debt opened for its
@@ -170,7 +176,13 @@ export function Credits({
     elsewhere: boolean;
     afresh?: true;
     name?: string;
-  } | null>(null);
+    /** Opened from outside «Покупці»: back there. */
+    away?: true;
+  } | null>(() =>
+    opened
+      ? { first: opened, from: store, elsewhere: false, away: true }
+      : null,
+  );
   // S21 on a debt, from «Покупці»'s card or a debt's detail.
   const [paying, setPaying] = useState<Credit | null>(null);
   // What a card did, said once it had nothing left to show.
@@ -424,6 +436,7 @@ export function Credits({
         }}
         deposit={setPaying}
         back={leaveCard}
+        away={card.away && back}
       />
     );
 

@@ -121,6 +121,7 @@ import { History } from "@/cash/History";
 import { Money } from "@/money/Money";
 import type { Period } from "@/money/reads";
 import { Today } from "@/today/Today";
+import type { Phoned } from "@/today/Search";
 import { useWaiting } from "@/today/waiting";
 import {
   loadInvoiceCommand,
@@ -774,6 +775,16 @@ function Workspace({
   });
   // A section a tag of «Сьогодні» opened goes back there: «← Сьогодні».
   const [fromToday, setFromToday] = useState<Tab | null>(null);
+  // «Сьогодні»'s search (frame task list, P2-2): what was typed, kept while
+  // what a result opened stands — «Сьогодні» keeps it meanwhile; the
+  // customer whose card a result opened, in «Покупці» as they were mounted
+  // then; the order.
+  const [todayTyped, setTodayTyped] = useState("");
+  const [todayCustomer, setTodayCustomer] = useState<{
+    customer: Phoned;
+    epoch: number;
+  } | null>(null);
+  const [todayOrder, setTodayOrder] = useState<string | null>(null);
   // So from «Гроші»: «← Гроші»; and «Надійшло»'s period, kept while the
   // report opened on it stands («Усе на бірці» sections task list, P0-7).
   const [fromMoney, setFromMoney] = useState<Tab | null>(null);
@@ -2270,6 +2281,36 @@ function Workspace({
     setFromToday(section);
     todayButton.current?.focus();
   };
+  /** A row of «Сьогодні»'s search: the model's detail or the customer's
+   * card, with «← Сьогодні»; an order's card in «Замовлення», as the
+   * parcels' verb opens it (frame task list, P2-2). */
+  const foundModel = (opened: Opened, typed: string): void => {
+    setTodayTyped(typed);
+    setModel(opened);
+    setTab("model");
+    setFromToday("model");
+    todayButton.current?.focus();
+  };
+  const foundCustomer = (customer: Phoned, typed: string): void => {
+    setTodayTyped(typed);
+    setTodayCustomer({ customer, epoch: creditEpoch });
+    setTab("credits");
+    setFromToday("credits");
+    todayButton.current?.focus();
+  };
+  const foundOrder = (order: Order, typed: string): void => {
+    setTodayTyped(typed);
+    setTab("list");
+    setSelectedId(order.id);
+    setOpening(order);
+    setOrderSheet(null);
+    setSheetRefused(false);
+    setOrderDone(null);
+    setCollected(null);
+    setOrdersView(freshOrdersView);
+    setTodayOrder(order.id);
+    ordersButton.current?.focus();
+  };
   /** «Замовлення» afresh, from «Сьогодні»'s parcels. */
   const ordersFromToday = (): void => {
     setTab("list");
@@ -2292,6 +2333,19 @@ function Workspace({
     setFromModel(null);
     setTillTyped("");
   }, [tab, fromModel]);
+  // «Сьогодні»'s search, anywhere but «Сьогодні» and what a result opened,
+  // is forgotten, with that way back: «Сьогодні» opens on the day again.
+  useEffect(() => {
+    const found =
+      (fromToday === "model" && (tab === "model" || tab === fromModel)) ||
+      (fromToday === "credits" && tab === "credits") ||
+      (todayOrder !== null && tab === "list" && selectedId === todayOrder);
+    if (tab === "today" || found) return;
+    setTodayTyped("");
+    setTodayCustomer(null);
+    setTodayOrder(null);
+    if (fromToday === "model" || fromToday === "credits") setFromToday(null);
+  }, [tab, fromToday, fromModel, todayOrder, selectedId]);
   // Opened on «Замовлення» with no till to open first, by whoever may not
   // read them: the first section shown instead (orders task list, P2-1) —
   // unless a kept operation turned to its own tab meanwhile (review,
@@ -2835,6 +2889,16 @@ function Workspace({
                 : {}),
             }}
             toOrders={canSeeOrders && !blocked ? ordersFromToday : undefined}
+            search={
+              canSeeStock || canSeeCredits || canSeeOrders
+                ? {
+                    typed: todayTyped,
+                    ...(canSeeStock ? { model: foundModel } : {}),
+                    ...(canSeeCredits ? { customer: foundCustomer } : {}),
+                    ...(canSeeOrders ? { order: foundOrder } : {}),
+                  }
+                : undefined
+            }
           />
         ) : // Never opened without the right: nothing is said of the rule
         // («Усе на бірці» task list, P2-1).
@@ -2959,7 +3023,7 @@ function Workspace({
             blocked={
               otherThanAdjustment || adjustmentStorageError || countStorageError
             }
-            back={tillBack}
+            back={fromToday === "model" ? todayBack : tillBack}
             receive={() => {
               fromModelTo("receive");
               setFromModel("receive");
@@ -3076,6 +3140,11 @@ function Workspace({
           <Credits
             key={creditEpoch}
             back={backOf("credits")}
+            opened={
+              fromToday === "credits" && todayCustomer?.epoch === creditEpoch
+                ? todayCustomer.customer
+                : undefined
+            }
             stores={depositOthers}
             payTask={setDepositTask}
             store={store}
