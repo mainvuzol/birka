@@ -1830,7 +1830,10 @@ test("a double tap on «Бачу» sees one tag: its second half is let go, on t
   page,
 }) => {
   await page.clock.install({ time: noon() });
-  await page.setViewportSize({ width: 390, height: 844 });
+  // The search's 64 px over the tags given back (frame task list, P2-2):
+  // the tag the cursor goes to stays whole on the screen, unscrolled, in
+  // CI's wider face too.
+  await page.setViewportSize({ width: 390, height: 844 + 64 });
   await twoStores(page);
   await orders(page, centre, [0, 1, 0]);
   await orders(page, market, [0, 1, 0]);
