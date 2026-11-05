@@ -928,7 +928,7 @@ function SetOffForm({
                 <option key={item.id} value={item.id}>
                   {when(item.at)} ·{" "}
                   {item.lines.reduce((units, line) => units + line.quantity, 0)}{" "}
-                  од.
+                  шт.
                   {counted > 0n &&
                     ` · уже зараховано ${money(decimal(counted))}`}
                 </option>

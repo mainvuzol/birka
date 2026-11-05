@@ -1,4 +1,11 @@
-import { changeStore, test, expect, openStore, section } from "./fixtures";
+import {
+  changeStore,
+  test,
+  expect,
+  menu,
+  openStore,
+  section,
+} from "./fixtures";
 import type { Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -8,8 +15,8 @@ import { readFileSync } from "node:fs";
  * hours after opening the app, then closes it and opens it again in Telegram.
  * The server takes Telegram's launch data for an hour only, so the app signs
  * in with it once, and reads everything after that — what each store lets the
- * person do, after a store's state changed, on «Оновити», on «Спробувати ще
- * раз» — with the token it was given.
+ * person do, after a store's state changed, on «Спробувати ще раз» — with
+ * the token it was given.
  *
  * Launch data past its hour is played by answering every sign-in sent after
  * the app opened as the server answers it then.
@@ -166,7 +173,7 @@ test("a seller at a blocked store reads it again with the token, however the rea
     await openAs(page, petro);
     await openStore(page, /^Ринок MARKET/);
     await expect(
-      page.getByText(/Роботу в цьому магазині зупинено/),
+      page.getByText(/^Продажі, приймання, повернення й оплати тут зупинено\./),
     ).toBeVisible();
     const signIns = await launchDataExpired(page);
     // The first reading is lost on the way; the second finds the access
@@ -183,7 +190,7 @@ test("a seller at a blocked store reads it again with the token, however the rea
       else await route.continue();
     });
 
-    await page.getByRole("button", { name: "Оновити" }).click();
+    await page.getByRole("button", { name: "Спробувати ще раз" }).click();
     // No answer: the shop sells on paper (owner decision, 2026-10-04).
     await expect(page.getByRole("alert")).toHaveText(
       "Сервер не відповідає. Продавайте на папері: модель, розмір, ціна, як оплачено, час. Коли сервер відповість — внесіть продажі до закриття каси.",
@@ -200,6 +207,32 @@ test("a seller at a blocked store reads it again with the token, however the rea
       page.getByRole("button", { name: "Продаж", exact: true }),
     ).toBeVisible();
     expect(reads).toBe(3);
+    expect(signIns.sent).toBe(0);
+  } finally {
+    await settle(page, market, "ACTIVE");
+  }
+});
+
+test("a seller at a blocked store opens it with «Спробувати ще раз» once it trades again, never signing in anew (stage 2, admin task list, P1-1)", async ({
+  page,
+}) => {
+  await settle(page, market, "BLOCKED");
+  try {
+    await openAs(page, petro);
+    await openStore(page, /^Ринок MARKET/);
+    await expect(
+      page.getByRole("heading", { name: /^Магазин заблоковано власником з/ }),
+    ).toBeVisible();
+    await expect(menu(page)).toHaveCount(0);
+    const signIns = await launchDataExpired(page);
+
+    // Meanwhile the owner opened the store again.
+    await settle(page, market, "ACTIVE");
+    await page.getByRole("button", { name: "Спробувати ще раз" }).click();
+    await expect(
+      page.getByRole("button", { name: "Продаж", exact: true }),
+    ).toBeVisible();
+    await expect(page.locator(".blank-tag")).toHaveCount(0);
     expect(signIns.sent).toBe(0);
   } finally {
     await settle(page, market, "ACTIVE");
@@ -223,7 +256,7 @@ test("a session past its 12 hours asks for the app to be opened again, and never
       });
     });
 
-    await page.getByRole("button", { name: "Оновити" }).click();
+    await page.getByRole("button", { name: "Спробувати ще раз" }).click();
     const told = page.getByRole("alert");
     await expect(told).toHaveText(
       "Сесія завершилась. Закрийте й відкрийте застосунок у Telegram. Незавершену команду збережено.",

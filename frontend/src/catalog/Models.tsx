@@ -260,7 +260,7 @@ function RenameForm({
       <fieldset disabled={blocked}>
         <legend>Нова назва цієї моделі</legend>
         <p className="hint">
-          Змінюється лише ця модель. Старі чеки зберігають назву, під якою
+          Змінюється лише ця модель. Старі продажі зберігають назву, під якою
           продали.
         </p>
         {nameWords.map((name) => (
@@ -353,10 +353,9 @@ function RenameForm({
                 </button>
               </>
             ) : (
-              <p>
-                Така назва вже є в іншої моделі. Об’єднати їх може той, хто має
-                це право в усіх магазинах мережі.
-              </p>
+              // Nothing said of who may join them (stage 2, goods task list,
+              // P1-5).
+              <p>Така назва вже є в іншої моделі.</p>
             )}
           </section>
         )}
@@ -844,8 +843,8 @@ export function Models({
           )}
           {card.data.status === "RETIRED" && (
             <p className="hint">
-              Прибрану модель не пропонують у «Прийманні» й пошуку; її залишок
-              продають, повертають і списують.
+              Прибрану модель не пропонують у «Прийшов товар» і пошуку; її
+              залишок продають, повертають і списують.
             </p>
           )}
           {mode === "rename" && (
@@ -873,11 +872,9 @@ export function Models({
                 blocked={working}
                 send={send}
               />
-            ) : (
-              <p role="alert">
-                Об’єднує лише той, хто має це право в усіх магазинах мережі.
-              </p>
-            ))}
+            ) : // «Об’єднати з іншою» is shown with the right alone (stage 2,
+            // goods task list, P1-5).
+            null)}
         </section>
       )}
     </>

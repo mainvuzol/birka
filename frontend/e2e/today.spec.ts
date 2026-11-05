@@ -1188,6 +1188,24 @@ test("each verb opens its section, and its «←» comes back to «Сьогод�
   await damaged(page, centre, [["Кокон графіт", "M"]]);
   await lists(page, centre, [5]);
   await onToday(page);
+  // The lists' tag bears «Товар і каталог»'s mark, never the paper mode's
+  // (stage 2, goods task list, P2-3).
+  const listsMark = await tags(page)
+    .filter({ hasText: "Переглянути й затвердити" })
+    .locator(".today-tag-title svg.icon")
+    .innerHTML();
+  await menu(page).getByRole("button", { name: /^Ще/ }).click();
+  const goods = page
+    .getByRole("navigation", { name: "Ще" })
+    .getByRole("button", { name: /^Товар і каталог/ });
+  expect(await goods.locator("svg.icon").innerHTML()).toBe(listsMark);
+  await expect(
+    page
+      .getByRole("navigation", { name: "Ще" })
+      .getByRole("switch", { name: /^Вношу продаж з паперу/ })
+      .locator("svg.icon"),
+  ).not.toHaveJSProperty("innerHTML", listsMark);
+  await tab(page, "Сьогодні").click();
   const back = page.getByRole("button", { name: "Назад до «Сьогодні»" });
   for (const [verb, heading] of [
     ["Переглянути", "Резервні копії"],

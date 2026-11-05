@@ -480,10 +480,8 @@ export function Receive({
               }}
             />
           ) : receivable.length === 0 ? (
-            <p>
-              Немає складу, куди цей магазин може приймати товар. Зверніться до
-              менеджера.
-            </p>
+            // Nothing said of the rule (stage 2, goods task list, P1-5).
+            <p>Тут немає складу для приймання.</p>
           ) : onlyWarehouse ? (
             <p className="t-row receive-place">
               Склад «{visible(onlyWarehouse.name)}»
@@ -851,7 +849,7 @@ function Failure({
     <div role="alert">
       <p>{errorText(error)}</p>
       <button type="button" onClick={retry}>
-        Повторити завантаження
+        Спробувати ще раз
       </button>
     </div>
   );

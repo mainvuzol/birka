@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { JSX } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, api, errorText, inOwnWords, isConflict } from "@/shared/api";
+import { ModeSwitch } from "@/shared/ModeSwitch";
 import { visible } from "@/shared/visible";
 import { decimal, kopecks, money } from "@/orders/types";
 import type { Store } from "@/orders/types";
@@ -51,7 +52,7 @@ export function SuggestedPrice({
               void prices.refetch();
             }}
           >
-            Повторити завантаження
+            Спробувати ще раз
           </button>
         </div>
       ) : (
@@ -130,7 +131,7 @@ export function PriceEditor({
             void prices.refetch();
           }}
         >
-          Повторити завантаження
+          Спробувати ще раз
         </button>
       </div>
     );
@@ -240,25 +241,29 @@ function Form({
     <fieldset disabled={blocked || busy}>
       <legend>Змінити ціну продажу</legend>
       {mayShare ? (
-        <label>
-          Яку ціну змінюємо
-          <select
-            value={appliesTo}
-            onChange={(event) => {
-              setAppliesTo(event.target.value as AppliesTo);
-              setProblem("");
-            }}
-          >
-            <option value="ORGANIZATION">Спільну — для всіх магазинів</option>
-            <option value="STORE">
-              Лише для магазину «{visible(store.name)}»
-            </option>
-          </select>
-        </label>
+        // For all stores or for this one: seen at once and one tap, two
+        // segments, never a list's wheel; the same price first as before
+        // (stage 2, admin task list, P1-2).
+        <ModeSwitch
+          label="Яку ціну змінюємо"
+          modes={[
+            { mode: "ORGANIZATION", label: "Для всіх магазинів" },
+            { mode: "STORE", label: `Лише «${visible(store.name)}»` },
+          ]}
+          current={appliesTo}
+          choose={(mode) => {
+            setAppliesTo(mode);
+            setProblem("");
+          }}
+          disabled={blocked || busy}
+          filters
+          className="price-scope"
+        />
       ) : (
+        // Nothing said of the price it may not change (stage 2, admin task
+        // list, P1-2).
         <p className="hint">
-          Ця ціна діятиме лише в магазині «{visible(store.name)}». Спільну ціну
-          для всіх магазинів тут змінити не можна.
+          Ця ціна діятиме лише в магазині «{visible(store.name)}».
         </p>
       )}
       <p className="hint">

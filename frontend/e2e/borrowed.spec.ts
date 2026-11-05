@@ -267,9 +267,9 @@ test("jackets borrowed from another shop are taken at a price, marked sold, and 
   await section(page, "Постачальникам");
   const lot = card(page, coat, supplier.name);
   await expect(lot).toContainText(
-    "1 500,00 грн за од. · взято 3 · продано 0 · повернено 0 · на руках 3",
+    "1 500,00 грн за шт. · взято 3 · продано 0 · повернено 0 · на руках 3",
   );
-  await lot.getByLabel("Скільки одиниць").fill("2");
+  await lot.getByLabel("Скільки, шт.").fill("2");
   // Refused once for a reason the screen does not name: its own words,
   // never an order's (owner decision, 2026-10-25).
   await refuseOnce(page, "**/api/v1/supplier-invoices/sold", 422);
@@ -292,7 +292,7 @@ test("jackets borrowed from another shop are taken at a price, marked sold, and 
   await lot.getByRole("button", { name: "Продано" }).click();
   await expect(
     page.getByText(
-      `Продано 2 од.: у «Накладних» борг «${supplier.name}» 3 000,00 грн.`,
+      `Продано 2 шт.: у «Накладних» борг «${supplier.name}» 3 000,00 грн.`,
     ),
   ).toBeVisible();
   await expect(lot).toContainText("продано 2 · повернено 0 · на руках 1");
@@ -315,13 +315,13 @@ test("unsold borrowed jackets go back to their supplier for nothing", async ({
   await openAs(page, hanna);
   await section(page, "Постачальникам");
   const lot = card(page, coat, supplier.name);
-  await lot.getByLabel("Скільки одиниць").fill("3");
+  await lot.getByLabel("Скільки, шт.").fill("3");
   await lot.getByRole("button", { name: "Повернути постачальнику" }).click();
-  await expect(lot.getByText("На руках лише 2 од.")).toBeVisible();
-  await lot.getByLabel("Скільки одиниць").fill("2");
+  await expect(lot.getByText("На руках лише 2 шт.")).toBeVisible();
+  await lot.getByLabel("Скільки, шт.").fill("2");
   await lot.getByRole("button", { name: "Повернути постачальнику" }).click();
   await expect(
-    page.getByText(`Повернено постачальнику «${supplier.name}»: 2 од.`),
+    page.getByText(`Повернено постачальнику «${supplier.name}»: 2 шт.`),
   ).toBeVisible();
   await expect(lot).toHaveCount(0);
   expect(returns.bodies).toEqual([

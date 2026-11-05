@@ -21,6 +21,7 @@ export function ModeSwitch<Mode extends string>({
   focus = false,
   focused,
   filters = false,
+  className,
 }: {
   /** What the group is called for a reader: «Продаж або повернення». */
   label: string;
@@ -34,6 +35,7 @@ export function ModeSwitch<Mode extends string>({
   focused?: () => void;
   /** Its ways filter this screen, never open another. */
   filters?: boolean;
+  className?: string;
 }): JSX.Element {
   const open = useRef<HTMLButtonElement>(null);
   useEffect(() => {
@@ -42,7 +44,11 @@ export function ModeSwitch<Mode extends string>({
     focused?.();
   }, [focus, focused]);
   return (
-    <div className="mode-switch" role="group" aria-label={label}>
+    <div
+      className={className ? `mode-switch ${className}` : "mode-switch"}
+      role="group"
+      aria-label={label}
+    >
       {modes.map(({ mode, label: name }) => (
         <button
           type="button"

@@ -282,11 +282,22 @@ test("«Ще» says what waits under each row, its count the row's one colour, a
       ).toBeGreaterThanOrEqual(4.5);
   }
   await page.emulateMedia({ colorScheme: "light" });
+  // «Товар і каталог»'s own mark on each of its rows; «paper» the paper
+  // mode's alone (stage 2, goods task list, P2-3).
+  const mark = await row(page, "Товар і каталог")
+    .locator("svg.icon")
+    .innerHTML();
+  const paper = page
+    .getByRole("navigation", { name: "Ще" })
+    .getByRole("switch", { name: /^Вношу продаж з паперу/ });
+  expect(await paper.locator("svg.icon").innerHTML()).not.toBe(mark);
   // Inside «Товар і каталог», the lists' own row says it too.
   await row(page, "Товар і каталог").click();
   await expect(row(page, "Початкові залишки")).toHaveAccessibleName(
     "Початкові залишки 2 на затвердження",
   );
+  for (const label of ["Перевірка каталогу", "Моделі", "Початкові залишки"])
+    expect(await row(page, label).locator("svg.icon").innerHTML()).toBe(mark);
   await expect(page.locator("body")).not.toContainText("⚠");
 });
 

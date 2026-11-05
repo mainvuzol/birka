@@ -139,6 +139,22 @@ async function detail(page: Page, name: string): Promise<Locator> {
   return page.getByRole("group", { name: new RegExp(name) });
 }
 
+/** For all stores or for this one (stage 2, admin task list, P1-2):
+ * «Для всіх магазинів» · «Лише «Основний»». */
+function scope(
+  within: Page | Locator,
+  appliesTo: "ORGANIZATION" | "STORE",
+  store = "Основний",
+): Locator {
+  return within
+    .getByRole("group", { name: "Яку ціну змінюємо" })
+    .getByRole("button", {
+      name:
+        appliesTo === "ORGANIZATION" ? "Для всіх магазинів" : `Лише «${store}»`,
+      exact: true,
+    });
+}
+
 /** «Змінити ціну», the price editor in a sheet named by the model. */
 async function priceSheet(page: Page, name: string): Promise<Locator> {
   await page.getByRole("button", { name: "Змінити ціну", exact: true }).click();
@@ -161,9 +177,7 @@ test("a store's price set on a model's detail is what its till suggests", async 
   await expect(hero).toContainText("Ціна продажу не задана");
 
   const sheet = await priceSheet(page, priced.name);
-  await sheet
-    .getByRole("combobox", { name: "Яку ціну змінюємо" })
-    .selectOption("STORE");
+  await scope(sheet, "STORE").click();
   await sheet.getByLabel("Нова ціна, грн").fill("0");
   await sheet.getByRole("button", { name: "Зберегти ціну" }).click();
   await expect(sheet.getByRole("alert")).toContainText("більше нуля");
@@ -256,9 +270,13 @@ test("the owner sets the shared price where goods arrive, and the store's own ov
   await expect(page.getByText("Ціна продажу: не задана")).toBeVisible();
 
   await page.getByRole("button", { name: "Задати ціну продажу" }).click();
-  await expect(
-    page.getByRole("combobox", { name: "Яку ціну змінюємо" }),
-  ).toHaveValue("ORGANIZATION");
+  // The same price first as before, one tap away from the other (stage 2,
+  // admin task list, P1-2).
+  await expect(scope(page, "ORGANIZATION")).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await expect(scope(page, "STORE")).toHaveAttribute("aria-pressed", "false");
   await page.getByLabel("Нова ціна, грн").fill("2000");
   // Refused once for a reason the screen does not name: its own words,
   // never an order's (owner decision, 2026-10-25).
@@ -286,9 +304,7 @@ test("the owner sets the shared price where goods arrive, and the store's own ov
   ).toBeVisible();
 
   await page.getByRole("button", { name: "Змінити ціну продажу" }).click();
-  await page
-    .getByRole("combobox", { name: "Яку ціну змінюємо" })
-    .selectOption("STORE");
+  await scope(page, "STORE").click();
   await expect(
     page.getByText("Зараз: своєї ціни немає, діє спільна 2 000,00 грн."),
   ).toBeVisible();
@@ -300,13 +316,71 @@ test("the owner sets the shared price where goods arrive, and the store's own ov
 
   // Removing the store's own price brings the shared one back.
   await page.getByRole("button", { name: "Змінити ціну продажу" }).click();
-  await expect(
-    page.getByRole("combobox", { name: "Яку ціну змінюємо" }),
-  ).toHaveValue("STORE");
+  await expect(scope(page, "STORE")).toHaveAttribute("aria-pressed", "true");
   await page.getByRole("button", { name: "Прибрати ціну магазину" }).click();
   await expect(
     page.getByText("Ціна продажу: 2 000,00 грн — спільна для всіх магазинів"),
   ).toBeVisible();
+});
+
+test("for all stores or for this one: two segments on one row at 360 px, the same one first, one tap to the other, a long store's name cut short and read whole (stage 2, admin task list, P1-2)", async ({
+  page,
+}) => {
+  const priced = await model(page, await token(page));
+  await sellsFrom(page, fixture.returns_location_id);
+  const long = "Основний на Хрещатику, біля центрального входу до ЦУМу";
+  await page.route("**/api/v1/me", async (route) => {
+    const response = await route.fetch();
+    const me = (await response.json()) as {
+      stores: { code: string; name: string }[];
+    };
+    await route.fulfill({
+      response,
+      json: {
+        ...me,
+        stores: me.stores.map((store) =>
+          store.code === "MAIN" ? { ...store, name: long } : store,
+        ),
+      },
+    });
+  });
+  await page.setViewportSize({ width: 360, height: 640 });
+  await page.goto(
+    `/#${new URLSearchParams({ tgWebAppData: initData(seller.id, seller.name) }).toString()}`,
+  );
+  await openStore(page, new RegExp(`^${long} MAIN`));
+  await detail(page, priced.name);
+  const sheet = await priceSheet(page, priced.name);
+  const all = scope(sheet, "ORGANIZATION");
+  const one = scope(sheet, "STORE", long);
+  await expect(sheet.getByRole("combobox")).toHaveCount(0);
+  // No price of its own yet, and the shared one may be set: that one first,
+  // as before.
+  await expect(all).toHaveAttribute("aria-pressed", "true");
+  await expect(one).toHaveAttribute("aria-pressed", "false");
+  const [left, right] = await Promise.all([
+    all.boundingBox(),
+    one.boundingBox(),
+  ]);
+  if (!left || !right) throw new Error("the segments are not drawn");
+  expect(Math.abs(left.y - right.y)).toBeLessThan(1);
+  expect(right.x + right.width).toBeLessThanOrEqual(360);
+  // The long name is cut short with «…», never wrapped.
+  expect(
+    await one.evaluate((node) => ({
+      cut: node.scrollWidth > node.clientWidth,
+      overflow: getComputedStyle(node).textOverflow,
+      lines: node.getClientRects().length,
+    })),
+  ).toEqual({ cut: true, overflow: "ellipsis", lines: 1 });
+  // «Для всіх магазинів» whole beside it (review).
+  expect(
+    await all.evaluate((node) => node.scrollWidth <= node.clientWidth),
+  ).toBe(true);
+  expect(right.height).toBeLessThan(50);
+  await one.click();
+  await expect(one).toHaveAttribute("aria-pressed", "true");
+  await expect(all).toHaveAttribute("aria-pressed", "false");
 });
 
 test("a price someone else changed meanwhile is not overwritten unseen", async ({
@@ -359,13 +433,15 @@ test("whoever may set only this store's price is told so, and sets that", async 
   await enter(page, seller);
   const hero = await detail(page, priced.name);
   const sheet = await priceSheet(page, priced.name);
+  // One line, nothing said of the price it may not change (stage 2, admin
+  // task list, P1-2).
   await expect(
     sheet.getByText("Ця ціна діятиме лише в магазині «Основний».", {
-      exact: false,
+      exact: true,
     }),
   ).toBeVisible();
   await expect(
-    sheet.getByRole("combobox", { name: "Яку ціну змінюємо" }),
+    sheet.getByRole("group", { name: "Яку ціну змінюємо" }),
   ).toHaveCount(0);
   const sent = page.waitForRequest(
     (request) =>

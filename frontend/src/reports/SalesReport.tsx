@@ -329,11 +329,11 @@ function Summary({
       </h3>
       <dl className="debt">
         <dt>
-          Продажі: {figures.sales} ({figures.units} од.)
+          Продажі: {figures.sales} ({figures.units} шт.)
         </dt>
         <dd>{money(figures.sold)}</dd>
         <dt>
-          Повернення: {figures.returns} ({figures.returned_units} од.)
+          Повернення: {figures.returns} ({figures.returned_units} шт.)
         </dt>
         <dd>{minus(figures.returned)}</dd>
         <dt>

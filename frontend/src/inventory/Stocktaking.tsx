@@ -138,10 +138,8 @@ export function Stocktaking({
             }}
           />
         ) : fixable.length === 0 ? (
-          <p>
-            Немає складу, де цей магазин може виправляти залишки. Зверніться до
-            менеджера.
-          </p>
+          // Nothing said of the rule (stage 2, goods task list, P1-5).
+          <p>Тут немає складу для інвентаризації.</p>
         ) : (
           <>
             {only ? (
@@ -372,7 +370,7 @@ function Failure({
   return (
     <div role="alert">
       <p>{errorText(error)}</p>
-      <button onClick={retry}>Повторити завантаження</button>
+      <button onClick={retry}>Спробувати ще раз</button>
     </div>
   );
 }

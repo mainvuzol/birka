@@ -794,9 +794,10 @@ function decisionText(
 ): string {
   if (!canApprove && !canImport) return "";
   if (!trading) return " Відхиліть його, щоб склад звільнився.";
+  // Nothing said of who may approve (stage 2, goods task list, P1-5).
   return canApprove
     ? " Затвердіть або відхиліть його."
-    : " Затверджує той, хто має право затверджувати списки; відхилити його можна й вам.";
+    : " Відхилити його можете й ви.";
 }
 
 const lineFilters: { status: LineStatus | null; label: string }[] = [
@@ -934,8 +935,8 @@ function ListView({
         )}
         {list.status === "APPLIED" && (
           <p role="status">
-            Затверджено: {list.application?.units ?? list.summary.units} од. стали
-            початковим залишком складу «{warehouse}».
+            Затверджено: {list.application?.units ?? list.summary.units} шт.
+            стали початковим залишком складу «{warehouse}».
           </p>
         )}
         {list.status === "REJECTED" && (
@@ -966,11 +967,9 @@ function ListView({
             refresh={refresh}
           />
         )}
-        {list.status === "IN_REVIEW" && trading && canImport && !canPick && (
-          <p role="alert">
-            Щоб розбирати рядки, потрібне право приймати товар у цьому магазині.
-          </p>
-        )}
+        {/* Whoever may not take the stock in reads the lines without
+            «Розібрати рядок», and nothing is said of the rule (stage 2, goods
+            task list, P1-5). */}
         {parts.error ? (
           <p role="alert">{errorText(parts.error)}</p>
         ) : (
@@ -1602,7 +1601,7 @@ function LineEditor({
                   choose("SIZE_WITH_COUNT");
                 }}
               />
-              {`Розмір ${visible(size.size)} — ${String(size.count)} шт`}
+              {`Розмір ${visible(size.size)} — ${String(size.count)} шт.`}
             </label>
             <label className="check">
               <input
@@ -1637,7 +1636,7 @@ function LineEditor({
               }}
             />
             {option === "STATED"
-              ? `${basisLabels.STATED}: ${String(line.quantity_total)} шт`
+              ? `${basisLabels.STATED}: ${String(line.quantity_total)} шт.`
               : option === "STATED_BY_SIZE"
                 ? `${basisLabels.STATED_BY_SIZE}: ${visible(sizesWithCounts(split))}`
                 : basisLabels[option]}
@@ -1969,7 +1968,7 @@ function Approval({
       {approvable && (
         <p>
           Стане початковим залишком складу «{warehouse}»:{" "}
-          <strong>{list.summary.units} од.</strong>
+          <strong>{list.summary.units} шт.</strong>
         </p>
       )}
       <p>
@@ -2001,7 +2000,7 @@ function Approval({
       {asking === "approve" ? (
         <div className="actions">
           <p>
-            {list.summary.units} од. стануть початковим залишком складу «
+            {list.summary.units} шт. стануть початковим залишком складу «
             {warehouse}». Скасувати це потім не можна.
           </p>
           <button

@@ -109,6 +109,27 @@ function counts(page: Page): CountBody[] {
   return sent;
 }
 
+test("a store with no warehouse to count says so, never who may (stage 2, goods task list, P1-5)", async ({
+  page,
+}) => {
+  await page.route("**/api/v1/stock-locations?*", async (route) => {
+    const response = await route.fetch();
+    const places = (await response.json()) as { can_receive: boolean }[];
+    await route.fulfill({
+      response,
+      json: places.map((place) => ({ ...place, can_receive: false })),
+    });
+  });
+  await page.goto(launch());
+  await openStore(page, "Основний MAIN");
+  await section(page, "Інвентаризація");
+  await expect(
+    page.getByText("Тут немає складу для інвентаризації.", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText(/Зверніться|може виправляти/)).toHaveCount(0);
+  await expect(page.getByRole("group", { name: "Склад" })).toHaveCount(0);
+});
+
 test("a warehouse is counted position by position, each difference applied at once, and finished as one record", async ({
   page,
 }) => {
@@ -151,7 +172,7 @@ test("a warehouse is counted position by position, each difference applied at on
   ).toBeVisible();
   const system = await onRecord(page);
   await line(page)
-    .getByLabel("Фактично на складі, од.")
+    .getByLabel("Фактично на складі, шт.")
     .fill(String(system - 2));
   await expect(
     line(page).getByText(
@@ -177,11 +198,11 @@ test("a warehouse is counted position by position, each difference applied at on
   ).toBeVisible();
   // Counted again, as the line asks after a refusal.
   await line(page)
-    .getByLabel("Фактично на складі, од.")
+    .getByLabel("Фактично на складі, шт.")
     .fill(String(system - 2));
   await line(page).getByRole("button", { name: "Записати кількість" }).click();
   await expect(counting.getByRole("status").first()).toContainText(
-    "Пораховано позицій: 1 · не перевірено: 0 · нестача: 2 од. (позицій: 1)",
+    "Пораховано позицій: 1 · не перевірено: 0 · нестача: 2 шт. (позицій: 1)",
   );
   await expect(
     counting.getByText(`облік ${String(system)} → ${String(system - 2)} (−2).`),
@@ -200,10 +221,10 @@ test("a warehouse is counted position by position, each difference applied at on
   await page
     .getByRole("combobox", { name: "Розмір" })
     .selectOption({ label: "L" });
-  await page.getByLabel("Фактично на складі, од.").fill("1");
+  await page.getByLabel("Фактично на складі, шт.").fill("1");
   await page.getByRole("button", { name: "Записати кількість" }).click();
   await expect(counting.getByRole("status").first()).toContainText(
-    "надлишок: 1 од. (позицій: 1)",
+    "надлишок: 1 шт. (позицій: 1)",
   );
 
   await counting
@@ -252,15 +273,15 @@ test("a warehouse is counted position by position, each difference applied at on
     .getByRole("combobox", { name: "Розмір" })
     .selectOption({ label: "M" });
   const found = page.getByRole("group", { name: /^Підрахунок:/ }).last();
-  await found.getByLabel("Фактично на складі, од.").fill("1");
+  await found.getByLabel("Фактично на складі, шт.").fill("1");
   await found.getByRole("button", { name: "Записати кількість" }).click();
   await expect(found.getByRole("alert")).toContainText(
-    `Цей товар уже є в обліку цього складу: ${String(system - 2)} од.`,
+    `Цей товар уже є в обліку цього складу: ${String(system - 2)} шт.`,
   );
   await expect(
     found.getByText(`В обліку тепер: ${String(system - 2)}`),
   ).toBeVisible();
-  await found.getByLabel("Фактично на складі, од.").fill(String(system - 2));
+  await found.getByLabel("Фактично на складі, шт.").fill(String(system - 2));
   await expect(found.getByText("Збігається з обліком.")).toBeVisible();
   await found.getByRole("button", { name: "Записати кількість" }).click();
   await expect(
@@ -288,7 +309,7 @@ test("a warehouse is counted position by position, each difference applied at on
   await counting.getByRole("button", { name: "Так, завершити" }).click();
   const done = page.getByRole("region", { name: "Інвентаризацію завершено" });
   await expect(done.getByRole("status")).toHaveText(
-    "Пораховано позицій: 2 · не перевірено: 0 · нестача: 2 од. (позицій: 1) · надлишок: 1 од. (позицій: 1).",
+    "Пораховано позицій: 2 · не перевірено: 0 · нестача: 2 шт. (позицій: 1) · надлишок: 1 шт. (позицій: 1).",
   );
   await done.getByRole("button", { name: "Повернутися до залишків" }).click();
 
@@ -300,8 +321,8 @@ test("a warehouse is counted position by position, each difference applied at on
     .click();
   const differences = section.getByRole("list", { name: "Розбіжності" });
   await expect(differences.getByRole("listitem")).toHaveCount(2);
-  await expect(differences).toContainText(" — −2 од. (пораховано");
-  await expect(differences).toContainText(" — +1 од. (пораховано 1, Оля)");
+  await expect(differences).toContainText(" — −2 шт. (пораховано");
+  await expect(differences).toContainText(" — +1 шт. (пораховано 1, Оля)");
   // The model's grid holds what was counted.
   await menu(page).getByRole("button", { name: "Продаж", exact: true }).click();
   await openModel(page, "Лоран", /^Лоран шоколад 70(?:\.0)? см$/);
@@ -331,7 +352,7 @@ test("a position sold while it was counted is refused and counted again, alone",
   const shown = await onRecord(page);
   stale = false;
   await line(page)
-    .getByLabel("Фактично на складі, од.")
+    .getByLabel("Фактично на складі, шт.")
     .fill(String(shown - 1));
   await line(page).getByRole("button", { name: "Записати кількість" }).click();
   await expect(line(page).getByRole("alert")).toContainText(
@@ -343,11 +364,11 @@ test("a position sold while it was counted is refused and counted again, alone",
   await expect(
     line(page).getByText(`В обліку: ${String(shown - 1)}`),
   ).toBeVisible();
-  await expect(line(page).getByLabel("Фактично на складі, од.")).toHaveValue(
+  await expect(line(page).getByLabel("Фактично на складі, шт.")).toHaveValue(
     "",
   );
   await line(page)
-    .getByLabel("Фактично на складі, од.")
+    .getByLabel("Фактично на складі, шт.")
     .fill(String(shown - 1));
   await expect(line(page).getByText("Збігається з обліком.")).toBeVisible();
   await line(page).getByRole("button", { name: "Записати кількість" }).click();
@@ -377,7 +398,7 @@ test("a count whose outcome is unknown blocks the app until it is resent unchang
   await begin(page);
   const system = await onRecord(page);
   await line(page)
-    .getByLabel("Фактично на складі, од.")
+    .getByLabel("Фактично на складі, шт.")
     .fill(String(system - 1));
   await line(page).getByRole("button", { name: "Записати кількість" }).click();
   // On «Інвентаризація», its own screen: the sale's stub, still attached
@@ -483,7 +504,7 @@ test("a balance read again is the one a count is made against", async ({
     line(page).getByText(`В обліку: ${String(shown - 1)}`),
   ).toBeVisible();
   await line(page)
-    .getByLabel("Фактично на складі, од.")
+    .getByLabel("Фактично на складі, шт.")
     .fill(String(shown - 1));
   await expect(line(page).getByText("Збігається з обліком.")).toBeVisible();
   await line(page).getByRole("button", { name: "Записати кількість" }).click();

@@ -331,7 +331,7 @@ test("goods returned are set off against an invoice, and their return waits for 
   });
   await expect(returns.getByRole("option")).toHaveText([
     "Оберіть повернення",
-    / · 2 од\.$/,
+    / · 2 шт\.$/,
   ]);
   await returns.selectOption({ index: 1 });
   await page.getByLabel("Скільки зарахував постачальник, грн").fill("1200");

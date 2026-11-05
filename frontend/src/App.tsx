@@ -278,6 +278,13 @@ function BlankTag({ children }: { children: ReactNode }): JSX.Element {
   );
 }
 
+/** «Магазин заблоковано власником з 01.10.2026», «Магазин закрито, в архіві
+ * з …»: a store that does not trade, to its own people (spec S08). */
+function stateTitle(store: Pick<Store, "state" | "state_since">): string {
+  const state = stateText(store);
+  return `Магазин ${state.charAt(0).toLocaleLowerCase("uk-UA")}${state.slice(1)}`;
+}
+
 /**
  * Someone the shop has not added yet (redesign P1-3; spec S03, «Усе на
  * бірці» task list, P1-4). People are added on the server, by their
@@ -579,18 +586,19 @@ export function App(): JSX.Element {
             changeHeld: false,
           }}
         >
-          <ScreenHeader title={stateText(store)} />
-          <section>
-            {/* A store that does not trade: its own plate, never a refusal's
-                (stage 2, orders task list, P0-2). */}
-            <Banner kind="blocked" role="status" as="div">
-              <p>
-                Роботу в цьому магазині зупинено: продажі, приймання, повернення
-                й оплати в ньому не проводяться. Зверніться до власника.
-              </p>
-            </Banner>
-            <button onClick={readAgain}>Оновити</button>
-          </section>
+          {/* One blank tag, its state and since when its title, the line
+              over it as on any screen of a store (spec S08; stage 2, admin
+              task list, P1-1). Said as a status, never a refusal (stage 2,
+              orders task list, P0-2). */}
+          <ScreenHeader />
+          <BlankTag>
+            <h1 className="t-title-l">{stateTitle(store)}</h1>
+            <p role="status" className="blank-body">
+              Продажі, приймання, повернення й оплати тут зупинено. Зверніться
+              до власника.
+            </p>
+            <button onClick={readAgain}>Спробувати ще раз</button>
+          </BlankTag>
         </WorkspaceLineContext.Provider>
       ) : (
         <Workspace
@@ -695,6 +703,7 @@ function Workspace({
   // The sales report: the owner's and managers' (owner decisions,
   // 2026-10-02). It reads every store they hold it in, whichever is open.
   const canSeeReport = store.permissions.includes("report:view_financial");
+  const canConfirmCatalog = store.permissions.includes("catalog:confirm");
   const reportKey = `${me.organization_id}:${me.user_id}`;
   // Correcting the catalogue: the owner's and managers' (owner decision,
   // 2026-10-03). Whether this person may merge, which needs the right in
@@ -1135,6 +1144,10 @@ function Workspace({
       }
     : {};
   const catalogCommand = useCatalogCommand();
+  // A catalogue operation kept on the phone is checked on its own screen
+  // alone: the screen stands while it is kept, its right gone or not, and
+  // the server's answer settles it (review).
+  const catalogKept = catalogCommand.pending !== null;
   const saleCommand = useSaleCommand();
   const [settled, setSettled] = useState<SaleReceipt | null>(null);
   // A basket that turned out to have been recorded as an empty shelf.
@@ -1936,14 +1949,16 @@ function Workspace({
     {
       tab: "catalog",
       label: "Перевірка каталогу",
-      icon: "check",
-      shown: store.permissions.includes("catalog:confirm"),
+      // «Товар і каталог»'s own mark on each of its rows; «paper» is the
+      // paper mode's alone (stage 2, goods task list, P2-3).
+      icon: "catalogue",
+      shown: canConfirmCatalog,
       disabled: blocked,
     },
     {
       tab: "openings",
       label: "Початкові залишки",
-      icon: "paper",
+      icon: "catalogue",
       shown: canSeeOpenings,
       disabled: blocked,
     },
@@ -1971,7 +1986,7 @@ function Workspace({
     {
       tab: "models",
       label: "Моделі",
-      icon: "edit",
+      icon: "catalogue",
       shown: canCorrect,
       disabled: otherThanCorrections,
     },
@@ -2387,7 +2402,28 @@ function Workspace({
       firstShown !== undefined
     )
       setTab((now) => (now === tab ? firstShown : now));
-  }, [tab, canSeeOrders, canSeeReport, firstShown]);
+    // And with «Перевірка каталогу», whose row is shown with its right
+    // alone: «Ще» instead, nothing said of the rule (stage 2, goods task
+    // list, P1-5) — once no operation of it is kept, which its screen
+    // checks and settles (review).
+    if (
+      tab === "catalog" &&
+      !canConfirmCatalog &&
+      !catalogKept &&
+      firstShown !== undefined
+    )
+      setTab((now) =>
+        now === "catalog" ? (hasMore ? "more" : firstShown) : now,
+      );
+  }, [
+    tab,
+    canSeeOrders,
+    canSeeReport,
+    canConfirmCatalog,
+    catalogKept,
+    hasMore,
+    firstShown,
+  ]);
   // A first send is its dock's to say: an attempt is shown as kept only
   // once its answer is lost, or while it is checked again («Усе на бірці»
   // task list, P0-2).
@@ -3380,7 +3416,7 @@ function Workspace({
         // («Усе на бірці» task list, P2-1).
         null
       ) : tab === "catalog" ? (
-        store.permissions.includes("catalog:confirm") ? (
+        canConfirmCatalog || catalogKept ? (
           <Catalog
             store={store}
             token={token}
@@ -3391,11 +3427,10 @@ function Workspace({
             person={me.display_name}
             back={moreBack}
           />
-        ) : (
-          <p role="alert">
-            Немає доступу до перевірки каталогу. Зверніться до менеджера.
-          </p>
-        )
+        ) : // Its row is shown with the right alone: without it, nothing is
+        // said of the rule, and «Ще» opens instead (stage 2, goods task
+        // list, P1-5).
+        null
       ) : tab === "new" ? (
         <NewOrder
           store={store}

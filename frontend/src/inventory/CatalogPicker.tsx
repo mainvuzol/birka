@@ -63,7 +63,7 @@ export function CatalogPicker({
             value={search}
             // The server's own limit for a search (review, 2026-10-24).
             maxLength={200}
-            placeholder="Модель, джерело або колір"
+            placeholder="Назва моделі або колір"
             onChange={(event) => {
               setSearch(event.target.value);
             }}

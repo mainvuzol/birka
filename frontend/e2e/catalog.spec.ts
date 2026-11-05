@@ -52,7 +52,8 @@ test("explicit catalog choice and opt-in alias feedback through real API", async
   page,
 }) => {
   await enter(page);
-  await create(page, `  Мій виріб для перевірки ${randomUUID().slice(0, 8)}\n`);
+  const id = randomUUID().slice(0, 8);
+  await create(page, `  Мій виріб для перевірки ${id}\n`);
   const confirm = page.getByRole("button", {
     name: "Підтвердити обраний товар",
   });
@@ -69,13 +70,24 @@ test("explicit catalog choice and opt-in alias feedback through real API", async
   const response = page.waitForResponse(
     (r) => r.url().endsWith("/alias-feedback") && r.status() === 200,
   );
-  await page.getByRole("button", { name: "Підтвердити зв’язок назви" }).click();
+  await page.getByRole("button", { name: "Так, це його назва" }).click();
   const body = (await (await response).json()) as {
     status: string;
     confirm_count: number;
   };
   expect(body.status).toBe("LEARNING");
   expect(body.confirm_count).toBe(1);
+  // Said in the shop's words, the description as its name (stage 2, goods
+  // task list, P2-2); the proposal stays on the screen.
+  await expect(
+    page.getByRole("status").filter({ hasText: /^Збережено/ }),
+  ).toHaveText(
+    new RegExp(
+      `^Збережено: «Мій виріб для перевірки ${id}» — назва Лоран шоколад 70 см`,
+    ),
+  );
+  await expect(page.getByText("Цей опис — назва товару?")).toBeVisible();
+  await expect(page.getByText(/свідчен/i)).toHaveCount(0);
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth > innerWidth,
@@ -309,7 +321,7 @@ test("lost alias-feedback response reuses the same evidence UUID after reopening
       } else await route.continue();
     },
   );
-  await page.getByRole("button", { name: "Підтвердити зв’язок назви" }).click();
+  await page.getByRole("button", { name: "Так, це його назва" }).click();
   await expect(
     page.getByRole("button", { name: "Повторити ту саму операцію" }),
   ).toBeEnabled();
@@ -396,6 +408,74 @@ test("uncertain catalog operation remains recoverable after access denial", asyn
   await expect(
     page.getByRole("button", { name: "Підтвердити обраний товар" }),
   ).toBeVisible();
+});
+
+test("a catalogue operation kept when its right goes opens its screen, is checked there until answered, then «Ще» (stage 2, goods task list, P1-5; review)", async ({
+  page,
+  context,
+}) => {
+  await enter(page);
+  await draft(page, "Право забрали, поки чекали відповіді");
+  let posts = 0;
+  let denied = false;
+  await context.route("**/api/v1/catalog/match-decisions**", async (route) => {
+    if (denied) {
+      await route.fulfill({ status: 403, json: { code: "PERMISSION_DENIED" } });
+      return;
+    }
+    if (route.request().method() === "POST") {
+      posts += 1;
+      if (posts === 1) {
+        await route.fetch();
+        await route.abort("failed");
+        return;
+      }
+    }
+    await route.continue();
+  });
+  await page.getByRole("button", { name: "Зберегти пропозицію" }).click();
+  await expect(
+    page.getByRole("button", { name: "Повторити ту саму операцію" }),
+  ).toBeEnabled();
+  // The right taken away while the answer is lost.
+  await context.route("**/api/v1/me", async (route) => {
+    const response = await route.fetch();
+    const body = (await response.json()) as {
+      stores: { permissions: string[] }[];
+    };
+    for (const store of body.stores)
+      store.permissions = store.permissions.filter(
+        (p) => p !== "catalog:confirm",
+      );
+    await route.fulfill({ response, json: body });
+  });
+  denied = true;
+  await page.close();
+  const reopened = await context.newPage();
+  await reopened.goto(launch());
+  await openStore(reopened, "Основний MAIN");
+  // Its own screen, the operation on it: never a silent «Ще» held by it.
+  await expect(
+    reopened.getByRole("heading", { name: "Перевірка каталогу" }),
+  ).toBeVisible();
+  await expect(
+    reopened.getByText("Незавершена операція каталогу"),
+  ).toBeVisible();
+  const retry = reopened.getByRole("button", {
+    name: "Повторити ту саму операцію",
+  });
+  await expect(retry).toBeEnabled();
+  // Answered: settled, and «Ще» opens, its row not shown.
+  denied = false;
+  await retry.click();
+  await expect(reopened.getByRole("navigation", { name: "Ще" })).toBeVisible();
+  await expect(reopened.getByText("Незавершена операція каталогу")).toHaveCount(
+    0,
+  );
+  await expect(
+    reopened.getByRole("button", { name: "Перевірка каталогу", exact: true }),
+  ).toHaveCount(0);
+  expect(posts).toBeGreaterThanOrEqual(2);
 });
 
 test("create a reviewed product and recover a lost response without duplication", async ({

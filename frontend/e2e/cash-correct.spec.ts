@@ -1,6 +1,7 @@
 import {
   test,
   expect,
+  expectGlyphBeside,
   openStore,
   section,
 } from "./fixtures";
@@ -318,9 +319,14 @@ test("yesterday's operation is changed in seven taps, without a calendar — «�
   const taps = await countTaps(page);
   await correct(page);
   const days = page.getByRole("group", { name: "Який день" });
-  await expect(days.getByRole("radio", { name: "Сьогодні" })).toBeChecked();
+  // The day as a switch of ways, «Сьогодні» first (stage 2, money task
+  // list, P2-1).
+  await expect(days.getByRole("radio")).toHaveCount(0);
+  await expect(
+    days.getByRole("button", { name: "Сьогодні", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByLabel("День", { exact: true })).toHaveCount(0);
-  await days.getByRole("radio", { name: "Вчора" }).check();
+  await days.getByRole("button", { name: "Вчора", exact: true }).click();
   await expect.poll(() => server.days.at(-1)).toBe(dayOf(1));
   const first = rows(page).getByRole("button").first();
   await expect(first.locator(".cash-row-title")).toHaveText(
@@ -330,7 +336,10 @@ test("yesterday's operation is changed in seven taps, without a calendar — «�
     `Пальто Ірис · L · закриття ${short(yesterdayClose.business_day)}`,
   );
   await expect(first.locator(".history-sum")).toHaveText("700,00 грн");
-  await expect(first.locator(".badge")).toHaveText("Картка · виправлено");
+  // The way's sticker with its glyph beside its words (stage 2, money task
+  // list, P2-1).
+  await expect(first.locator(".way-pill")).toHaveText("Картка · виправлено");
+  await expectGlyphBeside(first.locator(".way-pill"));
   // A closed refund may be changed by the owner as any other (B6.2).
   await expect(rows(page).getByRole("button").nth(1)).toBeEnabled();
   await first.click();
@@ -391,10 +400,10 @@ test("another day is chosen on the calendar: nothing is read until one is, and a
   await correct(page);
   await expect.poll(() => server.days.length).toBe(1);
   const days = page.getByRole("group", { name: "Який день" });
-  await days.getByRole("radio", { name: "Вчора" }).check();
+  await days.getByRole("button", { name: "Вчора", exact: true }).click();
   await expect.poll(() => server.days.length).toBe(2);
   await expect(page.getByLabel("День", { exact: true })).toHaveCount(0);
-  await days.getByRole("radio", { name: "Інший день" }).check();
+  await days.getByRole("button", { name: "Інший день", exact: true }).click();
   await expect(page.getByText("Оберіть день.")).toBeVisible();
   // Long enough for a read to be asked, were one.
   await page.evaluate(
@@ -433,8 +442,8 @@ test("a refusal is said over the day it was about, and goes with another day (ca
   await correct(page);
   await page
     .getByRole("group", { name: "Який день" })
-    .getByRole("radio", { name: "Інший день" })
-    .check();
+    .getByRole("button", { name: "Інший день", exact: true })
+    .click();
   await page.getByLabel("День", { exact: true }).fill(dayOf(20));
   await rows(page).getByRole("button").first().click();
   await page
@@ -463,8 +472,8 @@ test("an operation from before the drawer was first counted says it may not be c
   await correct(page);
   await page
     .getByRole("group", { name: "Який день" })
-    .getByRole("radio", { name: "Інший день" })
-    .check();
+    .getByRole("button", { name: "Інший день", exact: true })
+    .click();
   await page.getByLabel("День", { exact: true }).fill(dayOf(40));
   const row = rows(page).getByRole("button");
   await expect(row.locator(".sale-meta")).toHaveText(
@@ -479,7 +488,7 @@ test("an operation from before the drawer was first counted says it may not be c
     row.locator(".cash-row-title"),
     row.locator(".sale-meta"),
     row.locator(".history-sum"),
-    row.locator(".badge"),
+    row.locator(".way-pill"),
   ])
     expect(await contrast(part)).toBeGreaterThanOrEqual(4.5);
 });
@@ -500,9 +509,9 @@ test("at 00:30 «Сьогодні» is the evening before's, as the drawer's day
   await correct(page);
   await expect.poll(() => server.days[0]).toBe(before(1));
   const days = page.getByRole("group", { name: "Який день" });
-  await days.getByRole("radio", { name: "Вчора" }).check();
+  await days.getByRole("button", { name: "Вчора", exact: true }).click();
   await expect.poll(() => server.days.at(-1)).toBe(before(2));
-  await days.getByRole("radio", { name: "Інший день" }).check();
+  await days.getByRole("button", { name: "Інший день", exact: true }).click();
   await expect(page.getByLabel("День", { exact: true })).toHaveAttribute(
     "max",
     before(1),
@@ -552,8 +561,8 @@ for (const [name, theme] of [
     await correct(page);
     await page
       .getByRole("group", { name: "Який день" })
-      .getByRole("radio", { name: "Вчора" })
-      .check();
+      .getByRole("button", { name: "Вчора", exact: true })
+      .click();
     const first = rows(page).getByRole("button").first();
     await expect(first).toBeVisible();
     await expect(rows(page).getByRole("button")).toHaveCount(3);
@@ -570,7 +579,7 @@ for (const [name, theme] of [
       const title = await box(row.locator(".cash-row-title"));
       const sum = await box(row.locator(".history-sum"));
       const meta = await box(row.locator(".sale-meta"));
-      const way = await box(row.locator(".badge"));
+      const way = await box(row.locator(".way-pill"));
       expect(sum.x).toBeGreaterThanOrEqual(title.x + title.width);
       expect(sum.x + sum.width).toBeLessThanOrEqual(main.x + main.width + 0.5);
       expect(sum.height).toBeLessThan(30);
@@ -580,11 +589,14 @@ for (const [name, theme] of [
       expect(way.x + way.width).toBeLessThanOrEqual(main.x + main.width + 0.5);
     }
     for (const part of [
-      page.locator(".correct-days span").first(),
+      // The day's ways, the one open and one not (stage 2, money task list,
+      // P2-1).
+      page.locator('.correct-days button[aria-pressed="true"]'),
+      page.locator('.correct-days button[aria-pressed="false"]').first(),
       first.locator(".cash-row-title"),
       first.locator(".sale-meta"),
       first.locator(".history-sum"),
-      first.locator(".badge"),
+      first.locator(".way-pill"),
     ])
       expect(await contrast(part)).toBeGreaterThanOrEqual(4.5);
     // Nothing wider than the phone.

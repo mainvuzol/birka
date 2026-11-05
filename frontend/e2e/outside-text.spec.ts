@@ -330,8 +330,12 @@ test("text from outside is shown with its hidden characters marked, on every scr
     .toISOString()
     .slice(0, 10);
   // By Kyiv's clock, which the phone's may not be: on the calendar (cash
-  // task list, P2-4).
-  await page.getByRole("radio", { name: "Інший день" }).check();
+  // task list, P2-4), from the days' switch (stage 2, money task list,
+  // P2-1).
+  await page
+    .getByRole("group", { name: "Який день" })
+    .getByRole("button", { name: "Інший день", exact: true })
+    .click();
   await page.getByLabel("День", { exact: true }).fill(cashDay);
   await shownSafely(page, `${tag}${marks[RLO]}21 шт`);
 

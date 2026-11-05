@@ -20,6 +20,29 @@ import type { MoreBack } from "@/shared/More";
 import { Back } from "@/shared/Back";
 import { ScreenHeader } from "@/shared/ScreenHeader";
 const base = "/catalog/match-decisions";
+/**
+ * A name's answer saved, in the shop's words (stage 2, goods task list,
+ * P2-2): «Збережено: «{опис}» — назва {модель}.», or «— не назва» for a
+ * model it is not. The description as its name is kept: spaces as one.
+ */
+function feedbackSaid(
+  command: Command,
+  decision: Decision | undefined,
+): string {
+  if (decision === undefined) return "Збережено.";
+  const variant = command.body.variant_id;
+  const name =
+    decision.preview.candidates.find((c) => c.variant_id === variant)
+      ?.display_name ??
+    (decision.resolved_variant_id === variant
+      ? decision.creation?.display_name
+      : undefined);
+  if (name === undefined) return "Збережено.";
+  const phrase = decision.preview.raw_text.trim().replace(/\s+/g, " ");
+  return command.body.event === "REJECT"
+    ? `Збережено: «${visible(phrase)}» — не назва ${visible(name)}.`
+    : `Збережено: «${visible(phrase)}» — назва ${visible(name)}.`;
+}
 function message(error: unknown): string {
   // Correcting the catalogue (owner decision, 2026-10-03) says its own.
   if (
@@ -28,7 +51,7 @@ function message(error: unknown): string {
   )
     return errorText(error);
   if (error instanceof ApiError && error.code === "IDEMPOTENCY_CONFLICT")
-    return "Для цієї операції або назви вже збережено інше рішення. Оновіть перегляд; повторно зараховувати свідчення не потрібно.";
+    return "Для цієї операції або назви вже збережено інше рішення. Оновіть перегляд; зберігати відповідь ще раз не потрібно.";
   if (error instanceof ApiError && error.code === "CATALOG_AMBIGUOUS")
     return "Модель неоднозначна або стан каталогу змінився. Перевірте обрану модель. Для окремої моделі зі схожою назвою вкажіть її відмінність; за тимчасового конфлікту повторіть спробу.";
   if (error instanceof ApiError && error.status === 409)
@@ -82,6 +105,17 @@ export function Catalog({
   });
   async function run(command: Command): Promise<void> {
     setSuccess("");
+    // Said of the proposal as it was read before the answer.
+    const said = command.path.endsWith("/alias-feedback")
+      ? feedbackSaid(
+          command,
+          cache.getQueryData<Decision>([
+            "catalog-decision",
+            journalKey,
+            command.decisionId,
+          ]),
+        )
+      : "Рішення збережено.";
     const result = await submitCatalogCommand(journalKey, token, command);
     if (result) {
       cache.setQueryData(
@@ -91,11 +125,7 @@ export function Catalog({
       setSelected(result.decision_id);
       setCreating(false);
       setRaw("");
-      setSuccess(
-        command.path.endsWith("/alias-feedback")
-          ? "Свідчення про назву збережено. Автоматичне підтвердження назв вимкнене."
-          : "Рішення збережено.",
-      );
+      setSuccess(said);
       await cache.invalidateQueries({
         queryKey: ["catalog-decisions", journalKey],
       });
@@ -354,7 +384,7 @@ function Failure({
   return (
     <div role="alert">
       <p>{message(error)}</p>
-      <button onClick={retry}>Повторити завантаження</button>
+      <button onClick={retry}>Спробувати ще раз</button>
     </div>
   );
 }
@@ -464,10 +494,13 @@ function Detail({
       {open ? (
         <fieldset disabled={blocked}>
           <legend>Оберіть товар після перевірки</legend>
+          {/* What the person may do, never the rule (stage 2, goods task
+              list, P1-5). */}
           {candidates.length === 0 && (
             <p>
-              Кандидатів немає. Перевірте опис і створіть товар, якщо маєте
-              право, або відхиліть пропозицію з поясненням.
+              {canCreate
+                ? "Кандидатів немає. Перевірте опис і створіть товар або відхиліть пропозицію з поясненням."
+                : "Кандидатів немає. Перевірте опис або відхиліть пропозицію з поясненням."}
             </p>
           )}
           {candidates.map((c) => (
@@ -530,11 +563,9 @@ function Detail({
         </fieldset>
       ) : (
         <fieldset disabled={blocked || aliasTooLong}>
-          <legend>Свідчення про назву — за бажанням</legend>
+          <legend>Цей опис — назва товару?</legend>
           {aliasTooLong && (
-            <p>
-              Опис задовгий для назви: свідчення підтримують до 200 символів.
-            </p>
+            <p>Опис задовгий для назви: назва — до 200 символів.</p>
           )}
           <p>
             Зберігайте зв’язок лише коли весь початковий опис справді є назвою
@@ -573,7 +604,7 @@ function Detail({
                   setFeedback(false);
                 }}
               >
-                Підтвердити зв’язок назви
+                Так, це його назва
               </button>
             </>
           )}
@@ -610,7 +641,7 @@ function Detail({
               setRejectedVariant("");
             }}
           >
-            Заперечити зв’язок назви
+            Ні, не про нього
           </button>
         </fieldset>
       )}

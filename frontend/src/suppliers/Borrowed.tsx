@@ -16,7 +16,7 @@ const pageSize = 20;
  * Goods borrowed from another shop, and goods under consignment (owner
  * decisions, 2026-10-01).
  *
- * They arrive through «Прийняти товар», from a supplier, at a price agreed
+ * They arrive through «Прийшов товар», from a supplier, at a price agreed
  * for each, and the till sells them as any goods. Here the owner or a
  * manager marks some sold — an invoice in «Накладні» for their price — or
  * sends unsold ones back to the supplier for nothing. A mistaken «Продано»
@@ -82,7 +82,7 @@ export function Borrowed({
       <h3>Позичене й під реалізацію</h3>
       <p className="hint">
         Товар інших магазинів і постачальників: сплачують лише продане, за
-        домовленою ціною, непродане повертають. Береться через «Прийняти товар».
+        домовленою ціною, непродане повертають. Береться через «Прийшов товар».
       </p>
       {invoiceCommand.pending && (
         <p className="notice">
@@ -139,7 +139,7 @@ export function Borrowed({
                 );
                 if (outcome.kind === "done") {
                   await changed(
-                    `Продано ${String(quantity)} од.: у «Накладних» борг «${visible(lot.supplier.name)}» ${money(outcome.result.amount)}.`,
+                    `Продано ${String(quantity)} шт.: у «Накладних» борг «${visible(lot.supplier.name)}» ${money(outcome.result.amount)}.`,
                   );
                   return null;
                 }
@@ -176,7 +176,7 @@ export function Borrowed({
                 );
                 if (outcome.kind === "done") {
                   await changed(
-                    `Повернено постачальнику «${visible(lot.supplier.name)}»: ${String(quantity)} од.`,
+                    `Повернено постачальнику «${visible(lot.supplier.name)}»: ${String(quantity)} шт.`,
                   );
                   return null;
                 }
@@ -229,11 +229,11 @@ function LotCard({
   function quantity(): number | null {
     const value = Number(count);
     if (!/^\d+$/.test(count) || value < 1) {
-      setProblem("Вкажіть, скільки одиниць.");
+      setProblem("Вкажіть, скільки штук.");
       return null;
     }
     if (value > lot.on_hand) {
-      setProblem(`На руках лише ${String(lot.on_hand)} од.`);
+      setProblem(`На руках лише ${String(lot.on_hand)} шт.`);
       return null;
     }
     return value;
@@ -253,14 +253,14 @@ function LotCard({
         {visible(lot.location_name)}
       </small>
       <p>
-        {lot.unit_cost ? `${money(lot.unit_cost)} за од. · ` : ""}взято{" "}
+        {lot.unit_cost ? `${money(lot.unit_cost)} за шт. · ` : ""}взято{" "}
         {lot.received} · продано {lot.sold} · повернено {lot.returned} · на
         руках <strong>{lot.on_hand}</strong>
       </p>
       {lot.on_hand > 0 && (
         <fieldset disabled={disabled}>
           <label>
-            Скільки одиниць
+            Скільки, шт.
             <input
               inputMode="numeric"
               value={count}
@@ -316,7 +316,7 @@ function refusalText(error: unknown): string {
       return "На складі цього товару вже менше: можливо, його продали. Позначте проданим.";
     switch (error.details.reason) {
       case "MORE_THAN_ON_HAND":
-        return `На руках лише ${String(error.details.on_hand)} од.`;
+        return `На руках лише ${String(error.details.on_hand)} шт.`;
       case "NO_PRICE":
         return "Для цього товару не вказали домовлену ціну.";
     }

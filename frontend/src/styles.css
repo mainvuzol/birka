@@ -2527,6 +2527,13 @@ section.credits.customer-card {
   color: var(--pencil);
   font-weight: 650;
 }
+/* The price's two (stage 2, admin task list, P1-2): one row at 360 px, a
+   long store's name cut short with «…»; its whole name is still read. */
+.price-scope button {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
 .mode-switch button[aria-current="page"],
 .mode-switch button[aria-pressed="true"] {
   background: var(--card);
@@ -2547,7 +2554,12 @@ section.credits.customer-card {
 .hand-back-what {
   margin: 0 0 6px;
 }
+/* Its glyph beside its words, centred on them, wherever it stands — not
+   only in a stub's head (stage 2, money task list, P2-1; review). */
 .way-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-size: 14px;
 }
 .hand-back-what {
@@ -3283,11 +3295,31 @@ section.cash-count {
   align-items: flex-start;
   gap: 4px;
 }
-.close-row .badge,
-.close-unclosed .badge {
+/* A close's sticker under its day, its sign before the words; its knot at
+   the row's left by the title's first line: tied, or a ring while its
+   reason waits (stage 2, money task list, P1-2). */
+.close-pill {
   font-size: 13px;
 }
+.close-row {
+  align-items: flex-start;
+}
+.close-row .sale-open {
+  align-self: center;
+}
+.close-node {
+  flex: none;
+  width: 22px;
+  margin-top: 7px;
+}
+.close-ring {
+  border: 1.5px solid var(--warning);
+  background: transparent;
+}
 .close-unclosed {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
   padding: 12px 4px;
   border-bottom: 1px solid var(--line);
 }
@@ -3381,16 +3413,34 @@ section.cash-count {
 /* «Замовлення» (orders task list, P0-1): the heading and «+» on one line,
    the waybill's field under them; a row a parcel's tag, its pill under the
    goods as «Закриття»'s; a cancel asked first at the card's foot (P0-4). */
+/* «Нове замовлення» in words, its «+» before them (stage 2, orders task
+   list, P1-4): the header's verb, `button-s` in the link's colour as
+   «Змінити магазин» — beside «Замовлення» at 360 px in the app's face,
+   never cut. Its words are wide enough to be its hit area, so nothing pads
+   them, and the title gives it 8 px, not 12. In the device's face, or its
+   text larger, it goes under the title whole: the title's word is never
+   broken (review). A class, not `:has()`. */
+.screen-title.wraps {
+  flex-wrap: wrap;
+  column-gap: 8px;
+  row-gap: 0;
+}
 .orders-add {
+  display: inline-flex;
   flex: 0 0 auto;
-  width: 44px;
-  min-width: 44px;
-  height: 44px;
+  align-items: center;
+  gap: 4px;
   min-height: 44px;
   padding: 0;
-  border-radius: 14px;
-  font-size: 26px;
-  line-height: 1;
+  border: 0;
+  background: transparent;
+  color: var(--link);
+  font-size: 15px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+.orders-add .icon {
+  flex: none;
 }
 .order-rows {
   margin: 0;
@@ -3405,8 +3455,30 @@ section.cash-count {
 .order-row .sale-meta {
   overflow-wrap: anywhere;
 }
+/* No order yet (spec §6.28): a blank tag drawn, the words under it (stage
+   2, orders task list, P1-4). */
 .orders-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
   margin: 12px 0;
+  padding-top: 20px;
+  text-align: center;
+}
+.orders-empty p {
+  margin: 0;
+}
+.orders-empty .t-meta {
+  color: var(--pencil);
+}
+.orders-empty button {
+  margin-top: 8px;
+}
+.orders-empty-mark {
+  width: 64px;
+  height: 64px;
+  color: var(--edge);
 }
 .cancel-order {
   margin-top: 16px;

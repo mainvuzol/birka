@@ -646,7 +646,7 @@ test.describe("«Оля»'s day at «Каса»", () => {
     await expect(row.locator(".sale-meta")).toHaveText(
       /^\d{2}:\d{2} · порахували 2\s000,00 · мало бути 2\s050,00$/,
     );
-    await expect(row.locator(".badge")).toHaveText("Нестача 50,00 грн");
+    await expect(row.locator(".close-pill")).toHaveText("Нестача 50,00 грн");
     await expect(
       closes.getByRole("listitem").filter({ hasText: "Перший підрахунок" }),
     ).toContainText("порахували 1 000,00");
@@ -992,7 +992,7 @@ test("a blocked store: only the network's owner counts and closes its day", asyn
   await openAs(page, marko);
   await openStore(page, /^Зупинений PAUSED/);
   await expect(
-    page.getByText(/Роботу в цьому магазині зупинено/),
+    page.getByText(/^Продажі, приймання, повернення й оплати тут зупинено\./),
   ).toBeVisible();
   // No menu at all: neither «Каса» a tab nor «Ще» to hold it as a row
   // («Усе на бірці» task list, P0-4).

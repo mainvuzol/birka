@@ -4,6 +4,8 @@ import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { money } from "@/orders/types";
 import type { Store } from "@/orders/types";
 import { api, errorText } from "@/shared/api";
+import { Eyelet } from "@/shared/Eyelet";
+import { Icon } from "@/shared/Icon";
 import { Placeholder } from "@/shared/Placeholder";
 import { visible } from "@/shared/visible";
 import { Back } from "@/shared/Back";
@@ -23,17 +25,40 @@ function bare(value: string): string {
   return value.replace(/\u00a0грн$/, "");
 }
 
-/** What a close came to, as a pill: a shortage or a surplus a warning, to
- * the kopeck the accent's, a first count nothing to compare (owner
- * decision, 2026-10-21, В4 (а); cash task list, P1-4). */
+/** What a close came to, as a sticker: a shortage or a surplus a warning
+ * with its triangle, to the kopeck the accent's with its knot, as the
+ * close's result says it; a first count nothing to compare, no sign (owner
+ * decision, 2026-10-21, В4 (а); cash task list, P1-4; stage 2, money task
+ * list, P1-2). */
 function Pill({ close }: { close: Close }): JSX.Element {
   if (isOpening(close))
-    return <span className="badge neutral">Перший підрахунок</span>;
+    return <span className="sticker close-pill">Перший підрахунок</span>;
   const difference = differenceOf(close.difference ?? "0.00");
   return difference.match ? (
-    <span className="badge match">Збіглося</span>
+    <span className="sticker close-pill cash-difference match">
+      <Icon name="eyelet-knot" size={16} />
+      Збіглося
+    </span>
   ) : (
-    <span className="badge warn">{difference.text}</span>
+    <span className="sticker close-pill cash-difference warn">
+      <Icon name="warning" size={16} />
+      {difference.text}
+    </span>
+  );
+}
+
+/** A close's knot at the row's left (spec §6.9; stage 2, money task list,
+ * P1-2): tied — nothing is left to do with it; a ring — its reason waits
+ * for whoever counted. Its words say it in the row's meta. */
+function Node({ close }: { close: Close }): JSX.Element {
+  return (
+    <span className="close-node" aria-hidden="true">
+      {close.reason_required && close.reason === null ? (
+        <span className="eyelet eyelet-8 close-ring" />
+      ) : (
+        <Eyelet state="knot" size={8} />
+      )}
+    </span>
   );
 }
 
@@ -240,6 +265,7 @@ function HistoryRow({
           data-close={close.id}
           onClick={open}
         >
+          <Node close={close} />
           <span className="sale-main">
             {/* The pill under the day, a column of its own down the list;
                 the figures the row's whole width. */}
@@ -263,9 +289,11 @@ function HistoryRow({
           className="close-unclosed"
           aria-label={`${dayOf(day)} — не закрито`}
         >
+          {/* No knot: nobody closed it. */}
+          <span className="close-node" aria-hidden="true" />
           <span className="close-head">
             <span className="cash-row-title">{dayOf(day)}</span>
-            <span className="badge neutral">Не закрито</span>
+            <span className="sticker close-pill">Не закрито</span>
           </span>
         </li>
       ))}

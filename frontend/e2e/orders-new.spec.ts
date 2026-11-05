@@ -588,6 +588,15 @@ test("a model with no price: its field empty and focused, the panel's sum a dash
   const price = line.getByLabel("Ціна, грн");
   await expect(price).toHaveValue("");
   await expect(price).toBeFocused();
+  // The keyboard's «Готово» puts it away, nothing sent (stage 2, orders
+  // task list, P0-5).
+  await expect(price).toHaveAttribute("enterkeyhint", "done");
+  await price.press("Enter");
+  await expect(price).not.toBeFocused();
+  await expect(
+    page.getByRole("heading", { name: "Нове замовлення", exact: true }),
+  ).toBeVisible();
+  await price.focus();
   await expect(
     line.getByText(
       "Ціни продажу ще немає — впишіть домовлену. Ціну для всіх задає менеджер: «Продаж» › назва моделі › «Змінити ціну».",

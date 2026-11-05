@@ -49,7 +49,7 @@ function signed(delta: number): string {
   return delta > 0 ? `+${String(delta)}` : `−${String(Math.abs(delta))}`;
 }
 
-/** «Пораховано позицій: 12 · не перевірено: 3 · нестача: 2 од. · …» */
+/** «Пораховано позицій: 12 · не перевірено: 3 · нестача: 2 шт. · …» */
 export function sumsText(sums: StocktakeSums): string {
   const parts = [
     `Пораховано позицій: ${String(sums.counted_positions)}`,
@@ -57,11 +57,11 @@ export function sumsText(sums: StocktakeSums): string {
   ];
   if (sums.shortage_units)
     parts.push(
-      `нестача: ${String(sums.shortage_units)} од. (позицій: ${String(sums.shortage_positions)})`,
+      `нестача: ${String(sums.shortage_units)} шт. (позицій: ${String(sums.shortage_positions)})`,
     );
   if (sums.surplus_units)
     parts.push(
-      `надлишок: ${String(sums.surplus_units)} од. (позицій: ${String(sums.surplus_positions)})`,
+      `надлишок: ${String(sums.surplus_units)} шт. (позицій: ${String(sums.surplus_positions)})`,
     );
   if (!sums.shortage_units && !sums.surplus_units)
     parts.push("розбіжностей немає");
@@ -83,13 +83,13 @@ export function countRefusalText(
     typeof details.actual === "number" &&
     details.expected === 0
   )
-    return `Цей товар уже є в обліку цього складу: ${String(details.actual)} од. Перерахуйте його й введіть кількість ще раз.${after}`;
+    return `Цей товар уже є в обліку цього складу: ${String(details.actual)} шт. Перерахуйте його й введіть кількість ще раз.${after}`;
   if (error.code === "STOCK_CHANGED" && typeof details.actual === "number")
     return `Поки ви рахували, облік змінився: було ${String(details.expected)}, тепер ${String(details.actual)}. Перерахуйте цей товар і введіть кількість ще раз.${after}`;
   if (error.code === "STOCKTAKE_FINISHED")
     return `Цю інвентаризацію вже завершили. Щоб рахувати далі, почніть нову.${after}`;
   if (details.reason === "RESERVED" && typeof details.reserved === "number")
-    return `На цей товар є резерв замовлення (${String(details.reserved)} од.). Якщо кількість не збігається, виправити облік можна після видачі або скасування замовлення.${after}`;
+    return `На цей товар є резерв замовлення (${String(details.reserved)} шт.). Якщо кількість не збігається, виправити облік можна після видачі або скасування замовлення.${after}`;
   if (error.status === 422 && typeof details.size_id === "string")
     return `Облік товару з невідомим розміром можна лише зменшити.${after}`;
   return `${inOwnWords(
@@ -179,7 +179,7 @@ export function Stocktakes({
               void list.refetch();
             }}
           >
-            Повторити завантаження
+            Спробувати ще раз
           </button>
         </div>
       ) : (
@@ -319,7 +319,7 @@ function Differences({
         <li key={`${item.product_variant_id}:${item.size_id}`}>
           {visible(item.display_name)} ·{" "}
           {item.size_is_unknown ? "розмір невідомий" : visible(item.size_label)}{" "}
-          — {item.count ? signed(item.count.net_delta) : ""} од.
+          — {item.count ? signed(item.count.net_delta) : ""} шт.
           {item.count
             ? ` (пораховано ${String(item.count.counted_quantity)}, ${visible(item.count.counted_by)})`
             : ""}
@@ -500,7 +500,7 @@ export function Stocktake({
       ) : page.error ? (
         <div role="alert">
           <p>{errorText(page.error)}</p>
-          <button onClick={reread}>Повторити завантаження</button>
+          <button onClick={reread}>Спробувати ще раз</button>
         </div>
       ) : (
         <>
@@ -779,7 +779,7 @@ function CountForm({
     typed === null
       ? "Вкажіть, скільки одиниць фактично на складі."
       : typed > 10000
-        ? "Не більше 10000 од. однієї позиції."
+        ? "Не більше 10000 шт. однієї позиції."
         : target.sizeIsUnknown && typed > system
           ? "Облік товару з невідомим розміром можна лише зменшити."
           : "";
@@ -832,7 +832,7 @@ function CountForm({
         </p>
       )}
       <label>
-        Фактично на складі, од.
+        Фактично на складі, шт.
         <input
           inputMode="numeric"
           value={count}
