@@ -12,7 +12,7 @@ import {
   toTill,
   units,
 } from "./fixtures";
-import type { Page, Route } from "@playwright/test";
+import type { Page, Response, Route } from "@playwright/test";
 import { createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
 
@@ -635,7 +635,7 @@ test("the real stock of a model, as the server lists it; «← Продаж» is
 }) => {
   const answers: { items: ReturnType<typeof row>[] }[] = [];
   const searched: string[] = [];
-  page.on("response", (response) => {
+  const listen = (response: Response): void => {
     const url = new URL(response.url());
     if (
       url.pathname.endsWith("/catalog/stock-options") &&
@@ -643,11 +643,16 @@ test("the real stock of a model, as the server lists it; «← Продаж» is
       response.status() === 200
     ) {
       searched.push(url.search);
-      void response.json().then((body: { items: ReturnType<typeof row>[] }) => {
-        answers.push(body);
-      });
+      // A body still coming as the journey ends is not read (CI, #170).
+      response.json().then(
+        (body: { items: ReturnType<typeof row>[] }) => {
+          answers.push(body);
+        },
+        () => undefined,
+      );
     }
-  });
+  };
+  page.on("response", listen);
   await enter(page);
   await toTill(page);
   const field = page.getByRole("searchbox", { name: "Знайти модель" });
@@ -702,6 +707,8 @@ test("the real stock of a model, as the server lists it; «← Продаж» is
   // Asked by the till's own words.
   expect(searched.every((search) => search.includes("query="))).toBe(true);
   expect(writes).toEqual([]);
+  // The detail's reads are counted: what the till reads next is not.
+  page.off("response", listen);
 
   await page.getByRole("button", { name: "Назад до «Продаж»" }).click();
   await expect(
