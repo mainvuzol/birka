@@ -5,6 +5,7 @@ import {
   confirmClose,
   test,
   expect,
+  expectPlate,
   expectStub,
   fillLine,
   fromPaper,
@@ -761,6 +762,12 @@ test.describe("1. the seller is told to sell on paper", () => {
     await expect(
       failed.getByRole("button", { name: "Спробувати ще раз" }),
     ).toBeVisible();
+    // A warning's plate and its triangle, never a refusal's nor a debt's,
+    // in both themes (stage 2, orders task list, P0-2).
+    await expectPlate(failed, "unread");
+    await page.emulateMedia({ colorScheme: "dark" });
+    await expectPlate(failed, "unread", "dark");
+    await page.emulateMedia({ colorScheme: "light" });
 
     server.stock = "ok";
     await failed.getByRole("button", { name: "Спробувати ще раз" }).click();
@@ -780,6 +787,34 @@ test.describe("1. the seller is told to sell on paper", () => {
     await expect(failed).not.toContainText("Не вдалося виконати операцію");
   });
 
+  test("three kept operations the phone cannot read: one refusal's plate, each said in it (stage 2, orders task list, P0-2)", async ({
+    page,
+  }) => {
+    await seed(page, {
+      [saleKey]: "{",
+      [orderKey]: "{",
+      [`birka:receipt-pending:${ids.organization}:${ids.user}:${ids.store}`]:
+        "{",
+    });
+    await serve(page);
+    await page.goto(launch());
+    await openStore(page, /Подільський/);
+    const failed = page.getByRole("alert");
+    await expect(failed).toHaveCount(1);
+    await expect(failed.locator("p")).toHaveText([
+      "Не вдалося прочитати збережену команду. Створення операцій зупинено. Зверніться до менеджера, не очищайте дані застосунку.",
+      "Не вдалося прочитати збережений продаж. Не очищайте дані застосунку; зверніться до менеджера.",
+      "Не вдалося прочитати збережене приймання. Не очищайте дані застосунку; зверніться до менеджера.",
+    ]);
+    await expectPlate(failed, "refused");
+    await page.emulateMedia({ colorScheme: "dark" });
+    await expectPlate(failed, "refused", "dark");
+    await page.setViewportSize({ width: 360, height: 640 });
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(360);
+  });
+
   test("at «Каса», whose drawer read went unanswered, with how to close later", async ({
     page,
   }) => {
@@ -790,6 +825,7 @@ test.describe("1. the seller is told to sell on paper", () => {
     await section(page, "Каса");
     const failed = page.getByRole("alert");
     await expect(failed).toContainText(UNREACHABLE);
+    await expectPlate(failed, "unread");
     await expect(failed).toContainText(
       "Касу зараз не закрити: сервер не відповідає. Перерахуйте гроші й запишіть суму для себе. Якщо сервер відповість сьогодні — спершу внесіть усе з паперу, потім закрийте касу; якщо ні — закриєте наступного вечора.",
     );
@@ -3542,19 +3578,23 @@ test.describe("10. a kept operation the phone settles says what became of it", (
       });
       await page.goto(launch());
       await openStore(page, /Подільський/);
-      // Checked by itself on opening, with no tap.
+      // Checked by itself on opening, with no tap: the title stands, the
+      // ring turns (stage 2, orders task list, P0-1).
       await expect(
-        page.getByRole("heading", { name: "Перевіряємо коригування…" }),
+        page.getByRole("heading", { name: "Коригування ще не підтверджено" }),
       ).toBeVisible();
+      await expect(page.locator(".check-line .eyelet-spin")).toHaveCount(1);
       await page.getByLabel("Склад для перегляду").selectOption(ids.shared);
       await expect.poll(() => reads).toBe(1);
       answer();
       // Refused: settled, and said.
       await expect(page.getByText(refusal.said, { exact: true })).toBeVisible();
       await expect(
-        page.getByRole("heading", { name: "Незавершене коригування" }),
+        page.getByRole("heading", { name: "Коригування ще не підтверджено" }),
       ).toHaveCount(0);
-      await expect(page.getByText("Коригування підтверджено")).toHaveCount(0);
+      await expect(
+        page.getByRole("heading", { name: "Коригування записано один раз" }),
+      ).toHaveCount(0);
       expect(
         await page.evaluate((key) => localStorage.getItem(key), adjustmentKey),
       ).toBeNull();
@@ -3808,6 +3848,16 @@ test.describe("10. a kept operation the phone settles says what became of it", (
     await expect(
       page.getByText(/ще не підтверджено|Спробуйте ще раз/),
     ).toHaveCount(0);
+    // Recorded: over the till, the banner in the paid colours, never the
+    // kept one (stage 2, orders task list, P0-1).
+    await expect(
+      page
+        .locator("section.banner-recorded")
+        .getByRole("heading", { name: "Операцію «Відправлено» записано" }),
+    ).toBeVisible();
+    await expect(page.locator("section.banner-kept, .stub-kept")).toHaveCount(
+      0,
+    );
     // The banner's own button reads the order again.
     const again = page.getByRole("button", { name: "Оновити результат" });
     await expect(again).toBeEnabled();
@@ -5481,5 +5531,372 @@ test.describe("11. the stub «Корінець»: every press says what became o
       return names;
     });
     expect(turning).toEqual(["eyelet-spin"]);
+  });
+});
+
+test.describe("12. every journal's kept operation is the sale's stub (stage 2, orders task list, P0-1)", () => {
+  const stocktake = randomUUID();
+
+  /** The app opened from Telegram, every event it sends kept to read. */
+  async function inTelegram(
+    page: Page,
+  ): Promise<(event: string) => Promise<unknown[]>> {
+    await page.addInitScript(() => {
+      const host = window as unknown as {
+        TelegramWebviewProxy: {
+          postEvent: (event: string, data: string) => void;
+        };
+        told: [string, unknown][];
+      };
+      host.told = [];
+      host.TelegramWebviewProxy = {
+        postEvent: (event, data) => {
+          host.told.push([event, data ? (JSON.parse(data) as unknown) : null]);
+        },
+      };
+    });
+    return (event) =>
+      page.evaluate(
+        (wanted) =>
+          (window as unknown as { told: [string, unknown][] }).told
+            .filter(([name]) => name === wanted)
+            .map(([, data]) => data),
+        event,
+      );
+  }
+
+  /** Whether Telegram asks before the app closes, as last told. */
+  function asks(
+    told: (event: string) => Promise<unknown[]>,
+  ): () => Promise<unknown> {
+    return async () =>
+      (await told("web_app_setup_closing_behavior")).at(-1) ?? null;
+  }
+
+  /** As `contrast` in orders-new.spec.ts: the words against the first
+   * ground under them. */
+  async function contrast(element: Locator): Promise<number> {
+    return element.evaluate((node) => {
+      const rgb = (value: string): number[] =>
+        (value.match(/[\d.]+/g) ?? []).map(Number);
+      const luminance = ([r, g, b]: number[]): number => {
+        const channel = (c: number): number => {
+          const v = c / 255;
+          return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+        };
+        return (
+          0.2126 * channel(r ?? 0) +
+          0.7152 * channel(g ?? 0) +
+          0.0722 * channel(b ?? 0)
+        );
+      };
+      let ground: Element | null = node;
+      let background = "rgba(0, 0, 0, 0)";
+      while (ground) {
+        background = getComputedStyle(ground).backgroundColor;
+        const alpha = rgb(background)[3];
+        if (alpha === undefined || alpha > 0) break;
+        ground = ground.parentElement;
+      }
+      const fore = luminance(rgb(getComputedStyle(node).color));
+      const back = luminance(rgb(background));
+      return (Math.max(fore, back) + 0.05) / (Math.min(fore, back) + 0.05);
+    });
+  }
+
+  for (const kept of [
+    {
+      name: "delivery",
+      scope: "receipt-pending",
+      path: "/inventory/receipts",
+      rights: ["catalog:confirm", "inventory:receive", "inventory:view"],
+      screen: "Прийшов товар",
+      body: {
+        location_id: ids.shared,
+        notes: null,
+        lines: [
+          {
+            product_variant_id: ids.variant,
+            size_id: ids.size,
+            quantity: 1,
+            acquisition_type: "PURCHASE",
+            unit_cost: "1000.00",
+          },
+        ],
+      },
+      title: "Приймання ще не підтверджено",
+      check: "Перевірити результат приймання",
+      answer: { id: randomUUID() },
+      settled: "Приймання записано один раз",
+      line: null,
+    },
+    {
+      name: "stock correction",
+      scope: "adjustment-pending",
+      path: "/inventory/adjustments",
+      rights: ["inventory:view", "inventory:adjust"],
+      screen: "Залишки",
+      body: {
+        location_id: ids.shared,
+        product_variant_id: ids.variant,
+        size_id: ids.size,
+        note: null,
+        quantity_delta: -2,
+        reason_code: "LOST",
+        expected_quantity: null,
+      },
+      title: "Коригування ще не підтверджено",
+      check: "Перевірити результат коригування",
+      answer: { quantity_before: 3, quantity_after: 1 },
+      settled: "Коригування записано один раз",
+      line: "Облік 3 → 1.",
+    },
+    {
+      name: "stocktake's count",
+      scope: "stocktake-count-pending",
+      path: `/stocktakes/${stocktake}/counts`,
+      rights: ["inventory:view", "inventory:adjust"],
+      screen: "Інвентаризація",
+      body: {
+        stocktake_id: stocktake,
+        product_variant_id: ids.variant,
+        size_id: ids.size,
+        counted_quantity: 3,
+        expected_quantity: 5,
+      },
+      title: "Підрахунок ще не підтверджено",
+      check: "Перевірити результат підрахунку",
+      answer: { quantity_before: 5, counted_quantity: 3, quantity_delta: -2 },
+      settled: "Підрахунок записано один раз",
+      line: "Облік 5 → 3.",
+    },
+  ])
+    test(`a kept ${kept.name} is its stub on «${kept.screen}», a banner over «Ще», its title the same while checked; confirmed, torn off once, Telegram no longer asking`, async ({
+      page,
+    }) => {
+      const told = await inTelegram(page);
+      const key = `birka:${kept.scope}:${ids.organization}:${ids.user}:${ids.store}`;
+      await seed(page, {
+        [key]: JSON.stringify({
+          key: randomUUID(),
+          ambiguous: true,
+          since: new Date(Date.now() - 30 * 60_000).toISOString(),
+          body: { store_id: ids.store, command_id: randomUUID(), ...kept.body },
+        }),
+      });
+      await serve(page);
+      await on(page, "/me", async (route) => {
+        await route.fulfill({
+          json: {
+            ...me,
+            stores: me.stores.map((store) => ({
+              ...store,
+              permissions: kept.rights,
+            })),
+          },
+        });
+      });
+      // The server gone from the first resend on: nothing answers, so
+      // nothing reads as its return; `held`, a resend waits to be lost.
+      let answer: "lost" | "held" | "ok" = "lost";
+      let gone = false;
+      let release: () => void = () => undefined;
+      const sent: { key: string | null; body: string }[] = [];
+      // Registered first, so the operation's own answer is heard before it.
+      await page.route("**/api/v1/**", async (route) => {
+        if (gone) await route.abort("connectionreset");
+        else await route.fallback();
+      });
+      await on(page, kept.path, async (route, request) => {
+        sent.push({
+          key: await request.headerValue("Idempotency-Key"),
+          body: request.postData() ?? "",
+        });
+        if (answer === "held")
+          await new Promise<void>((done) => {
+            release = done;
+          });
+        if (answer === "ok") {
+          await route.fulfill({ status: 201, json: kept.answer });
+          return;
+        }
+        gone = true;
+        await route.abort("connectionreset");
+      });
+      const hash = launch().slice(2);
+      await page.goto(`/#${hash}&tgWebAppVersion=9.1`);
+      await openStore(page, /Подільський/);
+
+      // On its own screen: the stub still attached, its sticker first, the
+      // phone checking by itself.
+      await expect(
+        page.getByRole("heading", { name: kept.screen, exact: true }),
+      ).toBeVisible();
+      const stub = page.locator(".stub-notice .stub");
+      await expect(stub).toHaveClass(/\bstub-kept\b/);
+      await expect(stub.locator("> .eyelet")).toHaveClass(/\beyelet-dashed\b/);
+      await expect(stub.locator(".stub-head")).toHaveText("Ще не підтверджено");
+      await expect(stub.getByRole("heading")).toHaveText(kept.title);
+      const check = stub.getByRole("button", { name: kept.check });
+      await expect(check).toHaveClass(/\bquiet\b/);
+      await expect(stub.locator(".check-line")).toHaveText(
+        /^Перевіряємо кожні 20 с/,
+      );
+      await expect.poll(asks(told)).toEqual({ need_confirmation: true });
+      // It reads at 4.5:1 at 360 × 640, in both themes, nothing wider than
+      // the screen.
+      await page.setViewportSize({ width: 360, height: 640 });
+      for (const scheme of ["light", "dark"] as const) {
+        await page.emulateMedia({ colorScheme: scheme });
+        for (const part of [
+          stub.getByRole("heading"),
+          stub.locator(".stub-head .badge"),
+          stub.locator("p").first(),
+          stub.locator(".check-line").getByText(/^Перевіряємо кожні 20 с/),
+          check,
+        ])
+          expect(await contrast(part)).toBeGreaterThanOrEqual(4.5);
+        expect(
+          await page.evaluate(() => document.documentElement.scrollWidth),
+        ).toBeLessThanOrEqual(360);
+      }
+      await page.emulateMedia({ colorScheme: "light" });
+
+      // Over «Ще», a banner with the same words; checked from it, its title
+      // stands and the ring turns on its check line.
+      await more(page);
+      const banner = page.locator("section.banner-kept");
+      await expect(banner.getByRole("heading")).toHaveText(kept.title);
+      await expect(page.locator(".stub-kept")).toHaveCount(0);
+      const again = banner.getByRole("button", { name: kept.check });
+      await expect(again).not.toHaveClass(/\bquiet\b/);
+      answer = "held";
+      const before = sent.length;
+      await again.click();
+      await expect.poll(() => sent.length).toBe(before + 1);
+      await expect(banner.locator(".check-line .eyelet-spin")).toHaveCount(1);
+      await expect(banner.getByRole("heading")).toHaveText(kept.title);
+      release();
+      await expect(banner.locator(".check-line .eyelet-spin")).toHaveCount(0);
+      await expect(banner.getByRole("heading")).toHaveText(kept.title);
+
+      // Its own screen again, the server back: confirmed once, the stub torn
+      // off, felt, and Telegram no longer asks.
+      await page
+        .getByRole("navigation", { name: "Ще" })
+        .getByRole("button", { name: kept.screen, exact: true })
+        .click();
+      gone = false;
+      answer = "ok";
+      await stub.getByRole("button", { name: kept.check }).click();
+      await expect(stub).toHaveClass(/\bstub-recorded\b/);
+      await expect(stub.getByRole("heading")).toHaveText(kept.settled);
+      if (kept.line)
+        await expect(stub.getByText(kept.line, { exact: true })).toBeVisible();
+      await expect(page.getByRole("heading", { name: kept.title })).toHaveCount(
+        0,
+      );
+      // Felt once.
+      const felt = (await told("web_app_trigger_haptic_feedback")) as {
+        notification_type?: string;
+      }[];
+      expect(
+        felt.filter((buzz) => buzz.notification_type === "success"),
+      ).toHaveLength(1);
+      await expect.poll(asks(told)).toEqual({ need_confirmation: false });
+      // The identical attempt every time.
+      for (const resend of sent) expect(resend).toEqual(sent[0]);
+      expect(
+        await page.evaluate((stored) => localStorage.getItem(stored), key),
+      ).toBeNull();
+    });
+
+  test("a kept order step is its stub on «Замовлення» and a banner over «Ще»; refused on resend, recorded nowhere, a refusal's plate, Telegram no longer asking", async ({
+    page,
+  }) => {
+    const told = await inTelegram(page);
+    const order = randomUUID();
+    await seed(page, {
+      [orderKey]: JSON.stringify({
+        path: `/orders/${order}/dispatch`,
+        body: { command_id: randomUUID() },
+        label: "Відправлено",
+        orderId: order,
+        ambiguous: true,
+        since: new Date(Date.now() - 30 * 60_000).toISOString(),
+      }),
+    });
+    await serve(page);
+    await on(page, "/me", async (route) => {
+      await route.fulfill({
+        json: {
+          ...me,
+          stores: me.stores.map((store) => ({
+            ...store,
+            permissions: [...store.permissions, "sale:view"],
+          })),
+        },
+      });
+    });
+    let refuse = false;
+    let gone = false;
+    const sent: string[] = [];
+    await page.route("**/api/v1/**", async (route) => {
+      if (gone) await route.abort("connectionreset");
+      else await route.fallback();
+    });
+    await on(page, `/orders/${order}/dispatch`, async (route, request) => {
+      sent.push(request.postData() ?? "");
+      if (!refuse) {
+        gone = true;
+        await route.abort("connectionreset");
+        return;
+      }
+      await route.fulfill({
+        status: 422,
+        json: {
+          code: "VALIDATION_ERROR",
+          message: "Invalid order transition",
+          details: { status: "CANCELLED", action: "dispatch", recorded: false },
+        },
+      });
+    });
+    const hash = launch().slice(2);
+    await page.goto(`/#${hash}&tgWebAppVersion=9.1`);
+    await openStore(page, /Подільський/);
+    const title = "Операцію «Відправлено» ще не підтверджено";
+    const stub = page.locator(".stub-notice .stub");
+    await expect(stub).toHaveClass(/\bstub-kept\b/);
+    await expect(stub.locator(".stub-head")).toHaveText("Ще не підтверджено");
+    await expect(stub.getByRole("heading")).toHaveText(title);
+    await expect(stub.locator("p").first()).toHaveText(
+      "Операція «Відправлено» — сервер не відповів. Двічі цю операцію не запишуть. Поки чекаємо, інші дії недоступні.",
+    );
+    await expect(stub.locator(".check-line")).toHaveText(
+      /^Перевіряємо кожні 20 с/,
+    );
+    await expect(
+      stub.getByRole("button", { name: "Перевірити результат замовлення" }),
+    ).toHaveClass(/\bquiet\b/);
+    await expect.poll(asks(told)).toEqual({ need_confirmation: true });
+
+    await more(page);
+    const banner = page.locator("section.banner-kept");
+    await expect(banner.getByRole("heading")).toHaveText(title);
+    gone = false;
+    refuse = true;
+    await banner
+      .getByRole("button", { name: "Перевірити результат замовлення" })
+      .click();
+    const refused = page
+      .getByRole("alert")
+      .filter({ hasText: "Операцію «Відправлено» не записано" });
+    await expect(refused).toHaveText(
+      "Операцію «Відправлено» не записано: замовлення вже «Скасовано».",
+    );
+    await expectPlate(refused, "refused");
+    await expect(banner).toHaveCount(0);
+    await expect.poll(asks(told)).toEqual({ need_confirmation: false });
+    for (const resend of sent) expect(resend).toBe(sent[0]);
   });
 });

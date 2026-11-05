@@ -108,6 +108,18 @@ type Step =
   | { name: "correct" }
   | { name: "history" };
 
+/** A count answered (P0-3): a difference, short or over, felt as a
+ * warning, as its colour is («Усе на бірці» task list, P1-2); a first count
+ * has nothing to differ from. */
+function countFelt(result: CashAnswer): "warning" | "success" {
+  return "opening" in result &&
+    !result.opening &&
+    result.difference !== null &&
+    !nothing(result.difference)
+    ? "warning"
+    : "success";
+}
+
 export function Cash({
   store,
   token,
@@ -318,6 +330,14 @@ export function Cash({
     });
     void resolveCashCommand(journalKey, token, attempt).then((outcome) => {
       if (outcome.kind === "done") {
+        // Confirmed: felt as every kept operation is (stage 2, orders task
+        // list, P0-1) — a count with a difference as when answered at once
+        // (review, 2026-11-05).
+        buzz(
+          attempt.body.command === "close"
+            ? countFelt(outcome.result)
+            : "success",
+        );
         recorded(attempt.body, outcome.result, true, attempt.since);
         // A close or its reason confirmed: its result, as when answered.
         if (
@@ -478,15 +498,7 @@ export function Cash({
       // A buzz in the hand once the server answers, as at the till (P0-3);
       // a difference, short or over, a warning, as its colour is («Усе на
       // бірці» task list, P1-2). A first count has nothing to differ from.
-      const result = outcome.result;
-      buzz(
-        "opening" in result &&
-          !result.opening &&
-          result.difference !== null &&
-          !nothing(result.difference)
-          ? "warning"
-          : "success",
-      );
+      buzz(countFelt(outcome.result));
       recorded(body, outcome.result);
       setCounting("");
       setStep({ name: "closed" });

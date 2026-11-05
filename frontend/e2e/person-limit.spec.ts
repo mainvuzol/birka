@@ -240,7 +240,9 @@ test("a correction refused for too many requests keeps its count, and is written
   await expect(alert).toContainText("Нічого не записано.");
   // The count still stands; nothing is kept as unknown.
   await expect(page.getByLabel("Скільки списати, од.")).toHaveValue("1");
-  await expect(page.getByText("Незавершене коригування")).toHaveCount(0);
+  await expect(
+    page.getByRole("heading", { name: "Коригування ще не підтверджено" }),
+  ).toHaveCount(0);
 
   await page.getByRole("button", { name: "Записати коригування" }).click();
   await expect(page.getByRole("status")).toContainText(

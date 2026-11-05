@@ -6,14 +6,19 @@ import type { QueryObserverResult } from "@tanstack/react-query";
 import { api, ApiError, errorText, inOwnWords } from "@/shared/api";
 import { isTillMethod, methodHow, methodLabels } from "@/shared/payment";
 import type { PaymentMethod, TillMethod } from "@/shared/payment";
-import { keptCashText, keptText, useAutoCheck } from "@/shared/reach";
+import {
+  keptCashText,
+  keptText,
+  noteChecked,
+  useAutoCheck,
+} from "@/shared/reach";
 import { setScreen } from "@/shared/report";
 import { visible } from "@/shared/visible";
 import { Opening } from "@/shared/Placeholder";
 import { Icon } from "@/shared/Icon";
 import { Toast } from "@/shared/Toast";
 import { Banner } from "@/shared/Banner";
-import { Kept, Settled } from "@/shared/Kept";
+import { CheckLine, Kept, Settled } from "@/shared/Kept";
 import {
   buzz,
   connectTelegram,
@@ -576,10 +581,14 @@ export function App(): JSX.Element {
         >
           <ScreenHeader title={stateText(store)} />
           <section>
-            <p role="alert">
-              Роботу в цьому магазині зупинено: продажі, приймання, повернення
-              й оплати в ньому не проводяться. Зверніться до власника.
-            </p>
+            {/* A store that does not trade: its own plate, never a refusal's
+                (stage 2, orders task list, P0-2). */}
+            <Banner kind="blocked" role="status" as="div">
+              <p>
+                Роботу в цьому магазині зупинено: продажі, приймання, повернення
+                й оплати в ньому не проводяться. Зверніться до власника.
+              </p>
+            </Banner>
             <button onClick={readAgain}>Оновити</button>
           </section>
         </WorkspaceLineContext.Provider>
@@ -845,6 +854,9 @@ function Workspace({
   stockListedNow.current = stockListed;
   const receiptKey = `birka:receipt-pending:${me.organization_id}:${me.user_id}:${store.id}`;
   const [receiptStorageError, setReceiptStorageError] = useState(false);
+  // A kept delivery confirmed: «Приймання записано один раз» until
+  // «Зрозуміло» (stage 2, orders task list, P0-1; В-ЗП2 (а)).
+  const [receiptSettled, setReceiptSettled] = useState(false);
   const receiptCommand = useReceiptCommand();
   useEffect(() => {
     try {
@@ -1395,8 +1407,13 @@ function Workspace({
       // the warehouse reopens (owner, 2026-10-08).
       if (outcome.kind === "refused")
         useReceiptCommand.setState({ error: outcome.error });
-      else if (outcome.kind === "done")
+      else if (outcome.kind === "done") {
+        // Confirmed: its stub torn off, felt as the till's is (stage 2,
+        // orders task list, P0-1).
+        buzz("success");
+        setReceiptSettled(true);
         setReceiveEpoch((epoch) => epoch + 1);
+      }
     });
   }
   function checkReturn(): void {
@@ -1479,6 +1496,7 @@ function Workspace({
     if (!attempt) return;
     void resolveAdjustment(adjustmentKey, token, attempt).then((outcome) => {
       if (outcome.kind === "done") {
+        buzz("success");
         setAdjustmentSettled(outcome.result);
         void cache.invalidateQueries({
           queryKey: ["inventory-stock"],
@@ -1502,6 +1520,7 @@ function Workspace({
     if (!attempt) return;
     void resolveCount(countKey, token, attempt).then((outcome) => {
       if (outcome.kind === "done") {
+        buzz("success");
         setCountSettled(outcome.result);
       } else if (outcome.kind === "refused") {
         // Proven to have recorded nothing — the balance moved since the
@@ -2382,6 +2401,20 @@ function Workspace({
     creditCommand.busy && creditCommand.firstSend
       ? null
       : creditCommand.pending;
+  // A delivery's press turns its own ring (stage 2, orders task list, P0-1);
+  // a correction's and a count's step aside, and their stub is what says
+  // they are sent.
+  const keptReceipt =
+    receiptCommand.busy && receiptCommand.firstSend
+      ? null
+      : receiptCommand.pending;
+  // A correction's own screens: wherever «Виправити залишок» is made — the
+  // model's detail, «Залишки», «Інвентаризація».
+  const correcting =
+    tab === "model" || tab === "stock" || tab === "stocktaking";
+  // An order's step answered is recorded: only its order is not shown yet.
+  const keptStep =
+    pending && !firstSend && !pending.acknowledged ? pending : null;
   // The line under every screen's title: «Змінити магазин» held, too, while
   // a payment's form stands at the till or the cash is counted: «←» is its
   // only way out (spec S21, S26; review, 2026-10-29).
@@ -2399,8 +2432,52 @@ function Workspace({
     `${store.id}:${String(saleEpoch)}`,
     store.id,
   );
-  useAskBeforeClosing(basketGoods || keptSale !== null);
+  // And while any other operation is kept on the phone, as the sale (stage
+  // 2, orders task list, P0-1) — never for a first send still in flight,
+  // whose attempt is on the phone already (review, 2026-11-05).
+  useAskBeforeClosing(
+    basketGoods ||
+      keptSale !== null ||
+      keptReceipt !== null ||
+      (adjustmentCommand.pending !== null &&
+        !(adjustmentCommand.busy && adjustmentCommand.firstSend)) ||
+      (countCommand.pending !== null &&
+        !(countCommand.busy && countCommand.firstSend)) ||
+      keptStep !== null ||
+      (cashCommand.pending !== null &&
+        !(cashCommand.busy && cashCommand.firstSend)),
+  );
   useLockPortrait(basketGoods);
+  // The phone's memory unread, a journal or more: one plate, a line each
+  // (stage 2, orders task list, P0-2).
+  const unreadKept = [
+    catalogStorageError &&
+      "Не вдалося прочитати збережену операцію каталогу. Не очищайте дані застосунку; зверніться до менеджера.",
+    correctionStorageError &&
+      "Не вдалося прочитати збережену зміну каталогу. Не очищайте дані застосунку; зверніться до менеджера.",
+    supplierStorageError &&
+      "Не вдалося прочитати збережене повернення постачальнику. Не очищайте дані застосунку; зверніться до менеджера.",
+    invoiceStorageError &&
+      "Не вдалося прочитати збережену операцію з накладною. Не очищайте дані застосунку; зверніться до власника.",
+    storesStorageError &&
+      "Не вдалося прочитати збережену зміну стану магазину. Не очищайте дані застосунку.",
+    cashStorageError &&
+      "Не вдалося прочитати збережену операцію каси. Не очищайте дані застосунку; зверніться до менеджера.",
+    storageError &&
+      "Не вдалося прочитати збережену команду. Створення операцій зупинено. Зверніться до менеджера, не очищайте дані застосунку.",
+    saleStorageError &&
+      "Не вдалося прочитати збережений продаж. Не очищайте дані застосунку; зверніться до менеджера.",
+    receiptStorageError &&
+      "Не вдалося прочитати збережене приймання. Не очищайте дані застосунку; зверніться до менеджера.",
+    returnStorageError &&
+      "Не вдалося прочитати збережене повернення. Не очищайте дані застосунку; зверніться до менеджера.",
+    creditStorageError &&
+      "Не вдалося прочитати збережений внесок. Не очищайте дані застосунку; зверніться до менеджера.",
+    adjustmentStorageError &&
+      "Не вдалося прочитати збережене коригування. Не очищайте дані застосунку; зверніться до менеджера.",
+    countStorageError &&
+      "Не вдалося прочитати збережений підрахунок інвентаризації. Не очищайте дані застосунку; зверніться до менеджера.",
+  ].filter((said): said is string => said !== false);
   setScreen(tab);
   return (
     <WorkspaceLineContext.Provider value={line}>
@@ -2441,53 +2518,12 @@ function Workspace({
             : []),
         ]}
       />
-      {catalogStorageError && (
-        <p role="alert">
-          Не вдалося прочитати збережену операцію каталогу. Не очищайте дані
-          застосунку; зверніться до менеджера.
-        </p>
-      )}
-      {correctionStorageError && (
-        <p role="alert">
-          Не вдалося прочитати збережену зміну каталогу. Не очищайте дані
-          застосунку; зверніться до менеджера.
-        </p>
-      )}
-      {supplierStorageError && (
-        <p role="alert">
-          Не вдалося прочитати збережене повернення постачальнику. Не очищайте
-          дані застосунку; зверніться до менеджера.
-        </p>
-      )}
-      {invoiceStorageError && (
-        <p role="alert">
-          Не вдалося прочитати збережену операцію з накладною. Не очищайте дані
-          застосунку; зверніться до власника.
-        </p>
-      )}
-      {storesStorageError && (
-        <p role="alert">
-          Не вдалося прочитати збережену зміну стану магазину. Не очищайте дані
-          застосунку.
-        </p>
-      )}
-      {cashStorageError && (
-        <p role="alert">
-          Не вдалося прочитати збережену операцію каси. Не очищайте дані
-          застосунку; зверніться до менеджера.
-        </p>
-      )}
-      {storageError && (
-        <p role="alert">
-          Не вдалося прочитати збережену команду. Створення операцій зупинено.
-          Зверніться до менеджера, не очищайте дані застосунку.
-        </p>
-      )}
-      {saleStorageError && (
-        <p role="alert">
-          Не вдалося прочитати збережений продаж. Не очищайте дані застосунку;
-          зверніться до менеджера.
-        </p>
+      {unreadKept.length > 0 && (
+        <div role="alert">
+          {unreadKept.map((said) => (
+            <p key={said}>{said}</p>
+          ))}
+        </div>
       )}
       {/* Kept and confirmed: the stub on the till, a banner over any other
           screen («Усе на бірці» task list, P0-2). */}
@@ -2559,39 +2595,39 @@ function Workspace({
           )}
         </p>
       )}
-      {receiptStorageError && (
-        <p role="alert">
-          Не вдалося прочитати збережене приймання. Не очищайте дані застосунку;
-          зверніться до менеджера.
-        </p>
-      )}
-      {receiptCommand.pending && (
-        <section className="notice">
-          <h3>
-            {receiptCommand.busy
-              ? "Перевіряємо приймання…"
-              : "Незавершене приймання"}
-          </h3>
+      {/* The journals' kept operations as the sale's: the stub on their
+          own screen, a banner over any other, the title the same while
+          checked (stage 2, orders task list, P0-1; В-ЗП2 (а)). */}
+      {keptReceipt && (
+        <Kept
+          own={tab === "receive"}
+          title="Приймання ще не підтверджено"
+          busy={receiptCommand.busy}
+          check={{ label: "Перевірити результат приймання", run: checkReceipt }}
+        >
           <p>
             Невідомо, чи записано попередню поставку. Перевірте результат — та
             сама поставка не буде прийнята двічі. Поки чекаємо, інші дії
             недоступні.
           </p>
-          <p>{keptText(receiptCommand.pending.since, me.display_name)}</p>
-          <button disabled={receiptCommand.busy} onClick={checkReceipt}>
-            Перевірити результат приймання
+          <p>{keptText(keptReceipt.since, me.display_name)}</p>
+        </Kept>
+      )}
+      {receiptSettled && (
+        <Settled own={tab === "receive"}>
+          <h3>Приймання записано один раз</h3>
+          <button
+            onClick={() => {
+              setReceiptSettled(false);
+            }}
+          >
+            Зрозуміло
           </button>
-        </section>
+        </Settled>
       )}
       {receiptCommand.error !== null && (
         <p role="alert">
           {receiptErrorText(receiptCommand.error, receiptCommand.misses)}
-        </p>
-      )}
-      {returnStorageError && (
-        <p role="alert">
-          Не вдалося прочитати збережене повернення. Не очищайте дані
-          застосунку; зверніться до менеджера.
         </p>
       )}
       {keptReturn && (
@@ -2628,12 +2664,6 @@ function Workspace({
       {returnCommand.error !== null && (
         <p role="alert">
           {returnErrorText(returnCommand.error, returnCommand.misses)}
-        </p>
-      )}
-      {creditStorageError && (
-        <p role="alert">
-          Не вдалося прочитати збережений внесок. Не очищайте дані застосунку;
-          зверніться до менеджера.
         </p>
       )}
       {keptCredit && (
@@ -2722,36 +2752,29 @@ function Workspace({
           )}
         </p>
       )}
-      {adjustmentStorageError && (
-        <p role="alert">
-          Не вдалося прочитати збережене коригування. Не очищайте дані
-          застосунку; зверніться до менеджера.
-        </p>
-      )}
       {adjustmentCommand.pending && (
-        <section className="notice">
-          <h3>
-            {adjustmentCommand.busy
-              ? "Перевіряємо коригування…"
-              : "Незавершене коригування"}
-          </h3>
+        <Kept
+          own={correcting}
+          title="Коригування ще не підтверджено"
+          busy={adjustmentCommand.busy}
+          check={{
+            label: "Перевірити результат коригування",
+            run: checkAdjustment,
+          }}
+        >
           <p>
             Невідомо, чи записано попереднє коригування залишку. Перевірте
             результат — те саме коригування не застосується двічі. Поки чекаємо,
             інші дії недоступні.
           </p>
           <p>{keptText(adjustmentCommand.pending.since, me.display_name)}</p>
-          <button disabled={adjustmentCommand.busy} onClick={checkAdjustment}>
-            Перевірити результат коригування
-          </button>
-        </section>
+        </Kept>
       )}
       {adjustmentSettled && (
-        <section className="notice" role="status">
-          <h3>Коригування підтверджено</h3>
+        <Settled own={correcting}>
+          <h3>Коригування записано один раз</h3>
           <p>
-            Його було записано один раз: облік{" "}
-            {adjustmentSettled.quantity_before} →{" "}
+            Облік {adjustmentSettled.quantity_before} →{" "}
             {adjustmentSettled.quantity_after}.
           </p>
           <button
@@ -2761,7 +2784,7 @@ function Workspace({
           >
             Зрозуміло
           </button>
-        </section>
+        </Settled>
       )}
       {adjustmentCommand.error !== null && (
         <p role="alert">
@@ -2771,38 +2794,28 @@ function Workspace({
           )}
         </p>
       )}
-      {countStorageError && (
-        <p role="alert">
-          Не вдалося прочитати збережений підрахунок інвентаризації. Не очищайте
-          дані застосунку; зверніться до менеджера.
-        </p>
-      )}
       {countCommand.pending && (
-        <section className="notice">
-          <h3>
-            {countCommand.busy
-              ? "Перевіряємо підрахунок…"
-              : "Незавершений підрахунок"}
-          </h3>
+        <Kept
+          own={tab === "stocktaking"}
+          title="Підрахунок ще не підтверджено"
+          busy={countCommand.busy}
+          check={{ label: "Перевірити результат підрахунку", run: checkCount }}
+        >
           <p>
             Невідомо, чи записано попередній підрахунок інвентаризації.
             Перевірте результат — той самий підрахунок не застосується двічі.
             Поки чекаємо, інші дії недоступні.
           </p>
           <p>{keptText(countCommand.pending.since, me.display_name)}</p>
-          <button disabled={countCommand.busy} onClick={checkCount}>
-            Перевірити результат підрахунку
-          </button>
-        </section>
+        </Kept>
       )}
       {countSettled && (
-        <section className="notice" role="status">
-          <h3>Підрахунок підтверджено</h3>
+        <Settled own={tab === "stocktaking"}>
+          <h3>Підрахунок записано один раз</h3>
           <p>
-            Його було записано один раз:{" "}
             {countSettled.quantity_delta === 0
-              ? `збігається з обліком (${String(countSettled.counted_quantity)}).`
-              : `облік ${String(countSettled.quantity_before)} → ${String(countSettled.counted_quantity)}.`}
+              ? `Збігається з обліком (${String(countSettled.counted_quantity)}).`
+              : `Облік ${String(countSettled.quantity_before)} → ${String(countSettled.counted_quantity)}.`}
           </p>
           <button
             onClick={() => {
@@ -2811,46 +2824,49 @@ function Workspace({
           >
             Зрозуміло
           </button>
-        </section>
+        </Settled>
       )}
       {countCommand.error !== null && (
         <p role="alert">
           {countErrorText(countCommand.error, countCommand.misses)}
         </p>
       )}
-      {pending && !firstSend && (
-        // Which step and which order (orders task list, P1-1), named as the
-        // order's refusals name it (owner decision, 2026-10-20).
-        <section className="notice">
-          <h3>
-            {busy
-              ? `Перевіряємо операцію «${visible(pending.label)}»…`
-              : pending.acknowledged
-                ? `Операцію «${visible(pending.label)}» записано`
-                : `Операцію «${visible(pending.label)}» ще не підтверджено`}
-          </h3>
-          <p>
-            {/* The operation the subject (owner decision after #136,
-                2026-10-25), and said by name after a line of goods. */}
-            {pending.shown
-              ? `${visible(pending.shown)} — `
-              : `Операція «${visible(pending.label)}» — `}
-            {pending.acknowledged
-              ? "замовлення ще не вдалося показати."
-              : "сервер не відповів. Двічі цю операцію не запишуть."}{" "}
-            Поки чекаємо, інші дії недоступні.
-          </p>
+      {/* Which step and which order (orders task list, P1-1), named as the
+          order's refusals name it (owner decision, 2026-10-20): the stub on
+          «Замовлення» and «Нове замовлення», a banner over any other
+          screen; answered, it is recorded, its stub torn off, and only its
+          order waits to be shown (stage 2, orders task list, P0-1). */}
+      {keptStep && (
+        <Kept
+          own={tab === "list" || tab === "new"}
+          title={`Операцію «${visible(keptStep.label)}» ще не підтверджено`}
+          busy={busy}
+          check={{ label: "Перевірити результат замовлення", run: checkOrder }}
+        >
+          <p>{keptStepText(keptStep)}</p>
           {/* An order's step is never typed from paper: one not recorded is
               made again here, and one recorded the server refuses by its
-              status (owner decision, 2026-10-23, В4 (а)). Answered, it is
-              recorded: nothing to wait for but its order. */}
-          {!pending.acknowledged && <p>{keptCashText(pending.since)}</p>}
-          <button disabled={busy} onClick={checkOrder}>
-            {pending.acknowledged
-              ? "Оновити результат"
-              : "Перевірити результат замовлення"}
+              status (owner decision, 2026-10-23, В4 (а)). */}
+          <p>{keptCashText(keptStep.since)}</p>
+        </Kept>
+      )}
+      {pending && !firstSend && pending.acknowledged && (
+        <Settled own={tab === "list" || tab === "new"}>
+          <h3>{`Операцію «${visible(pending.label)}» записано`}</h3>
+          <p>{keptStepText(pending)}</p>
+          <CheckLine busy={busy} />
+          <button
+            type="button"
+            className={tab === "list" || tab === "new" ? "quiet" : undefined}
+            disabled={busy}
+            onClick={() => {
+              noteChecked();
+              checkOrder();
+            }}
+          >
+            Оновити результат
           </button>
-        </section>
+        </Settled>
       )}
       {error !== null &&
         // A new order short of stock: said on its line (P0-5); a step
@@ -3622,6 +3638,22 @@ function keptCreditText(body: CreditBody): string {
       : ` за «${named}${goods.length > 1 ? ` + ще ${String(goods.length - 1)}` : ""}»`;
   const way = body.payment_method ? ` ${methodHow[body.payment_method]}` : "";
   return `Внесок${body.outage ? " з паперу" : ""} ${money(body.amount)}${way}${what} — сервер не відповів. Двічі він не запишеться. Поки чекаємо, інші дії недоступні.`;
+}
+
+/**
+ * A kept order step's line (orders task list, P1-1): the operation the
+ * subject (owner decision after #136, 2026-10-25), said by name after a
+ * line of goods; answered, only its order is not shown yet.
+ */
+function keptStepText(step: Pending): string {
+  const subject = step.shown
+    ? visible(step.shown)
+    : `Операція «${visible(step.label)}»`;
+  return `${subject} — ${
+    step.acknowledged
+      ? "замовлення ще не вдалося показати."
+      : "сервер не відповів. Двічі цю операцію не запишуть."
+  } Поки чекаємо, інші дії недоступні.`;
 }
 
 /**

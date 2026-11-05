@@ -727,3 +727,99 @@ export async function shippedFace(page: Page): Promise<void> {
     void face.load();
   });
 }
+
+/**
+ * A plate said at once, as drawn (stage 2, orders task list, P0-2): a
+ * refusal in the error's colours with the crossed circle, what could not be
+ * read in the warning's with the triangle — never a debt's, which is a
+ * customer's debt alone. Its words at 4.5:1 and its glyph at 3:1, in
+ * `theme` — its tokens proven to be that theme's — and the glyph beside the
+ * first line of its words.
+ */
+export async function expectPlate(
+  plate: Locator,
+  kind: "refused" | "unread",
+  theme: "light" | "dark" = "light",
+): Promise<void> {
+  const look = await plate.evaluate((node) => {
+    const resolved = (value: string): string => {
+      const probe = document.createElement("i");
+      probe.style.color = value;
+      document.body.append(probe);
+      const colour = getComputedStyle(probe).color;
+      probe.remove();
+      return colour;
+    };
+    const luminance = (colour: string): number => {
+      const [r, g, b] = (colour.match(/[\d.]+/g) ?? []).map((c) => {
+        const v = Number(c) / 255;
+        return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+      });
+      return 0.2126 * (r ?? 0) + 0.7152 * (g ?? 0) + 0.0722 * (b ?? 0);
+    };
+    const ratio = (fore: string, back: string): number => {
+      const [a, b] = [luminance(fore), luminance(back)];
+      return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+    };
+    const own = getComputedStyle(node);
+    const glyph = getComputedStyle(node, "::before");
+    // The first line of its words, where the glyph stands beside it.
+    const words = document
+      .createTreeWalker(node, NodeFilter.SHOW_TEXT, {
+        acceptNode: (text) =>
+          text.textContent?.trim()
+            ? NodeFilter.FILTER_ACCEPT
+            : NodeFilter.FILTER_REJECT,
+      })
+      .nextNode();
+    const range = document.createRange();
+    if (words) range.selectNodeContents(words);
+    const line = range.getClientRects()[0];
+    const middle =
+      node.getBoundingClientRect().top +
+      parseFloat(glyph.top) +
+      parseFloat(glyph.height) / 2;
+    return {
+      ground: own.backgroundColor,
+      words: own.color,
+      glyph: glyph.backgroundColor,
+      mask:
+        glyph.getPropertyValue("mask-image") ||
+        glyph.getPropertyValue("-webkit-mask-image"),
+      size: [glyph.width, glyph.height],
+      // Drawn at all: a glyph with no content is styled but never painted.
+      drawn: glyph.content !== "none" && glyph.content !== "normal",
+      owed: resolved("var(--owed)"),
+      owedGround: resolved("var(--owed-bg)"),
+      danger: resolved("var(--danger)"),
+      dangerGround: resolved("var(--danger-bg)"),
+      warning: resolved("var(--warning)"),
+      warningGround: resolved("var(--warning-bg)"),
+      text: ratio(own.color, own.backgroundColor),
+      mark: ratio(glyph.backgroundColor, own.backgroundColor),
+      beside: line !== undefined && middle >= line.top && middle <= line.bottom,
+    };
+  });
+  // The error's own red of the theme asked for: light #b42318, dark
+  // #ff8b80.
+  expect(look.danger).toBe(
+    theme === "dark" ? "rgb(255, 139, 128)" : "rgb(180, 35, 24)",
+  );
+  expect(look.beside).toBe(true);
+  expect(look.ground).not.toBe(look.owedGround);
+  expect(look.words).not.toBe(look.owed);
+  expect(look.drawn).toBe(true);
+  expect(look.size).toEqual(["20px", "20px"]);
+  if (kind === "refused") {
+    expect(look.ground).toBe(look.dangerGround);
+    expect(look.words).toBe(look.danger);
+    expect(look.glyph).toBe(look.danger);
+    expect(look.mask).toContain("circle");
+  } else {
+    expect(look.ground).toBe(look.warningGround);
+    expect(look.glyph).toBe(look.warning);
+    expect(look.mask).toContain("M10.27");
+  }
+  expect(look.text).toBeGreaterThanOrEqual(4.5);
+  expect(look.mark).toBeGreaterThanOrEqual(3);
+}

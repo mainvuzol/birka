@@ -513,7 +513,9 @@ export function Closed({
         {kept}
         {close === null ? (
           failed ? (
-            <div role="alert">
+            // A warning's plate, as «Каса»'s own (stage 2, orders task list,
+            // P0-2; review, 2026-11-05).
+            <div className="notice read-failure" role="alert">
               <p>{errorText(failed)}</p>
               <button type="button" onClick={retry}>
                 Спробувати ще раз

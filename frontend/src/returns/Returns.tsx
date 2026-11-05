@@ -288,7 +288,7 @@ export function Returns({
           // The rows' places while they are read (returns task list, P2-3).
           <Placeholder said="Завантажуємо продажі…" rows={3} />
         ) : !sales.data ? (
-          <div role="alert">
+          <div className="notice read-failure" role="alert">
             <p>{refusalText(sales.error)}</p>
             <button
               type="button"
@@ -328,7 +328,7 @@ export function Returns({
             {sales.isError && !sales.isFetchNextPageError && (
               // Read again and refused: the rows below are as they were, and
               // that is said (ADR-0011; review, 2026-10-17).
-              <div role="alert">
+              <div className="notice read-failure" role="alert">
                 <p>{refusalText(sales.error)}</p>
                 <button
                   type="button"
@@ -363,7 +363,7 @@ export function Returns({
             ))}
             {sales.isFetchNextPageError ? (
               // The next page could not be read: those read stay.
-              <div role="alert">
+              <div className="notice read-failure" role="alert">
                 <p>{refusalText(sales.error)}</p>
                 <button
                   type="button"

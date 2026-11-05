@@ -1,4 +1,4 @@
-import { test, expect, openStore, section } from "./fixtures";
+import { test, expect, expectPlate, openStore, section } from "./fixtures";
 import type { Locator, Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -1114,6 +1114,11 @@ test("a list that could not be read says so on a warning's plate, never a debt's
     return { plate: getComputedStyle(node).backgroundColor, notice };
   });
   expect(colours.plate).toBe(colours.notice);
+  // And its triangle, in both themes (stage 2, orders task list, P0-2).
+  await expectPlate(plate, "unread");
+  await page.emulateMedia({ colorScheme: "dark" });
+  await expectPlate(plate, "unread", "dark");
+  await page.emulateMedia({ colorScheme: "light" });
   orders.openFails = false;
   await plate.getByRole("button", { name: "Спробувати ще раз" }).click();
   await expect(page.locator(".order-row")).toHaveCount(1);

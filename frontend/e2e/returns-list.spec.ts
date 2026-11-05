@@ -1,4 +1,11 @@
-import { test, expect, openStore, section, tillWays } from "./fixtures";
+import {
+  test,
+  expect,
+  expectPlate,
+  openStore,
+  section,
+  tillWays,
+} from "./fixtures";
 import type { Locator, Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -343,6 +350,8 @@ test("a next page that cannot be read keeps the sales read, and offers to try ag
   await page.getByRole("button", { name: "Показати ще" }).click();
   const failed = page.getByRole("alert");
   await expect(failed).toBeVisible();
+  // A warning's plate and its triangle (stage 2, orders task list, P0-2).
+  await expectPlate(failed, "unread");
   await expect(page.getByRole("article")).toHaveCount(20);
   await failed.getByRole("button", { name: "Спробувати ще раз" }).click();
   await expect(page.getByRole("article")).toHaveCount(30);

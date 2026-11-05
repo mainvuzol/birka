@@ -1,6 +1,10 @@
 import { useState } from "react";
 import type { JSX } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { ApiError, api, errorText, inOwnWords, isConflict } from "@/shared/api";
 import { money } from "@/orders/types";
 import { sizeLabel } from "@/returns/types";
@@ -55,19 +59,32 @@ export function Suppliers({
   const [making, setMaking] = useState(false);
   const [done, setDone] = useState<string | null>(null);
   const [supplierId, setSupplierId] = useState("");
-  const [shown, setShown] = useState(pageSize);
   const suppliers = useSuppliers(store, token);
-  const returns = useQuery({
-    queryKey: ["supplier-returns", store.id, supplierId, shown],
-    queryFn: () =>
+  // Page by page: the server takes fifty at most (stage 2, money task list,
+  // P0-7).
+  const returns = useInfiniteQuery({
+    queryKey: ["supplier-returns", store.id, supplierId],
+    queryFn: ({ pageParam }) =>
       api<ReturnPage>(
-        `/supplier-returns?store_id=${store.id}&limit=${String(shown)}${
+        `/supplier-returns?store_id=${store.id}&limit=${String(pageSize)}&offset=${String(pageParam)}${
           supplierId ? `&supplier_id=${supplierId}` : ""
         }`,
         token,
       ),
+    initialPageParam: 0,
+    getNextPageParam: (last: ReturnPage, pages: ReturnPage[]) =>
+      last.has_more ? pages.length * pageSize : undefined,
     retry: false,
   });
+  // A return made between two pages moves the older ones down by one: each
+  // is shown once.
+  const listed = [
+    ...new Map(
+      (returns.data?.pages ?? [])
+        .flatMap((page) => page.items)
+        .map((item) => [item.id, item]),
+    ).values(),
+  ];
   const working = busy || pending !== null;
 
   async function settled(result: SupplierReturn): Promise<void> {
@@ -177,7 +194,6 @@ export function Suppliers({
             value={supplierId}
             onChange={(event) => {
               setSupplierId(event.target.value);
-              setShown(pageSize);
             }}
           >
             <option value="">Усі постачальники</option>
@@ -190,13 +206,13 @@ export function Suppliers({
         </label>
         {returns.isPending ? (
           <p role="status">Завантажуємо повернення…</p>
-        ) : returns.error ? (
+        ) : returns.data === undefined ? (
           <p role="alert">{errorText(returns.error)}</p>
-        ) : returns.data.items.length === 0 ? (
+        ) : listed.length === 0 ? (
           <p>Цей магазин ще нічого не повертав постачальникам.</p>
         ) : (
           <>
-            {returns.data.items.map((item) => (
+            {listed.map((item) => (
               <ReturnCard
                 key={item.id}
                 item={item}
@@ -215,12 +231,14 @@ export function Suppliers({
                 }}
               />
             ))}
-            {returns.data.has_more && (
+            {/* A page that failed keeps the returns already read. */}
+            {returns.error && <p role="alert">{errorText(returns.error)}</p>}
+            {returns.hasNextPage && (
               <button
                 className="quiet"
                 disabled={returns.isFetching}
                 onClick={() => {
-                  setShown(shown + pageSize);
+                  void returns.fetchNextPage();
                 }}
               >
                 Показати ще

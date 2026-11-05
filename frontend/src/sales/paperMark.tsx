@@ -431,7 +431,9 @@ export function PaperFields({
             </select>
           </label>
           {mark.people.error && (
-            <p role="alert">
+            // What could not be read: a warning's plate (stage 2, orders
+            // task list, P0-2; review, 2026-11-05).
+            <p className="notice read-failure" role="alert">
               {errorText(mark.people.error)}{" "}
               <button
                 className="quiet"

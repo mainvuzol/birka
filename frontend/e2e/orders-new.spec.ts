@@ -1,4 +1,4 @@
-import { test, expect, openStore, section } from "./fixtures";
+import { test, expect, expectPlate, openStore, section } from "./fixtures";
 import type { Locator, Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -794,6 +794,12 @@ test("refused for another reason: said over the page and brought to the finger, 
   expect(await buzzes(page)).toEqual([
     { type: "notification", notification_type: "error" },
   ]);
+  // A refusal's plate, never a debt's, in both themes (stage 2, orders task
+  // list, P0-2).
+  await expectPlate(alert, "refused");
+  await page.emulateMedia({ colorScheme: "dark" });
+  await expectPlate(alert, "refused", "dark");
+  await page.emulateMedia({ colorScheme: "light" });
   await expect(line.locator("output")).toHaveText("2");
   await expect(
     page

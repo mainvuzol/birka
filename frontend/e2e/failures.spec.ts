@@ -1,4 +1,11 @@
-import { test, expect, more, openStore, sections } from "./fixtures";
+import {
+  test,
+  expect,
+  expectPlate,
+  more,
+  openStore,
+  sections,
+} from "./fixtures";
 import type { Page, Request, Response } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -927,6 +934,14 @@ test.describe("an attempt saved before the way of paying was asked, resent to th
         "Продаж не записано (не вказано, як платить покупець. Натисніть «Готівка», «Картка» або «Переказ»). Якщо товар віддали покупцю — внесіть його з паперу з позначкою «Вношу продаж з паперу». Кошик треба зібрати знову.",
       ),
     ).toBeVisible();
+    // A refusal's plate, never a debt's, in both themes (stage 2, orders
+    // task list, P0-2).
+    const refused = page
+      .getByRole("alert")
+      .filter({ hasText: "Продаж не записано" });
+    await expectPlate(refused, "refused");
+    await page.emulateMedia({ colorScheme: "dark" });
+    await expectPlate(refused, "refused", "dark");
     expect(await page.evaluate((k) => localStorage.getItem(k), key)).toBeNull();
     // The till is the seller's again; its three ways come with a basket
     // (redesign direction §5).
@@ -983,6 +998,14 @@ test.describe("an attempt saved before the way of paying was asked, resent to th
         "Внесок не записано — прийміть його ще раз і вкажіть, як платить покупець.",
       ),
     ).toBeVisible();
+    // A refusal's plate, never a debt's, in both themes (stage 2, orders
+    // task list, P0-2).
+    const refused = page
+      .getByRole("alert")
+      .filter({ hasText: "Внесок не записано" });
+    await expectPlate(refused, "refused");
+    await page.emulateMedia({ colorScheme: "dark" });
+    await expectPlate(refused, "refused", "dark");
     expect(await page.evaluate((k) => localStorage.getItem(k), key)).toBeNull();
     const debt = await page.request.get(`/api/v1/credits/${creditId}`, {
       headers: { Authorization: `Bearer ${who.token}` },
@@ -1035,6 +1058,14 @@ test.describe("an attempt saved before the way of paying was asked, resent to th
         "Повернення не записано — оформіть його ще раз і вкажіть, як повертаєте гроші.",
       ),
     ).toBeVisible();
+    // A refusal's plate, never a debt's, in both themes (stage 2, orders
+    // task list, P0-2).
+    const refused = page
+      .getByRole("alert")
+      .filter({ hasText: "Повернення не записано" });
+    await expectPlate(refused, "refused");
+    await page.emulateMedia({ colorScheme: "dark" });
+    await expectPlate(refused, "refused", "dark");
     expect(await page.evaluate((k) => localStorage.getItem(k), key)).toBeNull();
   });
 });
