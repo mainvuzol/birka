@@ -683,21 +683,67 @@ export async function returnUnits(
 /**
  * The paper switch ticked, and the paper said to be an outage's — or, with
  * `firstDays`, the first days', «з паперу» (owner decision, 2026-10-16):
- * nothing typed from paper is sent until the series says which it is.
+ * nothing typed from paper is sent until the series says which it is. Said
+ * in «З паперу», which the switch opens while the series has said nothing
+ * (stage 2, orders task list, P0-4), or its row once it has; `named`, who
+ * sold or took it, in the same sheet; then «Готово».
  */
 export async function fromPaper(
   page: Page,
   label = "Вношу продаж з паперу",
   firstDays = false,
+  named?: string,
 ): Promise<void> {
-  await page.getByLabel(label).check();
-  await page
+  const toggle = page.getByLabel(label);
+  const was = await toggle.isChecked();
+  await toggle.check();
+  // Turned on, «З паперу» is open from that tap, never by the row behind it
+  // (review, 2026-11-05); already on, its row opens it.
+  const sheet = page.getByRole("dialog", { name: "З паперу" });
+  if (was) await paperSheet(page);
+  else await expect(sheet).toHaveAttribute("data-ready", "");
+  await sheet
     .getByRole("radio", {
       name: firstDays
         ? "Перші дні, до затвердження залишків"
         : "Сервер не відповідав",
     })
     .check();
+  if (named !== undefined)
+    await sheet.getByRole("radio", { name: named, exact: true }).check();
+  await sheet.getByRole("button", { name: "Готово" }).click();
+  await expect(sheet).toHaveCount(0);
+}
+
+/** «З паперу», open (stage 2, orders task list, P0-4): opened by the
+ * switch, or else by the series' row; once it takes taps (`Sheet`). */
+export async function paperSheet(page: Page): Promise<Locator> {
+  const sheet = page.getByRole("dialog", { name: "З паперу" });
+  if ((await sheet.count()) === 0)
+    await page.locator(".paper-series").first().click();
+  await expect(sheet).toHaveAttribute("data-ready", "");
+  return sheet;
+}
+
+/** The series' row (stage 2, orders task list, P0-4): which paper, and who
+ * is named under it — nobody named until the paper is said. */
+export async function expectSeries(
+  page: Page,
+  title: string,
+  meta: string | null,
+): Promise<void> {
+  const row = page.locator(".paper-series");
+  await expect(row.locator(".paper-series-title")).toHaveText(title);
+  if (meta === null) await expect(row.locator(".sale-meta")).toHaveCount(0);
+  else await expect(row.locator(".sale-meta")).toHaveText(meta);
+}
+
+/** Who sold or took it, picked in «З паперу»; then «Готово». */
+export async function namedFromPaper(page: Page, named: string): Promise<void> {
+  const sheet = await paperSheet(page);
+  await sheet.getByRole("radio", { name: named, exact: true }).check();
+  await sheet.getByRole("button", { name: "Готово" }).click();
+  await expect(sheet).toHaveCount(0);
 }
 
 /**

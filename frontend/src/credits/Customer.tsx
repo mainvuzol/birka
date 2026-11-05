@@ -2,7 +2,7 @@ import { Fragment, useEffect, useId, useRef, useState } from "react";
 import type { JSX } from "react";
 import { useQueries, useQueryClient } from "@tanstack/react-query";
 import type { UseQueryResult } from "@tanstack/react-query";
-import { api } from "@/shared/api";
+import { api, readText } from "@/shared/api";
 import { visible } from "@/shared/visible";
 import { money } from "@/orders/types";
 import type { Store } from "@/orders/types";
@@ -456,7 +456,7 @@ function StoreBlock({
         </h3>
         {answer.isError ? (
           <div role="alert">
-            <p>{refusalText(answer.error)}</p>
+            <p>{readText(answer.error, refusalText)}</p>
             <button
               type="button"
               className="quiet"
@@ -511,7 +511,7 @@ function StoreBlock({
       {answer.isError && (
         // Read again and refused: what is shown is as it was, and said.
         <div role="alert">
-          <p>{refusalText(answer.error)}</p>
+          <p>{readText(answer.error, refusalText)}</p>
           <button
             type="button"
             className="quiet"
@@ -656,7 +656,7 @@ function ClosedStores({
       <h3 className="t-label">Магазини, що не працюють</h3>
       {answer?.isError && (
         <div role="alert">
-          <p>{refusalText(answer.error)}</p>
+          <p>{readText(answer.error, refusalText)}</p>
           <button
             type="button"
             className="quiet"

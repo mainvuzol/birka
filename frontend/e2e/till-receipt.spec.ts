@@ -13,6 +13,7 @@ import {
   tillWays,
   sellsFrom,
   shortage,
+  paperSheet,
 } from "./fixtures";
 import type { Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
@@ -582,8 +583,17 @@ test("the till's ticks are rows of 44 px, and paying in parts puts the cursor in
   await page.keyboard.press("Enter");
   await expect(sheet).toHaveCount(0);
   await paper.click();
+  // «З паперу» opened in the same tap (stage 2, orders task list, P0-4).
+  await (
+    await paperSheet(page)
+  )
+    .getByRole("button", { name: "Готово" })
+    .click();
   await page.getByLabel("Час з паперу").fill("10:00");
-  const yesterday = page.locator("label.check", { hasText: "Це було вчора" });
+  // A switch row, as the paper's own (P0-4).
+  const yesterday = page.locator("label.switch-row", {
+    hasText: "Це було вчора",
+  });
   expect((await yesterday.boundingBox())?.height).toBeGreaterThanOrEqual(44);
 });
 

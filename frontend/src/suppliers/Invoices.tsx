@@ -6,15 +6,12 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { ApiError, api, errorText, inOwnWords } from "@/shared/api";
+import { Unread } from "@/shared/Unread";
 import { decimal, kopecks, money } from "@/orders/types";
 import type { Store } from "@/orders/types";
 import { asInput } from "@/prices/SuggestedPrice";
 import { visible } from "@/shared/visible";
-import {
-  resolveInvoiceCommand,
-  submitInvoiceCommand,
-  useInvoiceCommand,
-} from "./invoiceCommands";
+import { submitInvoiceCommand, useInvoiceCommand } from "./invoiceCommands";
 import { SupplierPicker, useSuppliers } from "./Picker";
 import type {
   Invoice,
@@ -74,7 +71,9 @@ export function Invoices({
   back?: MoreBack | undefined;
 }): JSX.Element {
   const cache = useQueryClient();
-  const { busy, pending, error } = useInvoiceCommand();
+  // A kept operation is the app's: its stub over this screen, its banner
+  // over any other, its check (stage 2, money task list, P0-6).
+  const { busy, pending } = useInvoiceCommand();
   const [making, setMaking] = useState(false);
   const [done, setDone] = useState<string | null>(null);
   const [selected, setSelected] = useState<Invoice | null>(null);
@@ -154,46 +153,9 @@ export function Invoices({
     return null;
   }
 
-  const notice = pending && (
-    <section className="notice">
-      <h3>
-        {busy ? "Перевіряємо операцію…" : "Незавершена операція з накладною"}
-      </h3>
-      <p>
-        Невідомо, чи записано{" "}
-        {pending.body.kind === "invoice"
-          ? "накладну"
-          : pending.body.kind === "payment"
-            ? "оплату"
-            : pending.body.kind === "set-off"
-              ? "залік"
-              : pending.body.kind === "sold"
-                ? "продаж позиченого"
-                : "списання"}
-        . Перевірте результат — та сама операція не запишеться двічі.
-      </p>
-      <button
-        disabled={busy}
-        onClick={() => {
-          void resolveInvoiceCommand(journalKey, token, pending).then(
-            (outcome) => {
-              if (outcome.kind === "done")
-                void settled(outcome.result, pending.body);
-              else if (outcome.kind === "refused")
-                setDone(refusalText(outcome.error));
-            },
-          );
-        }}
-      >
-        Перевірити результат операції
-      </button>
-    </section>
-  );
-
   if (selected)
     return (
       <>
-        {notice}
         <InvoiceDetail
           store={store}
           token={token}
@@ -244,10 +206,6 @@ export function Invoices({
             ? "Магазин не торгує: його накладні тут лише для перегляду. Сплачує будь-який магазин мережі, що працює."
             : "Що магазин винен постачальникам. Кожна накладна — окремий борг: сплачують частинами, без графіка, а повернений постачальнику товар зараховують заліком."}
         </p>
-        {notice}
-        {error instanceof Error && !(error instanceof ApiError) && (
-          <p role="alert">{error.message}</p>
-        )}
         {done && <p role="status">{done}</p>}
         {!readOnly && (
           <label>
@@ -341,7 +299,12 @@ export function Invoices({
         {invoices.isPending ? (
           <p role="status">Завантажуємо накладні…</p>
         ) : invoices.data === undefined ? (
-          <p role="alert">{errorText(invoices.error)}</p>
+          <Unread
+            error={invoices.error}
+            retry={() => {
+              void invoices.refetch();
+            }}
+          />
         ) : listed.length === 0 ? (
           <p>
             {elsewhere
@@ -389,7 +352,16 @@ export function Invoices({
               </article>
             ))}
             {/* A page that failed keeps the invoices already read. */}
-            {invoices.error && <p role="alert">{errorText(invoices.error)}</p>}
+            {invoices.error && (
+              <Unread
+                error={invoices.error}
+                retry={() => {
+                  void (invoices.isFetchNextPageError
+                    ? invoices.fetchNextPage()
+                    : invoices.refetch());
+                }}
+              />
+            )}
             {invoices.hasNextPage && (
               <button
                 className="quiet"
@@ -903,7 +875,12 @@ function SetOffForm({
       {returns.isPending ? (
         <p role="status">Завантажуємо повернення…</p>
       ) : returns.error ? (
-        <p role="alert">{errorText(returns.error)}</p>
+        <Unread
+          error={returns.error}
+          retry={() => {
+            void returns.refetch();
+          }}
+        />
       ) : standing.length === 0 ? (
         <p>
           Цей магазин нічого не повертав постачальнику «
@@ -1122,7 +1099,9 @@ const entryLabels: Record<InvoiceEntry["kind"], string> = {
   WRITE_OFF: "Списано",
 };
 
-function doneText(invoice: Invoice, command: Command): string {
+/** What an operation recorded, said once: here, and on a kept one's stub
+ * torn off (stage 2, money task list, P0-6). */
+export function doneText(invoice: Invoice, command: Command): string {
   const rest =
     invoice.status === "SETTLED"
       ? "Накладну сплачено повністю."
@@ -1148,7 +1127,9 @@ function when(iso: string): string {
   });
 }
 
-function refusalText(error: unknown): string {
+/** Why an operation was not taken, in this screen's words: here, and under
+ * a kept one checked (stage 2, money task list, P0-6). */
+export function refusalText(error: unknown): string {
   if (error instanceof ApiError) {
     switch (error.details.reason) {
       case "MORE_THAN_OWED":

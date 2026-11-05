@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { JSX } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, errorText } from "@/shared/api";
+import { api, readText } from "@/shared/api";
 import { BackToMore } from "@/shared/More";
 import type { MoreBack } from "@/shared/More";
 import { ScreenHeader } from "@/shared/ScreenHeader";
@@ -369,7 +369,7 @@ function Failure({
 }): JSX.Element {
   return (
     <div role="alert">
-      <p>{errorText(error)}</p>
+      <p>{readText(error)}</p>
       <button onClick={retry}>Спробувати ще раз</button>
     </div>
   );

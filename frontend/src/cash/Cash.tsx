@@ -3,7 +3,8 @@ import type { JSX, ReactNode } from "react";
 import { BackToMore } from "@/shared/More";
 import type { MoreBack } from "@/shared/More";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, errorText, unreachable } from "@/shared/api";
+import { api, unreachable, readText } from "@/shared/api";
+import { Unread } from "@/shared/Unread";
 import type { JournalOutcome } from "@/shared/journal";
 import { Placeholder } from "@/shared/Placeholder";
 import { useAutoCheck } from "@/shared/reach";
@@ -646,7 +647,7 @@ export function Cash({
           // A warning's plate, as the direction draws a server that does not
           // answer — still said at once (cash task list, P2-3).
           <div className="notice" role="alert">
-            <p>{errorText(drawer.error)}</p>
+            <p>{readText(drawer.error)}</p>
             {unreachable(drawer.error) && (
               // No close while the server does not answer (owner decisions,
               // 2026-10-04 and 2026-10-07; ADR-0013 §9, G26).
@@ -1089,7 +1090,12 @@ function CorrectStep({
             ) : events.isPending ? (
               <Placeholder said="Завантажуємо операції…" rows={3} day={false} />
             ) : events.error ? (
-              <p role="alert">{errorText(events.error)}</p>
+              <Unread
+                error={events.error}
+                retry={() => {
+                  void events.refetch();
+                }}
+              />
             ) : events.data.items.length === 0 ? (
               <p>Цього дня грошових операцій не було.</p>
             ) : (

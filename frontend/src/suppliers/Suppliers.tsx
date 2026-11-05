@@ -6,16 +6,13 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { ApiError, api, errorText, inOwnWords, isConflict } from "@/shared/api";
+import { Unread } from "@/shared/Unread";
 import { money } from "@/orders/types";
 import { sizeLabel } from "@/returns/types";
 import type { StockOption, Store } from "@/orders/types";
 import { useBackOnSale } from "@/returns/places";
 import { visible } from "@/shared/visible";
-import {
-  resolveReturnToSupplier,
-  submitReturnToSupplier,
-  useReturnToSupplier,
-} from "./commands";
+import { submitReturnToSupplier, useReturnToSupplier } from "./commands";
 import { Borrowed } from "./Borrowed";
 import { SupplierPicker, useSuppliers } from "./Picker";
 import type { ReturnPage, Supplier, SupplierReturn } from "./types";
@@ -55,7 +52,9 @@ export function Suppliers({
   back?: MoreBack | undefined;
 }): JSX.Element {
   const cache = useQueryClient();
-  const { busy, pending, error } = useReturnToSupplier();
+  // A kept return is the app's: its stub over this screen, its banner over
+  // any other, its check (stage 2, money task list, P0-6).
+  const { busy, pending } = useReturnToSupplier();
   const [making, setMaking] = useState(false);
   const [done, setDone] = useState<string | null>(null);
   const [supplierId, setSupplierId] = useState("");
@@ -89,11 +88,7 @@ export function Suppliers({
 
   async function settled(result: SupplierReturn): Promise<void> {
     setMaking(false);
-    setDone(
-      `Повернено постачальнику «${visible(result.supplier.name)}»: ${String(
-        result.lines.reduce((units, line) => units + line.quantity, 0),
-      )} шт.`,
-    );
+    setDone(returnedText(result));
     await Promise.all([
       cache.invalidateQueries({ queryKey: ["supplier-returns", store.id] }),
       cache.invalidateQueries({ queryKey: ["sale-stock"] }),
@@ -123,32 +118,6 @@ export function Suppliers({
           розділу «Брак». Скільки постачальник за нього зарахував, записують
           заліком у «Накладних».
         </p>
-        {pending && (
-          <section className="notice">
-            <h3>{busy ? "Перевіряємо повернення…" : "Незавершене повернення"}</h3>
-            <p>
-              Невідомо, чи записано повернення постачальнику. Перевірте результат
-              — те саме повернення не запишеться двічі.
-            </p>
-            <button
-              disabled={busy}
-              onClick={() => {
-                void resolveReturnToSupplier(journalKey, token, pending).then(
-                  (outcome) => {
-                    if (outcome.kind === "done") void settled(outcome.result);
-                    else if (outcome.kind === "refused")
-                      setDone(refusalText(outcome.error));
-                  },
-                );
-              }}
-            >
-              Перевірити результат повернення
-            </button>
-          </section>
-        )}
-        {error instanceof Error && !(error instanceof ApiError) && (
-          <p role="alert">{error.message}</p>
-        )}
         {done && <p role="status">{done}</p>}
         {making ? (
           <NewReturn
@@ -207,7 +176,12 @@ export function Suppliers({
         {returns.isPending ? (
           <p role="status">Завантажуємо повернення…</p>
         ) : returns.data === undefined ? (
-          <p role="alert">{errorText(returns.error)}</p>
+          <Unread
+            error={returns.error}
+            retry={() => {
+              void returns.refetch();
+            }}
+          />
         ) : listed.length === 0 ? (
           <p>Цей магазин ще нічого не повертав постачальникам.</p>
         ) : (
@@ -232,7 +206,16 @@ export function Suppliers({
               />
             ))}
             {/* A page that failed keeps the returns already read. */}
-            {returns.error && <p role="alert">{errorText(returns.error)}</p>}
+            {returns.error && (
+              <Unread
+                error={returns.error}
+                retry={() => {
+                  void (returns.isFetchNextPageError
+                    ? returns.fetchNextPage()
+                    : returns.refetch());
+                }}
+              />
+            )}
             {returns.hasNextPage && (
               <button
                 className="quiet"
@@ -397,7 +380,12 @@ function NewReturn({
           {stock.isPending ? (
             <p role="status">Завантажуємо залишки…</p>
           ) : stock.error ? (
-            <p role="alert">{errorText(stock.error)}</p>
+            <Unread
+              error={stock.error}
+              retry={() => {
+                void stock.refetch();
+              }}
+            />
           ) : options.length === 0 ? (
             <p>На цьому складі немає вільного товару.</p>
           ) : (
@@ -722,7 +710,17 @@ function when(iso: string): string {
   });
 }
 
-function refusalText(error: unknown): string {
+/** What a return recorded, said once: here, and on a kept one's stub torn
+ * off (stage 2, money task list, P0-6). */
+export function returnedText(result: SupplierReturn): string {
+  return `Повернено постачальнику «${visible(result.supplier.name)}»: ${String(
+    result.lines.reduce((units, line) => units + line.quantity, 0),
+  )} шт.`;
+}
+
+/** Why a return was not taken, in this screen's words: here, and under a
+ * kept one checked (stage 2, money task list, P0-6). */
+export function refusalText(error: unknown): string {
   if (error instanceof ApiError) {
     if (error.code === "INSUFFICIENT_STOCK")
       return "Вільного товару вже менше, ніж ви повертаєте: частину могли продати чи забронювати. Оновіть і перевірте кількість.";

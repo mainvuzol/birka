@@ -3,7 +3,7 @@ import { BackToMore } from "@/shared/More";
 import type { MoreBack } from "@/shared/More";
 import type { JSX } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { api, errorText } from "@/shared/api";
+import { api, readText } from "@/shared/api";
 import { visible } from "@/shared/visible";
 import { ScreenHeader } from "@/shared/ScreenHeader";
 import { money } from "@/orders/types";
@@ -400,7 +400,7 @@ function Failure({
 }): JSX.Element {
   return (
     <div role="alert">
-      <p>{errorText(error)}</p>
+      <p>{readText(error)}</p>
       <button onClick={retry}>Спробувати ще раз</button>
     </div>
   );

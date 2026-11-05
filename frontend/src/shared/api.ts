@@ -12,6 +12,16 @@ export const UNREACHABLE =
   "Сервер не відповідає. Продавайте на папері: модель, розмір, ціна, як оплачено, час. Коли сервер відповість — внесіть продажі до закриття каси.";
 
 /**
+ * What a place inside a store that could not be read says while the server
+ * does not answer (stage 2, orders task list, P0-3; В-ЗП1 (а)): the owner's
+ * first sentence, beside «Спробувати ще раз». The rest is said once, by the
+ * paper banner over the screen. The sign-in, «Щось пішло не так» and the page
+ * that never loaded, which stand outside a store, say the owner's words
+ * whole; a record whose answer was lost says its own (`errorText`).
+ */
+export const SILENT = "Сервер не відповідає.";
+
+/**
  * No answer from the server, as `api()` itself knows it (ADR-0013 §3):
  * `fetch` gave up — no network, a connection reset, the edge dead — or the
  * 20 s ran out, or a page that is not the API's answered for it (a captive
@@ -262,6 +272,15 @@ export function isConflict(error: unknown): boolean {
  * is safe to make again. A kept command whose outcome is unknown says its
  * own, as it may be recorded (`keptUnconfirmed`, `@/cash/errors`). */
 export const FAILED_TEXT = "Не вдалося виконати операцію. Спробуйте ще раз.";
+
+/** A read that failed, in a store: no answer, `SILENT`; any other, as the
+ * place says it (`errorText`, unless it has words of its own). */
+export function readText(
+  error: unknown,
+  said: (error: unknown) => string = errorText,
+): string {
+  return unreachable(error) ? SILENT : said(error);
+}
 
 export function errorText(error: unknown): string {
   // The server was not reached: the shop sells on paper (ADR-0013 §3).

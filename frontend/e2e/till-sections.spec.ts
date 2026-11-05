@@ -1,9 +1,11 @@
 import {
   test,
   expect,
+  expectSeries,
   menu,
   more,
   openStore,
+  paperSheet,
   rowNamed,
   toTill,
   section,
@@ -101,8 +103,7 @@ async function contrast(element: Locator): Promise<number> {
   });
 }
 
-const UNREACHABLE =
-  "Сервер не відповідає. Продавайте на папері: модель, розмір, ціна, як оплачено, час. Коли сервер відповість — внесіть продажі до закриття каси.";
+const SILENT = "Сервер не відповідає.";
 
 /** The bottom menu's tabs («Усе на бірці» task list, P0-4). */
 function tabs(page: Page): Locator {
@@ -1088,9 +1089,11 @@ test("every screen of a store is headed by its own title, the store and who work
   );
 });
 
-/** The till's warehouses, read while the server does not answer. */
+/** The till's warehouses, read while the server does not answer: the
+ * place says «Сервер не відповідає.», the paper banner the rest (stage 2,
+ * orders task list, P0-3). */
 function failed(page: Page): Locator {
-  return page.getByRole("alert").filter({ hasText: UNREACHABLE });
+  return page.getByRole("alert").filter({ hasText: SILENT });
 }
 
 function reminder(page: Page): Locator {
@@ -1169,10 +1172,11 @@ test("a phone that saw the server come back says once, at the till, to type the 
     .click();
   // The same as the tick: the mode is on, and the reminder is answered.
   await expect(paper).toBeChecked();
-  // The paper of an outage the phone saw, said so (owner, 2026-10-16).
-  await expect(
-    page.getByRole("radio", { name: "Сервер не відповідав" }),
-  ).toBeChecked();
+  // The paper of an outage the phone saw, said so (owner, 2026-10-16) by
+  // the series' row; «З паперу» does not open (stage 2, orders task list,
+  // P0-4).
+  await expectSeries(page, "Сервер не відповідав", "Продавець: не вказано");
+  await expect(page.getByRole("dialog", { name: "З паперу" })).toHaveCount(0);
   await expect(page.getByText("Режим: продаж з паперу")).toBeVisible();
   await expect(reminder(page)).toHaveCount(0);
   // The paper typed, the switch is unticked: the reminder does not return.
@@ -1217,6 +1221,11 @@ test("«Пізніше» puts the reminder away until the server is lost and bac
   await expect(reminder(page)).toBeVisible();
   // Ticked by hand, it is answered as by its button.
   await page.getByLabel("Вношу продаж з паперу").check();
+  await (
+    await paperSheet(page)
+  )
+    .getByRole("button", { name: "Готово" })
+    .click();
   await page.getByLabel("Вношу продаж з паперу").uncheck();
   await expect(reminder(page)).toHaveCount(0);
 });
@@ -1279,6 +1288,11 @@ test("a server back while the paper is being typed is the reminder answered, and
   const server = await tillAfterOutage(page);
   const paper = page.getByLabel("Вношу продаж з паперу");
   await paper.check();
+  await (
+    await paperSheet(page)
+  )
+    .getByRole("button", { name: "Готово" })
+    .click();
   await expect(page.getByText("Режим: продаж з паперу")).toBeVisible();
   await answered(page, server);
   await expect(till(page)).toBeVisible();

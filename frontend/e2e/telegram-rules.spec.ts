@@ -380,6 +380,41 @@ test("held sideways as the first coat goes in, the screen is not locked so: turn
     .toEqual([upright(true)[1]]);
 });
 
+test("«З паперу» at the till: never a MainButton, and Telegram's «Назад» closes the sheet, not the till (stage 2, orders task list, P0-4)", async ({
+  page,
+}) => {
+  await hear(page);
+  await stubList(page);
+  await onTheTill(page, "9.1");
+  await page.getByLabel("Вношу продаж з паперу").check();
+  const sheet = page.getByRole("dialog", { name: "З паперу" });
+  await expect(sheet).toHaveAttribute("data-ready", "");
+  await sheet.getByRole("radio", { name: "Сервер не відповідав" }).check();
+  // The app's own «Готово», quiet, in the sheet's foot.
+  await expect(sheet.getByRole("button", { name: "Готово" })).toHaveClass(
+    /\bquiet\b/,
+  );
+  await page.evaluate(() => {
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        data: JSON.stringify({ eventType: "back_button_pressed" }),
+        source: window.parent,
+      }),
+    );
+  });
+  await expect(sheet).toHaveCount(0);
+  await expect(
+    page.getByRole("heading", { name: "Продаж", exact: true }),
+  ).toBeVisible();
+  // Nothing chosen is lost.
+  await expect(page.locator(".paper-series-title")).toHaveText(
+    "Сервер не відповідав",
+  );
+  expect((await told(page)).map(([event]) => event)).not.toContain(
+    "web_app_setup_main_button",
+  );
+});
+
 test("a basket from paper, the paper turned off in «Ще»: gone, and the question and the lock with it", async ({
   page,
 }) => {

@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { JSX } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, api, errorText, inOwnWords } from "@/shared/api";
+import { Unread } from "@/shared/Unread";
 import { visible } from "@/shared/visible";
 import type { StoreState } from "@/orders/types";
 import {
@@ -117,7 +118,12 @@ export function Stores({
         {stores.isPending ? (
           <p role="status">Завантажуємо магазини…</p>
         ) : stores.error ? (
-          <p role="alert">{errorText(stores.error)}</p>
+          <Unread
+            error={stores.error}
+            retry={() => {
+              void stores.refetch();
+            }}
+          />
         ) : (
           stores.data.map((store) => (
             <StoreCard

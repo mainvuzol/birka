@@ -9,7 +9,7 @@ import type { StoreDebts } from "@/credits/types";
 import { plural } from "@/openings/types";
 import { kopecks, money } from "@/orders/types";
 import type { Store, StoreState } from "@/orders/types";
-import { Unread } from "@/orders/Orders";
+import { Unread } from "@/shared/Unread";
 import type { StoreFigures, WayFigures } from "@/reports/types";
 import { Icon } from "@/shared/Icon";
 import type { IconName } from "@/shared/icons";

@@ -260,6 +260,14 @@ export function keptCashText(since: string | undefined): string {
   return `${waitsSince(since)}Телефон перевірить сам. Нічого не повторюйте, поки він не скаже «не записано».`;
 }
 
+/** The line under a kept command that is checked by its button alone —
+ * an invoice's, a return to a supplier's (stage 2, money task list, P0-6;
+ * В1 (а)): since when it waits, and no paper line, since suppliers are not
+ * paid on paper. Nothing for an attempt kept before it said since when. */
+export function waitsText(since: string | undefined): string {
+  return waitsSince(since).trim();
+}
+
 /** «Чекає відповіді сервера з 14:20. », or nothing for an attempt kept
  * before it said since when. */
 function waitsSince(since: string | undefined): string {

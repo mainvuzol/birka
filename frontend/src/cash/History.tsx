@@ -3,7 +3,8 @@ import type { JSX } from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { money } from "@/orders/types";
 import type { Store } from "@/orders/types";
-import { api, errorText } from "@/shared/api";
+import { api } from "@/shared/api";
+import { Unread } from "@/shared/Unread";
 import { Eyelet } from "@/shared/Eyelet";
 import { Icon } from "@/shared/Icon";
 import { Placeholder } from "@/shared/Placeholder";
@@ -211,7 +212,12 @@ export function History({
         {closes.isPending ? (
           <Placeholder said="Завантажуємо закриття…" rows={4} day={false} />
         ) : closes.data === undefined ? (
-          <p role="alert">{errorText(closes.error)}</p>
+          <Unread
+            error={closes.error}
+            retry={() => {
+              void closes.refetch();
+            }}
+          />
         ) : items.length === 0 ? (
           <p>Касу цього магазину ще не закривали.</p>
         ) : (
@@ -230,7 +236,16 @@ export function History({
               ))}
             </ul>
             {/* A page that failed keeps the closes already read. */}
-            {closes.error && <p role="alert">{errorText(closes.error)}</p>}
+            {closes.error && (
+              <Unread
+                error={closes.error}
+                retry={() => {
+                  void (closes.isFetchNextPageError
+                    ? closes.fetchNextPage()
+                    : closes.refetch());
+                }}
+              />
+            )}
             {closes.hasNextPage && (
               <button
                 className="quiet"

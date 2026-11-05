@@ -6,6 +6,7 @@ import {
   toTill,
   sellsFrom,
   shortage,
+  paperSheet,
 } from "./fixtures";
 import type { Locator, Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
@@ -390,8 +391,14 @@ test("«Вношу продаж з паперу» is a switch row under the sear
   await expect(
     page.getByRole("region", { name: "Режим: продаж з паперу" }),
   ).toBeVisible();
-  // The paper's fields under it, still over the list.
-  const who = await page.getByLabel("Хто продав").boundingBox();
+  // «З паперу» in the same tap; closed, the series' row under the switch,
+  // still over the list (stage 2, orders task list, P0-4).
+  await (
+    await paperSheet(page)
+  )
+    .getByRole("button", { name: "Готово" })
+    .click();
+  const who = await page.locator(".paper-series").boundingBox();
   if (who === null) throw new Error("not drawn");
   expect(who.y).toBeGreaterThan(box.y);
   await more(page);
@@ -511,7 +518,7 @@ test("an answer refused for its own reason under a long list is brought into vie
   await expect(tray(page).locator(".tray-count")).toHaveText("Кошик · 3");
 });
 
-test("with a coat in the basket, the switch row turned on brings the paper's fields into view over the tray, under the held search", async ({
+test("with a coat in the basket, the switch row turned on asks «З паперу» over the tray, and closed, brings the series' row into view over the tray, under the held search", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 360, height: 640 });
@@ -520,14 +527,22 @@ test("with a coat in the basket, the switch row turned on brings the paper's fie
   await cell(page).click();
   await expect(tray(page)).toBeVisible();
   await page.getByRole("switch", { name: "Вношу продаж з паперу" }).check();
-  const kind = page.getByRole("group", { name: "Що вносите з паперу?" });
-  await expect(kind).toBeInViewport();
-  const top = await kind.boundingBox();
+  // The paper asked in the same tap, in «З паперу» (stage 2, orders task
+  // list, P0-4).
+  const sheet = await paperSheet(page);
+  await expect(
+    sheet.getByRole("group", { name: "Що вносите з паперу?" }),
+  ).toBeInViewport();
+  await sheet.getByRole("button", { name: "Готово" }).click();
+  await expect(sheet).toHaveCount(0);
+  const series = page.locator(".paper-series");
+  await expect(series).toBeInViewport({ ratio: 1 });
+  const row = await series.boundingBox();
   const find = await page.locator(".find.sticky").boundingBox();
   const panel = await tray(page).boundingBox();
-  if (top === null || find === null || panel === null)
+  if (row === null || find === null || panel === null)
     throw new Error("not drawn");
-  // Its question read whole between the search and the tray.
-  expect(top.y).toBeGreaterThanOrEqual(find.y + find.height);
-  expect(top.y + 40).toBeLessThanOrEqual(panel.y);
+  // Its row read whole between the search and the tray.
+  expect(row.y).toBeGreaterThanOrEqual(find.y + find.height);
+  expect(row.y + row.height).toBeLessThanOrEqual(panel.y);
 });

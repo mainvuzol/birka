@@ -3,6 +3,7 @@ import type { Dispatch, JSX, SetStateAction } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { UseQueryResult } from "@tanstack/react-query";
 import { ApiError, api, errorText, inOwnWords } from "@/shared/api";
+import { Unread } from "@/shared/Unread";
 import type { Store } from "@/orders/types";
 import { visible } from "@/shared/visible";
 import type { Supplier } from "./types";
@@ -117,7 +118,14 @@ export function SupplierPicker({
           ))}
         </select>
       </label>
-      {suppliers.error && <p role="alert">{errorText(suppliers.error)}</p>}
+      {suppliers.error && (
+        <Unread
+          error={suppliers.error}
+          retry={() => {
+            void suppliers.refetch();
+          }}
+        />
+      )}
       {adding ? (
         <fieldset disabled={disabled || busy}>
           <legend>Новий постачальник</legend>

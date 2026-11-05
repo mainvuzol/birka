@@ -711,6 +711,39 @@ test("paid in parts, a sale that suggests no way is returned without one (G35), 
   await expect(page.getByText(/Поверніть/)).toHaveCount(0);
 });
 
+test("from paper at 360 × 640: its banner on top, three rows over the first goods — the switch, the series, the time — and the first goods in view (stage 2, orders task list, P0-4)", async ({
+  page,
+}) => {
+  await oneSale(page, [line("Лоран шоколад")]);
+  await opened(page);
+  await fromPaper(page, "Вношу повернення з паперу");
+  const banner = page.getByRole("region", { name: "Режим: з паперу" });
+  await expect(banner).toBeVisible();
+  const form = page.locator("section.returns fieldset").first();
+  const rows = await form.evaluate((node) =>
+    [...node.children]
+      .slice(
+        0,
+        [...node.children].findIndex((child) =>
+          child.classList.contains("line-return"),
+        ),
+      )
+      .filter((child) => child.tagName !== "LEGEND")
+      .map((child) => child.className),
+  );
+  expect(rows).toEqual(["switch-row", "sale-row paper-series", "fields"]);
+  const top = await banner.boundingBox();
+  const turn = await page.locator(".switch-row").first().boundingBox();
+  expect((top?.y ?? 0) + (top?.height ?? 0)).toBeLessThanOrEqual(turn?.y ?? 0);
+  await expect(
+    page.locator(".line-return").first().locator("h3"),
+  ).toBeInViewport({ ratio: 1 });
+  // Read as switches.
+  await expect(
+    page.getByRole("switch", { name: "Вношу повернення з паперу" }),
+  ).toBeChecked();
+});
+
 test("from paper, the panel's large line says so too, and never what to hand back later", async ({
   page,
 }) => {

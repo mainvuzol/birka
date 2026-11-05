@@ -1,7 +1,13 @@
 import { useEffect, useState } from "react";
 import type { JSX } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, ApiError, errorText, recordedNothing } from "@/shared/api";
+import {
+  api,
+  ApiError,
+  errorText,
+  recordedNothing,
+  readText,
+} from "@/shared/api";
 import { keptText, useAutoCheck } from "@/shared/reach";
 import { visible } from "@/shared/visible";
 import type { Store } from "@/orders/types";
@@ -383,7 +389,7 @@ function Failure({
 }): JSX.Element {
   return (
     <div role="alert">
-      <p>{message(error)}</p>
+      <p>{readText(error, message)}</p>
       <button onClick={retry}>Спробувати ще раз</button>
     </div>
   );

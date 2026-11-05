@@ -3,7 +3,8 @@ import { useState } from "react";
 import type { JSX } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { UseQueryResult } from "@tanstack/react-query";
-import { api, errorText } from "@/shared/api";
+import { api, ApiError, errorText } from "@/shared/api";
+import { Unread } from "@/shared/Unread";
 import { money } from "@/orders/types";
 import { markText } from "@/sales/types";
 import { visible } from "@/shared/visible";
@@ -259,8 +260,18 @@ export function SalesReport({
         )}
         {report.isPending ? (
           <p role="status">Рахуємо…</p>
-        ) : report.error ? (
+        ) : report.error instanceof ApiError &&
+          report.error.details.reason === "PERIOD" ? (
+          // Days refused as chosen: reading them again changes nothing, so
+          // no «Спробувати ще раз» (review, 2026-11-05).
           <p role="alert">{errorText(report.error)}</p>
+        ) : report.error ? (
+          <Unread
+            error={report.error}
+            retry={() => {
+              void report.refetch();
+            }}
+          />
         ) : (
           <>
             <h3>{periodText(report.data.date_from, report.data.date_to)}</h3>
@@ -431,7 +442,12 @@ function ModelList({
       {models.isPending ? (
         <p role="status">Рахуємо моделі…</p>
       ) : models.error ? (
-        <p role="alert">{errorText(models.error)}</p>
+        <Unread
+          error={models.error}
+          retry={() => {
+            void models.refetch();
+          }}
+        />
       ) : models.data.models.length === 0 ? (
         <p className="hint">Нічого не продано.</p>
       ) : (
@@ -531,7 +547,12 @@ function EntryList({
       {entries.isPending ? (
         <p role="status">Завантажуємо продажі…</p>
       ) : entries.error ? (
-        <p role="alert">{errorText(entries.error)}</p>
+        <Unread
+          error={entries.error}
+          retry={() => {
+            void entries.refetch();
+          }}
+        />
       ) : entries.data.entries.length === 0 ? (
         <p className="hint">Ні продажів, ні повернень.</p>
       ) : (

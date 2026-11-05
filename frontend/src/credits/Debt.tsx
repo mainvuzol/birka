@@ -42,6 +42,7 @@ import { Back } from "@/shared/Back";
 import { Sheet } from "@/shared/Sheet";
 import { ScreenHeader } from "@/shared/ScreenHeader";
 import {
+  PaperBanner,
   PaperFields,
   paperRefusal,
   paperText,
@@ -572,6 +573,11 @@ export function Debt({
           }
         />
         <section className="credits debt-detail debt-till">
+          {/* From paper: its banner at the top, as the till's (stage 2,
+              orders task list, P0-4). */}
+          {takes && !paidResult && (
+            <PaperBanner mark={paperMark} what="payment" />
+          )}
           {goods}
           <p className="hint debt-context">
             {customerName} · «{visible(credit.store_name)}» · з{" "}

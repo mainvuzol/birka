@@ -1,7 +1,11 @@
-import { useEffect, useId, useState } from "react";
-import type { JSX } from "react";
+import { useEffect, useId, useRef, useState } from "react";
+import type { JSX, RefObject } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { api, errorText } from "@/shared/api";
+import type { UseQueryResult } from "@tanstack/react-query";
+import { api, readText } from "@/shared/api";
+import { Banner } from "@/shared/Banner";
+import { Icon } from "@/shared/Icon";
+import { Sheet } from "@/shared/Sheet";
 import { visible } from "@/shared/visible";
 import type { Store } from "@/orders/types";
 import {
@@ -150,7 +154,8 @@ export function PaperKind({
   return (
     <fieldset className="paper-kind">
       <legend>Що вносите з паперу?</legend>
-      <label className="check">
+      {/* Rows in «З паперу» (stage 2, orders task list, P0-4). */}
+      <label className="sale-row paper-option">
         <input
           type="radio"
           name={name}
@@ -159,9 +164,9 @@ export function PaperKind({
             setFirstDays(storeId, true);
           }}
         />
-        Перші дні, до затвердження залишків
+        {kindLabel(true)}
       </label>
-      <label className="check">
+      <label className="sale-row paper-option">
         <input
           type="radio"
           name={name}
@@ -170,7 +175,7 @@ export function PaperKind({
             setFirstDays(storeId, false);
           }}
         />
-        Сервер не відповідав
+        {kindLabel(false)}
       </label>
       {firstDays === null && (
         <p className="hint">
@@ -181,10 +186,222 @@ export function PaperKind({
   );
 }
 
+/** Which paper a series is, as its row and «З паперу» name it. */
+function kindLabel(firstDays: boolean): string {
+  return firstDays
+    ? "Перші дні, до затвердження залишків"
+    : "Сервер не відповідав";
+}
+
 /**
- * The paper's day and time, each operation's own. An outage's paper is of
- * today, or of yesterday with «Це було вчора» (G1); the first days' paper
- * is of any of the last two weeks, its day picked.
+ * «Вношу продаж / повернення / внесок з паперу», a switch row (spec S08;
+ * «Усе на бірці» task list, P0-5): the till's, and since stage 2 (orders
+ * task list, P0-4) the return's and the payment's — one state for the store
+ * (`./paper`), whichever screen it is turned on.
+ */
+export function PaperSwitch({
+  label,
+  on,
+  turn,
+}: {
+  label: string;
+  on: boolean;
+  turn: (on: boolean) => void;
+}): JSX.Element {
+  return (
+    <label className="switch-row">
+      <input
+        type="checkbox"
+        role="switch"
+        checked={on}
+        onChange={(event) => {
+          turn(event.target.checked);
+        }}
+      />
+      <span className="switch-label">{label}</span>
+      <span className="switch-track" aria-hidden="true">
+        <span className="switch-knob" />
+      </span>
+    </label>
+  );
+}
+
+/**
+ * The series, one row under the switch (spec S12; stage 2, orders task
+ * list, P0-4): which paper it is, and who is named — «Продавець: Наталя» at
+ * the till, «Хто прийняв: Ганна» on a return or a payment, «… не вказано».
+ * Until the paper is said, «Оберіть, що вносите з паперу ›» with the
+ * warning's triangle. A tap opens «З паперу».
+ */
+export function PaperSeries({
+  firstDays,
+  who,
+  named,
+  open,
+  row,
+}: {
+  firstDays: boolean | null;
+  who: "Продавець" | "Хто прийняв";
+  /** Whoever is named, as the list read them; null — nobody. */
+  named: string | null;
+  open: () => void;
+  row: RefObject<HTMLButtonElement>;
+}): JSX.Element {
+  return (
+    <button
+      ref={row}
+      type="button"
+      className="sale-row paper-series"
+      aria-haspopup="dialog"
+      data-unsaid={firstDays === null ? "" : undefined}
+      onClick={open}
+    >
+      <Icon name={firstDays === null ? "warning" : "paper"} size={20} />
+      <span className="sale-main">
+        <span className="paper-series-title">
+          {firstDays === null
+            ? "Оберіть, що вносите з паперу"
+            : kindLabel(firstDays)}
+        </span>
+        {firstDays !== null && (
+          <span className="sale-meta">
+            {who}: {named === null ? "не вказано" : visible(named)}
+          </span>
+        )}
+      </span>
+      <span className="sale-open" aria-hidden="true">
+        ›
+      </span>
+    </button>
+  );
+}
+
+/** Whoever may be named from paper, as the store's list reads them. */
+type People = UseQueryResult<{
+  sellers: { user_id: string; display_name: string }[];
+}>;
+
+/**
+ * «З паперу», a sheet (§6.29; stage 2, orders task list, P0-4): which
+ * paper — nothing chosen for it, the mark is permanent — and who sold or
+ * took it, «Не вказано» first and chosen (В-ЗП5 (а)); a list not read says
+ * so, with «Спробувати ще раз». The app's quiet «Готово» closes it, as
+ * Telegram's «Назад» and the scrim do, and nothing chosen is lost; never a
+ * MainButton.
+ */
+export function PaperSheet({
+  storeId,
+  firstDays,
+  ask,
+  people,
+  chosen,
+  name,
+  close,
+  fallback,
+}: {
+  storeId: string;
+  firstDays: boolean | null;
+  ask: "Хто продав" | "Хто прийняв";
+  people: People;
+  /** Whoever is named, if the list holds them. */
+  chosen: string | null;
+  name: (userId: string | null) => void;
+  close: () => void;
+  fallback: RefObject<HTMLElement>;
+}): JSX.Element {
+  const group = useId();
+  return (
+    <Sheet
+      title="З паперу"
+      close={close}
+      fallback={fallback}
+      foot={
+        <button type="button" className="quiet sheet-done" onClick={close}>
+          Готово
+        </button>
+      }
+    >
+      <PaperKind storeId={storeId} firstDays={firstDays} />
+      <fieldset className="paper-kind">
+        <legend>{ask}</legend>
+        <label className="sale-row paper-option">
+          <input
+            type="radio"
+            name={group}
+            checked={chosen === null}
+            onChange={() => {
+              name(null);
+            }}
+          />
+          Не вказано
+        </label>
+        {(people.data?.sellers ?? []).map((person) => (
+          <label className="sale-row paper-option" key={person.user_id}>
+            <input
+              type="radio"
+              name={group}
+              checked={chosen === person.user_id}
+              onChange={() => {
+                name(person.user_id);
+              }}
+            />
+            {visible(person.display_name)}
+          </label>
+        ))}
+      </fieldset>
+      {people.error && (
+        // What could not be read: a warning's plate (stage 2, orders task
+        // list, P0-2), in the sheet.
+        <div className="notice read-failure" role="alert">
+          <p>{readText(people.error)}</p>
+          <button
+            type="button"
+            onClick={() => {
+              void people.refetch();
+            }}
+          >
+            Спробувати ще раз
+          </button>
+        </div>
+      )}
+    </Sheet>
+  );
+}
+
+/**
+ * «Режим: з паперу» over a return or a payment, as the till's «Режим:
+ * продаж з паперу» (§6.23; stage 2, orders task list, P0-4): its own
+ * approved sentence, once the paper is said.
+ */
+export function PaperBanner({
+  mark,
+  what,
+}: {
+  mark: PaperMarkState;
+  what: "return" | "payment";
+}): JSX.Element | null {
+  if (!mark.paper || mark.firstDays === null) return null;
+  return (
+    <Banner kind="paper" label="Режим: з паперу">
+      <h3>Режим: з паперу</h3>
+      <p>
+        {what === "return"
+          ? mark.firstDays
+            ? "Повернення позначать «з паперу». Воно увійде в сьогоднішні повернення й у касу до наступного закриття. Гроші, які вже віддали, вдруге не віддавайте."
+            : "Повернення позначать «під час збою». Воно увійде в сьогоднішні повернення й у касу до наступного закриття. Гроші, які віддали під час збою, вдруге не віддавайте."
+          : mark.firstDays
+            ? "Внесок позначать «з паперу». Він увійде в касу до наступного закриття. Гроші вже взяли — на терміналі нічого не проводьте."
+            : "Внесок позначать «під час збою». Він увійде в касу до наступного закриття. Гроші вже взяли — на терміналі нічого не проводьте."}
+      </p>
+    </Banner>
+  );
+}
+
+/**
+ * The paper's day and time, each operation's own, on the page under the
+ * series (stage 2, orders task list, P0-4). An outage's paper is of today,
+ * or of yesterday with «Це було вчора», a switch row (G1); the first days'
+ * paper is of any of the last two weeks, its day picked.
  */
 export function PaperWhen({
   firstDays,
@@ -233,16 +450,7 @@ export function PaperWhen({
         />
       </label>
       {firstDays !== true && time && (
-        <label className="check">
-          <input
-            type="checkbox"
-            checked={yesterday}
-            onChange={(event) => {
-              onYesterday(event.target.checked);
-            }}
-          />
-          Це було вчора
-        </label>
+        <PaperSwitch label="Це було вчора" on={yesterday} turn={onYesterday} />
       )}
       {problem && <p className="hint">{problem}</p>}
     </div>
@@ -375,7 +583,13 @@ export function usePaperMark(
 
 export type PaperMarkState = ReturnType<typeof usePaperMark>;
 
-/** The switch and, while it is on, what the paper names. */
+/**
+ * A return's or a payment's paper, as the till's (stage 2, orders task
+ * list, P0-4): the switch; while it is on, the series' row and the paper's
+ * time — three rows over what is typed. Turned on with no paper said yet,
+ * «З паперу» opens in the same tap. Its banner stands at the screen's top
+ * (`PaperBanner`).
+ */
 export function PaperFields({
   mark,
   what,
@@ -385,66 +599,34 @@ export function PaperFields({
   what: "return" | "payment";
   storeId: string;
 }): JSX.Element {
+  const row = useRef<HTMLButtonElement>(null);
+  const [asking, setAsking] = useState(false);
   return (
     <>
-      <label className="check">
-        <input
-          type="checkbox"
-          checked={mark.paper}
-          onChange={(event) => {
-            mark.turn(event.target.checked);
-          }}
-        />
-        {what === "return"
-          ? "Вношу повернення з паперу"
-          : "Вношу внесок з паперу"}
-      </label>
+      <PaperSwitch
+        label={
+          what === "return"
+            ? "Вношу повернення з паперу"
+            : "Вношу внесок з паперу"
+        }
+        on={mark.paper}
+        turn={(on) => {
+          mark.turn(on);
+          // Turned on, the paper is said anew (`setPaper`).
+          setAsking(on);
+        }}
+      />
       {mark.paper && (
-        <section className="notice" aria-label="Режим: з паперу">
-          <h3>Режим: з паперу</h3>
-          <PaperKind storeId={storeId} firstDays={mark.firstDays} />
-          {mark.firstDays !== null && (
-            <p>
-              {what === "return"
-                ? mark.firstDays
-                  ? "Повернення позначать «з паперу». Воно увійде в сьогоднішні повернення й у касу до наступного закриття. Гроші, які вже віддали, вдруге не віддавайте."
-                  : "Повернення позначать «під час збою». Воно увійде в сьогоднішні повернення й у касу до наступного закриття. Гроші, які віддали під час збою, вдруге не віддавайте."
-                : mark.firstDays
-                  ? "Внесок позначать «з паперу». Він увійде в касу до наступного закриття. Гроші вже взяли — на терміналі нічого не проводьте."
-                  : "Внесок позначать «під час збою». Він увійде в касу до наступного закриття. Гроші вже взяли — на терміналі нічого не проводьте."}
-            </p>
-          )}
-          <label>
-            Хто прийняв
-            <select
-              value={mark.named?.user_id ?? ""}
-              onChange={(event) => {
-                mark.name(event.target.value || null);
-              }}
-            >
-              <option value="">Не вказано</option>
-              {(mark.people.data?.sellers ?? []).map((person) => (
-                <option key={person.user_id} value={person.user_id}>
-                  {visible(person.display_name)}
-                </option>
-              ))}
-            </select>
-          </label>
-          {mark.people.error && (
-            // What could not be read: a warning's plate (stage 2, orders
-            // task list, P0-2; review, 2026-11-05).
-            <p className="notice read-failure" role="alert">
-              {errorText(mark.people.error)}{" "}
-              <button
-                className="quiet"
-                onClick={() => {
-                  void mark.people.refetch();
-                }}
-              >
-                Спробувати ще раз
-              </button>
-            </p>
-          )}
+        <>
+          <PaperSeries
+            firstDays={mark.firstDays}
+            who="Хто прийняв"
+            named={mark.named?.display_name ?? null}
+            open={() => {
+              setAsking(true);
+            }}
+            row={row}
+          />
           <PaperWhen
             firstDays={mark.firstDays}
             day={mark.day}
@@ -456,7 +638,23 @@ export function PaperFields({
             }}
             onYesterday={mark.setYesterday}
           />
-        </section>
+        </>
+      )}
+      {mark.paper && asking && (
+        <PaperSheet
+          storeId={storeId}
+          firstDays={mark.firstDays}
+          ask="Хто прийняв"
+          people={mark.people}
+          chosen={mark.named?.user_id ?? null}
+          name={(userId) => {
+            mark.name(userId);
+          }}
+          close={() => {
+            setAsking(false);
+          }}
+          fallback={row}
+        />
       )}
     </>
   );

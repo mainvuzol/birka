@@ -1,7 +1,13 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { JSX } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, CONFLICT_TEXT, errorText, INVALID_TEXT } from "@/shared/api";
+import {
+  api,
+  CONFLICT_TEXT,
+  errorText,
+  INVALID_TEXT,
+  readText,
+} from "@/shared/api";
 import type { ApiError } from "@/shared/api";
 import { decimal, kopecks, money } from "@/orders/types";
 import type { Location, StockOption, Store } from "@/orders/types";
@@ -32,7 +38,9 @@ import { setPaper, setSoldBy, usePaper } from "./paper";
 import { forgetBasket, keepBasket, keptBasket, outlives } from "./basket";
 import type { Basket, Draft } from "./basket";
 import {
-  PaperKind,
+  PaperSeries,
+  PaperSheet,
+  PaperSwitch,
   PaperWhen,
   paperAt,
   paperWhenProblem,
@@ -836,6 +844,10 @@ export function Sale({
   // the ways wait for them (screenshots, 2026-10-30).
   const paperRef = useRef<HTMLDivElement>(null);
   const paperAsked = useRef(false);
+  // «З паперу» (stage 2, orders task list, P0-4): opened by the series' row,
+  // and by the switch turned on, which says the paper anew.
+  const seriesRow = useRef<HTMLButtonElement>(null);
+  const [paperAsking, setPaperAsking] = useState(false);
   useEffect(() => {
     if (!paper || !paperAsked.current) return;
     paperAsked.current = false;
@@ -958,48 +970,27 @@ export function Sale({
   // opening stock, the catalogue — it stands at the top, as before.
   const paperRow = (
     <>
-      <label className="switch-row">
-        <input
-          type="checkbox"
-          role="switch"
-          checked={paper}
-          onChange={(event) => {
-            paperAsked.current = event.target.checked;
-            turnPaper(event.target.checked);
-          }}
-        />
-        <span className="switch-label">Вношу продаж з паперу</span>
-        <span className="switch-track" aria-hidden="true">
-          <span className="switch-knob" />
-        </span>
-      </label>
+      <PaperSwitch
+        label="Вношу продаж з паперу"
+        on={paper}
+        turn={(on) => {
+          paperAsked.current = on;
+          turnPaper(on);
+          // Turned on, the paper is said anew: «З паперу» in the same tap.
+          setPaperAsking(on);
+        }}
+      />
       {paper && (
         <div ref={paperRef}>
-          <PaperKind storeId={store.id} firstDays={firstDays} />
-          <label>
-            Хто продав
-            <select
-              value={named?.user_id ?? ""}
-              onChange={(event) => {
-                setSoldBy(store.id, event.target.value || null);
-              }}
-            >
-              <option value="">Не вказано</option>
-              {(sellers.data?.sellers ?? []).map((seller) => (
-                <option key={seller.user_id} value={seller.user_id}>
-                  {visible(seller.display_name)}
-                </option>
-              ))}
-            </select>
-          </label>
-          {sellers.error && (
-            <Failure
-              error={sellers.error}
-              retry={() => {
-                void sellers.refetch();
-              }}
-            />
-          )}
+          <PaperSeries
+            firstDays={firstDays}
+            who="Продавець"
+            named={named?.display_name ?? null}
+            open={() => {
+              setPaperAsking(true);
+            }}
+            row={seriesRow}
+          />
           <PaperWhen
             firstDays={firstDays}
             day={paperDate}
@@ -1013,6 +1004,22 @@ export function Sale({
             onYesterday={setYesterday}
           />
         </div>
+      )}
+      {paper && paperAsking && (
+        <PaperSheet
+          storeId={store.id}
+          firstDays={firstDays}
+          ask="Хто продав"
+          people={sellers}
+          chosen={named?.user_id ?? null}
+          name={(userId) => {
+            setSoldBy(store.id, userId);
+          }}
+          close={() => {
+            setPaperAsking(false);
+          }}
+          fallback={seriesRow}
+        />
       )}
     </>
   );
@@ -2065,7 +2072,7 @@ function Failure({
   // P0-2).
   return (
     <div className="notice read-failure" role="alert">
-      <p>{errorText(error)}</p>
+      <p>{readText(error)}</p>
       <button type="button" onClick={retry}>
         Спробувати ще раз
       </button>

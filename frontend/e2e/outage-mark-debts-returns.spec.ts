@@ -2,6 +2,9 @@ import {
   test,
   expect,
   fromPaper,
+  expectSeries,
+  namedFromPaper,
+  paperSheet,
   openStore,
   returnUnits,
   section,
@@ -209,10 +212,14 @@ test("a return typed from paper by «Ліда» naming «Ганна» says not t
   ).toContainText(
     "Воно увійде в сьогоднішні повернення й у касу до наступного закриття.",
   );
-  await page
-    .getByRole("combobox", { name: "Хто прийняв" })
-    .selectOption({ label: "Ганна" });
+  // Who took it, in «З паперу»; the series' row says it (stage 2, orders
+  // task list, P0-4).
+  await namedFromPaper(page, "Ганна");
+  await expectSeries(page, "Сервер не відповідав", "Хто прийняв: Ганна");
   await page.getByLabel("Час з паперу").fill("19:40");
+  await expect(
+    page.getByRole("switch", { name: "Це було вчора" }),
+  ).toBeVisible();
   await page.getByLabel("Це було вчора").check();
   await returnUnits(page, { intact: 1 });
   // One line under the button (returns task list, P1-4), and the warning
@@ -274,21 +281,36 @@ test("a card payment typed from paper never says to charge the card, and the deb
 
   await openAs(page, fixture.network_centre_cashier_telegram_user_id, "Ліда");
   await payOnCard(page, name);
-  // Ticked, nothing is paid until the series says which paper it is.
+  // Ticked, «З паперу» opens; closed with nothing said, nothing is paid
+  // until the series says which paper it is.
   await page.getByLabel("Вношу внесок з паперу").check();
+  const sheet = await paperSheet(page);
+  // «Не вказано» first, and chosen (В-ЗП5 (а)); no paper chosen for them.
+  const people = sheet.getByRole("group", { name: "Хто прийняв" });
+  await expect(people.getByRole("radio").first()).toHaveAccessibleName(
+    "Не вказано",
+  );
+  await expect(people.getByRole("radio").first()).toBeChecked();
+  await expect(
+    sheet.getByRole("radio", { name: "Сервер не відповідав" }),
+  ).not.toBeChecked();
+  await sheet.getByRole("button", { name: "Готово" }).click();
+  await expectSeries(page, "Оберіть, що вносите з паперу", null);
   await keyIn(page, "300");
   await expect(
     page
       .getByRole("group", { name: "Внесок", exact: true })
       .getByRole("button", { name: "З паперу · Картка" }),
   ).toBeDisabled();
-  await page.getByRole("radio", { name: "Сервер не відповідав" }).check();
+  await (
+    await paperSheet(page)
+  )
+    .getByRole("radio", { name: "Сервер не відповідав" })
+    .check();
+  await namedFromPaper(page, "Ганна");
   await expect(
     page.getByRole("region", { name: "Режим: з паперу" }),
   ).toContainText("на терміналі нічого не проводьте");
-  await page
-    .getByRole("combobox", { name: "Хто прийняв" })
-    .selectOption({ label: "Ганна" });
   // Said once, in the band; under the ways, who took it, in one line
   // (credits task list, P0-4).
   await expect(page.getByText(/на терміналі нічого не проводьте/i)).toHaveCount(
@@ -339,10 +361,8 @@ test("the switch is one for the store: ticked on «Повернення», the t
 
   // At the till: paper mode, «Ганна» named as having sold.
   await page.getByRole("button", { name: "Продаж", exact: true }).click();
-  await fromPaper(page);
-  await page
-    .getByRole("combobox", { name: "Хто продав" })
-    .selectOption({ label: "Ганна" });
+  await fromPaper(page, undefined, false, "Ганна");
+  await expectSeries(page, "Сервер не відповідав", "Продавець: Ганна");
 
   // «Повернення»: in paper mode too, and nobody named for the return.
   await section(page, "Повернення");
@@ -354,9 +374,9 @@ test("the switch is one for the store: ticked on «Повернення», the t
     .getByRole("button", { name: "Оформити повернення" })
     .click();
   await expect(page.getByLabel("Вношу повернення з паперу")).toBeChecked();
-  await expect(page.getByRole("combobox", { name: "Хто прийняв" })).toHaveValue(
-    "",
-  );
+  // The paper said once for the series; nobody named for the return.
+  await expectSeries(page, "Сервер не відповідав", "Хто прийняв: не вказано");
+  await expect(page.getByRole("dialog", { name: "З паперу" })).toHaveCount(0);
 
   // A debt's «Внесок»: the same; back on the card, the menu again.
   await payOnCard(page, name);
@@ -427,15 +447,25 @@ test("the first days' paper: a return and a payment typed from it are «з па�
     .getByRole("button", { name: "Оформити повернення" })
     .click();
   await page.getByLabel("Вношу повернення з паперу").check();
+  await (
+    await paperSheet(page)
+  )
+    .getByRole("button", { name: "Готово" })
+    .click();
   // Nothing is sent until the series says which paper it is.
   await returnUnits(page, { intact: 1 });
-  const press = page.getByRole("button", {
-    name: "Оберіть, що вносите з паперу",
-  });
+  const press = page.locator(".return-go");
+  await expect(press).toHaveText("Оберіть, що вносите з паперу");
   await expect(press).toBeDisabled();
-  await page
+  await (
+    await paperSheet(page)
+  )
     .getByRole("radio", { name: "Перші дні, до затвердження залишків" })
     .check();
+  await page
+    .getByRole("dialog", { name: "З паперу" })
+    .getByRole("button", { name: "Готово" })
+    .click();
   const band = page.getByRole("region", { name: "Режим: з паперу" });
   await expect(band).toContainText(
     "Повернення позначать «з паперу». Воно увійде в сьогоднішні повернення й у касу до наступного закриття. Гроші, які вже віддали, вдруге не віддавайте.",
@@ -474,9 +504,11 @@ test("the first days' paper: a return and a payment typed from it are «з па�
 
   // A debt's «Внесок»: the series is the first days' paper there too.
   await payOnCard(page, name);
-  await expect(
-    page.getByRole("radio", { name: "Перші дні, до затвердження залишків" }),
-  ).toBeChecked();
+  await expectSeries(
+    page,
+    "Перші дні, до затвердження залишків",
+    "Хто прийняв: не вказано",
+  );
   await keyIn(page, "300");
   await page
     .getByRole("group", { name: "Внесок", exact: true })

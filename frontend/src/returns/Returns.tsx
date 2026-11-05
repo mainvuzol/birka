@@ -11,7 +11,9 @@ import {
   INVALID_TEXT,
   api,
   errorText,
+  readText,
 } from "@/shared/api";
+import { Unread } from "@/shared/Unread";
 import { NoCustomerData } from "@/shared/NoCustomerData";
 import { visible } from "@/shared/visible";
 import { decimal, kopecks, money } from "@/orders/types";
@@ -24,6 +26,7 @@ import { Sum } from "@/shared/Sum";
 import { Eyelet } from "@/shared/Eyelet";
 import { SendingLine } from "@/shared/Sending";
 import {
+  PaperBanner,
   PaperFields,
   paperRefusal,
   takenBy,
@@ -289,7 +292,7 @@ export function Returns({
           <Placeholder said="Завантажуємо продажі…" rows={3} />
         ) : !sales.data ? (
           <div className="notice read-failure" role="alert">
-            <p>{refusalText(sales.error)}</p>
+            <p>{readText(sales.error, refusalText)}</p>
             <button
               type="button"
               onClick={() => {
@@ -329,7 +332,7 @@ export function Returns({
               // Read again and refused: the rows below are as they were, and
               // that is said (ADR-0011; review, 2026-10-17).
               <div className="notice read-failure" role="alert">
-                <p>{refusalText(sales.error)}</p>
+                <p>{readText(sales.error, refusalText)}</p>
                 <button
                   type="button"
                   disabled={sales.isFetching}
@@ -364,7 +367,7 @@ export function Returns({
             {sales.isFetchNextPageError ? (
               // The next page could not be read: those read stay.
               <div className="notice read-failure" role="alert">
-                <p>{refusalText(sales.error)}</p>
+                <p>{readText(sales.error, refusalText)}</p>
                 <button
                   type="button"
                   disabled={sales.isFetching}
@@ -718,6 +721,9 @@ function ReturnForm({
         }
       />
       <section className="returns">
+        {/* From paper: its banner at the top, as the till's (stage 2,
+            orders task list, P0-4). */}
+        <PaperBanner mark={mark} what="return" />
         {/* One sale's sum, once it is opened (G33). */}
         <p className="sale-context">
           Продаж {when(sale.sold_at)} · {money(sale.total)}
@@ -859,7 +865,14 @@ function ReturnForm({
             </button>
           )}
         </fieldset>
-        {ownPlaces.error && <p role="alert">{errorText(ownPlaces.error)}</p>}
+        {ownPlaces.error && (
+          <Unread
+            error={ownPlaces.error}
+            retry={() => {
+              void ownPlaces.refetch();
+            }}
+          />
+        )}
         {refusal !== null && (
           <p role="alert" ref={refusalRef}>
             {refusalText(refusal)}{" "}
