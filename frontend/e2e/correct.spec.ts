@@ -38,7 +38,7 @@ interface AdjustmentBody {
   expected_quantity: number | null;
 }
 
-function launch(): string {
+function launch(version?: string): string {
   const fields = new URLSearchParams({
     auth_date: String(Math.floor(Date.now() / 1000)),
     user: `{"id":${fixture.telegram_user_id},"first_name":"Оля"}`,
@@ -51,13 +51,15 @@ function launch(): string {
     .update("123456:TEST-TOKEN-not-a-real-secret")
     .digest();
   fields.set("hash", createHmac("sha256", secret).update(check).digest("hex"));
-  return `/#${new URLSearchParams({ tgWebAppData: fields.toString() }).toString()}`;
+  const hash = new URLSearchParams({ tgWebAppData: fields.toString() });
+  if (version) hash.set("tgWebAppVersion", version);
+  return `/#${hash.toString()}`;
 }
 
 const lorans = /^Лоран шоколад 70(?:\.0)? см$/;
 
-async function login(page: Page): Promise<void> {
-  await page.goto(launch());
+async function login(page: Page, version?: string): Promise<void> {
+  await page.goto(launch(version));
   await openStore(page, "Основний MAIN");
 }
 
@@ -67,8 +69,9 @@ async function enter(
   page: Page,
   query = "Лоран",
   name: string | RegExp = lorans,
+  version?: string,
 ): Promise<void> {
-  await login(page);
+  await login(page, version);
   await openModel(page, query, name);
 }
 
@@ -266,7 +269,9 @@ test("a count made against a balance that has since moved is refused, and asks f
   // The form now judges the count from what the server saw.
   await expect(page.getByText(`В обліку: ${String(shown - 1)}`)).toBeVisible();
   await expect(page.getByLabel("Фактично на складі, од.")).toHaveValue("");
-  await expect(page.getByText("Незавершене коригування")).toHaveCount(0);
+  await expect(
+    page.getByRole("heading", { name: "Коригування ще не підтверджено" }),
+  ).toHaveCount(0);
   // The grid read again as the refusal came may still be on its way: the
   // page closes without waiting for it.
   await page.unrouteAll({ behavior: "ignoreErrors" });
@@ -346,35 +351,80 @@ test("found goods that turn out to be held are counted against what is held", as
 test("a correction whose outcome is unknown blocks the app until it is resent unchanged", async ({
   page,
 }) => {
+  // Inside Telegram: whether it asks before Бірка closes, as last told.
+  await page.addInitScript(() => {
+    const host = window as unknown as {
+      TelegramWebviewProxy: {
+        postEvent: (event: string, data: string) => void;
+      };
+      asked: unknown;
+    };
+    host.asked = null;
+    host.TelegramWebviewProxy = {
+      postEvent: (event, data) => {
+        if (event === "web_app_setup_closing_behavior")
+          host.asked = JSON.parse(data) as unknown;
+      },
+    };
+  });
+  const asked = (): Promise<unknown> =>
+    page.evaluate(() => (window as unknown as { asked: unknown }).asked);
   const keys: (string | null)[] = [];
   const commands: string[] = [];
+  let lose: () => void = () => undefined;
+  const lost = new Promise<void>((done) => {
+    lose = done;
+  });
   await page.route("**/api/v1/inventory/adjustments", async (route) => {
     keys.push(await route.request().headerValue("Idempotency-Key"));
     commands.push(
       (route.request().postDataJSON() as AdjustmentBody).command_id,
     );
     if (keys.length === 1) {
+      await lost;
       await route.abort("connectionfailed");
       return;
     }
     await route.continue();
   });
-  await enter(page);
+  await enter(page, "Лоран", lorans, "9.1");
   const system = await units(here(page));
   await correct(page);
   await page.getByRole("radio", { name: "Втрачено" }).click();
   await page.getByLabel("Скільки списати, од.").fill("1");
   await page.getByRole("button", { name: "Записати коригування" }).click();
+  // Its first send in flight: the sheet stands, and the attempt is on the
+  // phone already, so Telegram is not asked until it is kept (review,
+  // 2026-11-05).
+  await expect.poll(() => keys.length).toBe(1);
+  await expect(page.getByRole("dialog")).toBeVisible();
+  const kept = page.locator(".stub-notice .stub");
+  await expect(kept).toHaveClass(/\bstub-kept\b/);
+  await page.evaluate(
+    () =>
+      new Promise((done) => {
+        requestAnimationFrame(() => setTimeout(done, 50));
+      }),
+  );
+  expect(await asked()).not.toEqual({ need_confirmation: true });
+  lose();
   // The sheet steps aside: the app's notice is where it is settled.
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  await expect(page.getByText("Незавершене коригування")).toBeVisible();
+  await expect.poll(asked).toEqual({ need_confirmation: true });
+  // On the model's detail, its own screen: the sale's stub, still attached
+  // (stage 2, orders task list, P0-1).
+  await expect(kept).toHaveClass(/\bstub-kept\b/);
+  await expect(kept.locator(".stub-head")).toHaveText("Ще не підтверджено");
+  await expect(
+    kept.getByRole("heading", { name: "Коригування ще не підтверджено" }),
+  ).toBeVisible();
   // The model's ways that would wait for it wait too, under the notice
   // (review, 2026-11-01).
   for (const name of ["Виправити залишок", "Прийшов товар"])
     await expect(
       page.getByRole("button", { name, exact: true }),
     ).toBeDisabled();
-  await waitsFor(page, /коригування/);
+  await waitsFor(page, /^Коригування ще не підтверджено$/);
   // The till waits too: nothing else happens until this is settled.
   await expect(
     page.getByRole("button", { name: "Продаж", exact: true }),
@@ -382,18 +432,25 @@ test("a correction whose outcome is unknown blocks the app until it is resent un
   await page
     .getByRole("button", { name: "Перевірити результат коригування" })
     .click();
-  await expect(page.getByText("Коригування підтверджено")).toBeVisible();
+  // Confirmed: torn off, once (В-ЗП2 (а)).
+  await expect(kept).toHaveClass(/\bstub-recorded\b/);
   await expect(
-    page.getByText(
-      `Його було записано один раз: облік ${String(system)} → ${String(system - 1)}.`,
-    ),
+    kept.getByRole("heading", { name: "Коригування записано один раз" }),
   ).toBeVisible();
-  await expect(page.getByText("Незавершене коригування")).toHaveCount(0);
+  await expect(
+    kept.getByText(`Облік ${String(system)} → ${String(system - 1)}.`, {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Коригування ще не підтверджено" }),
+  ).toHaveCount(0);
   expect(keys[1]).toBe(keys[0]);
   expect(commands[1]).toBe(commands[0]);
   await expect(
     page.getByRole("button", { name: "Продаж", exact: true }),
   ).toBeEnabled();
+  await expect.poll(asked).toEqual({ need_confirmation: false });
 });
 
 test("correcting stock needs inventory:adjust, which a seller does not hold", async ({

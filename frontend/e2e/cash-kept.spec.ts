@@ -197,11 +197,11 @@ async function stubDrawer(
  * by itself, as it does for a kept command, and the count may stand there
  * before anything is pressed, the menu out of its way («Усе на бірці»
  * sections task list, P1-2). */
-async function cash(page: Page, main = true): Promise<void> {
+async function cash(page: Page, main = true, version?: string): Promise<void> {
   await page.goto("about:blank");
-  await page.goto(
-    `/#${new URLSearchParams({ tgWebAppData: initData(olya) }).toString()}`,
-  );
+  const hash = new URLSearchParams({ tgWebAppData: initData(olya) });
+  if (version) hash.set("tgWebAppVersion", version);
+  await page.goto(`/#${hash.toString()}`);
   await openStore(page, /^Каса CASH/);
   if (!main) return;
   await section(page, "Каса");
@@ -437,6 +437,29 @@ for (const kept of [
         : kept.since
           ? new Date(Date.now() - 5 * 60 * 1000).toISOString()
           : undefined;
+    // Inside Telegram: whatever the app tells it, kept to read.
+    await page.addInitScript(() => {
+      const host = window as unknown as {
+        TelegramWebviewProxy: {
+          postEvent: (event: string, data: string) => void;
+        };
+        told: [string, unknown][];
+      };
+      host.told = [];
+      host.TelegramWebviewProxy = {
+        postEvent: (event, data) => {
+          host.told.push([event, data ? (JSON.parse(data) as unknown) : null]);
+        },
+      };
+    });
+    const told = (event: string): Promise<unknown[]> =>
+      page.evaluate(
+        (wanted) =>
+          (window as unknown as { told: [string, unknown][] }).told
+            .filter(([name]) => name === wanted)
+            .map(([, data]) => data),
+        event,
+      );
     const key = await keep(page, kept.body, since);
     await stubDrawer(page, { now: drawer() });
     let answered = false;
@@ -461,7 +484,7 @@ for (const kept of [
       await held;
       await route.fulfill({ status: 201, json: kept.answer });
     });
-    await cash(page);
+    await cash(page, true, "9.1");
     const banner = page.locator("section.notice");
     // Checked by itself on opening, and still unconfirmed.
     await expect(page.getByRole("alert")).toContainText(
@@ -470,6 +493,11 @@ for (const kept of [
     await expect(banner.getByRole("heading")).toHaveText(
       `${kept.heading} ще не підтверджено`,
     );
+    // The sale's stub still attached, its sticker first (stage 2, orders
+    // task list, P0-1).
+    const stub = banner.locator(".stub");
+    await expect(stub).toHaveClass(/\bstub-kept\b/);
+    await expect(stub.locator(".stub-head")).toHaveText("Ще не підтверджено");
     await expect(banner.locator("p").first()).toHaveText(kept.line);
     // Nothing of the drawer on paper: no paper line, no name.
     await expect(banner.locator("p").nth(1)).toHaveText(
@@ -486,15 +514,33 @@ for (const kept of [
     });
     await expect(check).toBeEnabled();
     expect(sent).toHaveLength(1);
+    await expect(check).toHaveClass(/\bquiet\b/);
+    // Telegram asks before Бірка closes while it is kept (stage 2, orders
+    // task list, P0-1).
+    await expect
+      .poll(async () => (await told("web_app_setup_closing_behavior")).at(-1))
+      .toEqual({ need_confirmation: true });
     answered = true;
     await check.click();
+    // Checked: the title stands, the ring turns on its check line.
     await expect(banner.getByRole("heading")).toHaveText(
-      `Перевіряємо ${kept.lower}…`,
+      `${kept.heading} ще не підтверджено`,
     );
+    await expect(banner.locator(".check-line .eyelet-spin")).toHaveCount(1);
     await expect(check).toBeDisabled();
     release();
     await expect(page.getByText(kept.done, { exact: true })).toBeVisible();
     await expect(banner).toHaveCount(0);
+    // Confirmed: felt once, and Telegram no longer asks.
+    const felt = (await told("web_app_trigger_haptic_feedback")) as {
+      notification_type?: string;
+    }[];
+    expect(
+      felt.filter((buzz) => buzz.notification_type === "success"),
+    ).toHaveLength(1);
+    await expect
+      .poll(async () => (await told("web_app_setup_closing_behavior")).at(-1))
+      .toEqual({ need_confirmation: false });
     if (kept.name === "count at the close")
       await expect(
         page.getByRole("heading", { name: "Касу закрито" }),

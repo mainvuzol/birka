@@ -5922,3 +5922,84 @@ every figure is the server's.
   forgets the search, as any section does. P0-6's reading of two tags on
   the first screen, open since P0-6, is not changed by the field: still
   an owner's reading.
+
+## Chosen in chat — 2026-11-05 (stage 2: the suppliers' pages, the plates said at once, every journal's kept stub; money P0-7, orders-paper P0-2, P0-1)
+
+Chosen in chat on 2026-11-05 («Yes, start that»), after the stage-2 audit
+on #168: the money and suppliers task list's P0-7, and the orders and paper
+task list's P0-2 and P0-1 (`all-on-the-tag-stage2-foundations-report.md`).
+The owner's questions stand by their (а): В-ЗП2 (а). No right, no server
+rule and no figure changes; no words change but the kept journals' titles
+and «… записано один раз» (В-ЗП2 (а)).
+
+- **The suppliers' lists page by page (money P0-7, a defect):** «Показати
+  ще» on «Накладні», on the returns to suppliers and on «Позичене й під
+  реалізацію» reads the twenty after those read, by offset — never one
+  longer page: the server takes fifty at most, so the third press was
+  refused and the list gave way to the refusal. Each row once, by its id:
+  a row the page's edge moved past is not shown twice. A page that fails
+  says why under the rows read, which stand, and «Показати ще» reads it
+  again. A filter changed (the supplier, still owed, on hand, other
+  stores) reads from the first page; a filter come back to shows what was
+  read under it while it is read again, as «Закриття» does (review).
+- **The plates said at once (orders-paper P0-2):** a refusal, or what was
+  typed wrong — every `role="alert"` — in the error's colours with the
+  crossed circle, 4 px corners, 12 px padding; never the debt's colours,
+  which are customers' debts alone. A warning said at once — a `.notice`
+  with the alert's role: what could not be read with «Спробувати ще раз»,
+  «Каса»'s server that does not answer, a name the catalogue already has, a
+  merge not possible yet — in the warning's colours with the triangle, its
+  words ink. Decided here: both drawn by the base style and `.notice`, not
+  by new kinds of `Banner` (a status's role, where these are said at once),
+  so every alert of the screens the parallel task lists redraw changes with
+  them. The sticker «failed» in the error's colours with its circle.
+  «Доступу ще немає», the body of the blank tag, takes no glyph.
+  - The phone's memory unread, one journal or several: one plate, each
+    journal's own sentence a line in it — the catalogue's two, the
+    suppliers' two, the stores', «Каса»'s, an order's step, the sale, and
+    after them a delivery, a return, a payment, a correction and a count,
+    which stood as plates of their own (review: joined).
+  - A store that does not trade: the «blocked» banner with a status's
+    role, its words as they were — never a refusal's plate (review).
+- **Every journal's kept operation is the sale's stub (orders-paper P0-1;
+  В-ЗП2 (а)):** a delivery, a stock correction, a stocktake's count, an
+  order's step and «Каса»'s command: on its own screen its stub still
+  attached, «Ще не підтверджено» on it, the title, its own body as before,
+  the phone's line (`keptText`; `keptCashText` for «Каса» and an order's
+  step), the check line and the quiet check; over any other screen the
+  kept banner with the same words. The title stands while it is checked:
+  the ring on the check line says so, never «Перевіряємо …».
+  - Its own screens, decided here: a delivery «Прийшов товар»; a
+    correction wherever «Виправити залишок» is made — the model's detail,
+    «Залишки», «Інвентаризація»; a count «Інвентаризація»; an order's step
+    «Замовлення» and «Нове замовлення»; «Каса»'s, «Каса»'s screens, and
+    nowhere else, as before.
+  - Titles: «Приймання ще не підтверджено», «Коригування ще не
+    підтверджено», «Підрахунок ще не підтверджено»; an order's step and
+    «Каса»'s as they were.
+  - Confirmed: torn off on its own screen, the recorded banner over any
+    other, with «Зрозуміло»: «Приймання записано один раз» (new);
+    «Коригування записано один раз» over «Облік 3 → 2.»; «Підрахунок
+    записано один раз» over «Облік 3 → 2.» or «Збігається з обліком (3).»
+    — the TZ's sentence a title and what it was, as the sale's settled
+    stub says it. An order's step and «Каса»'s say it as they did. An
+    order's step answered whose order could not be read is recorded: the
+    stub torn off, or the recorded banner, «Операцію «…» записано», its
+    line, the check line and «Оновити результат».
+  - A first send, decided here: a delivery's press turns its own ring, so
+    its stub stands only once its answer is lost, as the sale's; a
+    correction's and a count's stub stands from the press, as built — the
+    correction's sheet stays over it with its press until the answer, and
+    steps aside once it is lost or recorded.
+  - Felt: «warning» as it is first kept (as built); «success» as a kept
+    delivery, correction, count or «Каса»'s command is confirmed; an
+    order's step as it did. A close confirmed later is felt as one
+    answered at once — a difference, short or over, a «warning» — which
+    replaces «none for one kept and confirmed later» (the close's rule of
+    2026-10-21) by the TZ's «success при подтверждении».
+  - Telegram asks before Бірка closes while a delivery, a correction, a
+    count, an order's step not yet answered or «Каса»'s command is kept,
+    as for the sale; not for a step answered (it is recorded).
+  - Recorded, left as built: a kept sale, return or payment confirmed later
+    buzzes nothing, and a kept return or payment does not ask before
+    closing — not in this task list.

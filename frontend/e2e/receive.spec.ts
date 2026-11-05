@@ -378,7 +378,12 @@ test("a brand-new model nobody holds any of can be received", async ({
 test("a definite refusal keeps the list and says nothing was received", async ({
   page,
 }) => {
+  let answer: () => void = () => undefined;
+  const answered = new Promise<void>((done) => {
+    answer = done;
+  });
   await page.route("**/api/v1/inventory/receipts", async (route) => {
+    await answered;
     await route.fulfill({
       status: 403,
       json: { code: "LOCATION_ACCESS_DENIED", message: "No" },
@@ -391,9 +396,16 @@ test("a definite refusal keeps the list and says nothing was received", async ({
   await page.getByRole("radio", { name: /Лоран шоколад/ }).click();
   await plus(page, "M", 2);
   await recordReceipt(page, 2).click();
+  // Its first send is its press's to say: the ring, never a kept stub nor
+  // a banner (stage 2, orders task list, P0-1).
+  await expect(page.locator(".order-dock .eyelet-spin")).toHaveCount(1);
+  await expect(page.locator(".stub-kept, .banner-kept")).toHaveCount(0);
+  answer();
   await expect(page.getByText(/нічого не прийнято/)).toBeVisible();
   await expect(page.getByText("2 шт. · Закупівля")).toBeVisible();
-  await expect(page.getByText("Незавершене приймання")).toHaveCount(0);
+  await expect(
+    page.getByRole("heading", { name: "Приймання ще не підтверджено" }),
+  ).toHaveCount(0);
   // A size counted after it is another delivery; sent again unchanged, the
   // same one; a line taken out, another again.
   await plus(page, "L", 1);
@@ -440,7 +452,14 @@ test("a delivery whose outcome is unknown blocks the app until it is resent unch
   await page.getByRole("radio", { name: /Лоран шоколад/ }).click();
   await plus(page, "M", 1);
   await recordReceipt(page, 1).click();
-  await expect(page.getByText("Незавершене приймання")).toBeVisible();
+  // On «Прийшов товар», its own screen: the sale's stub, still attached
+  // (stage 2, orders task list, P0-1).
+  const kept = page.locator(".stub-notice .stub");
+  await expect(kept).toHaveClass(/\bstub-kept\b/);
+  await expect(kept.locator(".stub-head")).toHaveText("Ще не підтверджено");
+  await expect(
+    kept.getByRole("heading", { name: "Приймання ще не підтверджено" }),
+  ).toBeVisible();
   // The till, too, waits: nothing else happens until this is settled.
   await expect(
     page.getByRole("button", { name: "Продаж", exact: true }),
@@ -448,7 +467,14 @@ test("a delivery whose outcome is unknown blocks the app until it is resent unch
   await page
     .getByRole("button", { name: "Перевірити результат приймання" })
     .click();
-  await expect(page.getByText("Незавершене приймання")).toHaveCount(0);
+  // Confirmed: torn off, once (В-ЗП2 (а)).
+  await expect(kept).toHaveClass(/\bstub-recorded\b/);
+  await expect(
+    kept.getByRole("heading", { name: "Приймання записано один раз" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Приймання ще не підтверджено" }),
+  ).toHaveCount(0);
   expect(keys[1]).toBe(keys[0]);
   expect(commands[1]).toBe(commands[0]);
   await expect(

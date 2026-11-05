@@ -1392,70 +1392,82 @@ test("with the server out of reach, the card never opens the count: «Каса»
   expect(server.closes).toHaveLength(0);
 });
 
-test("a close kept on the phone and confirmed later shows its result, with no buzz", async ({
-  page,
-}) => {
-  await page.addInitScript(() => {
-    const host = window as unknown as {
-      TelegramWebviewProxy: {
-        postEvent: (event: string, data: string) => void;
+for (const { felt, counted, difference } of [
+  { felt: "success", counted: "2000.00", difference: "0.00" },
+  { felt: "warning", counted: "1999.50", difference: "-0.50" },
+] as const) {
+  test(`a close kept on the phone and confirmed later shows its result, felt once: ${felt} (stage 2, orders task list, P0-1)`, async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      const host = window as unknown as {
+        TelegramWebviewProxy: {
+          postEvent: (event: string, data: string) => void;
+        };
+        buzzes: string[];
       };
-      buzzes: string[];
-    };
-    host.buzzes = [];
-    host.TelegramWebviewProxy = {
-      postEvent: (event, data) => {
-        if (event === "web_app_trigger_haptic_feedback") host.buzzes.push(data);
-      },
-    };
-  });
-  const state = { now: drawer(), answer: closeOf() };
-  const server = await stubDrawer(page, state);
-  // Where this person's drawer commands are kept on the phone.
-  const auth = await page.request.post("/api/v1/auth/telegram", {
-    data: { init_data: initData(olya) },
-  });
-  const { access_token } = (await auth.json()) as { access_token: string };
-  const me = (await (
-    await page.request.get("/api/v1/me", {
-      headers: { Authorization: `Bearer ${access_token}` },
-    })
-  ).json()) as { organization_id: string; user_id: string };
-  const key = `birka:cash-pending:${me.organization_id}:${me.user_id}:${store}`;
-  await page.goto("/");
-  await page.evaluate(
-    ([name, saved]) => {
-      localStorage.setItem(name, saved);
-    },
-    [
-      key,
-      JSON.stringify({
-        key: randomUUID(),
-        ambiguous: true,
-        body: {
-          command: "close",
-          store_id: store,
-          command_id: randomUUID(),
-          counted: "2000.00",
-          counted_at: new Date().toISOString(),
-          after_close_id: lastClose.id,
+      host.buzzes = [];
+      host.TelegramWebviewProxy = {
+        postEvent: (event, data) => {
+          if (event === "web_app_trigger_haptic_feedback")
+            host.buzzes.push(data);
         },
-      }),
-    ] as const,
-  );
-  await page.goto("about:blank");
-  await page.goto(launch(olya, { version: "6.1" }));
-  await openStore(page, /^Каса CASH/);
-  await expect.poll(() => server.closes.length).toBe(1);
-  await expect(
-    page.getByRole("heading", { name: "Касу закрито" }),
-  ).toBeVisible();
-  expect(
+      };
+    });
+    const state = {
+      now: drawer(),
+      answer: closeOf({ expected: "2000.00", counted, difference }),
+    };
+    const server = await stubDrawer(page, state);
+    // Where this person's drawer commands are kept on the phone.
+    const auth = await page.request.post("/api/v1/auth/telegram", {
+      data: { init_data: initData(olya) },
+    });
+    const { access_token } = (await auth.json()) as { access_token: string };
+    const me = (await (
+      await page.request.get("/api/v1/me", {
+        headers: { Authorization: `Bearer ${access_token}` },
+      })
+    ).json()) as { organization_id: string; user_id: string };
+    const key = `birka:cash-pending:${me.organization_id}:${me.user_id}:${store}`;
+    await page.goto("/");
     await page.evaluate(
+      ([name, saved]) => {
+        localStorage.setItem(name, saved);
+      },
+      [
+        key,
+        JSON.stringify({
+          key: randomUUID(),
+          ambiguous: true,
+          body: {
+            command: "close",
+            store_id: store,
+            command_id: randomUUID(),
+            counted,
+            counted_at: new Date().toISOString(),
+            after_close_id: lastClose.id,
+          },
+        }),
+      ] as const,
+    );
+    await page.goto("about:blank");
+    await page.goto(launch(olya, { version: "6.1" }));
+    await openStore(page, /^Каса CASH/);
+    await expect.poll(() => server.closes.length).toBe(1);
+    await expect(
+      page.getByRole("heading", { name: "Касу закрито" }),
+    ).toBeVisible();
+    // Felt once, as when the server answers at once: a difference a
+    // warning, as its colour is.
+    const buzzes = await page.evaluate(
       () => (window as unknown as { buzzes: string[] }).buzzes,
-    ),
-  ).toEqual([]);
-});
+    );
+    expect(buzzes.map((data) => JSON.parse(data) as unknown)).toEqual([
+      { type: "notification", notification_type: felt },
+    ]);
+  });
+}
 
 test("the owner's close holds the period's figures (G27)", async ({ page }) => {
   await stubDrawer(page, {

@@ -923,8 +923,10 @@ test("a delivery whose answer was lost settles when its model was retired meanwh
   await receiveModel(page, name);
   await receiveUnits(page, "M", 1);
   await recordReceipt(page, 1).click();
-  await expect(page.getByText("Незавершене приймання")).toBeVisible();
-  await waitsFor(page, /приймання/);
+  await expect(
+    page.getByRole("heading", { name: "Приймання ще не підтверджено" }),
+  ).toBeVisible();
+  await waitsFor(page, /^Приймання ще не підтверджено$/);
   // Meanwhile a manager retires the model.
   const retired = await page.request.post(
     `/api/v1/catalog/models/${made.variant}/retire`,
@@ -940,7 +942,9 @@ test("a delivery whose answer was lost settles when its model was retired meanwh
   await page
     .getByRole("button", { name: "Перевірити результат приймання" })
     .click();
-  await expect(page.getByText("Незавершене приймання")).toHaveCount(0);
+  await expect(
+    page.getByRole("heading", { name: "Приймання ще не підтверджено" }),
+  ).toHaveCount(0);
   // Settled, and said: what was not recorded, then why (ADR-0013 §1).
   await expect(
     page.getByText(

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { JSX } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, api, errorText, inOwnWords, isConflict } from "@/shared/api";
 import { money } from "@/orders/types";
 import { sizeLabel } from "@/returns/types";
@@ -39,20 +39,33 @@ export function Borrowed({
 }): JSX.Element {
   const cache = useQueryClient();
   const [onHandOnly, setOnHandOnly] = useState(true);
-  const [shown, setShown] = useState(pageSize);
   const [done, setDone] = useState<string | null>(null);
   const invoiceCommand = useInvoiceCommand();
-  const lots = useQuery({
-    queryKey: ["borrowed", store.id, onHandOnly, shown],
-    queryFn: () =>
+  // Page by page: the server takes fifty at most (stage 2, money task list,
+  // P0-7).
+  const lots = useInfiniteQuery({
+    queryKey: ["borrowed", store.id, onHandOnly],
+    queryFn: ({ pageParam }) =>
       api<BorrowedPage>(
-        `/borrowed?store_id=${store.id}&limit=${String(shown)}${
+        `/borrowed?store_id=${store.id}&limit=${String(pageSize)}&offset=${String(pageParam)}${
           onHandOnly ? "" : "&on_hand=false"
         }`,
         token,
       ),
+    initialPageParam: 0,
+    getNextPageParam: (last: BorrowedPage, pages: BorrowedPage[]) =>
+      last.has_more ? pages.length * pageSize : undefined,
     retry: false,
   });
+  // A lot borrowed between two pages moves the older ones down by one: each
+  // is shown once.
+  const listed = [
+    ...new Map(
+      (lots.data?.pages ?? [])
+        .flatMap((page) => page.items)
+        .map((lot) => [lot.stock_lot_id, lot]),
+    ).values(),
+  ];
 
   async function changed(message: string): Promise<void> {
     setDone(message);
@@ -83,7 +96,6 @@ export function Borrowed({
           value={onHandOnly ? "ON_HAND" : "ALL"}
           onChange={(event) => {
             setOnHandOnly(event.target.value === "ON_HAND");
-            setShown(pageSize);
           }}
         >
           <option value="ON_HAND">Ще на руках</option>
@@ -92,9 +104,9 @@ export function Borrowed({
       </label>
       {lots.isPending ? (
         <p role="status">Завантажуємо позичене…</p>
-      ) : lots.error ? (
+      ) : lots.data === undefined ? (
         <p role="alert">{errorText(lots.error)}</p>
-      ) : lots.data.items.length === 0 ? (
+      ) : listed.length === 0 ? (
         <p>
           {onHandOnly
             ? "Позиченого на руках немає."
@@ -102,7 +114,7 @@ export function Borrowed({
         </p>
       ) : (
         <>
-          {lots.data.items.map((lot) => (
+          {listed.map((lot) => (
             <LotCard
               key={lot.stock_lot_id}
               lot={lot}
@@ -178,12 +190,14 @@ export function Borrowed({
               }}
             />
           ))}
-          {lots.data.has_more && (
+          {/* A page that failed keeps the lots already read. */}
+          {lots.error && <p role="alert">{errorText(lots.error)}</p>}
+          {lots.hasNextPage && (
             <button
               className="quiet"
               disabled={lots.isFetching}
               onClick={() => {
-                setShown(shown + pageSize);
+                void lots.fetchNextPage();
               }}
             >
               Показати ще

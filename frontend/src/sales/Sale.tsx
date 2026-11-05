@@ -2061,8 +2061,10 @@ function Failure({
   error: unknown;
   retry: () => void;
 }): JSX.Element {
+  // What could not be read: a warning's plate (stage 2, orders task list,
+  // P0-2).
   return (
-    <div role="alert">
+    <div className="notice read-failure" role="alert">
       <p>{errorText(error)}</p>
       <button type="button" onClick={retry}>
         Спробувати ще раз

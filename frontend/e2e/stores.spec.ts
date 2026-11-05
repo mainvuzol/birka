@@ -284,6 +284,17 @@ test("the owner blocks a store; its seller sees only that, and the owner reads i
   await expect(
     page.getByText(/Роботу в цьому магазині зупинено/),
   ).toBeVisible();
+  // The «blocked» banner, never a refusal's plate (stage 2, orders task
+  // list, P0-2).
+  await expect(page.locator(".banner-blocked")).toContainText(
+    /Роботу в цьому магазині зупинено/,
+  );
+  await expect(
+    page.getByRole("status").filter({ hasText: /Роботу в цьому магазині/ }),
+  ).toHaveCount(1);
+  await expect(
+    page.getByRole("alert").filter({ hasText: /Роботу в цьому магазині/ }),
+  ).toHaveCount(0);
   await expect(page.getByText(/Ревізія/)).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "Продаж", exact: true }),

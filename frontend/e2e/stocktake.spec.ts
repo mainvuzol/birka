@@ -354,7 +354,9 @@ test("a position sold while it was counted is refused and counted again, alone",
   await expect(
     page.getByText(`збігається з обліком (${String(shown - 1)})`),
   ).toBeVisible();
-  await expect(page.getByText("Незавершений підрахунок")).toHaveCount(0);
+  await expect(
+    page.getByRole("heading", { name: "Підрахунок ще не підтверджено" }),
+  ).toHaveCount(0);
 });
 
 test("a count whose outcome is unknown blocks the app until it is resent unchanged", async ({
@@ -378,7 +380,14 @@ test("a count whose outcome is unknown blocks the app until it is resent unchang
     .getByLabel("Фактично на складі, од.")
     .fill(String(system - 1));
   await line(page).getByRole("button", { name: "Записати кількість" }).click();
-  await expect(page.getByText("Незавершений підрахунок")).toBeVisible();
+  // On «Інвентаризація», its own screen: the sale's stub, still attached
+  // (stage 2, orders task list, P0-1).
+  const kept = page.locator(".stub-notice .stub");
+  await expect(kept).toHaveClass(/\bstub-kept\b/);
+  await expect(kept.locator(".stub-head")).toHaveText("Ще не підтверджено");
+  await expect(
+    kept.getByRole("heading", { name: "Підрахунок ще не підтверджено" }),
+  ).toBeVisible();
   // The till waits too, and so does the finish: nothing else happens until
   // this is settled, and no sums are frozen without it.
   await expect(
@@ -390,11 +399,15 @@ test("a count whose outcome is unknown blocks the app until it is resent unchang
   await page
     .getByRole("button", { name: "Перевірити результат підрахунку" })
     .click();
-  await expect(page.getByText("Підрахунок підтверджено")).toBeVisible();
+  // Confirmed: torn off, once (В-ЗП2 (а)).
+  await expect(kept).toHaveClass(/\bstub-recorded\b/);
   await expect(
-    page.getByText(
-      `Його було записано один раз: облік ${String(system)} → ${String(system - 1)}.`,
-    ),
+    kept.getByRole("heading", { name: "Підрахунок записано один раз" }),
+  ).toBeVisible();
+  await expect(
+    kept.getByText(`Облік ${String(system)} → ${String(system - 1)}.`, {
+      exact: true,
+    }),
   ).toBeVisible();
   expect(keys[1]).toBe(keys[0]);
   expect(commands[1]).toBe(commands[0]);

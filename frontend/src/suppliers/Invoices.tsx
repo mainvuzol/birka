@@ -1,6 +1,10 @@
 import { useState } from "react";
 import type { JSX } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { ApiError, api, errorText, inOwnWords } from "@/shared/api";
 import { decimal, kopecks, money } from "@/orders/types";
 import type { Store } from "@/orders/types";
@@ -78,28 +82,35 @@ export function Invoices({
   const [owedOnly, setOwedOnly] = useState(true);
   // Whose invoices: this store's, or those of the stores that do not trade.
   const [elsewhere, setElsewhere] = useState(false);
-  const [shown, setShown] = useState(pageSize);
   const suppliers = useSuppliers(store, token);
-  const invoices = useQuery({
-    queryKey: [
-      "supplier-invoices",
-      store.id,
-      elsewhere,
-      supplierId,
-      owedOnly,
-      shown,
-    ],
-    queryFn: () =>
+  // Page by page, as «Закриття» reads: the server takes fifty at most, so a
+  // page that grew past it was refused on the third «Показати ще» (stage 2,
+  // money task list, P0-7).
+  const invoices = useInfiniteQuery({
+    queryKey: ["supplier-invoices", store.id, elsewhere, supplierId, owedOnly],
+    queryFn: ({ pageParam }) =>
       api<InvoicePage>(
-        `/supplier-invoices?store_id=${store.id}&limit=${String(shown)}${
+        `/supplier-invoices?store_id=${store.id}&limit=${String(pageSize)}&offset=${String(pageParam)}${
           owedOnly ? "&status=OPEN" : ""
         }${supplierId ? `&supplier_id=${supplierId}` : ""}${
           elsewhere ? "&elsewhere=true" : ""
         }`,
         token,
       ),
+    initialPageParam: 0,
+    getNextPageParam: (last: InvoicePage, pages: InvoicePage[]) =>
+      last.has_more ? pages.length * pageSize : undefined,
     retry: false,
   });
+  // An invoice written between two pages moves the older ones down by one:
+  // each is shown once.
+  const listed = [
+    ...new Map(
+      (invoices.data?.pages ?? [])
+        .flatMap((page) => page.items)
+        .map((invoice) => [invoice.id, invoice]),
+    ).values(),
+  ];
   const summary = useQuery({
     queryKey: ["supplier-invoices", store.id, "summary"],
     queryFn: () =>
@@ -245,7 +256,6 @@ export function Invoices({
               value={elsewhere ? "ELSEWHERE" : "HERE"}
               onChange={(event) => {
                 setElsewhere(event.target.value === "ELSEWHERE");
-                setShown(pageSize);
               }}
             >
               <option value="HERE">Цього магазину</option>
@@ -306,7 +316,6 @@ export function Invoices({
             value={supplierId}
             onChange={(event) => {
               setSupplierId(event.target.value);
-              setShown(pageSize);
             }}
           >
             <option value="">Усі постачальники</option>
@@ -323,7 +332,6 @@ export function Invoices({
             value={owedOnly ? "OPEN" : "ALL"}
             onChange={(event) => {
               setOwedOnly(event.target.value === "OPEN");
-              setShown(pageSize);
             }}
           >
             <option value="OPEN">Ще не сплачені</option>
@@ -332,9 +340,9 @@ export function Invoices({
         </label>
         {invoices.isPending ? (
           <p role="status">Завантажуємо накладні…</p>
-        ) : invoices.error ? (
+        ) : invoices.data === undefined ? (
           <p role="alert">{errorText(invoices.error)}</p>
-        ) : invoices.data.items.length === 0 ? (
+        ) : listed.length === 0 ? (
           <p>
             {elsewhere
               ? "Магазини, що не працюють, нічого не винні постачальникам."
@@ -344,7 +352,7 @@ export function Invoices({
           </p>
         ) : (
           <>
-            {invoices.data.items.map((invoice) => (
+            {listed.map((invoice) => (
               <article
                 className="order-card"
                 key={invoice.id}
@@ -380,12 +388,14 @@ export function Invoices({
                 </button>
               </article>
             ))}
-            {invoices.data.has_more && (
+            {/* A page that failed keeps the invoices already read. */}
+            {invoices.error && <p role="alert">{errorText(invoices.error)}</p>}
+            {invoices.hasNextPage && (
               <button
                 className="quiet"
                 disabled={invoices.isFetching}
                 onClick={() => {
-                  setShown(shown + pageSize);
+                  void invoices.fetchNextPage();
                 }}
               >
                 Показати ще

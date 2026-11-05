@@ -1,5 +1,6 @@
 import type { JSX } from "react";
 import { kopecks, money } from "@/orders/types";
+import { Kept as Stub } from "@/shared/Kept";
 import { methodLabels, notStated } from "@/shared/payment";
 import { keptCashText } from "@/shared/reach";
 import { directionOf, isPaymentMethod, movementLabels } from "./types";
@@ -86,7 +87,9 @@ function whatOf(body: CashBody, name: Name): string {
  * worked out: nobody knows yet whether it was recorded, and a count's own
  * sum is not what the drawer should hold (G32). The phone checks it by
  * itself; nothing of the drawer is typed from paper (owner decision,
- * 2026-10-21, В2).
+ * 2026-10-21, В2). Its stub still attached, as every kept operation's, its
+ * title the same while checked (stage 2, orders task list, P0-1): «Каса»'s
+ * screens are its own.
  */
 export function Kept({
   body,
@@ -102,10 +105,12 @@ export function Kept({
   const name = nameOf(body);
   const lower = name.heading.charAt(0).toLowerCase() + name.heading.slice(1);
   return (
-    <section className="notice">
-      <h3>
-        {busy ? `Перевіряємо ${lower}…` : `${name.heading} ще не підтверджено`}
-      </h3>
+    <Stub
+      own
+      title={`${name.heading} ще не підтверджено`}
+      busy={busy}
+      check={{ label: `Перевірити ${lower}`, run: check }}
+    >
       {/* As an order's banner says it (owner decision after #137,
           2026-10-25). */}
       <p>
@@ -113,9 +118,6 @@ export function Kept({
         запишуть. Поки чекаємо, інші дії недоступні.
       </p>
       <p>{keptCashText(since)}</p>
-      <button disabled={busy} onClick={check}>
-        Перевірити {lower}
-      </button>
-    </section>
+    </Stub>
   );
 }
