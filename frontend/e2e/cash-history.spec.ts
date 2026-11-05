@@ -249,30 +249,53 @@ test("«Закриття»: a row a close — its day and who, what was counted 
   await expect(short.locator(".sale-meta")).toHaveText(
     /^\d{2}:\d{2} · порахували 2\s000,00 · мало бути 2\s050,00 · причину не вказано$/,
   );
-  await expect(short.locator(".badge")).toHaveText("Нестача 50,00 грн");
-  await expect(short.locator(".badge")).toHaveClass(/\bwarn\b/);
+  await expect(short.locator(".close-pill")).toHaveText("Нестача 50,00 грн");
+  await expect(short.locator(".close-pill")).toHaveClass(/\bwarn\b/);
+  // Each sticker with its sign but the neutral ones; a ring at the row's
+  // left only while a reason waits, a knot on every other close (stage 2,
+  // money task list, P1-2).
+  await expect(short.locator(".close-pill svg.icon")).toHaveCount(1);
+  await expect(short.locator(".close-node .close-ring")).toHaveCount(1);
+  await expect(short.locator(".close-node .eyelet-knot")).toHaveCount(0);
   // The days nobody closed, newest first, after the close they came into.
   const unclosed = list.locator(".close-unclosed");
   await expect(unclosed).toHaveCount(2);
   await expect(unclosed.nth(0)).toHaveAccessibleName("19.10 — не закрито");
-  await expect(unclosed.nth(0).locator(".badge")).toHaveText("Не закрито");
-  await expect(unclosed.nth(0).locator(".badge")).toHaveClass(/\bneutral\b/);
+  await expect(unclosed.nth(0).locator(".close-pill")).toHaveText("Не закрито");
+  await expect(unclosed.nth(0).locator(".close-pill")).toHaveClass(
+    "sticker close-pill",
+  );
+  await expect(unclosed.nth(0).locator(".close-pill svg")).toHaveCount(0);
+  await expect(unclosed.nth(0).locator(".close-node > *")).toHaveCount(0);
   await expect(unclosed.nth(1)).toHaveAccessibleName("18.10 — не закрито");
   const over = row(list, "17.10");
   await expect(over.locator(".sale-meta")).toHaveText(
     /^\d{2}:\d{2} · порахували 2\s350,00 · мало бути 2\s000,00 · пояснено \+50,00$/,
   );
-  await expect(over.locator(".badge")).toHaveText("Надлишок 350,00 грн");
-  await expect(over.locator(".badge")).toHaveClass(/\bwarn\b/);
+  await expect(over.locator(".close-pill")).toHaveText("Надлишок 350,00 грн");
+  await expect(over.locator(".close-pill")).toHaveClass(/\bwarn\b/);
+  await expect(over.locator(".close-pill svg.icon")).toHaveCount(1);
+  await expect(over.locator(".close-node .eyelet-knot")).toHaveCount(1);
+  await expect(over.locator(".close-node .close-ring")).toHaveCount(0);
   const same = row(list, "16.10");
   await expect(same.locator(".sale-meta")).toHaveText(
     /^\d{2}:\d{2} · порахували 2\s000,00 · мало бути 2\s000,00$/,
   );
-  await expect(same.locator(".badge")).toHaveText("Збіглося");
-  await expect(same.locator(".badge")).toHaveClass("badge match");
+  await expect(same.locator(".close-pill")).toHaveText("Збіглося");
+  await expect(same.locator(".close-pill")).toHaveClass(
+    "sticker close-pill cash-difference match",
+  );
+  await expect(same.locator(".close-pill svg.icon")).toHaveCount(1);
+  await expect(same.locator(".close-node .eyelet-knot")).toHaveCount(1);
+  // The signs are not one: the triangle, the knot.
+  expect(await short.locator(".close-pill svg").innerHTML()).not.toBe(
+    await same.locator(".close-pill svg").innerHTML(),
+  );
+  // The ring stands only where a reason waits.
+  await expect(list.locator(".close-ring")).toHaveCount(1);
   // The pills one column down the list, under each day.
   const lefts = await list
-    .locator(".close-row .badge, .close-unclosed .badge")
+    .locator(".close-row .close-pill, .close-unclosed .close-pill")
     .evaluateAll((pills) =>
       pills.map((pill) => pill.getBoundingClientRect().x),
     );
@@ -351,8 +374,12 @@ test("twenty closes to a page, «Показати ще» for the rest; the first
   await expect(opening.locator(".sale-meta")).toHaveText(
     /^\d{2}:\d{2} · порахували 1\s000,00$/,
   );
-  await expect(opening.locator(".badge")).toHaveText("Перший підрахунок");
-  await expect(opening.locator(".badge")).toHaveClass(/\bneutral\b/);
+  await expect(opening.locator(".close-pill")).toHaveText("Перший підрахунок");
+  await expect(opening.locator(".close-pill")).toHaveClass(
+    "sticker close-pill",
+  );
+  await expect(opening.locator(".close-pill svg")).toHaveCount(0);
+  await expect(opening.locator(".close-node .eyelet-knot")).toHaveCount(1);
   await expect(page.getByRole("button", { name: "Показати ще" })).toHaveCount(
     0,
   );
@@ -409,10 +436,10 @@ for (const [name, theme] of [
     for (const part of [
       row(list, "20.10").locator(".cash-row-title"),
       row(list, "20.10").locator(".sale-meta"),
-      row(list, "20.10").locator(".badge"),
-      row(list, "17.10").locator(".badge"),
-      row(list, "16.10").locator(".badge"),
-      list.locator(".close-unclosed .badge").first(),
+      row(list, "20.10").locator(".close-pill"),
+      row(list, "17.10").locator(".close-pill"),
+      row(list, "16.10").locator(".close-pill"),
+      list.locator(".close-unclosed .close-pill").first(),
       list.locator(".close-unclosed .cash-row-title").first(),
     ])
       expect(await contrast(part)).toBeGreaterThanOrEqual(4.5);

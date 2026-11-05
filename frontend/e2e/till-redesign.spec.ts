@@ -315,7 +315,13 @@ test("a store that cannot be worked in, among two, keeps «Змінити маг
   );
   await page.goto(launch());
   await page.getByRole("button", { name: /^Основний MAIN/ }).click();
-  await expect(page.getByRole("button", { name: "Оновити" })).toBeVisible();
+  // Its blank tag (stage 2, admin task list, P1-1).
+  await expect(
+    page.getByRole("heading", { name: /^Магазин заблоковано/, level: 1 }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Спробувати ще раз", exact: true }),
+  ).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Розділи" })).toHaveCount(
     0,
   );
@@ -334,7 +340,13 @@ test("a single store that does not trade shows its state, with nothing to change
       .map((s) => ({ ...s, state: "BLOCKED", permissions: [] })),
   );
   await page.goto(launch());
-  await expect(page.getByRole("button", { name: "Оновити" })).toBeVisible();
+  // Its blank tag (stage 2, admin task list, P1-1).
+  await expect(
+    page.getByRole("heading", { name: /^Магазин заблоковано/, level: 1 }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Спробувати ще раз", exact: true }),
+  ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Змінити магазин" }),
   ).toHaveCount(0);

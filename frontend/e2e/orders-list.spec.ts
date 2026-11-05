@@ -1,4 +1,11 @@
-import { test, expect, expectPlate, openStore, section } from "./fixtures";
+import {
+  test,
+  expect,
+  expectPlate,
+  openStore,
+  section,
+  shippedFace,
+} from "./fixtures";
 import type { Locator, Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -1028,16 +1035,19 @@ test("no order yet says what an order does, with «Нове замовлення
   const orders = server();
   await stub(page, orders);
   await enter(page);
-  await expect(
-    page.getByText(
-      "Замовлень ще немає. Замовлення тримає товар у резерві, поки його не відправили.",
-    ),
-  ).toBeVisible();
+  // A blank tag drawn, the words under it, «Нове замовлення» a second
+  // button (spec §6.28; stage 2, orders task list, P1-4).
+  const empty = page.locator(".orders-empty");
+  await expect(empty.locator(".orders-empty-mark")).toBeVisible();
+  await expect(empty.locator(".t-row")).toHaveText("Замовлень ще немає.");
+  await expect(empty.locator(".t-meta")).toHaveText(
+    "Замовлення тримає товар у резерві, поки його не відправили.",
+  );
   await expect(knots(page)).toHaveCount(0);
-  await page
-    .locator(".orders-empty")
-    .getByRole("button", { name: "Нове замовлення" })
-    .click();
+  await expect(
+    empty.getByRole("button", { name: "Нове замовлення" }),
+  ).toHaveClass(/\bquiet\b/);
+  await empty.getByRole("button", { name: "Нове замовлення" }).click();
   await expect(
     page.getByRole("heading", { name: "Нове замовлення" }),
   ).toBeVisible();
@@ -1054,6 +1064,98 @@ test("no order yet says what an order does, with «Нове замовлення
   await expect(
     page.getByText("Зараз нічого не треба відправляти."),
   ).toHaveCount(0);
+});
+
+/** The title and «Нове замовлення» as drawn: beside it, 8 px from it or
+ * more, or under it — never over it — the title one line, the button's
+ * words whole, nothing past the screen's edge. */
+async function titleLine(page: Page, width = 360): Promise<"beside" | "under"> {
+  const title = page.getByRole("heading", { name: "Замовлення", level: 1 });
+  const add = page
+    .locator(".screen-title")
+    .getByRole("button", { name: "Нове замовлення", exact: true });
+  await expect(add).toHaveText("Нове замовлення");
+  await expect(add.locator("svg.icon")).toHaveCount(1);
+  const [heading, button] = await Promise.all([
+    title.boundingBox(),
+    add.boundingBox(),
+  ]);
+  if (!heading || !button) throw new Error("the title's line is not drawn");
+  expect(button.height).toBeGreaterThanOrEqual(44);
+  // The title is one line — its word never broken — and the button's
+  // words are not cut.
+  const lineHeight = await title.evaluate((node) =>
+    parseFloat(getComputedStyle(node).lineHeight),
+  );
+  expect(heading.height).toBeLessThan(lineHeight * 1.5);
+  expect(
+    await add.evaluate((node) => node.scrollWidth <= node.clientWidth),
+  ).toBe(true);
+  expect(button.x + button.width).toBeLessThanOrEqual(width);
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(width);
+  if (button.y >= heading.y + heading.height - 1) return "under";
+  // Beside: on the title's line, 8 px from it.
+  expect(button.y).toBeLessThan(heading.y + heading.height);
+  expect(heading.y).toBeLessThan(button.y + button.height);
+  expect(button.x - (heading.x + heading.width)).toBeGreaterThanOrEqual(7.5);
+  return "beside";
+}
+
+test("«Нове замовлення» is said in words beside «Замовлення», its «+» before them, on the title's line at 360 px and never cut (stage 2, orders task list, P1-4)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  // In the app's face, as it is meant to be seen (review: measured only
+  // once it is drawn).
+  await shippedFace(page);
+  await stub(page, server());
+  await enter(page);
+  await page.evaluate(() => document.fonts.ready);
+  expect(
+    await page.evaluate(() =>
+      document.fonts.check(
+        '800 34px "Fira Sans Extra Condensed"',
+        "Замовлення",
+      ),
+    ),
+  ).toBe(true);
+  expect(await titleLine(page)).toBe("beside");
+  await page
+    .locator(".screen-title")
+    .getByRole("button", { name: "Нове замовлення", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Нове замовлення" }),
+  ).toBeVisible();
+});
+
+test("in the device's face «Нове замовлення» goes under «Замовлення» when the two do not fit, whole, the title's word never broken (stage 2, orders task list, P1-4; review)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  // The app's face never comes: `optional`, a phone may draw its own.
+  await page.route("**/fira-sans-extra-condensed-800.woff2*", (route) =>
+    route.abort(),
+  );
+  await stub(page, server());
+  await enter(page);
+  await page.evaluate(() => document.fonts.ready);
+  expect(
+    await page.evaluate(() =>
+      [...document.fonts].some(
+        (face) =>
+          face.family.includes("Fira Sans Extra Condensed") &&
+          face.status === "loaded",
+      ),
+    ),
+  ).toBe(false);
+  await titleLine(page);
+  // And narrower still, as a phone's larger text draws it: under it, in
+  // any face.
+  await page.setViewportSize({ width: 320, height: 640 });
+  expect(await titleLine(page, 320)).toBe("under");
 });
 
 test("while the open orders are read, the string not counted and three rows hold their places: the field and the first row stand where they will, heard as «Завантажуємо замовлення…» (orders task list, P2-2)", async ({

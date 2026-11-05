@@ -162,7 +162,7 @@ test("a list is typed, each line answered, and approved into opening stock", asy
     .getByRole("button", { name: "Розібрати рядок" })
     .click();
   const first = page.getByRole("form", { name: "Розбір рядка 1" });
-  await expect(first.getByLabel("Як у списку: 3 шт")).toBeChecked();
+  await expect(first.getByLabel("Як у списку: 3 шт.")).toBeChecked();
   await expect(
     first.getByLabel("Рядок без кількості — одна штука"),
   ).toHaveCount(0);
@@ -217,7 +217,7 @@ test("a list is typed, each line answered, and approved into opening stock", asy
   await approval.getByRole("button", { name: "Так, затвердити" }).click();
   await expect(
     page.getByText(
-      "Затверджено: 4 од. стали початковим залишком складу «Новий склад».",
+      "Затверджено: 4 шт. стали початковим залишком складу «Новий склад».",
     ),
   ).toBeVisible();
 
@@ -665,7 +665,8 @@ test("approving is for whoever may approve, and the section for whoever handles 
   });
   await noListWaits(page, fixture.location_id);
   await openings(page);
-  await typeList(page, fixture.location_id, `Зошит ${word()}`, ["Куртка 1 шт"]);
+  const source = `Зошит ${word()}`;
+  await typeList(page, fixture.location_id, source, ["Куртка 1 шт"]);
   await page.getByRole("button", { name: "Зберегти список" }).click();
   await expect(
     page.getByRole("button", { name: "Розібрати рядок" }),
@@ -680,6 +681,25 @@ test("approving is for whoever may approve, and the section for whoever handles 
   await expect(
     page.getByRole("button", { name: "Затвердити список" }),
   ).toHaveCount(0);
+
+  // Whoever may not take the stock in reads the lines without «Розібрати
+  // рядок», and nothing is said of the rule (stage 2, goods task list,
+  // P1-5).
+  drop = ["snapshot:approve", "inventory:receive"];
+  await page.reload();
+  await openStore(page, "Основний MAIN");
+  await section(page, "Початкові залишки");
+  await page
+    .getByRole("article", { name: `Список ${source}` })
+    .getByRole("button", { name: "Відкрити", exact: true })
+    .click();
+  await expect(page.getByRole("heading", { name: source })).toBeVisible();
+  await expect(page.getByText(/Куртка 1 шт/).first()).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Розібрати рядок" }),
+  ).toHaveCount(0);
+  await expect(page.getByText(/право/)).toHaveCount(0);
+  await expect(page.getByRole("alert")).toHaveCount(0);
 
   drop = ["snapshot:approve", "snapshot:import"];
   await page.reload();

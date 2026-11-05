@@ -640,6 +640,30 @@ test("only a person with the right in every store is offered a merge", async ({
   await expect(
     page.getByRole("button", { name: "Об’єднати з іншою" }),
   ).toHaveCount(0);
+
+  // Renamed as another model is named: said so, never who may join them
+  // (stage 2, goods task list, P1-5).
+  await model(
+    page,
+    bearer,
+    { concept: `${name} друга`, variant: { color: "графіт" } },
+    0,
+  );
+  await enter(page, "Моделі");
+  await open(page, `${name} друга`, /друга графіт/);
+  await page.getByRole("button", { name: "Перейменувати" }).click();
+  await page.getByLabel("Назва моделі", { exact: true }).fill(name);
+  await page.getByRole("button", { name: "Зберегти назву" }).click();
+  // The same model, and the same colour: the name is that one's.
+  await page.getByRole("radio", { name, exact: true }).check();
+  await page.getByRole("button", { name: "Зберегти назву" }).click();
+  await expect(
+    page.getByText("Така назва вже є в іншої моделі.", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText(/право/)).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Об’єднати з тією моделлю" }),
+  ).toHaveCount(0);
 });
 
 test("«Моделі» is the owner's and managers' alone", async ({ page }) => {

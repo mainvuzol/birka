@@ -109,8 +109,8 @@ const weekday =
  * app opens (redesign P0-1); with two or more, the door asks «Де ви
  * сьогодні?» (spec S06; «Усе на бірці» task list, P1-4), and this presses
  * the store's tag, named by its name and code. It waits for whichever
- * comes: the door, the workspace's sections, or a store's state that offers
- * only «Оновити».
+ * comes: the door, the workspace's sections, or the blank tag of a store
+ * that does not trade.
  */
 export async function openStore(
   page: Page,
@@ -120,7 +120,17 @@ export async function openStore(
   await expect(
     choice
       .or(page.getByRole("navigation", { name: "Розділи" }))
-      .or(page.getByRole("button", { name: "Оновити", exact: true }))
+      // A store that does not trade: its blank tag, «Магазин …» its
+      // title (stage 2, admin task list, P1-1) — not the door's or the
+      // sign-in's «Спробувати ще раз» (review).
+      .or(
+        page
+          .locator(".blank-tag")
+          .filter({
+            has: page.getByRole("heading", { name: /^Магазин /, level: 1 }),
+          })
+          .getByRole("button", { name: "Спробувати ще раз", exact: true }),
+      )
       .first(),
   ).toBeVisible();
   if (!(await choice.isVisible())) return;
@@ -380,11 +390,12 @@ export async function section(page: Page, name: string): Promise<void> {
     return;
   }
   if (name === "+ Нове замовлення") {
-    // «+» beside «Замовлення»'s title (P0-2).
+    // Beside «Замовлення»'s title, said in words (P0-2; stage 2, orders
+    // task list, P1-4).
     await section(page, "Замовлення");
     await page
       .locator(".screen-title")
-      .getByRole("button", { name: "Нове замовлення" })
+      .getByRole("button", { name: "Нове замовлення", exact: true })
       .click();
     return;
   }
@@ -708,6 +719,32 @@ export async function expectStub(
   if (sum !== undefined) await expect(stub.locator(".stub-sum")).toHaveText(sum);
 }
 
+/** A sticker's glyph beside its words and centred on them, 4 px apart
+ * (stage 2, money task list, P2-1; review): never on the words' baseline,
+ * never touching them. */
+export async function expectGlyphBeside(sticker: Locator): Promise<void> {
+  await expect(sticker.locator("svg.icon")).toHaveCount(1);
+  const look = await sticker.evaluate((node) => {
+    const icon = node.querySelector("svg.icon");
+    if (icon === null) throw new Error("no glyph");
+    const glyph = icon.getBoundingClientRect();
+    const box = node.getBoundingClientRect();
+    const words = document.createRange();
+    const text = [...node.childNodes].find(
+      (child) => child.nodeType === Node.TEXT_NODE && child.textContent?.trim(),
+    );
+    if (text === undefined) throw new Error("no words");
+    words.selectNodeContents(text);
+    const said = words.getBoundingClientRect();
+    return {
+      apart: said.left - glyph.right,
+      off: Math.abs(glyph.top + glyph.height / 2 - (box.top + box.height / 2)),
+    };
+  });
+  expect(look.apart).toBeGreaterThanOrEqual(3.5);
+  expect(look.off).toBeLessThanOrEqual(1.5);
+}
+
 /**
  * The display face drawn from the first paint, for a journey that measures
  * what fits in it. The app's face is `optional` (styles.css): a till never
@@ -715,9 +752,12 @@ export async function expectStub(
  * keep the fallback for good — CI's frame of #166 drew «КОКОН ГРАФІТ» and
  * the grid in it. The same file, added by the page as `block`, is the one
  * drawn; the journey waits for `document.fonts.ready` before it measures.
+ * Not on `about:blank`, which a journey may open first: the file has no
+ * address there, and its refusal would be the page's (review).
  */
 export async function shippedFace(page: Page): Promise<void> {
   await page.addInitScript(() => {
+    if (location.origin === "null") return;
     const face = new FontFace(
       "Fira Sans Extra Condensed",
       'url("/src/assets/fonts/fira-sans-extra-condensed-800.woff2") format("woff2")',

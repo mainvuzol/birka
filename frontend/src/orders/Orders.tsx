@@ -10,6 +10,7 @@ import { visible } from "@/shared/visible";
 import { useSettled } from "@/sales/StockSearch";
 import { Back } from "@/shared/Back";
 import { Eyelet } from "@/shared/Eyelet";
+import { Icon } from "@/shared/Icon";
 import { CARRIED_TAP } from "@/shared/panel";
 import { Placeholder } from "@/shared/Placeholder";
 import { ScreenHeader } from "@/shared/ScreenHeader";
@@ -599,16 +600,19 @@ export function Orders({
     <>
       <ScreenHeader
         title="Замовлення"
+        wraps
         aside={
           mayCreate && (
+            // Said in words, its «+» before them (stage 2, orders task list,
+            // P1-4; В-ЗП4 (а)).
             <button
               type="button"
               className="orders-add"
-              aria-label="Нове замовлення"
               disabled={blocked}
               onClick={create}
             >
-              +
+              <Icon name="plus" size={20} />
+              Нове замовлення
             </button>
           )
         }
@@ -719,13 +723,22 @@ export function Orders({
               closed.pages.isPending ? (
                 <Placeholder said="Завантажуємо замовлення…" rows={3} />
               ) : (
+                // Nothing yet (spec §6.28): a blank tag drawn, the words
+                // under it, «Нове замовлення» a second button (stage 2,
+                // orders task list, P1-4).
                 <div className="orders-empty">
-                  <p>
-                    Замовлень ще немає. Замовлення тримає товар у резерві, поки
-                    його не відправили.
+                  <Icon name="mark-lg" className="orders-empty-mark" />
+                  <p className="t-row">Замовлень ще немає.</p>
+                  <p className="t-meta">
+                    Замовлення тримає товар у резерві, поки його не відправили.
                   </p>
                   {mayCreate && (
-                    <button type="button" disabled={blocked} onClick={create}>
+                    <button
+                      type="button"
+                      className="quiet"
+                      disabled={blocked}
+                      onClick={create}
+                    >
                       Нове замовлення
                     </button>
                   )}

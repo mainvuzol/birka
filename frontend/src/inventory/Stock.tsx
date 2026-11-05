@@ -194,9 +194,8 @@ export function Stock({
                 ))}
               </select>
             </label>
-            {locations.data.length === 0 && (
-              <p>Доступних складів немає. Зверніться до менеджера.</p>
-            )}
+            {/* Nothing said of the rule (stage 2, goods task list, P1-5). */}
+            {locations.data.length === 0 && <p>Тут немає складів.</p>}
             {selected && (
               <>
                 <h3>{visible(selected.name)}</h3>
@@ -402,7 +401,7 @@ function Failure({
   return (
     <div role="alert">
       <p>{errorText(error)}</p>
-      <button onClick={retry}>Повторити завантаження</button>
+      <button onClick={retry}>Спробувати ще раз</button>
     </div>
   );
 }

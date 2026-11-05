@@ -6003,3 +6003,107 @@ and «… записано один раз» (В-ЗП2 (а)).
   - Recorded, left as built: a kept sale, return or payment confirmed later
     buzzes nothing, and a kept return or payment does not ask before
     closing — not in this task list.
+
+## Chosen in chat — 2026-11-05 (stage 2 quick wins: goods P1-5, P2-1, P2-2, P2-3; orders-paper P1-4, P2-3; admin P1-1, P1-2; money P1-2, P2-1, P2-2)
+
+Chosen in chat on 2026-11-05 («Quick wins first»), after #169: the small
+points of the four stage-2 task lists, with the done key on the new
+order's price and the delivery's waybill, and «Прийшов товар» on the
+borrowed goods (`all-on-the-tag-stage2-quick-wins-report.md`). The
+owner's questions stand by their (а): В-ЗП4, В6, В8. No right, no
+server rule and no figure changes: words, marks and how a choice is drawn.
+
+- **No rule said (goods P1-5):** whoever lacks a right is never told of
+  it, nor who has it; what they cannot do is simply not offered.
+  - «Перевірка каталогу» is shown with `catalog:confirm` alone; a tab
+    left there when the right goes opens «Ще» (or the first section
+    shown, with no «Ще»), never «Немає доступу…». Decided here.
+  - «Початкові залишки»: whoever may not take stock in reads the lines
+    with no «Розібрати рядок» and no sentence of the right; the decision
+    line to whoever may not approve: «Відхилити його можете й ви.».
+  - «Моделі»: a name another model has — «Така назва вже є в іншої
+    моделі.», not who may join them; «Об’єднати з іншою» is not shown
+    without the right, and nothing in its place.
+  - «Інвентаризація» with no warehouse it may count: «Тут немає складу
+    для інвентаризації.». Decided here, by it (review): «Прийшов товар»
+    with none it may receive into, «Тут немає складу для приймання.»;
+    «Залишки» with none it may read, «Тут немає складів.».
+  - A catalogue operation kept on the phone when the right goes, decided
+    here (review): its screen stays while it is kept — only there is it
+    checked — with its retry and the server's refusal; answered, «Ще».
+  - Left, recorded: the phone's-memory sentences, «Некоректне збережене
+    … Зверніться до менеджера.», one family across every journal, of a
+    damaged record, not a right; the till's «Доступних складів немає.
+    Зверніться до менеджера.», outside this task list.
+  - «Перевірка каталогу» with no candidates: «… створіть товар або
+    відхиліть…» to whoever may create one; «Перевірте опис або відхиліть
+    пропозицію з поясненням.» to whoever may not. Decided here.
+- **One word for pieces, «шт.» (goods P2-1, money P2-2; В6 (а)):**
+  «од.», «одиниць» and a bare «шт» become «шт.» on «Інвентаризація»,
+  «Виправити залишок», «Початкові залишки», «Звіт про продажі»
+  (sales and returns), «Позичене й під реалізацію» and the returns to
+  suppliers. «Вкажіть, скільки штук.» and «Скільки, шт.» on a lot.
+  «з «Брак»» becomes «з «Браку»» on a return to a supplier. Left as they
+  are, recorded: the stores' «од.» on «Магазини» and «одиниць» in
+  sentences the goods task list does not name.
+- **The shop's words (goods P2-2):**
+  - a name's answer: the legend «Цей опис — назва товару?», the buttons
+    «Так, це його назва» and «Ні, не про нього»; saved, «Збережено:
+    «{опис}» — назва {модель}.», or «— не назва {модель}.» for the
+    model it is not — the description as read before the answer, spaces
+    as one. «Ні, не про нього» answers for the model chosen in «Товар,
+    якому ця назва не відповідає», as built, until goods P1-1 puts both
+    buttons under the one question. «свідчення» no longer said: «зберігати
+    відповідь ще раз не потрібно» in a conflict, «Опис задовгий для назви:
+    назва — до 200 символів.». Decided here (review). Decided here: «Збережено.» alone when the proposal or the
+    model's name is no longer read. «Автоматичне підтвердження назв
+    вимкнене.» is no longer said.
+  - «Старі продажі зберігають назву…», «…у «Прийшов товар» і пошуку»
+    on «Моделі»; the catalogue's search «Назва моделі або колір».
+  - «Спробувати ще раз» for every read that failed on the goods
+    screens too («Залишки», «Прийшов товар», «Інвентаризація», «Моделі»,
+    «Перевірка каталогу», the price). Decided here, with orders-paper
+    P2-3.
+- **«Товар і каталог»'s mark (goods P2-3):** its rows in «Ще» —
+  «Перевірка каталогу», «Початкові залишки», «Моделі» — and the lists'
+  line on «Сьогодні» take the catalogue's mark; «paper» is the paper
+  mode's alone.
+- **«Нове замовлення» in words (orders-paper P1-4; В-ЗП4 (а)):** the
+  header's verb is «+ Нове замовлення», a text button beside the title.
+  Decided here: no padding and an 8 px gap, so «Замовлення» and the verb
+  hold one row at 360 px in the app's face; in the device's face, or with
+  larger text, the verb goes under the title, whole, and the title's word
+  is never broken (review). No orders yet: the large tag
+  drawn, «Замовлень ще немає.» a row, what an order does its meta,
+  «Нове замовлення» a quiet button.
+- **The keyboard's «Готово» (orders-paper P0-5, P1-1):** the new
+  order's price and the delivery's waybill take `enterkeyhint="done"`;
+  Enter puts the keyboard away and sends nothing.
+- **«Спробувати ще раз» (orders-paper P2-3):** in place of «Повторити
+  завантаження» wherever a read failed.
+- **A store that does not trade, to its own people (admin P1-1):** one
+  blank tag under the store's line: «Магазин заблоковано власником з …»
+  or «Магазин закрито, в архіві з …» its title, «Продажі, приймання,
+  повернення й оплати тут зупинено. Зверніться до власника.» said as a
+  status, and «Спробувати ще раз», which reads the store again.
+- **The price's two (admin P1-2):** «Для всіх магазинів» and «Лише
+  «{магазин}»» as two segments of one switch, pressed or not, never a
+  list's wheel; the shared price first, as before, whenever this store
+  has none of its own and the person may change the shared one. A long
+  store name is cut with «…» in its segment. Whoever may change only this
+  store's price: «Ця ціна діятиме лише в магазині «…».», and nothing of
+  the shared price they may not change.
+- **«Закриття» (money P1-2):** what a close came to is a sticker:
+  «Збіглося» with the knot, a shortage or a surplus with the triangle,
+  «Перший підрахунок» and «Не закрито» with no sign. Each close's row
+  has the eyelet at its left: tied, or a ring in the warning's colour
+  while its reason waits for whoever counted; a day not closed has none.
+  The ring's colour decided here. A close opened from «Закриття» stays a
+  card (В8 (а)).
+- **«Змінити спосіб оплати» (money P2-1):** the way an operation was paid
+  is the sale stub's sticker, its glyph centred beside its words wherever
+  it stands (review): «Зараз: Готівка · виправлено» on the operation,
+  «Картка · виправлено» on its row. The days are «Надійшло»'s switch of
+  modes, pressed or not.
+- **«Прийшов товар» (money):** the borrowed goods' and the lots' words
+  name the section by its name, not «Прийняти товар».

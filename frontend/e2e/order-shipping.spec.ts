@@ -459,7 +459,14 @@ test("a waybill written after the parcel went: «ТТН ще немає — вп
   ).toHaveCount(0);
   // Back without saving: nothing sent, the row in focus.
   await write.click();
-  await expect(page.getByLabel("Номер ТТН", { exact: true })).toBeFocused();
+  const waybill = page.getByLabel("Номер ТТН", { exact: true });
+  await expect(waybill).toBeFocused();
+  // The keyboard's «Готово» puts it away, nothing saved (stage 2, orders
+  // task list, P1-1).
+  await expect(waybill).toHaveAttribute("enterkeyhint", "done");
+  await waybill.press("Enter");
+  await expect(waybill).not.toBeFocused();
+  expect(changed.bodies).toHaveLength(0);
   await page.getByRole("button", { name: "← Замовлення" }).click();
   await expect(write).toBeFocused();
   expect(changed.bodies).toHaveLength(0);

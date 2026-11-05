@@ -542,7 +542,7 @@ test("a file fills a new list: lines show their photo and reading, a split the l
   await approval.getByRole("button", { name: "Так, затвердити" }).click();
   await expect(
     page.getByText(
-      "Затверджено: 7 од. стали початковим залишком складу «Склад для файлу».",
+      "Затверджено: 7 шт. стали початковим залишком складу «Склад для файлу».",
     ),
   ).toBeVisible();
 
@@ -618,7 +618,7 @@ test("a file added by mistake is removed with its answers, the last file is not,
   // One of its lines answered, then the file goes, with that answer.
   await page.getByRole("button", { name: "Усі", exact: true }).click();
   let editor = await answer(page, 2);
-  await expect(editor.getByLabel("Як у списку: 1 шт")).toBeChecked();
+  await expect(editor.getByLabel("Як у списку: 1 шт.")).toBeChecked();
   await pickModel(editor, coat);
   await editor.getByLabel("Розмір").selectOption({ label: "L" });
   await editor.getByRole("button", { name: "Зберегти відповідь" }).click();
@@ -694,7 +694,7 @@ test("a file added by mistake is removed with its answers, the last file is not,
   await approval.getByRole("button", { name: "Так, затвердити" }).click();
   await expect(
     page.getByText(
-      "Затверджено: 3 од. стали початковим залишком складу «Склад, де прибирають файл».",
+      "Затверджено: 3 шт. стали початковим залишком складу «Склад, де прибирають файл».",
     ),
   ).toBeVisible();
 });
@@ -1053,7 +1053,7 @@ test("a record that may be a size with its count or a range of sizes is asked ab
   await expect(question).toBeVisible();
   await expect(editor.getByLabel(/Як у рядку/)).toHaveCount(0);
   await expect(editor.getByRole("radio", { checked: true })).toHaveCount(0);
-  await question.getByLabel("Розмір 42 — 44 шт").check();
+  await question.getByLabel("Розмір 42 — 44 шт.").check();
   const bySize = editor.getByLabel("Як у рядку, по розмірах: 42 × 44");
   await expect(bySize).toBeVisible();
   await expect(bySize).not.toBeChecked();
@@ -1064,7 +1064,7 @@ test("a record that may be a size with its count or a range of sizes is asked ab
   await expect(editor).toContainText(
     "Діапазон не каже, скільки якого розміру: вкажіть розміри й кількість і звідки вони відомі.",
   );
-  await question.getByLabel("Розмір 42 — 44 шт").check();
+  await question.getByLabel("Розмір 42 — 44 шт.").check();
   await expect(bySize).not.toBeChecked();
   await bySize.check();
   await pickModel(editor, parka);
@@ -1249,7 +1249,7 @@ test("the shared warehouse's list is seen and filled from the other store, and n
   );
   await page.getByRole("button", { name: "Усі", exact: true }).click();
   const editor = await answer(page, 2);
-  await expect(editor.getByLabel("Як у списку: 2 шт")).toBeChecked();
+  await expect(editor.getByLabel("Як у списку: 2 шт.")).toBeChecked();
   await pickModel(editor, coat);
   await editor.getByLabel("Розмір").selectOption({ label: "L" });
   await editor.getByRole("button", { name: "Зберегти відповідь" }).click();
@@ -1428,11 +1428,9 @@ test("a shared list whose own store stopped trading is only rejected, from the o
     await expect(
       page.getByRole("button", { name: "Затвердити список" }),
     ).toHaveCount(0);
-    await expect(
-      page.getByText(
-        "Затверджує той, хто має право затверджувати списки; відхилити його можна й вам.",
-      ),
-    ).toBeVisible();
+    // Nothing said of who may approve (stage 2, goods task list, P1-5).
+    await expect(page.getByText(/Відхилити його можете й ви\.$/)).toBeVisible();
+    await expect(page.getByText(/право/)).toHaveCount(0);
     await expect(page.getByText("Затвердіть або відхиліть його.")).toHaveCount(
       0,
     );
@@ -1616,7 +1614,7 @@ test("a slow answer is no outage: a file and an approval wait 60 s, say so, and 
 
   await page.getByRole("button", { name: "Усі", exact: true }).click();
   const editor = await answer(page, 1);
-  await expect(editor.getByLabel("Як у списку: 1 шт")).toBeChecked();
+  await expect(editor.getByLabel("Як у списку: 1 шт.")).toBeChecked();
   await pickModel(editor, coat);
   await editor.getByLabel("Розмір").selectOption({ label: "M" });
   await editor.getByRole("button", { name: "Зберегти відповідь" }).click();
@@ -1915,7 +1913,7 @@ test("on a narrow phone a file's long name breaks, never pushes the page sideway
     if (route.request().method() !== "PUT") return route.continue();
     await route.fulfill(refusals.shift() ?? { status: 500 });
   });
-  await expect(editor.getByLabel("Як у списку: 1 шт")).toBeChecked();
+  await expect(editor.getByLabel("Як у списку: 1 шт.")).toBeChecked();
   await pickModel(editor, coat);
   await editor.getByLabel("Розмір").selectOption({ label: "M" });
   const save = editor.getByRole("button", { name: "Зберегти відповідь" });

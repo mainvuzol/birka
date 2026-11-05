@@ -53,19 +53,27 @@ const wayIcons: Record<TillMethod, IconName> = {
 /**
  * The way's sticker on a stub (spec §6.18, §6.30): its glyph and its word,
  * «Картка»; what to do with the money is the line under it. `hidden` where
- * a sentence says it all to a screen reader.
+ * a sentence says it all to a screen reader. `words` where the sticker says
+ * more than the way — «Зараз: Готівка · виправлено» — or a way not stated
+ * (stage 2, money task list, P2-1).
  */
 export function WaySticker({
   way,
   hidden = false,
+  words,
 }: {
-  way: PaymentMethod;
+  way: PaymentMethod | null;
   hidden?: boolean;
-}): JSX.Element {
+  words?: ReactNode;
+}): JSX.Element | null {
+  // Nothing to say: no sticker (review).
+  if (way === null && words === undefined) return null;
   return (
     <span className="badge way-pill" aria-hidden={hidden || undefined}>
-      {isTillMethod(way) && <Icon name={wayIcons[way]} size={16} />}
-      {methodLabels[way]}
+      {way !== null && isTillMethod(way) && (
+        <Icon name={wayIcons[way]} size={16} />
+      )}
+      {words ?? (way === null ? null : methodLabels[way])}
     </span>
   );
 }

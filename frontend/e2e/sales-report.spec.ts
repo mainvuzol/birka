@@ -315,8 +315,8 @@ function expected(before: Figures, added: Added): Shown {
   );
   return {
     terms: [
-      `Продажі: ${String(count("sales"))} (${String(count("units"))} од.)`,
-      `Повернення: ${String(count("returns"))} (${String(count("returned_units"))} од.)`,
+      `Продажі: ${String(count("sales"))} (${String(count("units"))} шт.)`,
+      `Повернення: ${String(count("returns"))} (${String(count("returned_units"))} шт.)`,
     ],
     sums: [
       uah(sum("sold")),

@@ -279,9 +279,11 @@ test("revoked warehouse clears its visible stock and selection", async ({
     await route.fulfill({ json: [] });
   });
   await page.getByRole("button", { name: "Оновити залишки" }).click();
+  // Nothing said of the rule (stage 2, goods task list, P1-5).
   await expect(
-    page.getByText("Доступних складів немає. Зверніться до менеджера."),
+    page.getByText("Тут немає складів.", { exact: true }),
   ).toBeVisible();
+  await expect(page.getByText(/Зверніться/)).toHaveCount(0);
   await expect(page.getByText(/Лоран шоколад 70(?:\.0)? см/)).toHaveCount(0);
   await expect(page.getByLabel("Склад для перегляду")).toHaveValue("");
 });

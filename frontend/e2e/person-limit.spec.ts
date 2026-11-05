@@ -232,14 +232,14 @@ test("a correction refused for too many requests keeps its count, and is written
     .getByRole("button", { name: /^M, Склад перерахунку, в обліку \d+$/ })
     .click();
   await page.getByRole("radio", { name: "Втрачено" }).click();
-  await page.getByLabel("Скільки списати, од.").fill("1");
+  await page.getByLabel("Скільки списати, шт.").fill("1");
   await page.getByRole("button", { name: "Записати коригування" }).click();
 
   const alert = page.getByRole("alert");
   await expect(alert).toContainText(WAIT);
   await expect(alert).toContainText("Нічого не записано.");
   // The count still stands; nothing is kept as unknown.
-  await expect(page.getByLabel("Скільки списати, од.")).toHaveValue("1");
+  await expect(page.getByLabel("Скільки списати, шт.")).toHaveValue("1");
   await expect(
     page.getByRole("heading", { name: "Коригування ще не підтверджено" }),
   ).toHaveCount(0);

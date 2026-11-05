@@ -192,7 +192,7 @@ test("goods go back to a supplier from a warehouse, and come back when it is can
   const returnReads = readsOf(page, /\/api\/v1\/supplier-returns$/);
   await refuseOnce(page, "**/api/v1/supplier-returns", 409);
   await page
-    .getByRole("button", { name: "Повернути постачальнику 2 од." })
+    .getByRole("button", { name: "Повернути постачальнику 2 шт." })
     .click();
   await expect(
     page.getByText(
@@ -202,10 +202,10 @@ test("goods go back to a supplier from a warehouse, and come back when it is can
   ).toBeVisible();
   await expect.poll(returnReads).toBeGreaterThan(0);
   await page
-    .getByRole("button", { name: "Повернути постачальнику 2 од." })
+    .getByRole("button", { name: "Повернути постачальнику 2 шт." })
     .click();
   await expect(
-    page.getByText(`Повернено постачальнику «${supplier}»: 2 од.`),
+    page.getByText(`Повернено постачальнику «${supplier}»: 2 шт.`),
   ).toBeVisible();
   // The one refused above, then the same return as a new command.
   expect(sent.bodies).toHaveLength(2);
@@ -392,7 +392,7 @@ test("a confirmed unit goes back to its supplier from «Брак», and comes ba
   const card = page.getByRole("article", {
     name: new RegExp(`^Повернення ${supplier}`),
   });
-  await expect(card).toContainText("з «Брак» «Брак ринку»");
+  await expect(card).toContainText("з «Браку» «Брак ринку»");
   await card.getByRole("button", { name: "Скасувати повернення" }).click();
   await card.getByLabel("Чому скасовуємо").fill("постачальник відмовив");
   await card.getByRole("button", { name: "Так, скасувати повернення" }).click();
@@ -425,7 +425,7 @@ test("a return whose answer is lost is resent unchanged, and takes the goods onc
   await page.getByLabel("Пошук моделі").fill(coat.model);
   await page.getByLabel(`Повернути: ${coat.model}`, { exact: false }).fill("1");
   await page
-    .getByRole("button", { name: "Повернути постачальнику 1 од." })
+    .getByRole("button", { name: "Повернути постачальнику 1 шт." })
     .click();
   await expect(page.getByText("Незавершене повернення")).toBeVisible();
   await expect(

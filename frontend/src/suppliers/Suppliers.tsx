@@ -92,7 +92,7 @@ export function Suppliers({
     setDone(
       `Повернено постачальнику «${visible(result.supplier.name)}»: ${String(
         result.lines.reduce((units, line) => units + line.quantity, 0),
-      )} од.`,
+      )} шт.`,
     );
     await Promise.all([
       cache.invalidateQueries({ queryKey: ["supplier-returns", store.id] }),
@@ -328,7 +328,7 @@ function NewReturn({
       const option = all.find((item) => key(item) === line.id);
       if (option && line.quantity > option.available_quantity) {
         setProblem(
-          `${visible(option.display_name)}, ${visible(option.size_label)}: вільно лише ${String(option.available_quantity)} од.`,
+          `${visible(option.display_name)}, ${visible(option.size_label)}: вільно лише ${String(option.available_quantity)} шт.`,
         );
         return;
       }
@@ -450,7 +450,7 @@ function NewReturn({
       {problem && <p role="alert">{problem}</p>}
       <div className="actions">
         <button type="button" disabled={units === 0} onClick={submit}>
-          Повернути постачальнику {units > 0 ? `${String(units)} од.` : ""}
+          Повернути постачальнику {units > 0 ? `${String(units)} шт.` : ""}
         </button>
         <button type="button" className="quiet" onClick={cancel}>
           Скасувати
@@ -513,7 +513,7 @@ function ReturnCard({
     >
       <strong>{visible(item.supplier.name)}</strong>
       <small>
-        {when(item.at)} · {item.damaged_unit_id ? "з «Брак»" : "склад"} «
+        {when(item.at)} · {item.damaged_unit_id ? "з «Браку»" : "склад"} «
         {visible(item.location_name)}» · {visible(item.by)}
       </small>
       <ul aria-label="Що повернули">

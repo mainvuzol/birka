@@ -10,6 +10,8 @@ import { useAutoCheck } from "@/shared/reach";
 import { money } from "@/orders/types";
 import type { Store } from "@/orders/types";
 import { Icon } from "@/shared/Icon";
+import { ModeSwitch } from "@/shared/ModeSwitch";
+import { WaySticker } from "@/shared/Stub";
 import { buzz } from "@/shared/telegram";
 import { visible } from "@/shared/visible";
 import { Back } from "@/shared/Back";
@@ -1051,25 +1053,22 @@ function CorrectStep({
           </>
         ) : (
           <>
-            <fieldset className="way-switch correct-days">
-              <legend className="visually-hidden">Який день</legend>
-              {(Object.keys(dayChoices) as (keyof typeof dayChoices)[]).map(
-                (option) => (
-                  <label key={option}>
-                    <input
-                      type="radio"
-                      name="correct-day"
-                      checked={which === option}
-                      onChange={() => {
-                        setWhich(option);
-                        setProblem(null);
-                      }}
-                    />
-                    <span>{dayChoices[option]}</span>
-                  </label>
-                ),
-              )}
-            </fieldset>
+            {/* The day as «Надійшло»'s switch of ways (spec §5; stage 2,
+                money task list, P2-1). */}
+            <ModeSwitch
+              label="Який день"
+              modes={(
+                Object.keys(dayChoices) as (keyof typeof dayChoices)[]
+              ).map((option) => ({ mode: option, label: dayChoices[option] }))}
+              current={which}
+              choose={(option) => {
+                setWhich(option);
+                setProblem(null);
+              }}
+              disabled={false}
+              filters
+              className="correct-days"
+            />
             {which === "other" && (
               <label>
                 День
@@ -1131,10 +1130,10 @@ function CorrectStep({
                             .filter(Boolean)
                             .join(" · ")}
                         </span>
-                        <span className="badge neutral">
-                          {wayName(event.method)}
-                          {event.corrected ? " · виправлено" : ""}
-                        </span>
+                        <WaySticker
+                          way={event.method}
+                          words={`${wayName(event.method)}${event.corrected ? " · виправлено" : ""}`}
+                        />
                       </span>
                     </button>
                   </li>

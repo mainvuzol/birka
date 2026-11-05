@@ -10,6 +10,7 @@ import type { JournalOutcome } from "@/shared/journal";
 import { usePanelRoom } from "@/shared/panel";
 import { methodLabels } from "@/shared/payment";
 import type { PaymentMethod } from "@/shared/payment";
+import { WaySticker } from "@/shared/Stub";
 import { Sum } from "@/shared/Sum";
 import { buzz } from "@/shared/telegram";
 import { visible } from "@/shared/visible";
@@ -257,10 +258,12 @@ export function WayCard({
         <p className="fix-sum">
           <Sum value={money(amount)} />
         </p>
-        <span className="badge neutral">
-          Зараз: {wayName(current)}
-          {corrected ? " · виправлено" : ""}
-        </span>
+        {/* The way's sticker with its glyph, as on a sale's stub (spec
+            S22; stage 2, money task list, P2-1). */}
+        <WaySticker
+          way={current}
+          words={`Зараз: ${wayName(current)}${corrected ? " · виправлено" : ""}`}
+        />
       </div>
       {/* A line under the card, never a plate (cash task list, P2-4). */}
       {closedNote && <p className="fix-note">{closedNote}</p>}

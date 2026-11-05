@@ -183,7 +183,8 @@ const SHOWN_TAGS = 7;
 const looks: Record<
   Kind,
   {
-    icon: "backup" | "warning" | "parcel" | "damaged" | "paper" | "stocktake";
+    icon:
+      "backup" | "warning" | "parcel" | "damaged" | "catalogue" | "stocktake";
     tone: string;
     ring?: true;
   }
@@ -192,7 +193,9 @@ const looks: Record<
   drawer: { icon: "warning", tone: "warning" },
   parcels: { icon: "parcel", tone: "online" },
   damaged: { icon: "damaged", tone: "damaged" },
-  openings: { icon: "paper", tone: "ink" },
+  // «Товар і каталог»'s mark: «paper» is the paper mode's alone (stage 2,
+  // goods task list, P2-3).
+  openings: { icon: "catalogue", tone: "ink" },
   stocktake: { icon: "stocktake", tone: "offline", ring: true },
 };
 

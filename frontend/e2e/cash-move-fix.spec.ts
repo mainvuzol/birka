@@ -1,4 +1,11 @@
-import { test, expect, moveSheet, openStore, section } from "./fixtures";
+import {
+  test,
+  expect,
+  expectGlyphBeside,
+  moveSheet,
+  openStore,
+  section,
+} from "./fixtures";
 import type { Locator, Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -646,7 +653,10 @@ test("«Змінити спосіб оплати»: the seller's operations as r
   await first.click();
   await expect(page.locator(".fix-what")).toHaveText(`Продаж · ${at ?? ""}`);
   await expect(page.locator(".fix-sum")).toHaveText("700,00 грн");
-  await expect(page.locator(".fix-card .badge")).toHaveText("Зараз: Картка");
+  await expect(page.locator(".fix-card .way-pill")).toHaveText("Зараз: Картка");
+  // With its glyph beside its words, as on a sale's stub (stage 2, money
+  // task list, P2-1).
+  await expectGlyphBeside(page.locator(".fix-card .way-pill"));
   const ways = page.getByRole("group", { name: "Новий спосіб оплати" });
   await expect(ways.getByRole("button")).toHaveCount(3);
   await expect(
@@ -733,7 +743,9 @@ test("an order's sale offers its five ways, a row each; a way changed meanwhile 
   );
   // Read again after the refusal.
   await expect.poll(server.methodReads).toBeGreaterThanOrEqual(2);
-  await expect(page.locator(".fix-card .badge")).toHaveText("Зараз: Готівка");
+  await expect(page.locator(".fix-card .way-pill")).toHaveText(
+    "Зараз: Готівка",
+  );
   await expect(
     ways.getByRole("button", { name: "Готівка зараз", exact: true }),
   ).toBeDisabled();
@@ -768,7 +780,7 @@ test("the owner's and managers' correction takes the same card: the operation's 
     /^Продаж · \d{2}:\d{2} · Лоран шоколад · M · Оля$/,
   );
   await expect(page.locator(".fix-sum")).toHaveText("700,00 грн");
-  await expect(page.locator(".fix-card .badge")).toHaveText("Зараз: Картка");
+  await expect(page.locator(".fix-card .way-pill")).toHaveText("Зараз: Картка");
   // Another operation: the day's list again.
   await page.getByRole("button", { name: "Інша операція" }).click();
   await events.getByRole("button").first().click();
@@ -887,7 +899,7 @@ for (const [name, theme] of [
     for (const part of [
       page.locator(".fix-what"),
       page.locator(".fix-sum .sum"),
-      page.locator(".fix-card .badge"),
+      page.locator(".fix-card .way-pill"),
       ways.getByRole("button", { name: "Готівка", exact: true }),
       ways.getByRole("button", { name: "Переказ", exact: true }),
       panelButton(page),

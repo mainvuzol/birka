@@ -117,11 +117,11 @@ export function Correction({
             ? "Облік збігається з фактом — виправляти нічого."
             : "Вкажіть кількість від 1."
           : delta !== null && system + delta < 0
-            ? `В обліку лише ${String(system)} од. — більше списати не можна.`
+            ? `В обліку лише ${String(system)} шт. — більше списати не можна.`
             : delta !== null && delta > 0 && target.sizeIsUnknown
               ? "Облік товару з невідомим розміром можна лише зменшити."
               : delta !== null && Math.abs(delta) > 10000
-                ? "За один раз можна змінити облік не більше ніж на 10000 од."
+                ? "За один раз можна змінити облік не більше ніж на 10000 шт."
                 : "";
 
   async function send(): Promise<void> {
@@ -218,10 +218,10 @@ export function Correction({
       {reason !== null && (
         <label>
           {reason === "STOCKTAKE"
-            ? "Фактично на складі, од."
+            ? "Фактично на складі, шт."
             : reason === "DAMAGED" || reason === "LOST"
-              ? "Скільки списати, од."
-              : "Скільки, од."}
+              ? "Скільки списати, шт."
+              : "Скільки, шт."}
           <input
             inputMode="numeric"
             value={count}
@@ -285,12 +285,12 @@ export function refusalText(
   const { details } = error;
   if (error.code === "STOCK_CHANGED" && typeof details.actual === "number")
     return details.expected === 0 && system === 0
-      ? `Цей товар уже є в обліку цього складу: ${String(details.actual)} од. Перерахуйте його й введіть кількість ще раз.`
+      ? `Цей товар уже є в обліку цього складу: ${String(details.actual)} шт. Перерахуйте його й введіть кількість ще раз.`
       : `Поки ви рахували, облік змінився: було ${String(details.expected)}, тепер ${String(details.actual)}. Перерахуйте товар і введіть кількість ще раз.${after}`;
   if (error.code === "INSUFFICIENT_STOCK")
     return `В обліку вже менше, ніж ви списуєте. Залишки оновлено — перевірте кількість.${after}`;
   if (details.reason === "RESERVED" && typeof details.reserved === "number")
-    return `На цей товар є резерв замовлення (${String(details.reserved)} од.). Виправити облік можна після видачі або скасування замовлення.${after}`;
+    return `На цей товар є резерв замовлення (${String(details.reserved)} шт.). Виправити облік можна після видачі або скасування замовлення.${after}`;
   return `${inOwnWords(
     errorText(error),
     "Перевірте кількість та спробуйте ще раз.",

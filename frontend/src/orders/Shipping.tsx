@@ -4,6 +4,7 @@ import { NoCustomerData } from "@/shared/NoCustomerData";
 import { CARRIED_TAP, usePanelRoom } from "@/shared/panel";
 import { Back } from "@/shared/Back";
 import { ScreenHeader } from "@/shared/ScreenHeader";
+import { hideKeyboard } from "@/shared/telegram";
 import { WhereTo } from "./WhereTo";
 import type { Carrier, Destination, Order } from "./types";
 
@@ -82,8 +83,16 @@ export function Shipping({
                 ref={field}
                 value={waybill}
                 maxLength={64}
+                // The keyboard's «Готово» puts it away (stage 2, orders task
+                // list, P1-1).
+                enterKeyHint="done"
                 onChange={(event) => {
                   setWaybill(event.target.value);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter") return;
+                  event.preventDefault();
+                  hideKeyboard();
                 }}
               />
             </label>

@@ -520,7 +520,7 @@ test("a read that fails again keeps the warehouses and the sizes counted, and th
       .getByRole("button", { name: "Каса-склад", exact: true }),
   ).toHaveAttribute("aria-pressed", "true");
   await expect(
-    page.getByRole("button", { name: "Повторити завантаження" }),
+    page.getByRole("button", { name: "Спробувати ще раз" }),
   ).toHaveCount(0);
   await expect(recordReceipt(page, 1)).toBeEnabled();
 });
@@ -550,6 +550,57 @@ test("receiving needs its own permission", async ({ page }) => {
   await expect(
     page.getByRole("button", { name: /^Прийшов товар/ }),
   ).toHaveCount(0);
+});
+
+test("a first read refused says why with «Спробувати ще раз», which reads it again (stage 2, orders task list, P2-3)", async ({
+  page,
+}) => {
+  let refused = true;
+  await page.route("**/api/v1/stock-locations?*", async (route) => {
+    if (refused) {
+      await route.fulfill({
+        status: 503,
+        json: { code: "UNAVAILABLE", message: "No" },
+      });
+      return;
+    }
+    await route.continue();
+  });
+  await enter(page);
+  const retry = page
+    .getByRole("alert")
+    .getByRole("button", { name: "Спробувати ще раз", exact: true });
+  await expect(retry).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Повторити завантаження" }),
+  ).toHaveCount(0);
+  refused = false;
+  await retry.click();
+  await expect(
+    page
+      .getByRole("group", { name: "Склад", exact: true })
+      .getByRole("button", { name: "Каса-склад", exact: true }),
+  ).toBeVisible();
+  await expect(retry).toHaveCount(0);
+});
+
+test("a store with no warehouse to receive into says so, never who may (stage 2, goods task list, P1-5)", async ({
+  page,
+}) => {
+  await page.route("**/api/v1/stock-locations?*", async (route) => {
+    const response = await route.fetch();
+    const places = (await response.json()) as { can_receive: boolean }[];
+    await route.fulfill({
+      response,
+      json: places.map((place) => ({ ...place, can_receive: false })),
+    });
+  });
+  await enter(page);
+  await expect(
+    page.getByText("Тут немає складу для приймання.", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText(/Зверніться|може приймати/)).toHaveCount(0);
+  await expect(page.getByRole("group", { name: "Склад" })).toHaveCount(0);
 });
 
 /** The store's two warehouses that take deliveries, as a shop has them —

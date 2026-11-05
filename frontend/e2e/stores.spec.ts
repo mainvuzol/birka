@@ -2,6 +2,7 @@ import {
   test,
   expect,
   expectStub,
+  menu,
   more,
   openStore,
   refuseOnce,
@@ -278,23 +279,29 @@ test("the owner blocks a store; its seller sees only that, and the owner reads i
   // Петро sees that it is blocked, and since when — never why.
   await openAs(page, petro);
   // His one store opens straight on its state (redesign P0-1).
+  // One blank tag: the state and since when its title, one line, «Спробувати
+  // ще раз» (spec S08; stage 2, admin task list, P1-1).
+  const tag = page.locator(".blank-tag");
   await expect(
-    page.getByRole("heading", { name: /^Заблоковано власником з/ }),
+    tag.getByRole("heading", {
+      name: /^Магазин заблоковано власником з \d{2}\.\d{2}\.\d{4}$/,
+    }),
   ).toBeVisible();
-  await expect(
-    page.getByText(/Роботу в цьому магазині зупинено/),
-  ).toBeVisible();
-  // The «blocked» banner, never a refusal's plate (stage 2, orders task
-  // list, P0-2).
-  await expect(page.locator(".banner-blocked")).toContainText(
-    /Роботу в цьому магазині зупинено/,
+  await expect(tag.getByRole("status")).toHaveText(
+    "Продажі, приймання, повернення й оплати тут зупинено. Зверніться до власника.",
   );
   await expect(
-    page.getByRole("status").filter({ hasText: /Роботу в цьому магазині/ }),
-  ).toHaveCount(1);
-  await expect(
-    page.getByRole("alert").filter({ hasText: /Роботу в цьому магазині/ }),
-  ).toHaveCount(0);
+    tag.getByRole("button", { name: "Спробувати ще раз" }),
+  ).toBeVisible();
+  // The line over it, as on any screen of a store.
+  await expect(page.locator(".store-line")).toContainText("Ринок");
+  // Said as a status, never a refusal's plate (stage 2, orders task list,
+  // P0-2).
+  await expect(page.getByRole("status")).toHaveCount(1);
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(page.locator(".banner-blocked")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Оновити" })).toHaveCount(0);
+  await expect(menu(page)).toHaveCount(0);
   await expect(page.getByText(/Ревізія/)).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "Продаж", exact: true }),

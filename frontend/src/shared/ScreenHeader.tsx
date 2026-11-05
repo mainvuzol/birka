@@ -37,6 +37,10 @@ export const ScreenHeader = forwardRef<
     /** Opened from another screen: by its «←», unless said. */
     pushed?: boolean;
     aside?: ReactNode;
+    /** Its aside goes under the title when the two do not fit one line —
+     * the device's face drawn, its text larger — never breaking the
+     * title's word (stage 2, orders task list, P1-4; review). */
+    wraps?: boolean;
     /** Its heading takes the focus as the screen opens. */
     focusable?: boolean;
     className?: string;
@@ -53,6 +57,7 @@ export const ScreenHeader = forwardRef<
     back,
     pushed = Boolean(back),
     aside,
+    wraps = false,
     focusable = false,
     className,
     lead,
@@ -64,7 +69,7 @@ export const ScreenHeader = forwardRef<
   return (
     <header className="screen-header">
       {back}
-      <div className="screen-title">
+      <div className={wraps ? "screen-title wraps" : "screen-title"}>
         {title !== undefined ? (
           <h1
             ref={ref}

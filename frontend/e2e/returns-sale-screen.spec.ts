@@ -833,13 +833,14 @@ test("Telegram buzzes once the server answers a return: an error refused, a succ
           };
     },
   });
-  // The kept one: its first answer lost, its body kept to compare.
+  // The kept one: every answer lost until the app is opened again — any
+  // other answer meanwhile has the phone check it at once (CI, #170) — its
+  // first body kept to compare.
   let lose = false;
   let lost: unknown = null;
   await page.route("**/api/v1/sales/*/refunds", async (route) => {
     if (lose) {
-      lose = false;
-      lost = route.request().postDataJSON();
+      lost ??= route.request().postDataJSON();
       await route.abort("connectionreset");
       return;
     }
@@ -889,6 +890,7 @@ test("Telegram buzzes once the server answers a return: an error refused, a succ
   ]);
   // Hours later, the app opened again: the phone confirms it by itself,
   // and buzzes nothing either.
+  lose = false;
   await page.reload();
   await openStore(page, "Основний MAIN");
   const notice = page.locator("section.notice", {

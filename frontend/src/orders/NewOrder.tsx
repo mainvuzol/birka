@@ -5,6 +5,7 @@ import { api, ApiError, errorText } from "@/shared/api";
 import { usePanelRoom } from "@/shared/panel";
 import { Placeholder } from "@/shared/Placeholder";
 import { Sum } from "@/shared/Sum";
+import { hideKeyboard } from "@/shared/telegram";
 import { visible } from "@/shared/visible";
 import { Back } from "@/shared/Back";
 import { ScreenHeader } from "@/shared/ScreenHeader";
@@ -417,10 +418,18 @@ export function NewOrder({
                           else priceRefs.current.delete(d.id);
                         }}
                         inputMode="decimal"
+                        // The keyboard's «Готово» puts it away (stage 2,
+                        // orders task list, P0-5).
+                        enterKeyHint="done"
                         placeholder="0,00"
                         value={d.price}
                         onChange={(event) => {
                           change(index, { price: event.target.value });
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key !== "Enter") return;
+                          event.preventDefault();
+                          hideKeyboard();
                         }}
                       />
                     </label>

@@ -218,11 +218,11 @@ export function sourceQuantity(line: ListLine): string {
   if (line.shown_split !== null && line.shown_split.length > 0)
     return `у рядку по розмірах: ${sizesWithCounts(line.shown_split)}`;
   if (line.quantity_state === "KNOWN")
-    return `у списку: ${String(line.quantity_total)} шт`;
+    return `у списку: ${String(line.quantity_total)} шт.`;
   if (line.quantity_state === "UNKNOWN_DISTRIBUTION")
     return line.quantity_total === null
       ? "у списку кілька розмірів чи кольорів, без поділу"
-      : `у списку: ${String(line.quantity_total)} шт, але не сказано, скільки якого розміру чи кольору`;
+      : `у списку: ${String(line.quantity_total)} шт., але не сказано, скільки якого розміру чи кольору`;
   return "кількість у списку не вказана";
 }
 
