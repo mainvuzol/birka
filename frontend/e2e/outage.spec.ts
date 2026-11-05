@@ -6,9 +6,13 @@ import {
   test,
   expect,
   expectPlate,
+  countTaps,
+  expectSeries,
   expectStub,
   fillLine,
   fromPaper,
+  namedFromPaper,
+  paperSheet,
   menu,
   more,
   openStore,
@@ -46,6 +50,15 @@ test.use({ timezoneId: "Europe/Kyiv" });
 
 const UNREACHABLE =
   "Сервер не відповідає. Продавайте на папері: модель, розмір, ціна, як оплачено, час. Коли сервер відповість — внесіть продажі до закриття каси.";
+// What a place not read says while the server is silent: the owner's words
+// whole stand once, in the paper banner (stage 2, orders task list, P0-3;
+// В-ЗП1 (а)).
+const SILENT = "Сервер не відповідає.";
+
+/** The paper banner over every screen of a store while the server is silent. */
+function paperBanner(page: Page): Locator {
+  return page.getByRole("status", { name: "Сервер не відповідає" });
+}
 
 // A person nobody else's journey knows, signed in by stubs alone.
 const telegramId = "777000222";
@@ -758,10 +771,15 @@ test.describe("1. the seller is told to sell on paper", () => {
     server.stock = "lost";
     await openTill(page);
     const failed = page.getByRole("alert");
-    await expect(failed).toContainText(UNREACHABLE);
+    // The place, «Сервер не відповідає.» and its retry; the owner's words
+    // once, over the screen (stage 2, orders task list, P0-3).
+    await expect(failed.locator("p")).toHaveText(SILENT);
     await expect(
       failed.getByRole("button", { name: "Спробувати ще раз" }),
     ).toBeVisible();
+    await expect(paperBanner(page)).toHaveText(UNREACHABLE);
+    await expect(paperBanner(page)).toHaveClass(/\bbanner-paper\b/);
+    await expect(page.getByText(UNREACHABLE)).toHaveCount(1);
     // A warning's plate and its triangle, never a refusal's nor a debt's,
     // in both themes (stage 2, orders task list, P0-2).
     await expectPlate(failed, "unread");
@@ -774,6 +792,38 @@ test.describe("1. the seller is told to sell on paper", () => {
     await expect(
       page.getByRole("searchbox", { name: "Знайти модель" }),
     ).toBeVisible();
+    // Answered: gone at once, and «Сервер знову відповідає» in its place.
+    await expect(paperBanner(page)).toHaveCount(0);
+    await expect(
+      page.getByRole("region", { name: "Сервер знову відповідає" }),
+    ).toBeVisible();
+  });
+
+  test("the paper banner stands over the till without covering its search or moving the menu (stage 2, orders task list, P0-3)", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 360, height: 640 });
+    const server = await serve(page);
+    await openTill(page);
+    await basket(page);
+    const search = page.getByRole("searchbox", { name: "Знайти модель" });
+    // The bottom menu, under the thumb: it stays where it was.
+    const dock = page.getByRole("navigation", { name: "Розділи" });
+    const before = await dock.boundingBox();
+    server.stock = "lost";
+    await search.fill("ко");
+    await expect(paperBanner(page)).toHaveText(UNREACHABLE);
+    await expect(page.getByText(UNREACHABLE)).toHaveCount(1);
+    await expect(search).toBeInViewport();
+    const banner = await paperBanner(page).boundingBox();
+    const field = await search.boundingBox();
+    expect((banner?.y ?? 0) + (banner?.height ?? 0)).toBeLessThanOrEqual(
+      field?.y ?? 0,
+    );
+    expect(await dock.boundingBox()).toEqual(before);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(360);
   });
 
   test("at the till, whose stock read a captive portal's page answered", async ({
@@ -783,7 +833,8 @@ test.describe("1. the seller is told to sell on paper", () => {
     server.stock = "portal";
     await openTill(page);
     const failed = page.getByRole("alert");
-    await expect(failed).toContainText(UNREACHABLE);
+    await expect(failed.locator("p")).toHaveText(SILENT);
+    await expect(paperBanner(page)).toHaveText(UNREACHABLE);
     await expect(failed).not.toContainText("Не вдалося виконати операцію");
   });
 
@@ -824,7 +875,9 @@ test.describe("1. the seller is told to sell on paper", () => {
     await openStore(page, /Подільський/);
     await section(page, "Каса");
     const failed = page.getByRole("alert");
-    await expect(failed).toContainText(UNREACHABLE);
+    await expect(failed.locator("p").first()).toHaveText(SILENT);
+    await expect(paperBanner(page)).toHaveText(UNREACHABLE);
+    await expect(page.getByText(UNREACHABLE)).toHaveCount(1);
     await expectPlate(failed, "unread");
     await expect(failed).toContainText(
       "Касу зараз не закрити: сервер не відповідає. Перерахуйте гроші й запишіть суму для себе. Якщо сервер відповість сьогодні — спершу внесіть усе з паперу, потім закрийте касу; якщо ні — закриєте наступного вечора.",
@@ -1018,7 +1071,7 @@ test.describe("2. a kept sale is checked by the phone itself", () => {
     // anew, and gets no answer.
     server.stock = "lost";
     await page.getByRole("searchbox", { name: "Знайти модель" }).fill("ко");
-    await expect(page.getByRole("alert")).toContainText(UNREACHABLE);
+    await expect(page.getByRole("alert")).toContainText(SILENT);
     expect(server.readies).toBe(0);
 
     // Now a sale is kept as well: the phone starts asking.
@@ -1034,7 +1087,7 @@ test.describe("2. a kept sale is checked by the phone itself", () => {
     const server = await serve(page);
     server.stock = "lost";
     await openTill(page);
-    await expect(page.getByRole("alert")).toContainText(UNREACHABLE);
+    await expect(page.getByRole("alert")).toContainText(SILENT);
     await page.clock.fastForward("00:10");
     await page.clock.fastForward("01:00");
     await page.waitForTimeout(1000);
@@ -1301,9 +1354,9 @@ test("4. an offline phone never leaves «Спробувати ще раз» wait
   // A search typed: the goods read anew.
   await goods.fill("ко");
   const failed = page.getByRole("alert");
-  await expect(failed).toContainText(UNREACHABLE, { timeout: 3000 });
+  await expect(failed).toContainText(SILENT, { timeout: 3000 });
   await failed.getByRole("button", { name: "Спробувати ще раз" }).click();
-  await expect(failed).toContainText(UNREACHABLE, { timeout: 3000 });
+  await expect(failed).toContainText(SILENT, { timeout: 3000 });
   await expect(page.getByText("Завантажуємо товари…")).toHaveCount(0);
 
   server.stock = "ok";
@@ -1352,9 +1405,8 @@ test("6. a sale typed from paper carries the mark, says who sold and from where,
       "Продаж позначать «продано під час збою». Він увійде в сьогоднішні продажі й у касу до наступного закриття.",
     ),
   ).toBeVisible();
-  await page
-    .getByRole("combobox", { name: "Хто продав" })
-    .selectOption({ label: colleague });
+  // Who sold it, in «З паперу» (stage 2, orders task list, P0-4).
+  await namedFromPaper(page, colleague);
   await page.getByLabel("Час з паперу").fill("19:40");
   await page.getByLabel("Це було вчора").check();
   await basket(page);
@@ -1401,9 +1453,7 @@ test("6. a sale typed from paper carries the mark, says who sold and from where,
   await expect(
     page.getByRole("heading", { name: "Режим: продаж з паперу" }),
   ).toBeVisible();
-  await expect(page.getByRole("combobox", { name: "Хто продав" })).toHaveValue(
-    ids.colleague,
-  );
+  await expectSeries(page, "Сервер не відповідав", `Продавець: ${colleague}`);
   await expect(page.getByLabel("Час з паперу")).toHaveValue("");
   await expect(page.getByLabel("Це було вчора")).toHaveCount(0);
   await basket(page);
@@ -1442,16 +1492,25 @@ test("6b. the series ends when the switch is unticked, and when the store is lef
   });
   await openTill(page);
   const paper = page.getByLabel("Вношу продаж з паперу");
-  const who = page.getByRole("combobox", { name: "Хто продав" });
-  await paper.check();
-  await who.selectOption({ label: colleague });
-  // Unticked and ticked again: a new series, nobody named yet.
+  await fromPaper(page, undefined, false, colleague);
+  // Unticked and ticked again: a new series — its paper said anew, nobody
+  // named yet («Не вказано» first and chosen, В-ЗП5 (а)).
   await paper.uncheck();
   await paper.check();
-  await expect(who).toHaveValue("");
+  const sheet = await paperSheet(page);
+  await expect(
+    sheet.getByRole("radio", { name: "Сервер не відповідав" }),
+  ).not.toBeChecked();
+  const who = sheet.getByRole("group", { name: "Хто продав" });
+  await expect(who.getByRole("radio").first()).toHaveAccessibleName(
+    "Не вказано",
+  );
+  await expect(who.getByRole("radio").first()).toBeChecked();
 
   // Leaving the store ends the series: back at its till, the switch is off.
-  await who.selectOption({ label: colleague });
+  await sheet.getByRole("radio", { name: "Сервер не відповідав" }).check();
+  await who.getByRole("radio", { name: colleague, exact: true }).check();
+  await sheet.getByRole("button", { name: "Готово" }).click();
   await changeStore(page);
   await openStore(page, /Подільський/);
   await page.getByRole("button", { name: "Продаж", exact: true }).click();
@@ -1462,6 +1521,52 @@ test("6b. the series ends when the switch is unticked, and when the store is lef
   await expect(
     page.getByRole("heading", { name: "Режим: продаж з паперу" }),
   ).toHaveCount(0);
+});
+
+test("6d. a series typed from paper: its first sale in 7 taps and its time, each next in 3 and its time (stage 2, orders task list, P0-4)", async ({
+  page,
+}) => {
+  const server = await serve(page);
+  await openTill(page);
+  const taps = await countTaps(page);
+  // The switch: «З паперу» in the same tap — which paper, who sold,
+  // «Готово».
+  await page.getByLabel("Вношу продаж з паперу").click();
+  const sheet = page.getByRole("dialog", { name: "З паперу" });
+  await expect(sheet).toHaveAttribute("data-ready", "");
+  await sheet.getByRole("radio", { name: "Сервер не відповідав" }).click();
+  await sheet.getByRole("radio", { name: colleague, exact: true }).click();
+  await sheet.getByRole("button", { name: "Готово" }).click();
+  await page.getByLabel("Час з паперу").fill("19:40");
+  await tapSize(page, ids.variant, ids.size);
+  await pay(page, "З паперу · Готівка").click();
+  await expect(
+    page.getByRole("heading", { name: "Продаж записано" }),
+  ).toBeVisible();
+  const first = await taps();
+  expect(first).toBeLessThanOrEqual(7);
+  // The next: the series said, only the sale and its time.
+  await page.getByRole("button", { name: "Новий продаж" }).click();
+  await page.getByLabel("Час з паперу").fill("19:55");
+  await tapSize(page, ids.variant, ids.size);
+  await pay(page, "З паперу · Готівка").click();
+  await expect(
+    page.getByRole("heading", { name: "Продаж записано" }),
+  ).toBeVisible();
+  expect((await taps()) - first).toBe(3);
+  const marks = server.sales.map(
+    (sale) => (JSON.parse(sale.body) as SaleBody).outage,
+  );
+  expect(marks).toEqual([
+    {
+      sold_by_user_id: ids.colleague,
+      sold_at: expect.stringMatching(/T19:40$/) as string,
+    },
+    {
+      sold_by_user_id: ids.colleague,
+      sold_at: expect.stringMatching(/T19:55$/) as string,
+    },
+  ]);
 });
 
 test("6c. a paper time with no «вчора» is today's, and «вчора» goes with a cleared time", async ({
@@ -1825,10 +1930,7 @@ test.describe("8. the real server keeps the mark", () => {
     // «Ліда» types yesterday's paper line: «Ганна» sold it at 19:40.
     await openAs(page, fixture.network_centre_cashier_telegram_user_id, "Ліда");
     await page.getByRole("button", { name: "Продаж", exact: true }).click();
-    await fromPaper(page);
-    await page
-      .getByRole("combobox", { name: "Хто продав" })
-      .selectOption({ label: "Ганна" });
+    await fromPaper(page, undefined, false, "Ганна");
     await page.getByLabel("Час з паперу").fill("19:40");
     await page.getByLabel("Це було вчора").check();
     await tapSize(page, coat.variant, coat.size);

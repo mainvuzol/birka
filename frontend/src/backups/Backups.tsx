@@ -1,7 +1,8 @@
 import type { JSX } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { UseQueryResult } from "@tanstack/react-query";
-import { api, errorText } from "@/shared/api";
+import { api } from "@/shared/api";
+import { Unread } from "@/shared/Unread";
 import type {
   Backups as State,
   Message,
@@ -112,7 +113,12 @@ export function Backups({
         {backups.isPending ? (
           <p role="status">Завантажуємо стан копій…</p>
         ) : backups.error ? (
-          <p role="alert">{errorText(backups.error)}</p>
+          <Unread
+            error={backups.error}
+            retry={() => {
+              void backups.refetch();
+            }}
+          />
         ) : (
           <>
             <Verdict backups={backups.data} />

@@ -417,23 +417,57 @@ test("a «Продано» whose answer is lost is resent unchanged, and counted
   await card(page, coat, supplier.name)
     .getByRole("button", { name: "Продано" })
     .click();
+  // On «Постачальникам», where «Позичене й під реалізацію» is: its stub,
+  // its own check (stage 2, money task list, P0-6).
+  const kept = page.locator(".stub-notice .stub");
+  await expect(kept).toHaveClass(/\bstub-kept\b/);
   await expect(
-    page.getByText(
-      "Незавершена операція з накладною: перевірте її в «Накладних».",
-    ),
+    kept.getByRole("heading", {
+      name: "Продаж позиченого ще не підтверджено",
+    }),
   ).toBeVisible();
+  await expect(kept).toContainText(
+    "Невідомо, чи записано продаж позиченого. Перевірте результат — та сама операція не запишеться двічі.",
+  );
+  await expect(page.getByText(/Перевіряємо кожні 20 с/)).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "Замовлення", exact: true }),
   ).toBeDisabled();
-  // Written down before it was sent: a reload still knows what to ask about.
+  // Written down before it was sent: a reload still knows what to ask
+  // about, and opens where it was made.
   await page.reload();
   await openStore(page, "Центр CENTRE");
-  await page
-    .getByRole("button", { name: "Перевірити результат операції" })
-    .click();
+  const own = page.getByRole("heading", {
+    name: "Постачальникам",
+    exact: true,
+  });
+  await expect(own).toBeVisible();
+  // Left, it is a banner over «Ще», and «Постачальникам»'s row stays open to
+  // it, its own screen (review, 2026-11-05).
+  await more(page);
   await expect(
-    page.getByText(new RegExp(`^Продано з позиченого: ${coat.model}`)),
+    page.locator(".banner-kept").getByRole("heading", {
+      name: "Продаж позиченого ще не підтверджено",
+    }),
   ).toBeVisible();
+  const row = page.getByRole("button", {
+    name: "Постачальникам",
+    exact: true,
+  });
+  await expect(row).toBeEnabled();
+  await row.click();
+  await expect(own).toBeVisible();
+  await expect(kept).toHaveClass(/\bstub-kept\b/);
+  await kept
+    .getByRole("button", { name: "Перевірити результат продажу позиченого" })
+    .click();
+  await expect(kept).toHaveClass(/\bstub-recorded\b/);
+  await expect(
+    kept.getByRole("heading", { name: "Продаж позиченого записано один раз" }),
+  ).toBeVisible();
+  await expect(kept).toContainText(
+    new RegExp(`Продано з позиченого: ${coat.model}`),
+  );
   expect(marks.bodies).toHaveLength(2);
   expect(marks.bodies[1]).toEqual(marks.bodies[0]);
   expect(await onHand(page, lotId)).toBe(1);

@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import type { JSX } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { api } from "@/shared/api";
+import { api, readText } from "@/shared/api";
 import { visible } from "@/shared/visible";
 import { money } from "@/orders/types";
 import type { Store } from "@/orders/types";
@@ -87,7 +87,7 @@ export function Debts({
         {read.isError && (
           // Read again and refused: what is shown is as it was, and said.
           <div role="alert">
-            <p>{refusalText(read.error)}</p>
+            <p>{readText(read.error, refusalText)}</p>
             <button
               type="button"
               disabled={read.isFetching}

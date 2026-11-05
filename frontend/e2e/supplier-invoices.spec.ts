@@ -528,9 +528,29 @@ test("a payment whose answer is lost is resent unchanged, and paid once", async 
   await open(page, supplier);
   await page.getByLabel("Сума оплати, грн").fill("300");
   await page.getByRole("button", { name: "Сплатити" }).click();
+  // On «Накладні», its own screen: the sale's stub, still attached, its
+  // check its main button — the phone never checks an invoice by itself, so
+  // nothing says it does (G11; stage 2, money task list, P0-6).
+  const kept = page.locator(".stub-notice .stub");
+  await expect(kept).toHaveClass(/\bstub-kept\b/);
+  await expect(kept.locator("> .eyelet")).toHaveClass(/\beyelet-dashed\b/);
+  await expect(kept.locator(".stub-head")).toHaveText("Ще не підтверджено");
   await expect(
-    page.getByText("Незавершена операція з накладною"),
+    kept.getByRole("heading", { name: "Оплату ще не підтверджено" }),
   ).toBeVisible();
+  await expect(kept).toContainText(
+    "Невідомо, чи записано оплату. Перевірте результат — та сама операція не запишеться двічі.",
+  );
+  await expect(kept).toContainText(/Чекає відповіді сервера з \d{2}:\d{2}\./);
+  await expect(page.getByText(/Перевіряємо кожні 20 с/)).toHaveCount(0);
+  // Suppliers are not paid on paper: no paper line on it, and nothing
+  // under it says what the paper banner says (stage 2, orders task list,
+  // P0-3).
+  await expect(kept).not.toContainText("папері");
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(
+    kept.getByRole("button", { name: "Перевірити результат оплати" }),
+  ).not.toHaveClass(/\bquiet\b/);
   await expect(
     page.getByRole("button", { name: "Замовлення", exact: true }),
   ).toBeDisabled();
@@ -561,13 +581,136 @@ test("a payment whose answer is lost is resent unchanged, and paid once", async 
   // Written down before it was sent: a reload still knows what to ask about.
   await page.reload();
   await openStore(page, "Центр CENTRE");
-  await page
-    .getByRole("button", { name: "Перевірити результат операції" })
-    .click();
   await expect(
-    page.getByText("Оплату 300,00 грн записано. Залишок 700,00 грн."),
+    page.getByRole("heading", { name: "Накладні", exact: true }),
   ).toBeVisible();
+  await kept
+    .getByRole("button", { name: "Перевірити результат оплати" })
+    .click();
+  // Confirmed: torn off, once, with what it recorded.
+  await expect(kept).toHaveClass(/\bstub-recorded\b/);
+  await expect(
+    kept.getByRole("heading", { name: "Оплату записано один раз" }),
+  ).toBeVisible();
+  await expect(kept).toContainText(
+    "Оплату 300,00 грн записано. Залишок 700,00 грн.",
+  );
   expect(paid.bodies).toHaveLength(2);
   expect(paid.bodies[1]).toEqual(paid.bodies[0]);
   expect(await owed(page, invoiceId)).toBe("700.00");
+  await kept.getByRole("button", { name: "Зрозуміло" }).click();
+  await expect(page.locator(".stub-notice")).toHaveCount(0);
+});
+
+test("a payment kept on the phone is checked from another screen, and the till is free once it is confirmed", async ({
+  page,
+}) => {
+  const supplier = `Здалеку ${randomUUID().slice(0, 6)}`;
+  const invoiceId = await anInvoice(
+    page,
+    await aSupplier(page, supplier),
+    "800.00",
+  );
+  const paid = posts(page, /\/payments$/);
+  let first = true;
+  await page.route("**/api/v1/supplier-invoices/*/payments", async (route) => {
+    if (first) {
+      first = false;
+      // The server takes it; the answer never arrives.
+      await route.fetch();
+      await route.abort("connectionreset");
+    } else await route.continue();
+  });
+  await invoicesAt(page, hanna);
+  await open(page, supplier);
+  await page.getByLabel("Сума оплати, грн").fill("200");
+  await page.getByRole("button", { name: "Сплатити" }).click();
+  await expect(page.locator(".stub-notice .stub-kept")).toBeVisible();
+  // «Гроші», the section it leaves open: over it, a banner — the same
+  // words, the same check (stage 2, money task list, P0-6).
+  await sections(page)
+    .getByRole("button", { name: "Гроші", exact: true })
+    .click();
+  const banner = page.locator(".banner-kept");
+  await expect(
+    banner.getByRole("heading", { name: "Оплату ще не підтверджено" }),
+  ).toBeVisible();
+  await expect(banner).toContainText("Невідомо, чи записано оплату.");
+  await expect(banner).toContainText(/Чекає відповіді сервера з \d{2}:\d{2}\./);
+  await expect(banner.locator(".check-line")).toHaveCount(0);
+  await expect(page.locator(".stub-notice")).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Продаж", exact: true }),
+  ).toBeDisabled();
+  await banner
+    .getByRole("button", { name: "Перевірити результат оплати" })
+    .click();
+  const recorded = page.locator(".banner-recorded");
+  await expect(
+    recorded.getByRole("heading", { name: "Оплату записано один раз" }),
+  ).toBeVisible();
+  await expect(recorded).toContainText(
+    "Оплату 200,00 грн записано. Залишок 600,00 грн.",
+  );
+  await expect(banner).toHaveCount(0);
+  // Settled: the till is the seller's again.
+  await expect(
+    page.getByRole("button", { name: "Продаж", exact: true }),
+  ).toBeEnabled();
+  await recorded.getByRole("button", { name: "Зрозуміло" }).click();
+  await expect(recorded).toHaveCount(0);
+  expect(paid.bodies).toHaveLength(2);
+  expect(paid.bodies[1]).toEqual(paid.bodies[0]);
+  expect(await owed(page, invoiceId)).toBe("600.00");
+  // Back on «Накладні», the invoice read again, its form closed.
+  await section(page, "Накладні");
+  await expect(page.locator(".stub-notice")).toHaveCount(0);
+  await expect(page.getByLabel("Сума оплати, грн")).toHaveCount(0);
+  await expect(
+    page
+      .getByRole("article", { name: new RegExp(`^Накладна ${supplier} від `) })
+      .first(),
+  ).toContainText("Винні 600,00 грн з 800,00 грн");
+});
+
+test("a kept payment refused on its check says why in the invoices' words, and frees the till", async ({
+  page,
+}) => {
+  const supplier = `Відмова ${randomUUID().slice(0, 6)}`;
+  await anInvoice(page, await aSupplier(page, supplier), "500.00");
+  let first = true;
+  await page.route("**/api/v1/supplier-invoices/*/payments", async (route) => {
+    if (first) {
+      first = false;
+      // Never reached the server.
+      await route.abort("connectionfailed");
+    } else await route.fallback();
+  });
+  await invoicesAt(page, hanna);
+  await open(page, supplier);
+  await page.getByLabel("Сума оплати, грн").fill("100");
+  await page.getByRole("button", { name: "Сплатити" }).click();
+  await expect(page.locator(".stub-notice .stub-kept")).toBeVisible();
+  // Paid in full meanwhile, says the server, having recorded nothing.
+  await refuseOnce(page, "**/api/v1/supplier-invoices/*/payments", 422, {
+    reason: "NOT_OWED",
+    status: "SETTLED",
+    recorded: false,
+  });
+  await sections(page)
+    .getByRole("button", { name: "Гроші", exact: true })
+    .click();
+  await page
+    .locator(".banner-kept")
+    .getByRole("button", { name: "Перевірити результат оплати" })
+    .click();
+  await expect(
+    page
+      .getByRole("alert")
+      .filter({ hasText: "За цією накладною вже нічого не винні." }),
+  ).toBeVisible();
+  await expect(page.locator(".banner-kept, .banner-recorded")).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Продаж", exact: true }),
+  ).toBeEnabled();
 });

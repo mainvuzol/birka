@@ -7,7 +7,9 @@ import {
   api,
   errorText,
   unreachable,
+  readText,
 } from "@/shared/api";
+import { Unread } from "@/shared/Unread";
 import type { Location, Store } from "@/orders/types";
 import { CatalogPicker } from "@/inventory/CatalogPicker";
 import type { ReceivableVariant, SizeOption } from "@/inventory/receiptTypes";
@@ -200,7 +202,12 @@ export function Openings({
         {lists.isPending ? (
           <p role="status">Завантажуємо списки…</p>
         ) : lists.error ? (
-          <p role="alert">{errorText(lists.error)}</p>
+          <Unread
+            error={lists.error}
+            retry={() => {
+              void lists.refetch();
+            }}
+          />
         ) : lists.data.items.length === 0 ? (
           <p>Списків ще немає.</p>
         ) : (
@@ -600,7 +607,7 @@ function NewList({
           <p role="status">Перевіряємо, чи на складі не чекає список…</p>
         ) : waiting.error ? (
           <div role="alert">
-            <p>{errorText(waiting.error)}</p>
+            <p>{readText(waiting.error)}</p>
             <button
               type="button"
               className="quiet"
@@ -971,7 +978,12 @@ function ListView({
             «Розібрати рядок», and nothing is said of the rule (stage 2, goods
             task list, P1-5). */}
         {parts.error ? (
-          <p role="alert">{errorText(parts.error)}</p>
+          <Unread
+            error={parts.error}
+            retry={() => {
+              void parts.refetch();
+            }}
+          />
         ) : (
           // A list typed in one go is one part: nothing to tell apart.
           (allParts.length > 1 || allParts[0]?.kind === "FILE") && (
@@ -1079,7 +1091,12 @@ function ListView({
         {lines.isPending ? (
           <p role="status">Завантажуємо рядки…</p>
         ) : lines.error ? (
-          <p role="alert">{errorText(lines.error)}</p>
+          <Unread
+            error={lines.error}
+            retry={() => {
+              void lines.refetch();
+            }}
+          />
         ) : lines.data.items.length === 0 ? (
           <p>Тут рядків немає.</p>
         ) : (

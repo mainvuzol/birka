@@ -5,7 +5,7 @@ import {
   useInfiniteQuery,
   useQuery,
 } from "@tanstack/react-query";
-import { api, errorText } from "@/shared/api";
+import { api } from "@/shared/api";
 import { visible } from "@/shared/visible";
 import { useSettled } from "@/sales/StockSearch";
 import { Back } from "@/shared/Back";
@@ -20,6 +20,7 @@ import { KnotFilter, Sticker, placeWords } from "./Knots";
 import type { Place } from "./Knots";
 import { placesKey, shippingText } from "./types";
 import type { Location, Order, OrderItem, Status, Store } from "./types";
+import { Unread } from "@/shared/Unread";
 
 interface OrderPage {
   orders: Order[];
@@ -217,26 +218,6 @@ function useOrders(
     ).values(),
   ];
   return { pages, orders };
-}
-
-/** What could not be read, and «Спробувати ще раз», over the rows read: a
- * warning's plate, as «Каса»'s, never a debt's red (orders task list,
- * P2-3). The card's too. */
-export function Unread({
-  error,
-  retry,
-}: {
-  error: unknown;
-  retry: () => void;
-}): JSX.Element {
-  return (
-    <div className="notice read-failure" role="alert">
-      <p>{errorText(error)}</p>
-      <button type="button" onClick={retry}>
-        Спробувати ще раз
-      </button>
-    </div>
-  );
 }
 
 /**

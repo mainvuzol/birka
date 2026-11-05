@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { JSX } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { api, errorText } from "@/shared/api";
+import { api, readText } from "@/shared/api";
 import { visible } from "@/shared/visible";
 import type { StockOption, Store } from "@/orders/types";
 import { CatalogPicker } from "@/inventory/CatalogPicker";
@@ -86,7 +86,7 @@ export function FromCatalog({
           // What could not be read: a warning's plate (stage 2, orders task
           // list, P0-2; review, 2026-11-05).
           <div className="notice read-failure" role="alert">
-            <p>{errorText(sizes.error)}</p>
+            <p>{readText(sizes.error)}</p>
             <button
               type="button"
               onClick={() => {

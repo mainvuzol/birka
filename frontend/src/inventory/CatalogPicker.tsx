@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { JSX } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { api, errorText } from "@/shared/api";
+import { api, readText } from "@/shared/api";
 import { visible } from "@/shared/visible";
 import type { Store } from "@/orders/types";
 import type { ReceivableVariant } from "./receiptTypes";
@@ -78,7 +78,7 @@ export function CatalogPicker({
           <p role="status">Шукаємо…</p>
         ) : variants.error ? (
           <div role="alert">
-            <p>{errorText(variants.error)}</p>
+            <p>{readText(variants.error)}</p>
             <button
               type="button"
               onClick={() => {

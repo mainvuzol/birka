@@ -23,7 +23,7 @@ import type {
   StockOption,
   Store,
 } from "./types";
-import { Unread } from "./Orders";
+import { Unread } from "@/shared/Unread";
 import { WhereTo } from "./WhereTo";
 
 interface DraftLine {

@@ -12,7 +12,7 @@ import type {
   InfiniteData,
   UseInfiniteQueryResult,
 } from "@tanstack/react-query";
-import { api } from "@/shared/api";
+import { api, readText } from "@/shared/api";
 import { visible } from "@/shared/visible";
 import { money } from "@/orders/types";
 import type { Store } from "@/orders/types";
@@ -572,7 +572,7 @@ export function Credits({
           <Placeholder said="Завантажуємо борги…" rows={3} debts />
         ) : !customers.data ? (
           <div role="alert">
-            <p>{refusalText(customers.error)}</p>
+            <p>{readText(customers.error, refusalText)}</p>
             <button
               type="button"
               onClick={() => {
@@ -825,7 +825,7 @@ function Block({
         <Placeholder said="Завантажуємо борги…" rows={alone ? 3 : 1} debts />
       ) : !customers.data ? (
         <div role="alert">
-          <p>{refusalText(customers.error)}</p>
+          <p>{readText(customers.error, refusalText)}</p>
           <button
             type="button"
             onClick={() => {
@@ -912,7 +912,7 @@ function Rows({
         // Read again and refused: the rows below are as they were, and that
         // is said (ADR-0011).
         <div role="alert">
-          <p>{refusalText(customers.error)}</p>
+          <p>{readText(customers.error, refusalText)}</p>
           <button
             type="button"
             disabled={customers.isFetching}
@@ -940,7 +940,7 @@ function Rows({
       {customers.isFetchNextPageError ? (
         // The next page could not be read: those read stay.
         <div role="alert">
-          <p>{refusalText(customers.error)}</p>
+          <p>{readText(customers.error, refusalText)}</p>
           <button
             type="button"
             disabled={customers.isFetching}

@@ -3,8 +3,10 @@ import {
   expect,
   basketDone,
   basketSheet,
+  expectSeries,
   fillLine,
   fromPaper,
+  paperSheet,
   openStore,
   toTill,
   sellsFrom,
@@ -401,6 +403,11 @@ test("a search that finds nothing offers the catalogue; without the rights, or f
     page.getByRole("region", { name: "Товар з каталогу" }),
   ).toBeVisible();
   await page.getByLabel("Вношу продаж з паперу").check();
+  await (
+    await paperSheet(page)
+  )
+    .getByRole("button", { name: "Готово" })
+    .click();
   await expect(
     page.getByRole("region", { name: "Товар з каталогу" }),
   ).toHaveCount(0);
@@ -426,9 +433,14 @@ test("the paper switch asks which paper it is; the first days' is «з папе�
   const server = await serve(page);
   await openTill(page);
   await page.getByLabel("Вношу продаж з паперу").check();
+  // «З паперу» opens in the same tap, nothing chosen for the paper (stage
+  // 2, orders task list, P0-4); closed, nothing is lost.
+  const sheet = await paperSheet(page);
   await expect(
-    page.getByText("Оберіть, що вносите: позначка залишиться назавжди."),
+    sheet.getByText("Оберіть, що вносите: позначка залишиться назавжди."),
   ).toBeVisible();
+  await sheet.getByRole("button", { name: "Готово" }).click();
+  await expectSeries(page, "Оберіть, що вносите з паперу", null);
   await chip(page).click();
   // Nothing typed from paper is sent until the series says which it is.
   await expect(pay(page, "З паперу · Картка")).toBeDisabled();
@@ -436,9 +448,20 @@ test("the paper switch asks which paper it is; the first days' is «з папе�
     page.getByText("Оберіть угорі, що вносите з паперу."),
   ).toBeVisible();
 
-  await page
+  await (
+    await paperSheet(page)
+  )
     .getByRole("radio", { name: "Перші дні, до затвердження залишків" })
     .check();
+  await page
+    .getByRole("dialog", { name: "З паперу" })
+    .getByRole("button", { name: "Готово" })
+    .click();
+  await expectSeries(
+    page,
+    "Перші дні, до затвердження залишків",
+    "Продавець: не вказано",
+  );
   const band = page.getByRole("region", { name: "Режим: продаж з паперу" });
   await expect(band).toContainText(
     "Продаж позначать «з паперу». Він увійде в сьогоднішні продажі й у касу до наступного закриття.",
@@ -493,9 +516,11 @@ test("the paper switch asks which paper it is; the first days' is «з папе�
 
   // The series stays the first days': the next sale's day is asked anew.
   await page.getByRole("button", { name: "Новий продаж" }).click();
-  await expect(
-    page.getByRole("radio", { name: "Перші дні, до затвердження залишків" }),
-  ).toBeChecked();
+  await expectSeries(
+    page,
+    "Перші дні, до затвердження залишків",
+    "Продавець: не вказано",
+  );
   await expect(page.getByLabel("День з паперу")).toHaveValue("");
   await expect(page.getByLabel("Час з паперу")).toHaveValue("");
   await chip(page).click();
@@ -561,9 +586,15 @@ test("an outage's paper is sent as it always was; a time too old is said for its
   ).toBeVisible();
 
   // Another kind: the day and time are asked anew.
-  await page
+  await (
+    await paperSheet(page)
+  )
     .getByRole("radio", { name: "Перші дні, до затвердження залишків" })
     .check();
+  await page
+    .getByRole("dialog", { name: "З паперу" })
+    .getByRole("button", { name: "Готово" })
+    .click();
   await expect(time).toHaveValue("");
   await expect(page.getByLabel("Це було вчора")).toHaveCount(0);
   const old = await daysAgo(page, 14);
@@ -585,12 +616,14 @@ test("an outage's paper is sent as it always was; a time too old is said for its
   // Unticked and ticked again: a new series, which is asked again.
   await page.getByLabel("Вношу продаж з паперу").uncheck();
   await page.getByLabel("Вношу продаж з паперу").check();
+  const again = await paperSheet(page);
   await expect(
-    page.getByRole("radio", { name: "Перші дні, до затвердження залишків" }),
+    again.getByRole("radio", { name: "Перші дні, до затвердження залишків" }),
   ).not.toBeChecked();
   await expect(
-    page.getByRole("radio", { name: "Сервер не відповідав" }),
+    again.getByRole("radio", { name: "Сервер не відповідав" }),
   ).not.toBeChecked();
+  await again.getByRole("button", { name: "Готово" }).click();
   await chip(page).click();
   await expect(pay(page, "З паперу · Готівка")).toBeDisabled();
 });

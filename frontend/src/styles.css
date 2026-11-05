@@ -5856,6 +5856,31 @@ section.receive-list {
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
+/* The paper's series, one row under its switch (stage 2, orders task
+   list, P0-4): its glyph, which paper in ink, who is named in pencil, the
+   chevron; the warning's triangle, in its own ink, until the paper is said. */
+.paper-series > .icon {
+  flex: none;
+  color: var(--ink);
+}
+.paper-series[data-unsaid] > .icon {
+  color: var(--warning);
+}
+.paper-series-title {
+  font-weight: 600;
+}
+/* «З паперу»'s answers, rows: the box before the words, the row its target. */
+.paper-option {
+  cursor: pointer;
+}
+.paper-option input {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  min-height: 0;
+  margin: 0;
+  accent-color: var(--primary);
+}
 .receive-way {
   display: flex;
   align-items: center;

@@ -3,7 +3,8 @@ import type { JSX, ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { money } from "@/orders/types";
 import type { Store } from "@/orders/types";
-import { api, errorText } from "@/shared/api";
+import { api } from "@/shared/api";
+import { Unread } from "@/shared/Unread";
 import { NoCustomerData } from "@/shared/NoCustomerData";
 import { Placeholder } from "@/shared/Placeholder";
 import type { JournalOutcome } from "@/shared/journal";
@@ -115,7 +116,12 @@ export function FixStep({
           {kept}
           {method.error ? (
             // A read, never a command: no «Не записано» (review, 2026-10-22).
-            <p role="alert">{errorText(method.error)}</p>
+            <Unread
+              error={method.error}
+              retry={() => {
+                void method.refetch();
+              }}
+            />
           ) : answer === undefined ? (
             <OperationPlaceholder />
           ) : answer.may_change ? (
@@ -173,7 +179,12 @@ export function FixStep({
         {mine.isPending ? (
           <Placeholder said="Завантажуємо…" rows={3} day={false} />
         ) : mine.error ? (
-          <p role="alert">{errorText(mine.error)}</p>
+          <Unread
+            error={mine.error}
+            retry={() => {
+              void mine.refetch();
+            }}
+          />
         ) : mine.data.items.length === 0 ? (
           <p>Після останнього закриття ви ще нічого не провели.</p>
         ) : (

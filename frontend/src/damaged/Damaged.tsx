@@ -10,6 +10,7 @@ import {
   inOwnWords,
   unreachable,
 } from "@/shared/api";
+import { Unread } from "@/shared/Unread";
 import { NoCustomerData } from "@/shared/NoCustomerData";
 import type { Location, Store } from "@/orders/types";
 import { useBackOnSale } from "@/returns/places";
@@ -137,7 +138,12 @@ export function Damaged({
         {units.isPending ? (
           <p role="status">Завантажуємо «Брак»…</p>
         ) : units.error ? (
-          <p role="alert">{errorText(units.error)}</p>
+          <Unread
+            error={units.error}
+            retry={() => {
+              void units.refetch();
+            }}
+          />
         ) : units.data.units.length === 0 ? (
           <p>У «Брак» зараз нічого немає.</p>
         ) : (

@@ -8,7 +8,9 @@ import {
   inOwnWords,
   isConflict,
   recordedNothing,
+  readText,
 } from "@/shared/api";
+import { Unread } from "@/shared/Unread";
 import { visible } from "@/shared/visible";
 import { keptUnconfirmed, twiceOf } from "@/cash/errors";
 import type { Location, Store } from "@/orders/types";
@@ -173,7 +175,7 @@ export function Stocktakes({
         <p role="status">Завантажуємо інвентаризації…</p>
       ) : list.error ? (
         <div role="alert">
-          <p>{errorText(list.error)}</p>
+          <p>{readText(list.error)}</p>
           <button
             onClick={() => {
               void list.refetch();
@@ -312,7 +314,15 @@ function Differences({
     retry: false,
   });
   if (page.isPending) return <p role="status">Завантажуємо розбіжності…</p>;
-  if (page.error) return <p role="alert">{errorText(page.error)}</p>;
+  if (page.error)
+    return (
+      <Unread
+        error={page.error}
+        retry={() => {
+          void page.refetch();
+        }}
+      />
+    );
   return (
     <ul aria-label="Розбіжності">
       {page.data.items.map((item) => (
@@ -499,7 +509,7 @@ export function Stocktake({
         <p role="status">Завантажуємо позиції…</p>
       ) : page.error ? (
         <div role="alert">
-          <p>{errorText(page.error)}</p>
+          <p>{readText(page.error)}</p>
           <button onClick={reread}>Спробувати ще раз</button>
         </div>
       ) : (
@@ -928,7 +938,14 @@ function FoundGoods({
           ))}
         </select>
       </label>
-      {sizes.error && <p role="alert">{errorText(sizes.error)}</p>}
+      {sizes.error && (
+        <Unread
+          error={sizes.error}
+          retry={() => {
+            void sizes.refetch();
+          }}
+        />
+      )}
       {variant && size && (
         <CountForm
           key={`${variant.product_variant_id}:${size.size_id}`}

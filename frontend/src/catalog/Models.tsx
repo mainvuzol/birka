@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { JSX } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError, errorText, inOwnWords, isConflict } from "@/shared/api";
+import { Unread } from "@/shared/Unread";
 import { visible } from "@/shared/visible";
 import type { Store } from "@/orders/types";
 import { familyLabel } from "./FamilySearch";
@@ -117,7 +118,14 @@ function ModelSearch({
         </label>
         <button type="submit">Знайти</button>
       </form>
-      {found.isError && <p role="alert">{errorText(found.error)}</p>}
+      {found.isError && (
+        <Unread
+          error={found.error}
+          retry={() => {
+            void found.refetch();
+          }}
+        />
+      )}
       {found.data && found.data.items.length === 0 && (
         <p>Нічого не знайдено.</p>
       )}
@@ -366,7 +374,12 @@ function RenameForm({
               назвою?
             </p>
             {families.isError && (
-              <p role="alert">{errorText(families.error)}</p>
+              <Unread
+                error={families.error}
+                retry={() => {
+                  void families.refetch();
+                }}
+              />
             )}
             {(families.data?.items ?? [])
               .filter((item) => candidates.includes(item.family_id))
@@ -500,7 +513,14 @@ function Merge({
           }}
         />
       )}
-      {preview.isError && <p role="alert">{errorText(preview.error)}</p>}
+      {preview.isError && (
+        <Unread
+          error={preview.error}
+          retry={() => {
+            void preview.refetch();
+          }}
+        />
+      )}
       {preview.data && (
         <>
           <dl>
@@ -757,7 +777,14 @@ export function Models({
           }}
         />
       )}
-      {selected && card.isError && <p role="alert">{errorText(card.error)}</p>}
+      {selected && card.isError && (
+        <Unread
+          error={card.error}
+          retry={() => {
+            void card.refetch();
+          }}
+        />
+      )}
       {selected && card.data && (
         <section>
           <h3>{visible(card.data.display_name)}</h3>

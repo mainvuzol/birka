@@ -427,11 +427,26 @@ test("a return whose answer is lost is resent unchanged, and takes the goods onc
   await page
     .getByRole("button", { name: "Повернути постачальнику 1 шт." })
     .click();
-  await expect(page.getByText("Незавершене повернення")).toBeVisible();
+  // On «Постачальникам», its own screen: the stub, still attached, checked
+  // by its button alone (G11; stage 2, money task list, P0-6).
+  const kept = page.locator(".stub-notice .stub");
+  await expect(kept).toHaveClass(/\bstub-kept\b/);
+  await expect(kept.locator(".stub-head")).toHaveText("Ще не підтверджено");
+  await expect(
+    kept.getByRole("heading", {
+      name: "Повернення постачальнику ще не підтверджено",
+    }),
+  ).toBeVisible();
+  await expect(kept).toContainText(
+    "Невідомо, чи записано повернення постачальнику. Перевірте результат — те саме повернення не запишеться двічі.",
+  );
+  await expect(kept).toContainText(/Чекає відповіді сервера з \d{2}:\d{2}\./);
+  await expect(page.getByText(/Перевіряємо кожні 20 с/)).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "Замовлення", exact: true }),
   ).toBeDisabled();
-  // Its own section stays open under «Ще», every other is held (P1-6).
+  // Its own section stays open under «Ще», every other is held (P1-6); over
+  // «Ще», a banner with the same check.
   await more(page);
   await expect(
     sections(page).getByRole("button", { name: "Постачальникам", exact: true }),
@@ -439,13 +454,30 @@ test("a return whose answer is lost is resent unchanged, and takes the goods onc
   await expect(
     sections(page).getByRole("button", { name: "Інвентаризація", exact: true }),
   ).toBeDisabled();
+  await expect(
+    page.locator(".banner-kept").getByRole("button", {
+      name: "Перевірити результат повернення",
+    }),
+  ).toBeVisible();
   // Written down before it was sent: a reload still knows what to ask about.
   await page.reload();
   await openStore(page, "Центр CENTRE");
-  await page
+  await kept
     .getByRole("button", { name: "Перевірити результат повернення" })
     .click();
-  await expect(page.getByText(/^Повернено постачальнику/)).toBeVisible();
+  await expect(kept).toHaveClass(/\bstub-recorded\b/);
+  await expect(
+    kept.getByRole("heading", {
+      name: "Повернення постачальнику записано один раз",
+    }),
+  ).toBeVisible();
+  await expect(kept).toContainText(
+    /Повернено постачальнику «Втрачений .*»: 1 шт\./,
+  );
+  // The till is the seller's again.
+  await expect(
+    page.getByRole("button", { name: "Продаж", exact: true }),
+  ).toBeEnabled();
   expect(sent.bodies).toHaveLength(2);
   expect(sent.bodies[1]).toEqual(sent.bodies[0]);
   expect(await available(page, coat)).toBe(2);

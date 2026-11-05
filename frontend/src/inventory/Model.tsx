@@ -1,7 +1,7 @@
 import { Fragment, useId, useRef, useState } from "react";
 import type { JSX } from "react";
 import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, errorText } from "@/shared/api";
+import { api, readText } from "@/shared/api";
 import { Icon } from "@/shared/Icon";
 import { BackToMore } from "@/shared/More";
 import type { MoreBack } from "@/shared/More";
@@ -278,7 +278,7 @@ export function Model({
         <ScreenHeader back={<BackToMore back={back} />} />
         <section>
           <div role="alert">
-            <p>{errorText(failed.error)}</p>
+            <p>{readText(failed.error)}</p>
             <button
               type="button"
               onClick={() => {

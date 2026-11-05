@@ -345,9 +345,24 @@ test("the owner blocks a store; its seller sees only that, and the owner reads i
   await expect(
     page.getByRole("button", { name: /^Борг магазину, що зараз не працює\?/ }),
   ).toHaveCount(0);
+  // The server silent over a store that does not trade: no paper banner —
+  // nothing is sold here, on paper or not — and the place not read says
+  // only «Сервер не відповідає.» (stage 2, orders task list, P0-3; review,
+  // 2026-11-05).
+  // Every call unanswered, so no other read says the server is back.
+  await page.route("**/api/v1/**", (route) => route.abort("connectionfailed"));
+  await section(page, "Замовлення");
+  const unread = page.locator(".read-failure");
+  await expect(unread.locator("p")).toHaveText("Сервер не відповідає.");
+  await expect(
+    page.getByRole("status", { name: "Сервер не відповідає" }),
+  ).toHaveCount(0);
+  await expect(page.getByText(/Продавайте на папері/)).toHaveCount(0);
+  await page.unroute("**/api/v1/**");
+  await unread.getByRole("button", { name: "Спробувати ще раз" }).click();
+  await expect(unread).toHaveCount(0);
   // Its orders read, none made: no «+» in «Замовлення»'s heading
   // (navigation task list, P0-2).
-  await section(page, "Замовлення");
   await expect(
     page
       .locator(".screen-title")

@@ -3,7 +3,13 @@ import type { ComponentProps, JSX, ReactNode } from "react";
 import { flushSync } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { QueryObserverResult } from "@tanstack/react-query";
-import { api, ApiError, errorText, inOwnWords } from "@/shared/api";
+import {
+  api,
+  ApiError,
+  errorText,
+  inOwnWords,
+  UNREACHABLE,
+} from "@/shared/api";
 import { isTillMethod, methodHow, methodLabels } from "@/shared/payment";
 import type { PaymentMethod, TillMethod } from "@/shared/payment";
 import {
@@ -11,6 +17,8 @@ import {
   keptText,
   noteChecked,
   useAutoCheck,
+  useReach,
+  waitsText,
 } from "@/shared/reach";
 import { setScreen } from "@/shared/report";
 import { visible } from "@/shared/visible";
@@ -42,7 +50,8 @@ import { Send } from "@/orders/Send";
 import { Collect } from "@/orders/Collect";
 import { chargeOnce } from "@/orders/Collected";
 import { NewOrder, shortOf } from "@/orders/NewOrder";
-import { Orders, Unread, freshOrdersView } from "@/orders/Orders";
+import { Orders, freshOrdersView } from "@/orders/Orders";
+import { Unread } from "@/shared/Unread";
 import { ModeSwitch } from "@/shared/ModeSwitch";
 import type { OrdersView } from "@/orders/Orders";
 import { asShown, money, stateText } from "@/orders/types";
@@ -115,7 +124,14 @@ import { Paid } from "@/credits/Paid";
 import { Damaged } from "@/damaged/Damaged";
 import { Openings } from "@/openings/Openings";
 import { Stores } from "@/stores/Stores";
-import { Invoices } from "@/suppliers/Invoices";
+import {
+  Invoices,
+  doneText as invoiceDoneText,
+  refusalText as invoiceRefusalText,
+} from "@/suppliers/Invoices";
+import { refusalText as borrowedRefusalText } from "@/suppliers/Borrowed";
+import { invoiceKept, keptSaid, supplierReturnKept } from "@/suppliers/kept";
+import type { Invoice, InvoiceBody, SupplierReturn } from "@/suppliers/types";
 import { Models } from "@/catalog/Models";
 import {
   loadCorrectionCommand,
@@ -130,11 +146,17 @@ import type { Phoned } from "@/today/Search";
 import { useWaiting } from "@/today/waiting";
 import {
   loadInvoiceCommand,
+  resolveInvoiceCommand,
   useInvoiceCommand,
 } from "@/suppliers/invoiceCommands";
-import { Suppliers } from "@/suppliers/Suppliers";
+import {
+  Suppliers,
+  refusalText as supplierRefusalText,
+  returnedText,
+} from "@/suppliers/Suppliers";
 import {
   loadReturnToSupplier,
+  resolveReturnToSupplier,
   useReturnToSupplier,
 } from "@/suppliers/commands";
 import { loadStateCommand, useStateCommand } from "@/stores/commands";
@@ -743,11 +765,38 @@ function Workspace({
         // Its own count, kept beside it (owner decision, 2026-10-21).
         misses: saved?.misses ?? 0,
       });
-      if (saved) setTab("invoices");
+      // Borrowed goods marked sold are «Постачальникам»'s, where
+      // «Позичене й під реалізацію» is (stage 2, money task list, P0-6).
+      if (saved)
+        setTab(
+          saved.body.kind === "sold" && canReturnToSupplier
+            ? "suppliers"
+            : "invoices",
+        );
     } catch {
       setInvoiceStorageError(true);
     }
-  }, [invoiceKey, canSeeInvoices]);
+  }, [invoiceKey, canSeeInvoices, canReturnToSupplier]);
+  // Either journal's kept operation confirmed: «… записано один раз» until
+  // «Зрозуміло», and the screen it was made on opened afresh; refused, in
+  // that screen's words while the refusal stands (stage 2, money task list,
+  // P0-6).
+  const [invoiceSettled, setInvoiceSettled] = useState<{
+    invoice: Invoice;
+    body: InvoiceBody;
+  } | null>(null);
+  const [invoiceRefused, setInvoiceRefused] = useState<{
+    error: unknown;
+    said: string;
+  } | null>(null);
+  const [supplierSettled, setSupplierSettled] = useState<SupplierReturn | null>(
+    null,
+  );
+  const [supplierRefused, setSupplierRefused] = useState<{
+    error: unknown;
+    said: string;
+  } | null>(null);
+  const [suppliersEpoch, setSuppliersEpoch] = useState(0);
   useEffect(() => {
     if (!canManageStores) return;
     try {
@@ -1429,6 +1478,62 @@ function Workspace({
       }
     });
   }
+  // What a supplier's operation changes, read again: the invoices, the
+  // returns, the borrowed goods and the till's stock.
+  function suppliersRead(): void {
+    for (const name of ["supplier-invoices", "supplier-returns", "borrowed"])
+      void cache.invalidateQueries({ queryKey: [name, store.id] });
+    void cache.invalidateQueries({ queryKey: ["sale-stock"] });
+  }
+  // The invoices' and the suppliers' kept operations, checked by their
+  // button alone (G11; stage 2, money task list, P0-6): confirmed later, as
+  // the sale's, felt as nothing.
+  function checkInvoice(): void {
+    const attempt = invoiceCommand.pending;
+    if (!attempt) return;
+    void resolveInvoiceCommand(invoiceKey, token, attempt).then((outcome) => {
+      if (outcome.kind === "done") {
+        setInvoiceSettled({ invoice: outcome.result, body: attempt.body });
+        setSuppliersEpoch((epoch) => epoch + 1);
+        suppliersRead();
+      } else if (outcome.kind === "refused") {
+        // Proven to have recorded nothing: its form, if still open, is the
+        // person's again, and the refusal says why.
+        useInvoiceCommand.setState({ error: outcome.error });
+        setInvoiceRefused({
+          error: outcome.error,
+          said:
+            attempt.body.kind === "sold"
+              ? borrowedRefusalText(outcome.error)
+              : invoiceRefusalText(outcome.error),
+        });
+        suppliersRead();
+      }
+    });
+  }
+  function checkSupplierReturn(): void {
+    const attempt = supplierCommand.pending;
+    if (!attempt) return;
+    void resolveReturnToSupplier(supplierKey, token, attempt).then(
+      (outcome) => {
+        if (outcome.kind === "done") {
+          setSupplierSettled(outcome.result);
+          setSuppliersEpoch((epoch) => epoch + 1);
+          suppliersRead();
+        } else if (outcome.kind === "refused") {
+          useReturnToSupplier.setState({ error: outcome.error });
+          setSupplierRefused({
+            error: outcome.error,
+            // Borrowed goods sent back say it as their section does.
+            said: attempt.body.stock_lot_id
+              ? borrowedRefusalText(outcome.error)
+              : supplierRefusalText(outcome.error),
+          });
+          suppliersRead();
+        }
+      },
+    );
+  }
   function checkReturn(): void {
     const attempt = returnCommand.pending;
     if (!attempt) return;
@@ -1694,6 +1799,15 @@ function Workspace({
     adjustmentUnsettled ||
     storesUnsettled ||
     invoiceUnsettled;
+  // Borrowed goods marked sold, kept, are «Постачальникам»'s: its row stays
+  // open to them, its forms held (stage 2, money task list, P0-6).
+  const soldKept =
+    canReturnToSupplier && invoiceCommand.pending?.body.kind === "sold";
+  const suppliersHeld =
+    othersUnsettled ||
+    adjustmentUnsettled ||
+    storesUnsettled ||
+    (invoiceUnsettled && !soldKept);
   const otherThanInvoices =
     othersUnsettled ||
     adjustmentUnsettled ||
@@ -1974,7 +2088,7 @@ function Workspace({
       label: "Постачальникам",
       icon: "supplier",
       shown: canReturnToSupplier,
-      disabled: otherThanSuppliers,
+      disabled: suppliersHeld,
     },
     {
       tab: "invoices",
@@ -2444,6 +2558,42 @@ function Workspace({
     receiptCommand.busy && receiptCommand.firstSend
       ? null
       : receiptCommand.pending;
+  const silent = useReach((reach) => reach.down);
+  // The suppliers' and the invoices' (stage 2, money task list, P0-6): a
+  // first send turns its own button's ring, as a delivery's.
+  const keptInvoice =
+    invoiceCommand.busy && invoiceCommand.firstSend
+      ? null
+      : invoiceCommand.pending;
+  const keptSupplierReturn =
+    supplierCommand.busy && supplierCommand.firstSend
+      ? null
+      : supplierCommand.pending;
+  // Borrowed goods marked sold, or sent back, are «Постачальникам»'s.
+  const invoiceOwn = (body: InvoiceBody): boolean =>
+    tab ===
+    (body.kind === "sold" && canReturnToSupplier ? "suppliers" : "invoices");
+  // Under either: why it is still unconfirmed, or — refused — why, while
+  // that refusal stands.
+  const invoiceSaid = keptInvoice
+    ? keptSaid(
+        invoiceCommand.error,
+        invoiceKept[keptInvoice.body.kind],
+        invoiceCommand.misses,
+      )
+    : invoiceRefused !== null && invoiceCommand.error === invoiceRefused.error
+      ? invoiceRefused.said
+      : null;
+  const supplierSaid = keptSupplierReturn
+    ? keptSaid(
+        supplierCommand.error,
+        supplierReturnKept,
+        supplierCommand.misses,
+      )
+    : supplierRefused !== null &&
+        supplierCommand.error === supplierRefused.error
+      ? supplierRefused.said
+      : null;
   // A correction's own screens: wherever «Виправити залишок» is made — the
   // model's detail, «Залишки», «Інвентаризація».
   const correcting =
@@ -2517,6 +2667,17 @@ function Workspace({
   setScreen(tab);
   return (
     <WorkspaceLineContext.Provider value={line}>
+      {/* While the server does not answer, the owner's words once, over
+          every screen of the store: each place not read says only «Сервер
+          не відповідає.» and «Спробувати ще раз» (G13; stage 2, orders task
+          list, P0-3; В-ЗП1 (а)). Gone with the first answer, before «Сервер
+          знову відповідає» can stand. Not over a store that does not trade:
+          nothing is sold there, on paper or not (review, 2026-11-05). */}
+      {silent && trading && (
+        <Banner kind="paper" role="status" label="Сервер не відповідає">
+          <p>{UNREACHABLE}</p>
+        </Banner>
+      )}
       {!trading && (
         <Banner kind="blocked" role="status" as="div">
           <p>
@@ -2867,6 +3028,69 @@ function Workspace({
           {countErrorText(countCommand.error, countCommand.misses)}
         </p>
       )}
+      {/* The invoices' and the suppliers' kept operations, as the sale's —
+          checked by their button alone, so nothing says the phone checks
+          every 20 s (G11; stage 2, money task list, P0-6; В1 (а)). */}
+      {keptInvoice && (
+        <Kept
+          own={invoiceOwn(keptInvoice.body)}
+          title={`${invoiceKept[keptInvoice.body.kind].what} ще не підтверджено`}
+          busy={invoiceCommand.busy}
+          byItself={false}
+          check={{
+            label: invoiceKept[keptInvoice.body.kind].check,
+            run: checkInvoice,
+          }}
+        >
+          <p>{invoiceKept[keptInvoice.body.kind].unknown}</p>
+          {keptInvoice.since && <p>{waitsText(keptInvoice.since)}</p>}
+        </Kept>
+      )}
+      {invoiceSettled && (
+        <Settled own={invoiceOwn(invoiceSettled.body)}>
+          <h3>{`${invoiceKept[invoiceSettled.body.kind].what} записано один раз`}</h3>
+          <p>{invoiceDoneText(invoiceSettled.invoice, invoiceSettled.body)}</p>
+          <button
+            onClick={() => {
+              setInvoiceSettled(null);
+            }}
+          >
+            Зрозуміло
+          </button>
+        </Settled>
+      )}
+      {invoiceSaid !== null && <p role="alert">{invoiceSaid}</p>}
+      {keptSupplierReturn && (
+        <Kept
+          own={tab === "suppliers"}
+          title={`${supplierReturnKept.what} ще не підтверджено`}
+          busy={supplierCommand.busy}
+          byItself={false}
+          check={{
+            label: supplierReturnKept.check,
+            run: checkSupplierReturn,
+          }}
+        >
+          <p>{supplierReturnKept.unknown}</p>
+          {keptSupplierReturn.since && (
+            <p>{waitsText(keptSupplierReturn.since)}</p>
+          )}
+        </Kept>
+      )}
+      {supplierSettled && (
+        <Settled own={tab === "suppliers"}>
+          <h3>{`${supplierReturnKept.what} записано один раз`}</h3>
+          <p>{returnedText(supplierSettled)}</p>
+          <button
+            onClick={() => {
+              setSupplierSettled(null);
+            }}
+          >
+            Зрозуміло
+          </button>
+        </Settled>
+      )}
+      {supplierSaid !== null && <p role="alert">{supplierSaid}</p>}
       {/* Which step and which order (orders task list, P1-1), named as the
           order's refusals name it (owner decision, 2026-10-20): the stub on
           «Замовлення» and «Нове замовлення», a banner over any other
@@ -3283,6 +3507,7 @@ function Workspace({
       ) : tab === "suppliers" ? (
         canReturnToSupplier ? (
           <Suppliers
+            key={suppliersEpoch}
             store={store}
             token={token}
             journalKey={supplierKey}
@@ -3296,6 +3521,7 @@ function Workspace({
       ) : tab === "invoices" ? (
         canSeeInvoices ? (
           <Invoices
+            key={suppliersEpoch}
             store={store}
             token={token}
             journalKey={invoiceKey}

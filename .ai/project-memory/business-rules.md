@@ -6107,3 +6107,84 @@ server rule and no figure changes: words, marks and how a choice is drawn.
   modes, pressed or not.
 - **«Прийшов товар» (money):** the borrowed goods' and the lots' words
   name the section by its name, not «Прийняти товар».
+
+## Chosen in chat — 2026-11-05 (stage 2 batch 2: the suppliers' and invoices' kept operations, one paper banner, one paper sample; money P0-6, orders-paper P0-3, P0-4)
+
+Chosen in chat on 2026-11-05 («merged, go next»), after #170: the second
+batch proposed after #169 (`all-on-the-tag-stage2-kept-and-paper-report.md`).
+The owner's questions stand by their (а): money В1, orders-paper В-ЗП1,
+В-ЗП5. No right, no server rule, no paper rule (ADR-0013, ADR-0021,
+G1–G26) and no figure changes: where the words stand and how they are
+drawn.
+
+- **The suppliers' and the invoices' kept operations (money P0-6; В1 (а)):**
+  as every kept operation since P0-2 — the stub still attached on its own
+  screen, «Ще не підтверджено» on it; a banner over any other.
+  - Its own screen: «Накладні» for an invoice, a payment, a set-off and a
+    write-off; «Постачальникам» for borrowed goods marked sold
+    («Позичене й під реалізацію» is there) and for a return to a
+    supplier. Telegram reopening the app on a kept one opens that screen;
+    its row in «Ще» stays open to it while every other screen's is held,
+    its forms held too (review). Whoever may no longer send goods back to
+    a supplier has a kept «Продано» on «Накладні». Decided here.
+  - Its words: «{Накладну | Оплату | Залік | Списання | Продаж
+    позиченого | Повернення постачальнику} ще не підтверджено»;
+    «Невідомо, чи записано {оплату}. Перевірте результат — та сама
+    операція не запишеться двічі.» (a return: «… те саме повернення не
+    запишеться двічі.»); «Чекає відповіді сервера з 11:42.»; the button
+    «Перевірити результат {оплати}». Decided here, in the sale's
+    pattern.
+  - Checked by its button alone (G11, as built): nothing says «Перевіряємо
+    кожні 20 с», the ring turns only while the pressed check is asked,
+    and the button is the stub's own, not a quiet one. A check answered
+    by no answer adds nothing under it: the stub says since when it
+    waits, and nothing of selling on paper, which is the till's. A check
+    pressed on one never moves «остання перевірка» of what the phone
+    checks by itself; the journal's own «Спершу завершіть збережену
+    операцію з накладною.» is said as the screens said it (review).
+  - Confirmed: «{Оплату} записано один раз» with what the screen said of
+    it done, and «Зрозуміло»; the screen it was made on is read afresh, its
+    form empty. No success buzz and no ask to close, as the sale's kept
+    attempt confirmed later. Decided here.
+  - Refused, proven to have recorded nothing: in the words its screen
+    says it (borrowed goods' as «Позичене й під реалізацію» says them),
+    under where the stub stood, while that refusal stands; the till is
+    free.
+  - «Продаж» stays held while one is kept, as built.
+  - Found, not changed (backend follow-up): the suppliers' endpoints never
+    say `recorded: false`, so a check the real server refuses is never
+    proven to have recorded nothing — it stays kept, with the refusal's
+    words under it, until a manager reads it.
+- **One paper banner (orders-paper P0-3; В-ЗП1 (а)):** while the server
+  does not answer, the owner's sentence (G13) once, at the top of every
+  screen of the store, a status named «Сервер не відповідає»; gone with
+  the first answer. Each place that could not be read for no answer says
+  only «Сервер не відповідає.» and «Спробувати ще раз»; a server's own
+  error keeps its words, with «Спробувати ще раз» too — one warning's
+  plate wherever a read failed, thirty more places than before (review);
+  a next page that failed reads that page again. The sign-in, the crash
+  screen and the page before the app keep the whole sentence: no banner
+  stands over them. Nor over a store that does not trade, where nothing is
+  sold, on paper or not (review). Decided here.
+- **One paper sample (orders-paper P0-4; В-ЗП5 (а)):** on the till, a
+  return and a debt's payment, four rows:
+  - the switch, «Вношу {продаж | повернення | внесок} з паперу»;
+  - the series: which paper («Сервер не відповідав», «Перші дні, до
+    затвердження залишків») and «Продавець: …» or «Хто прийняв: …»
+    («не вказано» when nobody is); until the paper is said, «Оберіть, що
+    вносите з паперу» with the warning's triangle, and no name;
+  - «З паперу», a sheet the switch turned on opens in the same tap, and
+    the series row opens again: which paper (nothing chosen for it — the
+    mark is permanent) and «Хто продав» or «Хто прийняв», «Не вказано»
+    first and chosen; a list not read says so with «Спробувати ще раз»;
+    the app's quiet «Готово», Telegram's «Назад» and the scrim close it,
+    and nothing chosen is lost; never a MainButton. «Сервер знову
+    відповідає»'s «Вношу продаж з паперу» ticks the switch with the
+    outage's paper said, as before, and opens no sheet; so does «Вношу
+    продаж з паперу» in «Ще» › «Цей телефон», the till's series then
+    saying «Оберіть, що вносите з паперу». Decided here.
+  - the paper's time: «Це було вчора», a switch row, and the time; the
+    first days' day picked.
+  A return and a payment from paper take «Режим: з паперу» at their top
+  once the paper is said, with its approved sentence. A series' first
+  sale is at most seven taps from the switch, each next one three.

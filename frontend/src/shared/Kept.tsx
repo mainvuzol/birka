@@ -34,12 +34,18 @@ export function CheckLine({ busy }: { busy: boolean }): JSX.Element | null {
  * still attached, «Ще не підтверджено» on it; over any other, a banner. The
  * same words either way — which operation it was, what to do on paper — and
  * the button that sends the identical attempt again.
+ *
+ * One the phone never checks by itself — an invoice's, a return to a
+ * supplier's (G11; stage 2, money task list, P0-6, В1 (а)) — says nothing of
+ * checking every 20 s: its ring turns only while its check, pressed, is
+ * asked, and the check is the stub's own button, not a quiet one.
  */
 export function Kept({
   own,
   title,
   busy,
   check,
+  byItself = true,
   children,
 }: {
   /** Its own screen is open. */
@@ -47,19 +53,33 @@ export function Kept({
   title: string;
   busy: boolean;
   check: { label: string; run: () => void };
+  /** The phone checks it by itself while the server does not answer. */
+  byItself?: boolean;
   children: ReactNode;
 }): JSX.Element {
   const body = (
     <>
       <h3>{title}</h3>
       {children}
-      <CheckLine busy={busy} />
+      {byItself ? (
+        <CheckLine busy={busy} />
+      ) : (
+        busy && (
+          <p className="check-line">
+            <Eyelet state="spin" />
+            <Waiting />
+          </p>
+        )
+      )}
       <button
         type="button"
-        className={own ? "quiet" : undefined}
+        className={own && byItself ? "quiet" : undefined}
         disabled={busy}
         onClick={() => {
-          noteChecked();
+          // «остання перевірка» is the phone's own checking's: a check
+          // pressed on one it never checks by itself is not (review,
+          // 2026-11-05).
+          if (byItself) noteChecked();
           check.run();
         }}
       >

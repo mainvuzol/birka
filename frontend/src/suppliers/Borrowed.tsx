@@ -2,12 +2,13 @@ import { useState } from "react";
 import type { JSX } from "react";
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, api, errorText, inOwnWords, isConflict } from "@/shared/api";
+import { Unread } from "@/shared/Unread";
 import { money } from "@/orders/types";
 import { sizeLabel } from "@/returns/types";
 import type { Store } from "@/orders/types";
 import { visible } from "@/shared/visible";
 import { submitReturnToSupplier } from "./commands";
-import { submitInvoiceCommand, useInvoiceCommand } from "./invoiceCommands";
+import { submitInvoiceCommand } from "./invoiceCommands";
 import type { Borrowed as Lot, BorrowedPage } from "./types";
 
 const pageSize = 20;
@@ -40,7 +41,6 @@ export function Borrowed({
   const cache = useQueryClient();
   const [onHandOnly, setOnHandOnly] = useState(true);
   const [done, setDone] = useState<string | null>(null);
-  const invoiceCommand = useInvoiceCommand();
   // Page by page: the server takes fifty at most (stage 2, money task list,
   // P0-7).
   const lots = useInfiniteQuery({
@@ -84,11 +84,6 @@ export function Borrowed({
         Товар інших магазинів і постачальників: сплачують лише продане, за
         домовленою ціною, непродане повертають. Береться через «Прийшов товар».
       </p>
-      {invoiceCommand.pending && (
-        <p className="notice">
-          Незавершена операція з накладною: перевірте її в «Накладних».
-        </p>
-      )}
       {done && <p role="status">{done}</p>}
       <label>
         Показати
@@ -105,7 +100,12 @@ export function Borrowed({
       {lots.isPending ? (
         <p role="status">Завантажуємо позичене…</p>
       ) : lots.data === undefined ? (
-        <p role="alert">{errorText(lots.error)}</p>
+        <Unread
+          error={lots.error}
+          retry={() => {
+            void lots.refetch();
+          }}
+        />
       ) : listed.length === 0 ? (
         <p>
           {onHandOnly
@@ -191,7 +191,16 @@ export function Borrowed({
             />
           ))}
           {/* A page that failed keeps the lots already read. */}
-          {lots.error && <p role="alert">{errorText(lots.error)}</p>}
+          {lots.error && (
+            <Unread
+              error={lots.error}
+              retry={() => {
+                void (lots.isFetchNextPageError
+                  ? lots.fetchNextPage()
+                  : lots.refetch());
+              }}
+            />
+          )}
           {lots.hasNextPage && (
             <button
               className="quiet"
@@ -310,7 +319,10 @@ function when(iso: string): string {
   return new Date(iso).toLocaleDateString("uk-UA");
 }
 
-function refusalText(error: unknown): string {
+/** Why a mark or a return of borrowed goods was not taken, in this section's
+ * words: here, and under a kept one checked (stage 2, money task list,
+ * P0-6). */
+export function refusalText(error: unknown): string {
   if (error instanceof ApiError) {
     if (error.code === "INSUFFICIENT_STOCK")
       return "На складі цього товару вже менше: можливо, його продали. Позначте проданим.";

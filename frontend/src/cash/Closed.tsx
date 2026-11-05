@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { JSX, ReactNode } from "react";
 import { money } from "@/orders/types";
-import { errorText } from "@/shared/api";
+import { readText } from "@/shared/api";
 import { RecordedMark } from "@/shared/Eyelet";
 import { Icon } from "@/shared/Icon";
 import { NoCustomerData } from "@/shared/NoCustomerData";
@@ -516,7 +516,7 @@ export function Closed({
             // A warning's plate, as «Каса»'s own (stage 2, orders task list,
             // P0-2; review, 2026-11-05).
             <div className="notice read-failure" role="alert">
-              <p>{errorText(failed)}</p>
+              <p>{readText(failed)}</p>
               <button type="button" onClick={retry}>
                 Спробувати ще раз
               </button>

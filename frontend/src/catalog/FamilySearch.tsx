@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { JSX } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { api, errorText } from "@/shared/api";
+import { api, readText } from "@/shared/api";
 import { visible } from "@/shared/visible";
 
 export interface Family {
@@ -100,7 +100,7 @@ export function FamilySearch({
           <p role="status">Шукаємо моделі…</p>
         ) : result.error ? (
           <div role="alert">
-            <p>{errorText(result.error)}</p>
+            <p>{readText(result.error)}</p>
             <button
               type="button"
               disabled={blocked}

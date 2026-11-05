@@ -1,7 +1,14 @@
 import { useState } from "react";
 import type { JSX } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ApiError, api, errorText, inOwnWords, isConflict } from "@/shared/api";
+import {
+  ApiError,
+  api,
+  errorText,
+  inOwnWords,
+  isConflict,
+  readText,
+} from "@/shared/api";
 import { ModeSwitch } from "@/shared/ModeSwitch";
 import { visible } from "@/shared/visible";
 import { decimal, kopecks, money } from "@/orders/types";
@@ -45,7 +52,7 @@ export function SuggestedPrice({
         <p role="status">Завантажуємо ціну продажу…</p>
       ) : prices.error ? (
         <div role="alert">
-          <p>{errorText(prices.error)}</p>
+          <p>{readText(prices.error)}</p>
           <button
             type="button"
             onClick={() => {
@@ -124,7 +131,7 @@ export function PriceEditor({
   if (prices.error)
     return (
       <div role="alert">
-        <p>{errorText(prices.error)}</p>
+        <p>{readText(prices.error)}</p>
         <button
           type="button"
           onClick={() => {
