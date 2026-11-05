@@ -248,9 +248,14 @@ async def test_borrowed_goods_sold_are_owed_in_the_invoices(maker):
         await sold(maker, shops, lot["stock_lot_id"], 2, SELLER, command_id=command)
     ).status_code == 403
     assert (await sold(maker, shops, lot["stock_lot_id"], 1, command_id=command)).status_code == 409
-    # Never more than is on hand, and never another store's.
+    # Never more than is on hand, and never another store's. Short only with
+    # this sale just added: nothing was recorded, said so (ADR-0013 §1).
     over = await sold(maker, shops, lot["stock_lot_id"], 2)
-    assert over.json()["details"] == {"reason": "MORE_THAN_ON_HAND", "on_hand": 1}, over.text
+    assert over.json()["details"] == {
+        "reason": "MORE_THAN_ON_HAND",
+        "on_hand": 1,
+        "recorded": False,
+    }, over.text
     assert (
         await sold(maker, shops, lot["stock_lot_id"], 1, store=shops.child_store)
     ).status_code == 404
@@ -311,7 +316,11 @@ async def test_unsold_borrowed_goods_go_back_to_their_supplier(maker):
     # on hand to send back.
     assert (await sold(maker, shops, lot["stock_lot_id"], 1)).status_code == 201
     over = await send_back(maker, shops, lot, 2)
-    assert over.json()["details"] == {"reason": "MORE_THAN_ON_HAND", "on_hand": 1}, over.text
+    assert over.json()["details"] == {
+        "reason": "MORE_THAN_ON_HAND",
+        "on_hand": 1,
+        "recorded": False,
+    }, over.text
     assert (await send_back(maker, shops, lot, 1)).status_code == 201
     assert (await borrowed(maker, shops)).json()["items"] == []
     assert counts(await lot_of(maker, shops, on_hand="false")) == (3, 1, 2, 0)

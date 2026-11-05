@@ -192,9 +192,14 @@ async def test_an_invoice_is_paid_in_parts_and_settled(maker):
     ).status_code == 403
     other = await act(maker, shops, invoice_id, "payments", money("3999", pay_command))
     assert other.status_code == 409, other.text
-    # Never more than is owed.
+    # Never more than is owed. Refused after the payment's lookup: it says
+    # nothing was recorded (ADR-0013 §1).
     over = await act(maker, shops, invoice_id, "payments", money("6000.01"))
-    assert over.json()["details"] == {"reason": "MORE_THAN_OWED", "owed": "6000.00"}
+    assert over.json()["details"] == {
+        "reason": "MORE_THAN_OWED",
+        "owed": "6000.00",
+        "recorded": False,
+    }
 
     owes = await summary(maker, shops)
     assert owes["owed"] == "8000.00" and owes["invoices"] == 2
@@ -650,6 +655,84 @@ async def test_an_open_invoice_does_not_keep_a_store_from_the_archive(maker):
             )
         ).json()["items"]
     assert (still["store_state"], still["owed"]) == ("ARCHIVED", "300.00")
+
+
+async def test_a_refusal_after_its_lookup_says_nothing_was_recorded(maker):
+    """The suppliers' commands as every kept command (ADR-0013 §1): refused
+    once their `command_id` was looked up and found nothing, they say they
+    recorded nothing, so a phone whose answer was lost settles them; refused
+    before it, or named twice, they say nothing of it."""
+    shops = await make_two_shops(maker)
+    variant, size = await coats(maker, shops, qty=3)
+    belardi = (await supplier(maker, shops)).json()["id"]
+    arno = (await supplier(maker, shops, "Арно")).json()["id"]
+
+    # An invoice of a supplier the network does not have.
+    unknown = await record(
+        maker, shops, invoice_body(shops.primary_store, str(uuid.uuid4()), "100")
+    )
+    assert unknown.status_code == 404, unknown.text
+    assert unknown.json()["details"]["recorded"] is False
+    # Before the lookup: what is paid is checked against its sum first.
+    early = await record(maker, shops, invoice_body(shops.primary_store, belardi, "100", "200"))
+    assert early.json()["details"] == {"reason": "MORE_THAN_OWED", "owed": "100.00"}
+
+    invoice_id = (
+        await record(maker, shops, invoice_body(shops.primary_store, belardi, "500"))
+    ).json()["id"]
+    # Another supplier's goods, set off.
+    to_arno = (await send(maker, shops, document(shops, arno, (variant, size, 1)))).json()["id"]
+    wrong = await act(
+        maker, shops, invoice_id, "set-offs", money("100") | {"supplier_return_id": to_arno}
+    )
+    assert wrong.json()["details"] == {
+        "reason": "OTHER_SUPPLIER",
+        "supplier_return_id": to_arno,
+        "recorded": False,
+    }
+    # Written off, then written off again, or paid: nothing is owed.
+    forgiven = {"reason": "постачальник пробачив"}
+    written = await act(
+        maker,
+        shops,
+        invoice_id,
+        "write-off",
+        forgiven | {"command_id": str(uuid.uuid4())},
+        OWNER,
+    )
+    assert written.status_code == 200, written.text
+    again = await act(
+        maker,
+        shops,
+        invoice_id,
+        "write-off",
+        forgiven | {"command_id": str(uuid.uuid4())},
+        OWNER,
+    )
+    assert again.json()["details"] == {
+        "reason": "NOT_OWED",
+        "status": "WRITTEN_OFF",
+        "recorded": False,
+    }
+    paid = await act(maker, shops, invoice_id, "payments", money("100"))
+    assert paid.json()["details"] == {
+        "reason": "NOT_OWED",
+        "status": "WRITTEN_OFF",
+        "recorded": False,
+    }
+
+    # One command named twice, by another request: its identity's refusal,
+    # as it came.
+    command = str(uuid.uuid4())
+    first = await record(
+        maker, shops, invoice_body(shops.primary_store, belardi, "100", command_id=command)
+    )
+    assert first.status_code == 201, first.text
+    twice = await record(
+        maker, shops, invoice_body(shops.primary_store, belardi, "101", command_id=command)
+    )
+    assert twice.status_code == 409, twice.text
+    assert "recorded" not in twice.json()["details"]
 
 
 async def test_the_migration_gives_the_debts_to_whoever_returns_goods():

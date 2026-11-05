@@ -33,7 +33,7 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.errors import NotFoundError, ValidationFailedError
+from app.core.errors import NotFoundError, ValidationFailedError, nothing_recorded
 from app.modules.authz.permissions import Permission
 from app.modules.authz.scope import RequestScope
 from app.modules.catalog.read import current_variants as catalog_current_variants
@@ -246,7 +246,11 @@ async def mark_sold(
             stock_lot_id=lot.id, quantity=quantity, label=await _label(session, lot)
         ),
     )
-    await ensure_on_hand(session, lot, quantity=quantity)
+    # Short of goods only with this sale just added: one already recorded
+    # under this command never took more than was on hand. So it recorded
+    # nothing, and says so (ADR-0013 §1).
+    with nothing_recorded():
+        await ensure_on_hand(session, lot, quantity=quantity)
     return view
 
 

@@ -36,7 +36,12 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import idempotency
-from app.core.errors import IdempotencyConflictError, NotFoundError, ValidationFailedError
+from app.core.errors import (
+    IdempotencyConflictError,
+    NotFoundError,
+    ValidationFailedError,
+    nothing_recorded,
+)
 from app.core.logging import get_logger
 from app.modules.audit import service as audit
 from app.modules.authz.locations import require_stock_access
@@ -577,52 +582,56 @@ async def return_goods(
                 command_id=str(command_id),
             )
         return await view(session, done)
-    await require_stock_access(
-        session,
-        scope=scope,
-        permission=Permission.SUPPLIER_RETURN,
-        store_id=store_id,
-        location_ids={location_id},
-        capability=LocationCapability.RECEIVE,
-    )
-    if await damaged_returns_locations(
-        session, organization_id=scope.organization_id, location_ids={location_id}
-    ):
-        raise ValidationFailedError(
-            "A unit in «Брак» goes back to its supplier from «Брак»",
-            reason="FROM_DAMAGED",
-            location_id=str(location_id),
+    # Under the command's lock, and nothing recorded under it: every refusal
+    # from here on proves this return recorded nothing, and says so, so a
+    # phone that never heard its answer can settle it (ADR-0013 §1).
+    with nothing_recorded():
+        await require_stock_access(
+            session,
+            scope=scope,
+            permission=Permission.SUPPLIER_RETURN,
+            store_id=store_id,
+            location_ids={location_id},
+            capability=LocationCapability.RECEIVE,
         )
-    lot = (
-        await borrowed.lot_to_return(
+        if await damaged_returns_locations(
+            session, organization_id=scope.organization_id, location_ids={location_id}
+        ):
+            raise ValidationFailedError(
+                "A unit in «Брак» goes back to its supplier from «Брак»",
+                reason="FROM_DAMAGED",
+                location_id=str(location_id),
+            )
+        lot = (
+            await borrowed.lot_to_return(
+                session,
+                organization_id=scope.organization_id,
+                store_id=store_id,
+                stock_lot_id=stock_lot_id,
+                location_id=location_id,
+                supplier_id=supplier_id,
+                lines=[(line.product_variant_id, line.size_id, line.quantity) for line in ordered],
+            )
+            if stock_lot_id is not None
+            else None
+        )
+        row = await record_return(
             session,
             organization_id=scope.organization_id,
             store_id=store_id,
-            stock_lot_id=stock_lot_id,
+            actor_user_id=scope.user_id,
+            command_id=command_id,
+            command_fingerprint=fingerprint,
             location_id=location_id,
             supplier_id=supplier_id,
-            lines=[(line.product_variant_id, line.size_id, line.quantity) for line in ordered],
+            lines=ordered,
+            note=remark,
+            correlation_id=correlation_id,
+            stock_lot_id=stock_lot_id,
         )
-        if stock_lot_id is not None
-        else None
-    )
-    row = await record_return(
-        session,
-        organization_id=scope.organization_id,
-        store_id=store_id,
-        actor_user_id=scope.user_id,
-        command_id=command_id,
-        command_fingerprint=fingerprint,
-        location_id=location_id,
-        supplier_id=supplier_id,
-        lines=ordered,
-        note=remark,
-        correlation_id=correlation_id,
-        stock_lot_id=stock_lot_id,
-    )
-    if lot is not None:
-        await borrowed.ensure_on_hand(session, lot, quantity=ordered[0].quantity)
-    return await view(session, row)
+        if lot is not None:
+            await borrowed.ensure_on_hand(session, lot, quantity=ordered[0].quantity)
+        return await view(session, row)
 
 
 async def cancel_return(

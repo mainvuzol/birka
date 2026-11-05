@@ -261,6 +261,9 @@ async def test_only_goods_free_to_sell_go_back(maker):
     too_many = await send(maker, shops, document(shops, supplier_id, (variant, size, 3)))
     assert too_many.status_code == 409, too_many.text
     assert too_many.json()["code"] == "INSUFFICIENT_STOCK"
+    # Refused after the return's lookup: it says nothing was recorded, so a
+    # phone whose answer was lost settles it (ADR-0013 §1).
+    assert too_many.json()["details"]["recorded"] is False
 
     async with api(maker, shops.scope(shops.primary_store)) as client:
         held = await client.post(
@@ -288,7 +291,9 @@ async def test_only_goods_free_to_sell_go_back(maker):
     assert fits.status_code == 201, fits.text
 
     duplicate = document(shops, supplier_id, (variant, size, 1), (variant, size, 1))
-    assert (await send(maker, shops, duplicate)).json()["details"]["reason"] == "DUPLICATE_LINE"
+    twice = (await send(maker, shops, duplicate)).json()["details"]
+    # Refused before any lookup: it says nothing of what was recorded.
+    assert twice == {"reason": "DUPLICATE_LINE"}
 
 
 async def test_who_returns_what_and_from_where(maker):
@@ -310,7 +315,11 @@ async def test_who_returns_what_and_from_where(maker):
     # Never from a «Брак»: a unit there goes back from «Брак».
     bin_ = await give_bin(maker, shops.organization_id, shops.primary_store)
     from_bin = await send(maker, shops, document(shops, supplier_id, line, location=bin_))
-    assert from_bin.json()["details"]["reason"] == "FROM_DAMAGED"
+    assert from_bin.json()["details"] == {
+        "reason": "FROM_DAMAGED",
+        "location_id": str(bin_),
+        "recorded": False,
+    }
     # Not to another network's supplier.
     foreign = await make_two_shops(maker)
     theirs = (await supplier(maker, foreign, "Чужий")).json()["id"]

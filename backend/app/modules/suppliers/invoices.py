@@ -39,6 +39,7 @@ from app.core.errors import (
     NotFoundError,
     StoreNotTradingError,
     ValidationFailedError,
+    nothing_recorded,
 )
 from app.core.logging import get_logger
 from app.modules.audit import service as audit
@@ -339,69 +340,75 @@ async def record_invoice(
             "This command_id was already used with a different request",
             command_id=str(command_id),
         )
-    await hold_trading_stores(session, organization_id=scope.organization_id, store_ids={store_id})
-    supplier = await session.scalar(
-        select(Supplier).where(
-            Supplier.id == supplier_id, Supplier.organization_id == scope.organization_id
+    # Under the command's lock, and nothing recorded under it: every refusal
+    # from here on proves this invoice recorded nothing, and says so, so a
+    # phone that never heard its answer can settle it (ADR-0013 §1).
+    with nothing_recorded():
+        await hold_trading_stores(
+            session, organization_id=scope.organization_id, store_ids={store_id}
         )
-    )
-    if supplier is None:
-        raise NotFoundError("Unknown supplier", supplier_id=str(supplier_id))
-    invoice = SupplierInvoice(
-        organization_id=scope.organization_id,
-        store_id=store_id,
-        supplier_id=supplier.id,
-        amount=total,
-        currency_code=currency_code,
-        note=remark,
-        created_by_user_id=scope.user_id,
-        command_id=command_id,
-        command_fingerprint=fingerprint,
-        correlation_id=correlation_id,
-        stock_lot_id=sold.stock_lot_id if sold else None,
-        lot_quantity=sold.quantity if sold else None,
-        lot_label=sold.label if sold else None,
-    )
-    session.add(invoice)
-    await session.flush()
-    if paid > ZERO:
-        session.add(
-            SupplierInvoiceEntry(
-                organization_id=scope.organization_id,
-                invoice_id=invoice.id,
-                kind=InvoiceEntryKind.PAYMENT.value,
-                amount=paid,
-                # The first payment is the invoice's own command.
-                command_id=command_id,
-                command_fingerprint=fingerprint,
-                actor_user_id=scope.user_id,
-                correlation_id=correlation_id,
+        supplier = await session.scalar(
+            select(Supplier).where(
+                Supplier.id == supplier_id, Supplier.organization_id == scope.organization_id
             )
         )
+        if supplier is None:
+            raise NotFoundError("Unknown supplier", supplier_id=str(supplier_id))
+        invoice = SupplierInvoice(
+            organization_id=scope.organization_id,
+            store_id=store_id,
+            supplier_id=supplier.id,
+            amount=total,
+            currency_code=currency_code,
+            note=remark,
+            created_by_user_id=scope.user_id,
+            command_id=command_id,
+            command_fingerprint=fingerprint,
+            correlation_id=correlation_id,
+            stock_lot_id=sold.stock_lot_id if sold else None,
+            lot_quantity=sold.quantity if sold else None,
+            lot_label=sold.label if sold else None,
+        )
+        session.add(invoice)
         await session.flush()
-    _settle_if_paid(invoice, money(total - paid))
-    await session.flush()
-    await audit.record(
-        session,
-        organization_id=scope.organization_id,
-        actor_user_id=scope.user_id,
-        action="supplier.invoice_recorded",
-        entity_type="supplier_invoice",
-        entity_id=invoice.id,
-        after={
-            "supplier_id": str(supplier.id),
-            "amount": str(total),
-            "paid_now": str(paid),
-        }
-        | (
-            {"stock_lot_id": str(sold.stock_lot_id), "lot_quantity": sold.quantity}
-            if sold is not None
-            else {}
-        ),
-        reason=remark,
-    )
-    logger.info("supplier.invoice_recorded", invoice_id=str(invoice.id), store_id=str(store_id))
-    return await view(session, invoice)
+        if paid > ZERO:
+            session.add(
+                SupplierInvoiceEntry(
+                    organization_id=scope.organization_id,
+                    invoice_id=invoice.id,
+                    kind=InvoiceEntryKind.PAYMENT.value,
+                    amount=paid,
+                    # The first payment is the invoice's own command.
+                    command_id=command_id,
+                    command_fingerprint=fingerprint,
+                    actor_user_id=scope.user_id,
+                    correlation_id=correlation_id,
+                )
+            )
+            await session.flush()
+        _settle_if_paid(invoice, money(total - paid))
+        await session.flush()
+        await audit.record(
+            session,
+            organization_id=scope.organization_id,
+            actor_user_id=scope.user_id,
+            action="supplier.invoice_recorded",
+            entity_type="supplier_invoice",
+            entity_id=invoice.id,
+            after={
+                "supplier_id": str(supplier.id),
+                "amount": str(total),
+                "paid_now": str(paid),
+            }
+            | (
+                {"stock_lot_id": str(sold.stock_lot_id), "lot_quantity": sold.quantity}
+                if sold is not None
+                else {}
+            ),
+            reason=remark,
+        )
+        logger.info("supplier.invoice_recorded", invoice_id=str(invoice.id), store_id=str(store_id))
+        return await view(session, invoice)
 
 
 # --- what lowers it ---------------------------------------------------------
@@ -474,43 +481,49 @@ async def pay(
     )
     if replay is not None:
         return replay
-    await _paying_store(session, scope=scope, invoice=invoice, at_store_id=at_store_id)
-    _still_owed(invoice)
-    owed = await _owed(session, invoice)
-    if paid > owed:
-        raise ValidationFailedError("More than is owed", reason="MORE_THAN_OWED", owed=str(owed))
-    session.add(
-        SupplierInvoiceEntry(
-            organization_id=scope.organization_id,
-            invoice_id=invoice.id,
-            kind=InvoiceEntryKind.PAYMENT.value,
-            amount=paid,
-            command_id=command_id,
-            command_fingerprint=fingerprint,
-            actor_user_id=scope.user_id,
-            paid_at_store_id=paying if elsewhere else None,
-            correlation_id=correlation_id,
+    # Under the invoice's lock, and nothing recorded under this command: every
+    # refusal from here on proves it recorded nothing, and says so (ADR-0013
+    # §1).
+    with nothing_recorded():
+        await _paying_store(session, scope=scope, invoice=invoice, at_store_id=at_store_id)
+        _still_owed(invoice)
+        owed = await _owed(session, invoice)
+        if paid > owed:
+            raise ValidationFailedError(
+                "More than is owed", reason="MORE_THAN_OWED", owed=str(owed)
+            )
+        session.add(
+            SupplierInvoiceEntry(
+                organization_id=scope.organization_id,
+                invoice_id=invoice.id,
+                kind=InvoiceEntryKind.PAYMENT.value,
+                amount=paid,
+                command_id=command_id,
+                command_fingerprint=fingerprint,
+                actor_user_id=scope.user_id,
+                paid_at_store_id=paying if elsewhere else None,
+                correlation_id=correlation_id,
+            )
         )
-    )
-    await session.flush()
-    _settle_if_paid(invoice, money(owed - paid))
-    await session.flush()
-    await audit.record(
-        session,
-        organization_id=scope.organization_id,
-        actor_user_id=scope.user_id,
-        action="supplier.invoice_paid",
-        entity_type="supplier_invoice",
-        entity_id=invoice.id,
-        before={"owed": str(owed)},
-        after={
-            "owed": str(money(owed - paid)),
-            "paid": str(paid),
-            **({"paid_at_store_id": str(paying)} if elsewhere else {}),
-        },
-    )
-    logger.info("supplier.invoice_paid", invoice_id=str(invoice.id), paid_at=str(paying))
-    return await view(session, invoice)
+        await session.flush()
+        _settle_if_paid(invoice, money(owed - paid))
+        await session.flush()
+        await audit.record(
+            session,
+            organization_id=scope.organization_id,
+            actor_user_id=scope.user_id,
+            action="supplier.invoice_paid",
+            entity_type="supplier_invoice",
+            entity_id=invoice.id,
+            before={"owed": str(owed)},
+            after={
+                "owed": str(money(owed - paid)),
+                "paid": str(paid),
+                **({"paid_at_store_id": str(paying)} if elsewhere else {}),
+            },
+        )
+        logger.info("supplier.invoice_paid", invoice_id=str(invoice.id), paid_at=str(paying))
+        return await view(session, invoice)
 
 
 async def set_off(
@@ -543,78 +556,84 @@ async def set_off(
     )
     if replay is not None:
         return replay
-    await hold_trading_stores(
-        session, organization_id=scope.organization_id, store_ids={invoice.store_id}
-    )
-    # Shared, so a cancellation of the return — which takes it for update —
-    # waits for this one, and then finds the set-off standing.
-    returned = await session.scalar(
-        select(SupplierReturn)
-        .where(
-            SupplierReturn.id == supplier_return_id,
-            SupplierReturn.organization_id == scope.organization_id,
+    # Under the invoice's lock, and nothing recorded under this command: every
+    # refusal from here on proves it recorded nothing, and says so (ADR-0013
+    # §1).
+    with nothing_recorded():
+        await hold_trading_stores(
+            session, organization_id=scope.organization_id, store_ids={invoice.store_id}
         )
-        .with_for_update(read=True)
-    )
-    if returned is None or returned.store_id != invoice.store_id:
-        raise NotFoundError(
-            "Unknown return to a supplier", supplier_return_id=str(supplier_return_id)
+        # Shared, so a cancellation of the return — which takes it for update —
+        # waits for this one, and then finds the set-off standing.
+        returned = await session.scalar(
+            select(SupplierReturn)
+            .where(
+                SupplierReturn.id == supplier_return_id,
+                SupplierReturn.organization_id == scope.organization_id,
+            )
+            .with_for_update(read=True)
         )
-    if returned.supplier_id != invoice.supplier_id:
-        raise ValidationFailedError(
-            "Goods returned to another supplier are not counted here",
-            reason="OTHER_SUPPLIER",
-            supplier_return_id=str(returned.id),
-        )
-    if (
-        await session.scalar(
-            select(SupplierReturnCancel.id).where(
-                SupplierReturnCancel.supplier_return_id == returned.id
+        if returned is None or returned.store_id != invoice.store_id:
+            raise NotFoundError(
+                "Unknown return to a supplier", supplier_return_id=str(supplier_return_id)
+            )
+        if returned.supplier_id != invoice.supplier_id:
+            raise ValidationFailedError(
+                "Goods returned to another supplier are not counted here",
+                reason="OTHER_SUPPLIER",
+                supplier_return_id=str(returned.id),
+            )
+        if (
+            await session.scalar(
+                select(SupplierReturnCancel.id).where(
+                    SupplierReturnCancel.supplier_return_id == returned.id
+                )
+            )
+            is not None
+        ):
+            raise ValidationFailedError(
+                "That return was cancelled: its goods came back",
+                reason="RETURN_CANCELLED",
+                supplier_return_id=str(returned.id),
+            )
+        _still_owed(invoice)
+        owed = await _owed(session, invoice)
+        if counted > owed:
+            raise ValidationFailedError(
+                "More than is owed", reason="MORE_THAN_OWED", owed=str(owed)
+            )
+        session.add(
+            SupplierInvoiceEntry(
+                organization_id=scope.organization_id,
+                invoice_id=invoice.id,
+                kind=InvoiceEntryKind.SET_OFF.value,
+                amount=counted,
+                supplier_return_id=returned.id,
+                command_id=command_id,
+                command_fingerprint=fingerprint,
+                actor_user_id=scope.user_id,
+                correlation_id=correlation_id,
             )
         )
-        is not None
-    ):
-        raise ValidationFailedError(
-            "That return was cancelled: its goods came back",
-            reason="RETURN_CANCELLED",
-            supplier_return_id=str(returned.id),
-        )
-    _still_owed(invoice)
-    owed = await _owed(session, invoice)
-    if counted > owed:
-        raise ValidationFailedError("More than is owed", reason="MORE_THAN_OWED", owed=str(owed))
-    session.add(
-        SupplierInvoiceEntry(
+        await session.flush()
+        _settle_if_paid(invoice, money(owed - counted))
+        await session.flush()
+        await audit.record(
+            session,
             organization_id=scope.organization_id,
-            invoice_id=invoice.id,
-            kind=InvoiceEntryKind.SET_OFF.value,
-            amount=counted,
-            supplier_return_id=returned.id,
-            command_id=command_id,
-            command_fingerprint=fingerprint,
             actor_user_id=scope.user_id,
-            correlation_id=correlation_id,
+            action="supplier.invoice_set_off",
+            entity_type="supplier_invoice",
+            entity_id=invoice.id,
+            before={"owed": str(owed)},
+            after={
+                "owed": str(money(owed - counted)),
+                "set_off": str(counted),
+                "supplier_return_id": str(returned.id),
+            },
         )
-    )
-    await session.flush()
-    _settle_if_paid(invoice, money(owed - counted))
-    await session.flush()
-    await audit.record(
-        session,
-        organization_id=scope.organization_id,
-        actor_user_id=scope.user_id,
-        action="supplier.invoice_set_off",
-        entity_type="supplier_invoice",
-        entity_id=invoice.id,
-        before={"owed": str(owed)},
-        after={
-            "owed": str(money(owed - counted)),
-            "set_off": str(counted),
-            "supplier_return_id": str(returned.id),
-        },
-    )
-    logger.info("supplier.invoice_set_off", invoice_id=str(invoice.id))
-    return await view(session, invoice)
+        logger.info("supplier.invoice_set_off", invoice_id=str(invoice.id))
+        return await view(session, invoice)
 
 
 async def write_off(
@@ -650,37 +669,41 @@ async def write_off(
     )
     if replay is not None:
         return replay
-    _still_owed(invoice)
-    owed = await _owed(session, invoice)
-    session.add(
-        SupplierInvoiceEntry(
-            organization_id=scope.organization_id,
-            invoice_id=invoice.id,
-            kind=InvoiceEntryKind.WRITE_OFF.value,
-            amount=owed,
-            command_id=command_id,
-            command_fingerprint=fingerprint,
-            actor_user_id=scope.user_id,
-            note=why,
-            correlation_id=correlation_id,
+    # Under the invoice's lock, and nothing recorded under this command: every
+    # refusal from here on proves it recorded nothing, and says so (ADR-0013
+    # §1).
+    with nothing_recorded():
+        _still_owed(invoice)
+        owed = await _owed(session, invoice)
+        session.add(
+            SupplierInvoiceEntry(
+                organization_id=scope.organization_id,
+                invoice_id=invoice.id,
+                kind=InvoiceEntryKind.WRITE_OFF.value,
+                amount=owed,
+                command_id=command_id,
+                command_fingerprint=fingerprint,
+                actor_user_id=scope.user_id,
+                note=why,
+                correlation_id=correlation_id,
+            )
         )
-    )
-    invoice.status = InvoiceStatus.WRITTEN_OFF.value
-    invoice.closed_at = datetime.now(tz=UTC)
-    await session.flush()
-    await audit.record(
-        session,
-        organization_id=scope.organization_id,
-        actor_user_id=scope.user_id,
-        action="supplier.invoice_written_off",
-        entity_type="supplier_invoice",
-        entity_id=invoice.id,
-        before={"owed": str(owed)},
-        after={"owed": "0.00"},
-        reason=why,
-    )
-    logger.info("supplier.invoice_written_off", invoice_id=str(invoice.id))
-    return await view(session, invoice)
+        invoice.status = InvoiceStatus.WRITTEN_OFF.value
+        invoice.closed_at = datetime.now(tz=UTC)
+        await session.flush()
+        await audit.record(
+            session,
+            organization_id=scope.organization_id,
+            actor_user_id=scope.user_id,
+            action="supplier.invoice_written_off",
+            entity_type="supplier_invoice",
+            entity_id=invoice.id,
+            before={"owed": str(owed)},
+            after={"owed": "0.00"},
+            reason=why,
+        )
+        logger.info("supplier.invoice_written_off", invoice_id=str(invoice.id))
+        return await view(session, invoice)
 
 
 # --- what was recorded by mistake -------------------------------------------
