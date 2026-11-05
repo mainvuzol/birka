@@ -3,7 +3,7 @@ import type { Backups } from "@/backups/types";
 import { timeOf } from "@/cash/errors";
 import { plural } from "@/openings/types";
 import type { Store } from "@/orders/types";
-import { useDebts, useStockLists } from "@/today/reads";
+import { listsWaiting, useDebts, useStockLists } from "@/today/reads";
 
 /**
  * The lines under «Ще»'s rows (spec S07; «Усе на бірці» task list, P1-5):
@@ -47,14 +47,16 @@ export function DebtsLine({
   );
 }
 
-/** The lists waiting to be approved, and whether more lists were left
- * unread past the read's hundred. */
-export type Awaiting = { waiting: number; more: boolean } | "reading" | null;
+/** The lists waiting on this person — to approve, to finish — and whether
+ * more lists were left unread past the read's hundred. */
+export type Awaiting =
+  { approve: number; finish: number; more: boolean } | "reading" | null;
 
-/** How many lists of existing stock wait to be approved in the open store
- * — a list of a warehouse two stores share waits in the store that keeps
- * it — where this person approves them (`snapshot:approve`); null while
- * none is known. */
+/** How many lists of existing stock wait on this person in the open store
+ * (stage 2, admin task list, P0-1): ready, where they approve them
+ * (`snapshot:approve`); not ready yet, where they make them
+ * (`snapshot:import`) — a list of a warehouse two stores share waits in the
+ * store that keeps it; null while none is known. */
 export function useAwaitingApproval(
   store: Store,
   token: string,
@@ -63,18 +65,18 @@ export function useAwaitingApproval(
   const lists = useStockLists(token, scopeKey, [store]).get(store.id);
   if (lists === undefined || lists.isError) return null;
   if (lists.isPending) return "reading";
+  const waiting = listsWaiting(store, lists.data.items);
   return {
-    waiting: lists.data.items.filter(
-      (list) => list.status === "IN_REVIEW" && list.store_id === store.id,
-    ).length,
+    approve: waiting.approve.length,
+    finish: waiting.finish.length,
     more: lists.data.has_more,
   };
 }
 
-/** «2 на затвердження»: «Початкові залишки»'s, and «Товар і каталог»'s
- * that holds it; «2+» when more lists were left unread (as «Сьогодні»'s
- * parcels say theirs); nothing while none is known to wait. `then`, what
- * follows it. */
+/** «1 на затвердження · 1 доробити»: «Початкові залишки»'s, and «Товар і
+ * каталог»'s that holds it; «2+» when more lists were left unread (as
+ * «Сьогодні»'s parcels say theirs); nothing while none is known to wait.
+ * `then`, what follows it. */
 export function ApprovalsLine({
   count,
   then,
@@ -83,13 +85,30 @@ export function ApprovalsLine({
   then?: string;
 }): JSX.Element | null {
   if (count === "reading") return <Reading />;
-  if (count === null || count.waiting === 0)
+  const more = count !== null && count.more ? "+" : "";
+  const parts =
+    count === null
+      ? []
+      : (
+          [
+            [count.approve, "на затвердження"],
+            [count.finish, "доробити"],
+          ] as const
+        )
+          .filter(([n]) => n > 0)
+          .map(([n, what]) => `${String(n)}${more} ${what}`);
+  if (parts.length === 0)
     return then === undefined ? null : (
       <span className="more-meta">{then}</span>
     );
   return (
     <span className="more-meta">
-      <span className="more-count">{`${String(count.waiting)}${count.more ? "+" : ""} на затвердження`}</span>
+      {parts.map((part, at) => (
+        <span key={part}>
+          {at > 0 && " · "}
+          <span className="more-count">{part}</span>
+        </span>
+      ))}
       {then !== undefined && ` · ${then}`}
     </span>
   );

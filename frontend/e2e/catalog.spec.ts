@@ -285,10 +285,10 @@ test("catalog navigation requires catalog permission", async ({ page }) => {
   const catalogue = page
     .getByRole("navigation", { name: "Ще" })
     .getByRole("button", { name: /^Товар і каталог/ });
-  // After the lists waiting to be approved, as many as the shared
-  // database holds (P1-5).
+  // After the lists waiting to be approved and to be finished, as many as
+  // the shared database holds (P1-5; stage 2, admin task list, P0-1).
   await expect(catalogue.locator(".more-meta")).toHaveText(
-    /^(\d+\+? на затвердження · )?моделі, початкові залишки$/,
+    /^(\d+\+? на затвердження · )?(\d+\+? доробити · )?моделі, початкові залишки$/,
   );
   await catalogue.click();
   await expect(

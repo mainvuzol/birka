@@ -1,71 +1,145 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { JSX } from "react";
+import { Eyelet } from "@/shared/Eyelet";
 import { NoCustomerData } from "@/shared/NoCustomerData";
-import { CARRIED_TAP, usePanelRoom } from "@/shared/panel";
-import { Back } from "@/shared/Back";
-import { ScreenHeader } from "@/shared/ScreenHeader";
-import { hideKeyboard } from "@/shared/telegram";
+import { CARRIED_TAP } from "@/shared/panel";
+import { Sheet } from "@/shared/Sheet";
+import {
+  hideKeyboard,
+  useAskBeforeClosing,
+  useMainButton,
+} from "@/shared/telegram";
+import { titleOf } from "./Orders";
 import { WhereTo } from "./WhereTo";
 import type { Carrier, Destination, Order } from "./types";
 
 /**
  * Where an open order goes, as it should stand: corrected, or its waybill
- * written later (owner decisions, 2026-10-01) — its own step, as a new
- * order says it (orders task list, P1-3): «По Україні» or «За кордон» by a
- * switch, the carrier by a chip, the waybill or abroad where and how it
- * went, and «Зберегти доставку» under the thumb. Every earlier version
- * stays in its history. Opened to write the waybill, the cursor is in it.
+ * written later (owner decisions, 2026-10-01) — a sheet over its card
+ * (stage 2, orders task list, P1-1), as «Відправити» is: the order in a
+ * line, where it goes by one row of chips with the current one chosen, the
+ * waybill or abroad where and how it went, and «Зберегти доставку»,
+ * Telegram's MainButton or the sheet's own. Every earlier version stays in
+ * its history. Opened to write the waybill, the cursor is in it. Refused,
+ * why over what was typed; Telegram asks before closing while anything was
+ * changed; its «Назад» closes the sheet.
  */
 export function Shipping({
   order,
-  title,
   writing,
   blocked,
-  back,
+  waiting,
+  refusal,
   save,
+  close,
 }: {
   order: Order;
-  /** The order as its card's title says it. */
-  title: string;
   /** Opened by «ТТН ще немає — вписати». */
   writing: boolean;
   blocked: boolean;
-  /** «← Замовлення». */
-  back: () => void;
+  /** «Зберегти доставку» is being asked: the button turns. */
+  waiting: boolean;
+  /** Why it was refused. */
+  refusal: string | null;
   save: (shipping: Record<string, unknown>) => void;
+  close: () => void;
 }): JSX.Element {
+  const meta = useId();
   const hint = useId();
-  const [destination, setDestination] = useState<Destination>(
-    order.destination ?? "UKRAINE",
-  );
-  const [carrier, setCarrier] = useState<Carrier | "">(order.carrier ?? "");
-  const [waybill, setWaybill] = useState(order.waybill ?? "");
-  const [note, setNote] = useState(order.abroad_note ?? "");
-  // The panel's room kept first, so the field in focus is brought over it.
-  const panel = useRef<HTMLDivElement>(null);
-  usePanelRoom(panel, true);
-  const heading = useRef<HTMLHeadingElement>(null);
-  const field = useRef<HTMLInputElement>(null);
+  // As it stands now: Telegram asks before closing once any of it changed.
+  const [was] = useState<{
+    destination: Destination;
+    carrier: Carrier | "";
+    waybill: string;
+    note: string;
+  }>(() => ({
+    destination: order.destination ?? "UKRAINE",
+    carrier: order.carrier ?? "",
+    waybill: order.waybill ?? "",
+    note: order.abroad_note ?? "",
+  }));
+  const [destination, setDestination] = useState<Destination>(was.destination);
+  const [carrier, setCarrier] = useState<Carrier | "">(was.carrier);
+  const [waybill, setWaybill] = useState(was.waybill);
+  const [note, setNote] = useState(was.note);
+  // The cursor in the field as the sheet rises, only then: a chip tapped
+  // later raises no keyboard.
+  const [focusField, setFocusField] = useState(writing);
+  // Why it was refused, brought to the finger: the keyboard put away to
+  // read it, what was typed kept.
+  const why = useRef<HTMLParagraphElement>(null);
   useEffect(() => {
-    if (writing) field.current?.focus();
-    else heading.current?.focus();
-  }, [writing]);
-  // Opened from the card's foot, «Зберегти доставку» may stand where the
-  // row was tapped: a second tap landing on it is let go (review,
-  // 2026-10-25).
-  const [shownAt] = useState(() => performance.now());
+    if (refusal !== null) why.current?.focus();
+  }, [refusal]);
   const noCarrier = destination === "UKRAINE" && carrier === "";
+  useAskBeforeClosing(
+    destination !== was.destination ||
+      carrier !== was.carrier ||
+      waybill !== was.waybill ||
+      note !== was.note,
+  );
+  function press(): void {
+    if (blocked || noCarrier || waiting) return;
+    hideKeyboard();
+    save(
+      destination === "UKRAINE"
+        ? {
+            destination,
+            carrier,
+            ...(waybill.trim() ? { waybill: waybill.trim() } : {}),
+          }
+        : {
+            destination,
+            ...(note.trim() ? { abroad_note: note.trim() } : {}),
+          },
+    );
+  }
+  const words = noCarrier ? "Оберіть перевізника" : "Зберегти доставку";
+  // Telegram's button stands where the card's was: the second tap of the
+  // press that opened the sheet is let go, as the sheet lets its own
+  // (review, 2026-10-25).
+  const [openedAt] = useState(() => performance.now());
+  const main = useMainButton(
+    words,
+    () => {
+      if (performance.now() - openedAt >= CARRIED_TAP) press();
+    },
+    { progress: waiting, active: !blocked && !noCarrier },
+  );
   return (
-    <>
-      <ScreenHeader
-        ref={heading}
-        focusable
-        title="Доставка"
-        back={
-          <Back go={back}>← Замовлення</Back>
-        }
-      />
-      <section className="order-shipping">
+    <Sheet
+      title="Доставка"
+      close={close}
+      said={meta}
+      foot={
+        main ? undefined : (
+          <button
+            type="button"
+            className="sheet-done main-mimic"
+            disabled={blocked || noCarrier}
+            onClick={press}
+          >
+            {waiting ? (
+              <>
+                <Eyelet state="spin" size={20} />
+                <span className="visually-hidden">{words}</span>
+              </>
+            ) : (
+              words
+            )}
+          </button>
+        )
+      }
+    >
+      <div className="shipping-sheet">
+        <p className="t-meta send-parcel" id={meta}>
+          {titleOf(order)}
+        </p>
+        {refusal !== null && (
+          <p role="alert" ref={why} tabIndex={-1}>
+            {refusal}
+          </p>
+        )}
         <fieldset disabled={blocked}>
           <WhereTo
             destination={destination}
@@ -74,22 +148,26 @@ export function Shipping({
             change={(nextDestination, nextCarrier) => {
               setDestination(nextDestination);
               setCarrier(nextCarrier);
+              setFocusField(false);
             }}
           />
           {destination === "UKRAINE" ? (
-            <label>
+            <label className="send-field">
               Номер ТТН
               <input
-                ref={field}
+                // «ТТН ще немає — вписати»: the keyboard rises with the
+                // sheet (spec §4.4, rule 5).
+                autoFocus={focusField}
+                className="ttn"
                 value={waybill}
                 maxLength={64}
-                // The keyboard's «Готово» puts it away (stage 2, orders task
-                // list, P1-1).
+                autoComplete="off"
                 enterKeyHint="done"
                 onChange={(event) => {
                   setWaybill(event.target.value);
                 }}
                 onKeyDown={(event) => {
+                  // Enter puts the keyboard away; «Зберегти доставку» saves.
                   if (event.key !== "Enter") return;
                   event.preventDefault();
                   hideKeyboard();
@@ -97,9 +175,10 @@ export function Shipping({
               />
             </label>
           ) : (
-            <label>
+            <label className="send-field">
               Куди і як відправили: місто, країна, спосіб
               <textarea
+                autoFocus={focusField}
                 value={note}
                 maxLength={1000}
                 aria-describedby={hint}
@@ -111,33 +190,7 @@ export function Shipping({
             </label>
           )}
         </fieldset>
-        {/* Under the thumb: which order, and the one press, which says the
-            carrier first when none is chosen — as a new order's. */}
-        <div className="pay-panel order-panel" ref={panel}>
-          <p className="pay-what">{title}</p>
-          <button
-            type="button"
-            disabled={blocked || noCarrier}
-            onClick={(event) => {
-              if (event.timeStamp - shownAt < CARRIED_TAP) return;
-              save(
-                destination === "UKRAINE"
-                  ? {
-                      destination,
-                      carrier,
-                      ...(waybill.trim() ? { waybill: waybill.trim() } : {}),
-                    }
-                  : {
-                      destination,
-                      ...(note.trim() ? { abroad_note: note.trim() } : {}),
-                    },
-              );
-            }}
-          >
-            {noCarrier ? "Оберіть перевізника" : "Зберегти доставку"}
-          </button>
-        </div>
-      </section>
-    </>
+      </div>
+    </Sheet>
   );
 }

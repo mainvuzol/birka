@@ -6,7 +6,7 @@ import {
   section,
   tapSize,
 } from "./fixtures";
-import type { Page, Request } from "@playwright/test";
+import type { Locator, Page, Request } from "@playwright/test";
 import { createHmac, randomInt, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 
@@ -18,7 +18,8 @@ import { readFileSync } from "node:fs";
  * open, and every version stays. One waybill on two orders is saved, and
  * named; orders are found by it. Where it goes is its own step, its history
  * a row a version, the other order with its waybill its row (orders task
- * list, P1-3).
+ * list, P1-3) — a sheet over the card, one row of chips «Куди» (stage 2,
+ * orders task list, P1-1, P0-5).
  */
 interface Fixture {
   telegram_user_id: string;
@@ -108,23 +109,33 @@ async function draft(page: Page): Promise<void> {
   await fillLine(page, { price: "900" });
 }
 
-/** A carrier's chip (P0-5). */
+/** Where it goes: a carrier's chip, or «За кордон», of one row (stage 2,
+ * orders task list, P0-5). */
 async function carrier(page: Page, name: string): Promise<void> {
   await page
-    .getByRole("group", { name: "Перевізник" })
+    .getByRole("group", { name: "Куди" })
     .getByRole("button", { name, exact: true })
     .click();
 }
 
-/** «Замовити та зарезервувати», what it did read before the next step. */
+/** «Замовити та зарезервувати», what it did read before the next step: the
+ * reserve torn off as a stub (stage 2, orders task list, P1-3). */
 async function reserve(page: Page): Promise<void> {
   await page.getByRole("button", { name: "Замовити та зарезервувати" }).click();
   await expect(
-    page
-      .getByRole("status")
-      .filter({ hasText: /^Зарезервовано: 1 шт\. Чекає відправлення\.$/ }),
-  ).toBeVisible();
+    page.locator(".order-done .stub-recorded .stub-line").last(),
+  ).toHaveText("Зарезервовано: 1 шт. Чекає відправлення.");
   await readTheAnswer(page);
+}
+
+/** «Змінити доставку», or «ТТН ще немає — вписати»: its sheet over the card
+ * (stage 2, orders task list, P1-1). */
+async function shippingSheet(page: Page, row: string): Promise<Locator> {
+  await page.getByRole("button", { name: row, exact: true }).click();
+  const sheet = page.getByRole("dialog", { name: "Доставка" });
+  // The tap that opened it is let go for a moment.
+  await expect(sheet).toHaveAttribute("data-ready", "");
+  return sheet;
 }
 
 /** Where an order goes, as its own step (orders task list, P1-3): the
@@ -138,12 +149,17 @@ async function where(
     await page.getByLabel("Номер ТТН", { exact: true }).fill(to.waybill);
 }
 
-/** «Зберегти доставку», back on the card with what it did. A tap within
- * 0.7 s of the screen opening is taken as carried from the row (review,
- * 2026-10-25): a person's typing takes longer. */
+/** «Зберегти доставку», the sheet's one button outside Telegram, back on
+ * the card with what it did. A tap within 0.7 s of the sheet opening is
+ * taken as carried from the row (review, 2026-10-25): a person's typing
+ * takes longer. */
 async function saveShipping(page: Page): Promise<void> {
   await readTheAnswer(page);
-  await page.getByRole("button", { name: "Зберегти доставку" }).click();
+  await page
+    .getByRole("dialog", { name: "Доставка" })
+    .getByRole("button", { name: "Зберегти доставку" })
+    .click();
+  await expect(page.getByRole("dialog", { name: "Доставка" })).toHaveCount(0);
   await expect(
     page.getByRole("status").filter({ hasText: /^Доставку збережено$/ }),
   ).toBeVisible();
@@ -243,7 +259,7 @@ test("an order within Ukraine names its carrier, and its waybill when it is sent
   await draft(page);
   // No carrier yet: the press asks for one and sends nothing (orders task
   // list, P0-5).
-  const press = page.locator(".pay-panel").getByRole("button");
+  const press = page.locator(".order-tray .main-mimic");
   await expect(press).toHaveText("Оберіть перевізника");
   await expect(press).toBeDisabled();
   expect(made.bodies).toHaveLength(0);
@@ -286,8 +302,10 @@ test("an order abroad says where and how it went, in one line", async ({
   const sent = posts(page, /\/dispatch$/);
   await enter(page);
   await draft(page);
-  await page.getByRole("radio", { name: "За кордон", exact: true }).check();
-  await expect(page.getByRole("group", { name: "Перевізник" })).toHaveCount(0);
+  await carrier(page, "За кордон");
+  await expect(
+    page.getByRole("group", { name: "Куди" }).locator("[aria-pressed='true']"),
+  ).toHaveText(["За кордон"]);
   await expect(
     page.getByText("Куди і як відправили — впишете, коли відправите.", {
       exact: true,
@@ -335,48 +353,35 @@ test("where an order goes is corrected while it is open, as its own step, and ev
   await expect(
     page.getByRole("button", { name: "ТТН ще немає — вписати" }),
   ).toHaveCount(0);
-  await page
-    .getByRole("button", { name: "Змінити доставку", exact: true })
-    .click();
-  // Its own screen: its own way back, no card's step under the thumb, nor
-  // a field for the waybill but its own.
-  await expect(
-    page.getByRole("heading", { name: "Доставка", exact: true }),
-  ).toBeFocused();
-  await expect(
-    page.getByRole("button", { name: "← До замовлень" }),
-  ).toHaveCount(0);
-  await expect(
-    page.getByRole("button", { name: "Відправити", exact: true }),
-  ).toHaveCount(0);
+  // A sheet over the card (stage 2, orders task list, P1-1): the card
+  // behind it out of reach, the order in its line, the cursor in the sheet,
+  // no field for the waybill but its own.
+  const shipping = await shippingSheet(page, "Змінити доставку");
+  await expect(shipping).toBeFocused();
+  await expect(page.locator("#root")).toHaveAttribute("inert", "");
+  await expect(shipping.locator(".send-parcel")).toHaveText(/^Лоран/);
   await expect(
     page.getByLabel("Номер ТТН (можна дописати пізніше)"),
   ).toHaveCount(0);
-  await expect(page.locator(".pay-panel .pay-what")).toHaveText(/^Лоран/);
-  // As it stands: within Ukraine, by Нова пошта.
-  await expect(
-    page.getByRole("radio", { name: "По Україні", exact: true }),
-  ).toBeChecked();
-  await expect(
-    page
-      .getByRole("group", { name: "Перевізник" })
-      .getByRole("button", { name: "Нова пошта", exact: true }),
-  ).toHaveAttribute("aria-pressed", "true");
+  // As it stands: by Нова пошта, one chip of the row chosen.
+  const row = shipping.getByRole("group", { name: "Куди" });
+  await expect(row.locator("[aria-pressed='true']")).toHaveText(["Нова пошта"]);
+  await expect(shipping.getByLabel("Номер ТТН", { exact: true })).toHaveValue(
+    "",
+  );
   // Abroad: no carrier, where and how it went, never a customer's name.
-  await page.getByRole("radio", { name: "За кордон", exact: true }).check();
-  await expect(page.getByRole("group", { name: "Перевізник" })).toHaveCount(0);
+  await carrier(page, "За кордон");
+  await expect(row.locator("[aria-pressed='true']")).toHaveText(["За кордон"]);
+  await expect(shipping.getByLabel("Номер ТТН", { exact: true })).toHaveCount(
+    0,
+  );
   await expect(
-    page.getByRole("textbox", {
+    shipping.getByRole("textbox", {
       name: "Куди і як відправили: місто, країна, спосіб",
       exact: true,
     }),
   ).toHaveAccessibleDescription("Без імен і телефонів покупців.");
-  // Back within Ukraine, no carrier is chosen for the seller: the press
-  // asks for one and sends nothing.
-  await page.getByRole("radio", { name: "По Україні", exact: true }).check();
-  const press = page.locator(".pay-panel").getByRole("button");
-  await expect(press).toHaveText("Оберіть перевізника");
-  await expect(press).toBeDisabled();
+  // A carrier's chip: within Ukraine again, by it.
   await where(page, { carrier: "Міст", waybill: MEEST });
   await saveShipping(page);
   // Saved: back on the card as it now stands.
@@ -458,8 +463,8 @@ test("a waybill written after the parcel went: «ТТН ще немає — вп
     page.getByRole("button", { name: "Змінити доставку" }),
   ).toHaveCount(0);
   // Back without saving: nothing sent, the row in focus.
-  await write.click();
-  const waybill = page.getByLabel("Номер ТТН", { exact: true });
+  const shipping = await shippingSheet(page, "ТТН ще немає — вписати");
+  const waybill = shipping.getByLabel("Номер ТТН", { exact: true });
   await expect(waybill).toBeFocused();
   // The keyboard's «Готово» puts it away, nothing saved (stage 2, orders
   // task list, P1-1).
@@ -467,7 +472,10 @@ test("a waybill written after the parcel went: «ТТН ще немає — вп
   await waybill.press("Enter");
   await expect(waybill).not.toBeFocused();
   expect(changed.bodies).toHaveLength(0);
-  await page.getByRole("button", { name: "← Замовлення" }).click();
+  // Closed as any sheet is, by «Назад» (Escape here).
+  await shipping.focus();
+  await page.keyboard.press("Escape");
+  await expect(shipping).toHaveCount(0);
   await expect(write).toBeFocused();
   expect(changed.bodies).toHaveLength(0);
   // A tap, the number typed where the cursor already is, a tap: with the
@@ -513,9 +521,7 @@ test("where an order goes saved as it was: back on its card, and a tap carried f
       .filter({ hasText: new RegExp(`^Відправлено · ТТН ${SAVED}$`) }),
   ).toBeVisible();
   await readTheAnswer(page);
-  await page
-    .getByRole("button", { name: "Змінити доставку", exact: true })
-    .click();
+  await shippingSheet(page, "Змінити доставку");
   await saveShipping(page);
   // Nothing changed: no version added.
   expect(changed.bodies).toHaveLength(1);
@@ -598,10 +604,13 @@ test("a correction whose answer is lost is resent unchanged", async ({
   await draft(page);
   await carrier(page, "Нова пошта");
   await reserve(page);
-  await page.getByRole("button", { name: "Змінити доставку" }).click();
+  await shippingSheet(page, "Змінити доставку");
   await where(page, { carrier: "Укрпошта", waybill: "20451111" });
   await readTheAnswer(page);
-  await page.getByRole("button", { name: "Зберегти доставку" }).click();
+  await page
+    .getByRole("dialog", { name: "Доставка" })
+    .getByRole("button", { name: "Зберегти доставку" })
+    .click();
   await expect(
     page.getByRole("button", { name: "Перевірити результат замовлення" }),
   ).toBeEnabled();

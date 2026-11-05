@@ -685,10 +685,10 @@ test("«Моделі» is the owner's and managers' alone", async ({ page }) => 
   const catalogue = page
     .getByRole("navigation", { name: "Ще" })
     .getByRole("button", { name: /^Товар і каталог/ });
-  // After the lists waiting to be approved, as many as the shared
-  // database holds (P1-5).
+  // After the lists waiting to be approved and to be finished, as many as
+  // the shared database holds (P1-5; stage 2, admin task list, P0-1).
   await expect(catalogue.locator(".more-meta")).toHaveText(
-    /^(\d+\+? на затвердження · )?перевірка, початкові залишки$/,
+    /^(\d+\+? на затвердження · )?(\d+\+? доробити · )?перевірка, початкові залишки$/,
   );
   await catalogue.click();
   await expect(

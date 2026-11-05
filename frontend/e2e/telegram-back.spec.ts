@@ -167,21 +167,17 @@ test("an order's card and the step over it show Telegram's «Назад»; press
   await expect(card).toBeVisible();
   await expect.poll(() => backs(page)).toEqual([true]);
 
-  // The step over the card: its own «←», and Telegram's never blinks
-  // between the two.
+  // The step over the card, a sheet (stage 2, orders task list, P1-1):
+  // Telegram's «Назад» never blinks as it rises.
   await page.getByRole("button", { name: "Змінити доставку" }).click();
-  await expect(
-    page.getByRole("button", { name: "← Замовлення" }),
-  ).toBeVisible();
-  await expect(card).toBeHidden();
+  const shipping = page.getByRole("dialog", { name: "Доставка" });
+  await expect(shipping).toBeVisible();
   expect(await backs(page)).toEqual([true]);
 
-  // «Назад»: the step's «← Замовлення», the card again.
+  // «Назад»: the sheet closed, the card again.
   await pressBack(page);
+  await expect(shipping).toHaveCount(0);
   await expect(card).toBeVisible();
-  await expect(page.getByRole("button", { name: "← Замовлення" })).toHaveCount(
-    0,
-  );
   expect(await backs(page)).toEqual([true]);
 
   // «Назад» again: the card's «← До замовлень», the list, and Telegram's

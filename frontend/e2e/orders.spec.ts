@@ -1,7 +1,10 @@
 import {
   test,
   expect,
+  basketDone,
+  basketSheet,
   fillLine,
+  menu,
   openStore,
   section,
   tapSize,
@@ -81,7 +84,7 @@ async function draft(page: Page): Promise<void> {
   await tapSize(page, fixture.variant_id, fixture.size_id, fixture.location_id);
   await fillLine(page, { price: "1200,15" });
   await page
-    .getByRole("group", { name: "Перевізник" })
+    .getByRole("group", { name: "Куди" })
     .getByRole("button", { name: "Нова пошта", exact: true })
     .click();
 }
@@ -111,14 +114,13 @@ async function send(page: Page): Promise<void> {
   await sending.getByRole("button", { name: "Відправлено" }).click();
 }
 /** «Замовити та зарезервувати», what it did read before the next step
- * (orders task list, P0-5). */
+ * (orders task list, P0-5): the reserve torn off as a stub (stage 2, orders
+ * task list, P1-3). */
 async function reserve(page: Page): Promise<void> {
   await page.getByRole("button", { name: "Замовити та зарезервувати" }).click();
   await expect(
-    page
-      .getByRole("status")
-      .filter({ hasText: /^Зарезервовано: 1 шт\. Чекає відправлення\.$/ }),
-  ).toBeVisible();
+    page.locator(".order-done .stub-recorded .stub-line").last(),
+  ).toHaveText("Зарезервовано: 1 шт. Чекає відправлення.");
   await readTheAnswer(page);
 }
 
@@ -446,11 +448,9 @@ test("uncertain command stays blocked after access denial, then reconciles", asy
   await expect(retry).toBeEnabled();
   await retry.click();
   await expect(page.getByRole("alert")).toContainText("Немає доступу");
-  // Every other section held, «Замовлення» too (navigation task list,
-  // P0-2; «Усе на бірці» task list, P0-4).
-  await expect(
-    page.getByRole("button", { name: "Замовлення", exact: true }),
-  ).toBeDisabled();
+  // A task screen: the menu, every other section held, steps aside
+  // (stage 2, orders task list, P0-5; В-ЗП6 (а)).
+  await expect(menu(page)).toBeHidden();
   await expect(retry).toBeEnabled();
   await retry.click();
   await expect(page.locator(".order-context")).toBeVisible();
@@ -479,11 +479,16 @@ test("first definitive rejection leaves draft editable", async ({
   await expect(page.getByRole("alert")).toHaveText(
     "Не записано: дані замовлення змінилися, поки ви працювали. Перевірте замовлення й спробуйте ще раз.",
   );
-  await expect(page.locator(".order-lines .line")).toHaveCount(1);
-  await expect(page.getByLabel("Ціна, грн")).toHaveValue("1200,15");
+  await expect(page.locator(".order-tray .tray-count")).toHaveText(
+    "У замовленні · 1",
+  );
+  const lines = (await basketSheet(page)).locator(".line");
+  await expect(lines).toHaveCount(1);
+  await expect(lines.getByLabel("Ціна, грн")).toHaveValue("1200,15");
+  await basketDone(page);
   await expect(
     page
-      .getByRole("group", { name: "Перевізник" })
+      .getByRole("group", { name: "Куди" })
       .getByRole("button", { name: "Нова пошта" }),
   ).toHaveAttribute("aria-pressed", "true");
   await expect(

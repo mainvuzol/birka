@@ -347,6 +347,15 @@ async function sheet(page: Page, name: string): Promise<Locator> {
   return dialog;
 }
 
+/** «Змінити доставку» or «ТТН ще немає — вписати»: the sheet «Доставка»
+ * over the card (stage 2, orders task list, P1-1). */
+async function shipping(page: Page, row: string): Promise<Locator> {
+  await page.getByRole("button", { name: row, exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Доставка", exact: true });
+  await expect(dialog).toBeVisible();
+  return dialog;
+}
+
 /** «Відправити» by the MainButton, its waybill typed, and «Відправлено». */
 async function send(page: Page, waybill?: string): Promise<void> {
   await pressMain(page, "Відправити");
@@ -559,21 +568,20 @@ test("outside Telegram the MainButton is the dock's one button under the thumb, 
     );
   const height = (await panel(page).boundingBox())?.height ?? 0;
   expect(Math.abs(parseFloat(await room()) - height)).toBeLessThanOrEqual(1);
-  // Where it goes changed: its own screen, its own press under the thumb
-  // and its room kept (review, 2026-10-23; orders task list, P1-3).
-  await page.getByRole("button", { name: "Змінити доставку" }).click();
-  await expect(panel(page).getByRole("button")).toHaveText("Зберегти доставку");
-  await expect
-    .poll(async () =>
-      Math.abs(
-        parseFloat(await room()) -
-          ((await panel(page).boundingBox())?.height ?? 0),
-      ),
-    )
-    .toBeLessThanOrEqual(1);
-  // Back: the card's press and its room, the row that opened it in focus.
-  await page.getByRole("button", { name: "← Замовлення" }).click();
+  // Where it goes changed: a sheet over the card, its own press at the
+  // sheet's foot in reach (stage 2, orders task list, P1-1).
+  const changing = await shipping(page, "Змінити доставку");
+  const save = changing.locator(".sheet-foot").getByRole("button");
+  await expect(save).toHaveText("Зберегти доставку");
+  await expect(save).toBeInViewport({ ratio: 1 });
+  // Closed by «Назад» (Escape here): the card's press and its room, the
+  // row that opened it in focus.
+  await expect(changing).toHaveAttribute("data-ready", "");
+  await page.keyboard.press("Escape");
+  await expect(changing).toHaveCount(0);
   await expect(step).toBeVisible();
+  // Its press let go a moment, as after any sheet over the card.
+  await readTheAnswer(page);
   await expect
     .poll(async () => Math.abs(parseFloat(await room()) - height))
     .toBeLessThanOrEqual(1);
@@ -634,9 +642,10 @@ test("sent with its waybill by the MainButton, then arrived: what is sent is as 
   await expect(page.getByRole("dialog")).toHaveCount(0);
   // What it did takes the cursor: the sheet went with the card it was on
   // (review, 2026-11-01).
-  await expect(
-    page.getByText("Відправлено · ТТН 0500012345678", { exact: true }),
-  ).toBeFocused();
+  // Said in its place over the thread, the cursor on it.
+  const said = page.locator(".order-done");
+  await expect(said).toHaveText("Відправлено · ТТН 0500012345678");
+  await expect(said).toBeFocused();
   await expect(standing(page)).toHaveText("Відправлено");
   await expect(passed(page)).toHaveText(["До відправлення"]);
   expect(await buzzes(page)).toEqual([
@@ -772,9 +781,7 @@ test("where a closed order goes is not changed: said so, and the card read again
   const server: Server = { order: order({ status: "DISPATCHED" }), sent: [] };
   await open(page, server);
   // Sent with no waybill: written later (orders task list, P1-3).
-  await page
-    .getByRole("button", { name: "ТТН ще немає — вписати", exact: true })
-    .click();
+  const writing = await shipping(page, "ТТН ще немає — вписати");
   server.answer = {
     status: 422,
     json: {
@@ -789,9 +796,9 @@ test("where a closed order goes is not changed: said so, and the card read again
     },
   };
   const reads = server.reads ?? 0;
-  await page.getByLabel("Номер ТТН", { exact: true }).fill("20451234");
+  await writing.getByLabel("Номер ТТН", { exact: true }).fill("20451234");
   await readTheAnswer(page);
-  await page.getByRole("button", { name: "Зберегти доставку" }).click();
+  await pressMain(page, "Зберегти доставку");
   const why = page.getByRole("alert");
   await expect(why).toHaveText(
     "Не записано: замовлення вже закрито, доставку більше не змінюють.",
@@ -810,12 +817,10 @@ test("a shipping change whose answer never came, resent after the order closed: 
     lose: true,
   };
   await open(page, server);
-  await page
-    .getByRole("button", { name: "ТТН ще немає — вписати", exact: true })
-    .click();
-  await page.getByLabel("Номер ТТН", { exact: true }).fill("20451234");
+  const writing = await shipping(page, "ТТН ще немає — вписати");
+  await writing.getByLabel("Номер ТТН", { exact: true }).fill("20451234");
   await readTheAnswer(page);
-  await page.getByRole("button", { name: "Зберегти доставку" }).click();
+  await pressMain(page, "Зберегти доставку");
   const retry = page.getByRole("button", {
     name: "Перевірити результат замовлення",
   });
@@ -1924,10 +1929,8 @@ test("a save refused for its waybill keeps where it goes and what was typed; the
 }) => {
   const server: Server = { order: order({ status: "DISPATCHED" }), sent: [] };
   await open(page, server);
-  await page
-    .getByRole("button", { name: "ТТН ще немає — вписати", exact: true })
-    .click();
-  const field = page.getByLabel("Номер ТТН", { exact: true });
+  const writing = await shipping(page, "ТТН ще немає — вписати");
+  const field = writing.getByLabel("Номер ТТН", { exact: true });
   await field.fill("НП");
   await readTheAnswer(page);
   server.answer = {
@@ -1940,27 +1943,29 @@ test("a save refused for its waybill keeps where it goes and what was typed; the
   };
   server.loseRead = true;
   const reads = server.reads ?? 0;
-  await page.getByRole("button", { name: "Зберегти доставку" }).click();
+  await pressMain(page, "Зберегти доставку");
+  // Said in the sheet, over what was typed.
   await expect(
-    page
+    writing
       .getByRole("alert")
       .filter({ hasText: /^Номер ТТН має містити цифри або латинські літери/ }),
   ).toBeVisible();
   await expect.poll(() => server.reads ?? 0).toBeGreaterThan(reads);
-  // The read again failed: said, and what was typed is still there to check.
+  // The read again failed: what was typed is still in the sheet to check;
+  // the card under it says it was not read, and is read once the sheet is
+  // closed (stage 2, orders task list, P1-1).
+  await expect(writing).toBeVisible();
+  await expect(field).toHaveValue("НП");
+  await page.keyboard.press("Escape");
+  await expect(writing).toHaveCount(0);
   const again = page.getByRole("button", { name: "Спробувати ще раз" });
   await expect(again).toBeVisible();
-  await expect(
-    page.getByRole("heading", { name: "Доставка", exact: true }),
-  ).toBeVisible();
-  await expect(field).toHaveValue("НП");
   await again.click();
   await expect(again).toHaveCount(0);
-  await expect(field).toHaveValue("НП");
   expect(server.sent.map((each) => each.step)).toEqual(["shipping"]);
 });
 
-test("a tap carried from «Змінити доставку» onto «Зберегти доставку», or from «← Замовлення» onto «← До замовлень», is let go (review, 2026-10-25)", async ({
+test("a tap carried from «Змінити доставку» onto «Зберегти доставку» is let go, the sheet's own or Telegram's MainButton (review, 2026-10-25; stage 2, orders task list, P1-1)", async ({
   page,
 }) => {
   const server: Server = {
@@ -1968,19 +1973,43 @@ test("a tap carried from «Змінити доставку» onto «Зберег
     sent: [],
   };
   await open(page, server);
-  await page.getByRole("button", { name: "Змінити доставку" }).click();
-  await page.getByRole("button", { name: "Зберегти доставку" }).click();
+  await shipping(page, "Змінити доставку");
+  await expect
+    .poll(() => main(page))
+    .toMatchObject({ is_visible: true, text: "Зберегти доставку" });
+  await page.evaluate(() => {
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        data: JSON.stringify({ eventType: "main_button_pressed" }),
+        source: window.parent,
+      }),
+    );
+  });
   await readTheAnswer(page);
   expect(server.sent).toEqual([]);
-  await page.getByRole("button", { name: "← Замовлення" }).click();
-  await page.getByRole("button", { name: "← До замовлень" }).click();
+  // Meant, it saves.
+  await pressMain(page, "Зберегти доставку");
+  await expect
+    .poll(() => server.sent.map((each) => each.step))
+    .toEqual(["shipping"]);
+});
+
+test("outside Telegram a tap carried from «Змінити доставку» onto the sheet's «Зберегти доставку» is let go (review, 2026-10-25; stage 2, orders task list, P1-1)", async ({
+  page,
+}) => {
+  const server: Server = {
+    order: order({ status: "DISPATCHED", waybill: "20451234" }),
+    sent: [],
+  };
+  await open(page, server, undefined, null);
+  const changing = await shipping(page, "Змінити доставку");
+  await changing.getByRole("button", { name: "Зберегти доставку" }).click();
   await readTheAnswer(page);
-  await expect(
-    page.getByRole("heading", { name: "Лоран шоколад · M", exact: true }),
-  ).toBeVisible();
-  // Meant, it goes.
-  await page.getByRole("button", { name: "← До замовлень" }).click();
-  await expect(page.locator(".order-row").first()).toBeVisible();
+  expect(server.sent).toEqual([]);
+  await changing.getByRole("button", { name: "Зберегти доставку" }).click();
+  await expect
+    .poll(() => server.sent.map((each) => each.step))
+    .toEqual(["shipping"]);
 });
 
 test("a waybill written later on a stubbed parcel: five taps from the menu with the typing — «Відправлено» among them — the cursor in its field, back on the card with a buzz (orders task list, P1-3; «Усе на бірці» task list, P0-4; sections task list, P0-1)", async ({
@@ -1994,17 +2023,34 @@ test("a waybill written later on a stubbed parcel: five taps from the menu with 
         postEvent: (event: string, data: string) => void;
       };
       buzzes: string[];
+      mains: Record<string, unknown>[];
+      closing: boolean[];
     };
     host.buzzes = [];
+    host.mains = [];
+    host.closing = [];
     host.TelegramWebviewProxy = {
       postEvent: (event, data) => {
         if (event === "web_app_trigger_haptic_feedback") host.buzzes.push(data);
+        if (event === "web_app_setup_main_button")
+          host.mains.push(JSON.parse(data) as Record<string, unknown>);
+        if (event === "web_app_setup_closing_behavior")
+          host.closing.push(
+            (JSON.parse(data) as { need_confirmation: boolean })
+              .need_confirmation,
+          );
       },
     };
   });
+  // A Telegram that asks before closing (from 6.2).
+  const asks = (): Promise<boolean | null> =>
+    page.evaluate(
+      () =>
+        (window as unknown as { closing: boolean[] }).closing.at(-1) ?? null,
+    );
   await stub(page, server);
   await page.goto("about:blank");
-  await page.goto(launch());
+  await page.goto(launch({ version: "8.0" }));
   await openStore(page, "Основний MAIN");
   await page.evaluate(() => {
     const host = window as unknown as { taps: number };
@@ -2018,25 +2064,46 @@ test("a waybill written later on a stubbed parcel: five taps from the menu with 
     );
   });
   await toOrder(page, "DISPATCHED");
-  await page
-    .getByRole("button", { name: "ТТН ще немає — вписати", exact: true })
-    .click();
-  await expect(page.getByLabel("Номер ТТН", { exact: true })).toBeFocused();
-  await expect(panel(page).locator(".pay-what")).toHaveText(
-    "Лоран шоколад · M",
-  );
+  const writing = await shipping(page, "ТТН ще немає — вписати");
+  await expect(writing.getByLabel("Номер ТТН", { exact: true })).toBeFocused();
+  // A waybill, never a word the phone would offer to finish.
+  await expect(
+    writing.getByLabel("Номер ТТН", { exact: true }),
+  ).toHaveAttribute("autocomplete", "off");
+  expect(await asks()).not.toBe(true);
+  // Which order, in the sheet's line (stage 2, orders task list, P1-1).
+  await expect(writing.locator(".send-parcel")).toHaveText("Лоран шоколад · M");
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth),
   ).toBeLessThanOrEqual(360);
   await page.keyboard.type("20451234");
+  // Typed: Telegram asks before closing, until it is saved.
+  await expect.poll(asks).toBe(true);
   await readTheAnswer(page);
-  await panel(page).getByRole("button", { name: "Зберегти доставку" }).click();
+  // Four taps on the page, the fifth on Telegram's MainButton.
+  await pressMain(page, "Зберегти доставку");
+  await expect(writing).toHaveCount(0);
   await expect(
     page.getByRole("status").filter({ hasText: /^Доставку збережено$/ }),
   ).toBeVisible();
+  await expect.poll(asks).toBe(false);
+  // In one line, its eyelet filled in the colour of where the order
+  // stands (stage 2, orders task list, P1-3).
+  const transit = await page.evaluate(() => {
+    const probe = document.createElement("i");
+    document.body.append(probe);
+    probe.style.color = "var(--transit)";
+    const colour = getComputedStyle(probe).color;
+    probe.remove();
+    return colour;
+  });
+  await expect(page.locator(".order-done .step-done .eyelet-filled")).toHaveCSS(
+    "background-color",
+    transit,
+  );
   expect(
     await page.evaluate(() => (window as unknown as { taps: number }).taps),
-  ).toBe(5);
+  ).toBe(4);
   expect(await buzzes(page)).toEqual([
     { type: "notification", notification_type: "success" },
   ]);
@@ -2660,16 +2727,14 @@ for (const [name, theme] of [
       .getByRole("button", { name: "Товар повернувся на склад" })
       .scrollIntoViewIfNeeded();
     await page.screenshot({ path: `test-results/order-history-${name}.png` });
-    await page.getByRole("button", { name: "Змінити доставку" }).click();
+    const changing = await shipping(page, "Змінити доставку");
     for (const part of [
-      page.getByRole("heading", { name: "Доставка", exact: true }),
-      page.locator(".way-switch label").first(),
-      page.locator(".way-switch label").last(),
-      page.getByRole("button", { name: "Нова пошта", exact: true }),
-      page.getByRole("button", { name: "Укрпошта", exact: true }),
-      page.locator(".order-shipping label", { hasText: "Номер ТТН" }),
-      panel(page).locator(".pay-what"),
-      panel(page).getByRole("button"),
+      changing.getByRole("heading", { name: "Доставка", exact: true }),
+      changing.locator(".send-parcel"),
+      changing.getByRole("button", { name: "Нова пошта", exact: true }),
+      changing.getByRole("button", { name: "Укрпошта", exact: true }),
+      changing.getByRole("button", { name: "За кордон", exact: true }),
+      changing.locator("label", { hasText: "Номер ТТН" }),
     ])
       expect(await contrast(part)).toBeGreaterThanOrEqual(4.5);
     expect(

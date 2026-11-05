@@ -45,8 +45,9 @@ export const ScreenHeader = forwardRef<
     focusable?: boolean;
     className?: string;
     /** What the line names first, where it is not the store: «Сьогодні»'s
-     * day, for whoever reads the network there. */
-    lead?: string;
+     * day, for whoever reads the network there; a new order's one
+     * warehouse. */
+    lead?: string | undefined;
     /** What the line says after the person: the count's time (spec S26). */
     after?: string;
   }

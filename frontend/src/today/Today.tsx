@@ -196,6 +196,10 @@ const looks: Record<
   // «Товар і каталог»'s mark: «paper» is the paper mode's alone (stage 2,
   // goods task list, P2-3).
   openings: { icon: "catalogue", tone: "ink" },
+  // A list to finish, a warehouse waiting for its stock: the same work
+  // (stage 2, admin task list, P0-1, P0-2).
+  finish: { icon: "catalogue", tone: "ink" },
+  first: { icon: "catalogue", tone: "ink" },
   stocktake: { icon: "stocktake", tone: "offline", ring: true },
 };
 
@@ -205,6 +209,8 @@ const verbWords: Partial<Record<Kind, string>> = {
   parcels: "Зібрати й відправити",
   damaged: "Оглянути",
   openings: "Переглянути й затвердити",
+  finish: "Доробити",
+  first: "Внести залишки",
 };
 
 /** A tag of «Чекає на вас» (spec §6.9): its eyelet, its title, up to two

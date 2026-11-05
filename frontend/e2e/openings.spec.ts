@@ -1,6 +1,7 @@
 import {
   test,
   expect,
+  menu,
   more,
   openStore,
   receiveInto,
@@ -775,4 +776,85 @@ test("nothing is received into a warehouse while its list waits, and it is once 
       name: "Прийшло 1 шт. · склад «Склад, що чекає» · Закупівля",
     }),
   ).toBeVisible();
+});
+
+test("a list typed is said on «Сьогодні» at once, its lines still to decide counted (stage 2, admin task list, P0-1, P0-2)", async ({
+  page,
+}) => {
+  const coat = await model(page);
+  await noListWaits(page, fixture.opening_location_id);
+  const read = page.waitForResponse(
+    (response) =>
+      response
+        .url()
+        .includes(`/api/v1/snapshots?store_id=${fixture.store_id}&limit=100`) &&
+      response.ok(),
+  );
+  await page.goto(
+    `/#${new URLSearchParams({ tgWebAppData: initData() }).toString()}`,
+  );
+  await openStore(page, "Основний MAIN");
+  // «Сьогодні» first, its lists read: fresh for a minute.
+  await expect(
+    page.getByRole("heading", { name: "Сьогодні", exact: true }),
+  ).toBeVisible();
+  await read;
+  await section(page, "Початкові залишки");
+  await typeList(page, fixture.opening_location_id, "Зошит на сьогодні", [
+    `${coat} сірий 3 шт`,
+    `${coat} сірий 2 шт`,
+  ]);
+  await page.getByRole("button", { name: "Зберегти список" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Зошит на сьогодні" }),
+  ).toBeVisible();
+  // What waits in the store now, read as «Сьогодні» reads it.
+  const answer = await page.request.get(
+    `/api/v1/snapshots?store_id=${fixture.store_id}&limit=100`,
+    { headers: { Authorization: `Bearer ${await token(page)}` } },
+  );
+  const { items } = (await answer.json()) as {
+    items: {
+      store_id: string;
+      status: string;
+      ready_to_approve: boolean;
+      summary: { pending: number; needs_review: number };
+    }[];
+  };
+  const undecided = items
+    .filter(
+      (list) =>
+        list.status === "IN_REVIEW" &&
+        list.store_id === fixture.store_id &&
+        !list.ready_to_approve,
+    )
+    .reduce(
+      (n, list) => n + list.summary.pending + list.summary.needs_review,
+      0,
+    );
+  expect(undecided).toBeGreaterThanOrEqual(2);
+  // Back on «Сьогодні»: said at once, never a minute later.
+  await menu(page)
+    .getByRole("button", { name: "Сьогодні", exact: true })
+    .click();
+  const waiting = page.getByRole("region", { name: /^Чекає на вас/ });
+  await expect(waiting).toBeVisible();
+  const folded = waiting.getByRole("button", { name: /^\+ ще/ });
+  if (await folded.isVisible()) await folded.click();
+  await expect(
+    waiting
+      .locator(".today-tag", { hasText: "Доробіть початкові залишки" })
+      .locator(".today-tag-meta", { hasText: "Основний · " }),
+  ).toHaveText(
+    `Основний · ${String(undecided)} ${
+      undecided % 10 === 1 && undecided % 100 !== 11
+        ? "рядок чекає"
+        : [2, 3, 4].includes(undecided % 10) &&
+            ![12, 13, 14].includes(undecided % 100)
+          ? "рядки чекають"
+          : "рядків чекають"
+    } рішення`,
+  );
+  // The warehouse's own list waits no more for the journeys after.
+  await noListWaits(page, fixture.opening_location_id);
 });

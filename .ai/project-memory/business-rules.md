@@ -6188,3 +6188,117 @@ drawn.
   A return and a payment from paper take «Режим: з паперу» at their top
   once the paper is said, with its approved sentence. A series' first
   sale is at most seven taps from the switch, each next one three.
+
+## Chosen in chat — 2026-11-05 (stage 2 batch 3: «Нове замовлення» in the new system, «Доставка» a sheet, the steps' results; the opening-stock lists by readiness, a warehouse awaiting its stock; orders-paper P0-5, P1-1, P1-3; admin P0-1, P0-2)
+
+Chosen in chat on 2026-11-05 («Orders + first days»), after #171: the
+third batch proposed after #171. The owner's questions stand by their
+(а): orders-paper В-ЗП3, В-ЗП6; admin В-А1, В-А2. No right, no server
+rule and no figure changes: where things stand, how they are drawn, and
+who is told of a list. The one server change closes what batch 2 found.
+
+- **«Нове замовлення» (orders-paper P0-5; В-ЗП3 (а), В-ЗП6 (а)):** a task
+  screen, the menu stepping aside, as the till's count and a payment.
+  - Its head: «Нове замовлення», «← До замовлень» (Telegram's «Назад»
+    too); with one warehouse the line under it says «Склад: {назва} ·
+    {Ім’я}» in place of the store, otherwise the store's line, as on every
+    screen.
+  - The search and the cells as the till's: a cell tapped puts one coat in
+    the order from that cell's warehouse, puts the keyboard away, a light
+    buzz. A model with no price opens the sheet by itself, the cursor in
+    its empty price.
+  - The tray «У замовленні · N», «{Модель} · {розмір}» and «›», over it
+    «Разом» or a dash while a line has no price; its sheet «У
+    замовленні»: each line «{Модель} · {розмір}», «Склад: {назва}», «−»
+    and «+» to what is free, «Ціна, грн» with the price's hint, «Прибрати
+    {Модель} · {розмір}» (and «· {склад}» with two warehouses), «Готово».
+    The keyboard's «Готово» in a price puts it away and closes the sheet,
+    as the till's basket does. The last line taken out closes the sheet
+    and the tray, the cursor back in the search. Decided here.
+  - Where it goes: one row of four chips, «Нова пошта · Укрпошта · Міст ·
+    За кордон», nothing chosen for the seller; the chosen one in the
+    chosen colours, a choice's buzz; under it one line, «ТТН впишете, коли
+    відправите.» or, abroad, «Куди і як відправили — впишете, коли
+    відправите.». The row has no visible caption, only its name «Куди»
+    for a reader, to keep the phone's height. The chips wrap to a second
+    row on a narrow phone. Decided here.
+  - Telegram's MainButton «Замовити та зарезервувати», set as the screen
+    opens and held until a line has its price; «Оберіть перевізника» and
+    held without a carrier; its ring while it is sent; taken away on «←».
+    Pressed while the sheet is open, the sheet goes and it reserves: what
+    the press comes to — a refusal's plate, a kept order's banner — is
+    said on the page, never under the sheet; short of stock, the sheet
+    opens again on its line (review, 2026-11-05). Outside Telegram the
+    dock's one button, in the tray, the same words, shown from the
+    screen's first moment, held. Decided here.
+  - Refused short of stock: the sheet opens on the line the server names,
+    with the approved words, focused; another refusal: the error's plate
+    over «Куди», focused, an error buzz; the lines and the carrier kept.
+    Kept on the phone: the banner, as before.
+  - Telegram asks before closing while the order holds a line (from
+    Telegram 6.2), never once it is recorded or emptied.
+  - Five taps with the search typed: «Замовлення», «+ Нове замовлення»,
+    the cell, the carrier, the MainButton. The body sent is unchanged.
+- **«Доставка» a sheet over the card (orders-paper P1-1; В-ЗП3 (а)):** the
+  order in its line («{Модель} · {розмір}»), the same row of chips with
+  where it goes now chosen, «Номер ТТН» (`autocomplete="off"`, the
+  keyboard's «Готово» puts it away) or «Куди і як відправили: місто,
+  країна, спосіб» with «Без імен і телефонів покупців.»; a refusal said in
+  the sheet over what was typed — the card read again after it, if that
+  read fails, says so on the card under the sheet, read again once the
+  sheet is closed. Telegram's MainButton «Зберегти доставку»
+  in place of the card's, its first 0.7 s let go as before; outside
+  Telegram the sheet's own button at its foot. A carrier is a chip, so
+  «Оберіть перевізника» stands only for an order that has none. Telegram
+  asks before closing while anything was changed; «Назад», Escape and the
+  scrim close it, the cursor back on the row that opened it. Saved, the
+  sheet closes and the card says «Доставку збережено». «ТТН ще немає —
+  вписати» opens it with the cursor in the field: five taps from the menu
+  with the typing, the fifth Telegram's MainButton. «← Замовлення» is
+  gone. Decided here.
+- **The steps' results (orders-paper P1-3):** a reserve recorded is torn
+  off over the thread as a stub, «До відправлення» on it, then each line
+  «{Модель} · {розмір} · склад «{назва}»» — as «У посилці» names a
+  warehouse, never «з «{назва}»», which would decline a name — and
+  «Зарезервовано: N шт. Чекає відправлення.»; the same for a kept reserve
+  once its check says so. Every other step says its words, as before, in
+  one line with a filled eyelet in the step's colour. Decided here.
+- **The opening-stock lists by readiness (admin P0-1; В-А1 (а)):** read on
+  «Сьогодні» and in «Ще» wherever the person makes or approves them
+  (`snapshot:import` or `snapshot:approve`).
+  - A list ready to approve: «Затвердьте початкові залишки», «N рядків» or
+    «N списки», «Переглянути й затвердити» — only for whoever approves.
+  - A list not ready: «Доробіть початкові залишки», «N рядків чекають
+    рішення» (its lines unmatched or in doubt, summed over the store's
+    lists), «Доробити», to «Початкові залишки» — only for whoever makes
+    them. A list with no such line and nothing to put in stock says its
+    lines, «12 рядків». Decided here.
+  - Ready with only the making, or not ready with only the approving:
+    nothing (В-А1 (а)). Another store's list: no verb; a shared
+    warehouse's list waits in the store that keeps it, as before.
+  - «Ще»: «N на затвердження» (ready, to approve) and «N доробити» (not
+    ready, to make), each in the row's colour, joined by «·».
+  - The catalogue's mark and the ink's tone, not «paper» as the TZ wrote:
+    «paper» is the paper mode's alone since goods P2-3. Decided here.
+- **A warehouse awaiting its stock (admin P0-2; В-А2 (а)):** a selling
+  warehouse that is active, not «Брак», where nothing was ever recorded,
+  with no list in review of it, is a tag for whoever makes the lists in
+  the store: «Склад «{назва}» ще чекає початкових залишків» or «N склади
+  ще чекають початкових залишків» with their names, then «Поки їх немає,
+  продажі тут — на папері»; «Внести залишки» in the open store, to
+  «Початкові залишки»; no verb in another store of the day. A warehouse
+  two stores share is told once, through the first store of the day that
+  sees it, the open one first. Told only once every store's warehouses
+  and lists have answered, as the stocktakes are, so a shared one never
+  moves between stores as they answer (review, 2026-11-05); a store
+  whose lists could not be read tells none of its warehouses. A list
+  typed, approved or rejected on «Початкові залишки» is said on
+  «Сьогодні» at once: the lists and the warehouses are read again.
+  Decided here.
+- **The suppliers' refusals say what was not recorded (backend; closes
+  batch 2's follow-up):** an invoice, a payment, a set-off, a write-off, a
+  return to a supplier and borrowed goods marked sold, refused by a rule
+  after the command found what it acts on, say `recorded: false` (ADR-0013
+  §1): a kept one the server refuses is settled at once. What is refused
+  before the lookup (the body itself) and a command id reused with
+  another body keep their answer as before, as every other journal's.
