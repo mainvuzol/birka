@@ -178,6 +178,12 @@ const stickers: Record<Status, { tone: Tone; icon: IconName }> = {
   RETURNED: { tone: "offline", icon: "return" },
 };
 
+/** The colour of an order's status: its sticker's, and the eyelet of the
+ * step that took it there (stage 2, orders task list, P1-3). */
+export function toneOf(status: Status): Tone {
+  return stickers[status].tone;
+}
+
 /**
  * An order's status as a printed sticker (spec §6.18): its glyph and its
  * word, on its colour's ground — «До відправлення» the waiting's violet

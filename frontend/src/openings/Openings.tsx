@@ -130,6 +130,12 @@ export function Openings({
       .then(() => {
         setOpenId(id);
       });
+    // «Сьогодні»'s too: its warehouse waiting for stock gives way to the
+    // list begun at once (stage 2, admin task list, P0-2).
+    void cache.invalidateQueries({
+      predicate: (query) =>
+        query.queryKey[0] === "stock-lists" && query.queryKey[1] !== scopeKey,
+    });
   };
 
   if (open)
@@ -894,6 +900,9 @@ function ListView({
       cache.invalidateQueries({ queryKey: ["stock-list-lines"] }),
       cache.invalidateQueries({ queryKey: ["stock-list-parts"] }),
       cache.invalidateQueries({ queryKey: ["inventory-stock"] }),
+      // Approved, its warehouse no longer waits for stock: «Сьогодні» says
+      // so at once (stage 2, admin task list, P0-2).
+      cache.invalidateQueries({ queryKey: ["inventory-locations"] }),
     ]);
   }
 

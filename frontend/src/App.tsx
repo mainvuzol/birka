@@ -47,9 +47,10 @@ import {
 } from "@/orders/Order";
 import { placesRead } from "@/orders/Returned";
 import { Send } from "@/orders/Send";
+import { Shipping } from "@/orders/Shipping";
 import { Collect } from "@/orders/Collect";
 import { chargeOnce } from "@/orders/Collected";
-import { NewOrder, shortOf } from "@/orders/NewOrder";
+import { NewOrder } from "@/orders/NewOrder";
 import { Orders, freshOrdersView } from "@/orders/Orders";
 import { Unread } from "@/shared/Unread";
 import { ModeSwitch } from "@/shared/ModeSwitch";
@@ -877,7 +878,9 @@ function Workspace({
   // was typed in it stays.
   const [orderSheet, setOrderSheet] = useState<{
     id: string;
-    kind: "send" | "collect";
+    kind: "send" | "collect" | "shipping";
+    /** «Доставка» opened by «ТТН ще немає — вписати»: the cursor in it. */
+    writing?: boolean;
   } | null>(null);
   const [opening, setOpening] = useState<Order | null>(null);
   // The sheet's step refused: why, in the sheet, over what was typed.
@@ -1079,7 +1082,9 @@ function Workspace({
   const [cashTask, setCashTask] = useState(false);
   const taskScreen =
     ((tab === "deposit" || tab === "credits") && depositTask) ||
-    (tab === "cash" && cashTask);
+    (tab === "cash" && cashTask) ||
+    // And while a new order is made (stage 2, orders task list, P0-5).
+    tab === "new";
   const creditKey = `birka:credit-pending:${me.organization_id}:${me.user_id}:${store.id}`;
   const [creditStorageError, setCreditStorageError] = useState(false);
   const creditCommand = useCreditCommand();
@@ -1261,10 +1266,12 @@ function Workspace({
   // refused as having recorded nothing, it says which (ADR-0013 §1).
   const [orderResent, setOrderResent] = useState<string | null>(null);
   // What a step did, said on the order it was taken on (orders task list,
-  // P0-2, P0-4): sent, arrived, cancelled.
+  // P0-2, P0-4): sent, arrived, cancelled — a reserve on its stub (stage 2,
+  // orders task list, P1-3).
   const [orderDone, setOrderDone] = useState<{
     id: string;
     text: string;
+    stub: boolean;
   } | null>(null);
   // The order «Клієнт забрав» was just recorded on: its sale said large
   // (orders task list, P0-3) — kept and confirmed later, said so.
@@ -1332,7 +1339,8 @@ function Workspace({
     // The step's sheet over its card («Усе на бірці» sections task list,
     // P0-2, P0-3), closed in the render that says what came of it: the
     // sale, the banner or why then takes the cursor, nothing over them.
-    const fromSheet = step === "dispatch" || step === "collect";
+    const fromSheet =
+      step === "dispatch" || step === "collect" || step === "shipping";
     const closeSheet = (): void => {
       setOrderSheet((open) => (open?.id === command.orderId ? null : open));
     };
@@ -1396,7 +1404,14 @@ function Workspace({
             ? "warning"
             : "success",
         );
-        if (!stay) setOrderDone({ id: order.id, text });
+        if (!stay)
+          setOrderDone({
+            id: order.id,
+            text,
+            // Reserved, and still waiting to be sent: torn off as recorded
+            // (P1-3). Confirmed late and moved on: its line alone.
+            stub: step === "reserve" && order.status === "READY_TO_DISPATCH",
+          });
       }
       // Collected: a sale, said as the till says one (orders task list,
       // P0-3).
@@ -1682,7 +1697,10 @@ function Workspace({
       setOrderSheet(null);
       setSheetRefused(false);
     };
-    const take = (action: "dispatch" | "collect", extra?: object): void => {
+    const take = (
+      action: "dispatch" | "collect" | "shipping",
+      extra?: Record<string, unknown>,
+    ): void => {
       setSheetRefused(false);
       const body = { command_id: crypto.randomUUID(), ...extra };
       void run({
@@ -1690,7 +1708,7 @@ function Workspace({
         body,
         label: actionLabels[action] ?? action,
         orderId: order.id,
-        shown: stepShown(order, body),
+        shown: stepShown(order, extra),
       });
     };
     const refusal =
@@ -1704,6 +1722,20 @@ function Workspace({
             pending?.acknowledged === true,
           )
         : null;
+    if (sheet.kind === "shipping")
+      return (
+        <Shipping
+          order={order}
+          writing={sheet.writing === true}
+          blocked={blocked}
+          waiting={busy}
+          refusal={refusal}
+          save={(extra) => {
+            take("shipping", extra);
+          }}
+          close={close}
+        />
+      );
     return sheet.kind === "send" ? (
       <Send
         order={order}
@@ -3129,9 +3161,10 @@ function Workspace({
         </Settled>
       )}
       {error !== null &&
-        // A new order short of stock: said on its line (P0-5); a step
-        // refused in its sheet, there.
-        !(error === newRefused && shortOf(error) !== null) &&
+        // A new order refused: said on its screen, over «Куди», or on its
+        // line (stage 2, orders task list, P0-5); a step refused in its
+        // sheet, there.
+        error !== newRefused &&
         !(sheetRefused && orderSheet !== null) && (
           <p role="alert" ref={orderAlert} tabIndex={-1}>
             {orderErrorText(
@@ -3162,6 +3195,11 @@ function Workspace({
               ...(canSeeDamaged ? { damaged: fromTag("damaged") } : {}),
               ...(store.permissions.includes("snapshot:approve")
                 ? { openings: fromTag("openings") }
+                : {}),
+              // Where this person makes the lists: one to finish, or the
+              // first to begin (stage 2, admin task list, P0-1, P0-2).
+              ...(store.permissions.includes("snapshot:import")
+                ? { finish: fromTag("openings"), first: fromTag("openings") }
                 : {}),
             }}
             toOrders={canSeeOrders && !blocked ? ordersFromToday : undefined}
@@ -3663,7 +3701,20 @@ function Workspace({
           token={token}
           journalKey={saleKey}
           blocked={blocked}
+          waiting={busy && firstSend}
           refused={newRefused}
+          said={
+            newRefused === null || error !== newRefused
+              ? null
+              : orderErrorText(
+                  error,
+                  orderResent,
+                  pending !== null && !pending.acknowledged,
+                  orderMisses,
+                  pending?.label ?? null,
+                  pending?.acknowledged === true,
+                )
+          }
           back={() => {
             setTab("list");
           }}
@@ -3740,7 +3791,7 @@ function Workspace({
                 detail.data.shipping_history?.length ?? 0,
               )}:${String(orderEpoch)}`}
               order={detail.data}
-              done={orderDone?.id === detail.data.id ? orderDone.text : null}
+              done={orderDone?.id === detail.data.id ? orderDone : null}
               collected={
                 collected?.id === detail.data.id
                   ? collected.kept
@@ -3753,8 +3804,8 @@ function Workspace({
               blocked={blocked}
               waiting={busy}
               sheet={orderSheet?.id === detail.data.id}
-              openSheet={(kind) => {
-                setOrderSheet({ id: detail.data.id, kind });
+              openSheet={(kind, writing = false) => {
+                setOrderSheet({ id: detail.data.id, kind, writing });
                 setSheetRefused(false);
               }}
               back={() => {

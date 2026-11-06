@@ -603,7 +603,7 @@ export async function tapSize(
  * takes taps: a tap carried from what opened it is let go for a moment.
  */
 export async function basketSheet(page: Page): Promise<Locator> {
-  const sheet = page.getByRole("dialog", { name: "Кошик" });
+  const sheet = page.getByRole("dialog", { name: await trayOf(page) });
   if (!(await sheet.isVisible()))
     await page.locator(".till-tray .tray-basket").click();
   await expect(sheet).toHaveAttribute("data-ready", "");
@@ -621,9 +621,17 @@ export async function shortage(page: Page): Promise<Locator> {
   return sheet;
 }
 
+/** The tray's sheet as it is named: the till's «Кошик», a new order's «У
+ * замовленні» (stage 2, orders task list, P0-5). */
+async function trayOf(page: Page): Promise<string> {
+  return (await page.locator(".order-tray").count()) > 0
+    ? "У замовленні"
+    : "Кошик";
+}
+
 /** The basket's sheet closed by its «Готово», the tray under it again. */
 export async function basketDone(page: Page): Promise<void> {
-  const sheet = page.getByRole("dialog", { name: "Кошик" });
+  const sheet = page.getByRole("dialog", { name: await trayOf(page) });
   if (await sheet.isVisible()) {
     await expect(sheet).toHaveAttribute("data-ready", "");
     await sheet.getByRole("button", { name: "Готово", exact: true }).click();
@@ -633,9 +641,9 @@ export async function basketDone(page: Page): Promise<void> {
 
 /**
  * The basket's last line, as the seller sets it (redesign P0-3): «Більше»
- * until it holds as many, and the price typed over the one it started from.
- * At the till in the basket's sheet (P0-5), closed again by «Готово»; in an
- * order, on its form.
+ * until it holds as many, and the price typed over the one it started from
+ * — in the tray's sheet (P0-5), the till's or a new order's (stage 2, orders
+ * task list, P0-5), closed again by «Готово».
  */
 export async function fillLine(
   page: Page,

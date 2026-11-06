@@ -9,14 +9,14 @@ import { Back } from "@/shared/Back";
 import { Eyelet } from "@/shared/Eyelet";
 import { Icon } from "@/shared/Icon";
 import { ScreenHeader } from "@/shared/ScreenHeader";
+import { Stub } from "@/shared/Stub";
 import { Toast } from "@/shared/Toast";
 import { askPopup, buzz, popupHere, useMainButton } from "@/shared/telegram";
 import { Collected, CollectedLine } from "./Collected";
 import { goesOf } from "./Collect";
-import { KnotString, Sticker, dayOf } from "./Knots";
+import { KnotString, Sticker, dayOf, toneOf } from "./Knots";
 import { sinceDay, tagOf, titleOf } from "./Orders";
 import { Returned, byPlace } from "./Returned";
-import { Shipping } from "./Shipping";
 import {
   carrierLabels,
   decimal,
@@ -110,8 +110,9 @@ function lineSum(item: OrderItem): string {
 
 interface CardProps {
   order: Order;
-  /** What the step just taken on it did. */
-  done: string | null;
+  /** What the step just taken on it did; a reserve, on its stub (stage 2,
+   * orders task list, P1-3). */
+  done: { text: string; stub: boolean } | null;
   /** «Клієнт забрав» just recorded on it — at its press, or kept and
    * confirmed later: its result, not its line. */
   collected: "now" | "kept" | null;
@@ -128,8 +129,9 @@ interface CardProps {
   returnSale?: (() => void) | undefined;
   /** Another order with the same waybill, opened from its row. */
   openOther: (id: string) => void;
-  /** «Відправити» or «Клієнт забрав»: its sheet over the card. */
-  openSheet: (kind: "send" | "collect") => void;
+  /** «Відправити», «Клієнт забрав» or «Доставка»: its sheet over the card;
+   * «Доставка» to write the waybill, the cursor in it. */
+  openSheet: (kind: "send" | "collect" | "shipping", writing?: boolean) => void;
   /** A sheet is over the card: its MainButton is the sheet's, or none. */
   sheet: boolean;
   /** A step is being asked: «Прибув на пошту» turns. */
@@ -179,43 +181,28 @@ function returnedText(order: Order, places: readonly Location[]): string {
 }
 
 /**
- * One order: its card, and over it a rare step on a screen of its own —
- * where it goes (orders task list, P1-3) or the goods come back (P2-4) —
- * the card kept under it with what was typed there, «← Замовлення» back to
- * it with the row that opened it in focus. Taken, the card is mounted
- * afresh with what it did.
+ * One order: its card, and over it the goods come back on a screen of
+ * their own (orders task list, P2-4) — the card kept under it with what was
+ * typed there, «← Замовлення» back to it with the row that opened it in
+ * focus. Where it goes is a sheet over the card (stage 2, orders task list,
+ * P1-1). Taken, the card is mounted afresh with what it did.
  */
 export function OrderDetail(props: CardProps): JSX.Element {
-  const [step, setStep] = useState<"write" | "change" | "return" | null>(null);
+  const [returning, setReturning] = useState(false);
   const back = (): void => {
-    setStep(null);
+    setReturning(false);
   };
   // The card first: its panel's room let go before the step's is kept.
   return (
     <>
       <Card
         {...props}
-        away={step === null ? null : step === "return" ? "return" : "shipping"}
-        changeShipping={(writing) => {
-          setStep(writing ? "write" : "change");
-        }}
+        away={returning}
         takeBack={() => {
-          setStep("return");
+          setReturning(true);
         }}
       />
-      {(step === "write" || step === "change") && (
-        <Shipping
-          order={props.order}
-          title={titleOf(props.order)}
-          writing={step === "write"}
-          blocked={props.blocked}
-          back={back}
-          save={(body) => {
-            props.action("shipping", body);
-          }}
-        />
-      )}
-      {step === "return" && (
+      {returning && (
         <Returned
           order={props.order}
           store={props.store}
@@ -259,13 +246,10 @@ function Card({
   openSheet,
   sheet,
   away,
-  changeShipping,
   takeBack,
 }: CardProps & {
-  /** A rare step shown over it, which: hidden, its panel with it. */
-  away: "shipping" | "return" | null;
-  /** Where it goes, its own step: to write the waybill, or to change it. */
-  changeShipping: (writing: boolean) => void;
+  /** The goods coming back are taken over it: hidden, its panel with it. */
+  away: boolean;
   /** «Товар повернувся на склад», its own step. */
   takeBack: () => void;
 }): JSX.Element {
@@ -289,7 +273,7 @@ function Card({
   // What a step did takes the cursor where nothing else has it: the button
   // pressed, or the sheet, went with the card it was on (review,
   // 2026-11-01).
-  const said = useRef<HTMLParagraphElement>(null);
+  const said = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (done === null || sheet) return;
     const at = document.activeElement;
@@ -302,17 +286,17 @@ function Card({
   useEffect(() => {
     if (done !== null) heading.current?.scrollIntoView({ block: "nearest" });
   }, [done]);
-  // Back from a rare step: the row that opened it in focus, and a tap
-  // carried from «← Замовлення» onto «← До замовлень» let go.
-  const shippingRow = useRef<HTMLButtonElement>(null);
+  // Back from the goods come back: the row that opened it in focus, and a
+  // tap carried from «← Замовлення» onto «← До замовлень» let go.
   const returnRow = useRef<HTMLButtonElement>(null);
-  const opened = useRef<"shipping" | "return" | null>(null);
+  const opened = useRef(false);
   const backAt = useRef(-Infinity);
   useEffect(() => {
-    if (away !== null) opened.current = away;
-    else if (opened.current !== null) {
+    if (away) opened.current = true;
+    else if (opened.current) {
+      opened.current = false;
       backAt.current = performance.now();
-      (opened.current === "return" ? returnRow : shippingRow).current?.focus();
+      returnRow.current?.focus();
     }
   }, [away]);
   const mayStep = store.permissions.includes("sale:create");
@@ -322,8 +306,7 @@ function Card({
   // The next step: sent, arrived, or «Клієнт забрав» by its ways. None
   // while a rare step is over the card: one press at a time under the thumb
   // (review, 2026-10-23).
-  const panelStep =
-    mayStep && away === null ? (nextSteps[order.status] ?? null) : null;
+  const panelStep = mayStep && !away ? (nextSteps[order.status] ?? null) : null;
   // Sent within Ukraine with no waybill: written later, as it often is
   // (orders task list, P1-3).
   const writeLater =
@@ -404,7 +387,7 @@ function Card({
       : null;
   const title = titleOf(order);
   return (
-    <div hidden={away !== null}>
+    <div hidden={away}>
       <ScreenHeader
         ref={heading}
         className="order-title"
@@ -426,9 +409,35 @@ function Card({
           <small className="order-number">№ {order.id.slice(0, 8)}</small>
         </p>
         {done && (
-          <p role="status" ref={said} tabIndex={-1}>
-            {done}
-          </p>
+          // A reserve torn off as recorded over the thread, the coat held
+          // for its customer; any other step a line, its eyelet filled in
+          // the step's colour (stage 2, orders task list, P1-3).
+          <div role="status" ref={said} tabIndex={-1} className="order-done">
+            {done.stub ? (
+              <Stub state="recorded">
+                <Sticker status="READY_TO_DISPATCH" />
+                {order.items.map((item) => {
+                  const from = names.get(item.source_location_id);
+                  return (
+                    <p className="stub-line" key={item.id}>
+                      <strong>
+                        {tagOf(item)}
+                        {from === undefined
+                          ? ""
+                          : ` · склад «${visible(from)}»`}
+                      </strong>
+                    </p>
+                  );
+                })}
+                <p className="stub-line">{done.text}</p>
+              </Stub>
+            ) : (
+              <p className={`step-done tone-${toneOf(order.status)}`}>
+                <Eyelet state="filled" />
+                {done.text}
+              </p>
+            )}
+          </div>
         )}
         <KnotString order={order} />
         <h3 className="order-section t-label">У посилці</h3>
@@ -578,10 +587,9 @@ function Card({
           <button
             type="button"
             className="quiet order-rare"
-            ref={shippingRow}
             disabled={blocked}
             onClick={() => {
-              changeShipping(writeLater);
+              openSheet("shipping", writeLater);
             }}
           >
             {writeLater ? "ТТН ще немає — вписати" : "Змінити доставку"}{" "}

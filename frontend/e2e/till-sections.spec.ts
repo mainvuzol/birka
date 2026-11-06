@@ -356,7 +356,9 @@ test("«Замовлення» is a tab of its own and «Покупці» a row 
   await expect(
     page.getByRole("group", { name: "Борги або замовлення" }),
   ).toHaveCount(0);
-  // A new order: «+» in the heading, the second tap, «Замовлення» marked.
+  // A new order: «+» in the heading, the second tap; a task screen, the
+  // menu steps aside (stage 2, orders task list, P0-5), «Замовлення»
+  // marked again once back.
   await page
     .locator(".screen-title")
     .getByRole("button", { name: "Нове замовлення" })
@@ -365,12 +367,12 @@ test("«Замовлення» is a tab of its own and «Покупці» a row 
     page.getByRole("heading", { name: "Нове замовлення" }),
   ).toBeVisible();
   expect(await taps()).toBe(2);
-  await expect(orders).toHaveAttribute("aria-current", "page");
-  // Pressed again: its first screen.
-  await orders.click();
+  await expect(menu(page)).toBeHidden();
+  await page.getByRole("button", { name: "← До замовлень" }).click();
   await expect(
     page.getByRole("heading", { name: "Замовлення", exact: true }),
   ).toBeVisible();
+  await expect(orders).toHaveAttribute("aria-current", "page");
   // The debts: «Ще», «Покупці» — «Ще» marked, «← Ще» back.
   await untapped();
   await moreButton(page).click();
@@ -761,7 +763,7 @@ test("the owner's menu is «Сьогодні · Продаж · Замовлен
     "Прийшов товар",
     /^Брак (нічого не чекає|\d+ (очікує|очікують) перевірки)$/,
     "Інвентаризація",
-    /^Товар і каталог (\d+\+? на затвердження · )?перевірка, моделі, початкові залишки$/,
+    /^Товар і каталог (\d+\+? на затвердження · )?(\d+\+? доробити · )?перевірка, моделі, початкові залишки$/,
     // «Каса», the report and «Накладні» are «Гроші»'s (P0-7).
     "Постачальникам",
     "Магазини",

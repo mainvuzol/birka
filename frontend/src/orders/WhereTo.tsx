@@ -1,18 +1,21 @@
-import { useId } from "react";
 import type { JSX } from "react";
+import { buzz } from "@/shared/telegram";
 import { carrierLabels } from "./types";
 import type { Carrier, Destination } from "./types";
 
-const destinationLabels: Record<Destination, string> = {
-  UKRAINE: "По Україні",
+type Way = Carrier | "ABROAD";
+
+const wayLabels: Record<Way, string> = {
+  ...carrierLabels,
   ABROAD: "За кордон",
 };
 
 /**
- * Where an order goes (orders task list, P0-5): «По Україні» or «За кордон»
- * by a switch, within Ukraine unless said otherwise, and within Ukraine its
- * carrier by a chip, nothing chosen for the seller (owner decisions,
- * 2026-10-01). Abroad has no carrier: how it went is said when it is sent.
+ * Where an order goes (stage 2, orders task list, P0-5, P1-1): one row of
+ * deciding chips — «Нова пошта · Укрпошта · Міст · За кордон» — nothing
+ * chosen for the seller (owner decisions, 2026-10-01; В-ЗП3 (а)). Within
+ * Ukraine its carrier; abroad has none: how it went is said when it is
+ * sent.
  */
 export function WhereTo({
   destination,
@@ -25,43 +28,25 @@ export function WhereTo({
   change: (destination: Destination, carrier: Carrier | "") => void;
   disabled: boolean;
 }): JSX.Element {
-  const name = useId();
+  const chosen: Way | "" = destination === "ABROAD" ? "ABROAD" : carrier;
   return (
-    <>
-      <fieldset className="way-switch two" disabled={disabled}>
-        <legend className="visually-hidden">Куди</legend>
-        {(Object.keys(destinationLabels) as Destination[]).map((option) => (
-          <label key={option}>
-            <input
-              type="radio"
-              name={name}
-              checked={destination === option}
-              onChange={() => {
-                change(option, option === "UKRAINE" ? carrier : "");
-              }}
-            />
-            <span>{destinationLabels[option]}</span>
-          </label>
-        ))}
-      </fieldset>
-      {destination === "UKRAINE" && (
-        <div className="chips carriers" role="group" aria-label="Перевізник">
-          {(Object.keys(carrierLabels) as Carrier[]).map((key) => (
-            <button
-              type="button"
-              className="chip"
-              key={key}
-              aria-pressed={carrier === key}
-              disabled={disabled}
-              onClick={() => {
-                change("UKRAINE", key);
-              }}
-            >
-              {carrierLabels[key]}
-            </button>
-          ))}
-        </div>
-      )}
-    </>
+    <div className="chips where-to" role="group" aria-label="Куди">
+      {(Object.keys(wayLabels) as Way[]).map((way) => (
+        <button
+          type="button"
+          className="chip"
+          key={way}
+          aria-pressed={chosen === way}
+          disabled={disabled}
+          onClick={() => {
+            if (chosen !== way) buzz("selection");
+            if (way === "ABROAD") change("ABROAD", "");
+            else change("UKRAINE", way);
+          }}
+        >
+          {wayLabels[way]}
+        </button>
+      ))}
+    </div>
   );
 }

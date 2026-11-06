@@ -112,11 +112,17 @@ async function waiting(page: Page): Promise<void> {
     });
   });
   // Two lists in review, kept by the store asked about.
+  await lists(page, [true, true]);
+}
+
+/** The lists in review, kept by the store asked about: each ready to
+ * approve, or with a line still to decide. */
+async function lists(page: Page, ready: boolean[]): Promise<void> {
   await page.route("**/api/v1/snapshots?**", async (route) => {
     const store = new URL(route.request().url()).searchParams.get("store_id");
     await route.fulfill({
       json: {
-        items: [0, 1].map((at) => ({
+        items: ready.map((done, at) => ({
           snapshot_id: `00000000-0000-4000-8000-8${String(at).padStart(11, "0")}`,
           command_id: `00000000-0000-4000-8000-9${String(at).padStart(11, "0")}`,
           store_id: store,
@@ -132,9 +138,9 @@ async function waiting(page: Page): Promise<void> {
           decided_at: null,
           summary: {
             lines: 3,
-            pending: 0,
+            pending: done ? 0 : 1,
             needs_review: 0,
-            resolved: 3,
+            resolved: done ? 3 : 2,
             skipped: 0,
             allocations: 3,
             units: 5,
@@ -144,7 +150,7 @@ async function waiting(page: Page): Promise<void> {
             parts: 1,
             parts_removed: 0,
           },
-          ready_to_approve: true,
+          ready_to_approve: done,
           application: null,
         })),
         has_more: false,
@@ -299,6 +305,33 @@ test("«Ще» says what waits under each row, its count the row's one colour, a
   for (const label of ["Перевірка каталогу", "Моделі", "Початкові залишки"])
     expect(await row(page, label).locator("svg.icon").innerHTML()).toBe(mark);
   await expect(page.locator("body")).not.toContainText("⚠");
+});
+
+test("a list still to finish is counted apart from those to approve: «1 на затвердження · 1 доробити», each the row's colour (stage 2, admin task list, P0-1)", async ({
+  page,
+}) => {
+  await lists(page, [true, false]);
+  await page.goto(launch(fixture.owner_telegram_user_id));
+  await openStore(page, "Основний MAIN");
+  await more(page);
+  await expect(row(page, "Товар і каталог")).toHaveAccessibleName(
+    "Товар і каталог 1 на затвердження · 1 доробити · перевірка, моделі, початкові залишки",
+  );
+  await expect(row(page, "Товар і каталог").locator(".more-count")).toHaveText([
+    "1 на затвердження",
+    "1 доробити",
+  ]);
+  await row(page, "Товар і каталог").click();
+  await expect(row(page, "Початкові залишки")).toHaveAccessibleName(
+    "Початкові залишки 1 на затвердження · 1 доробити",
+  );
+  for (const scheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    for (const count of await row(page, "Початкові залишки")
+      .locator(".more-count")
+      .all())
+      expect(await contrast(count, "text")).toBeGreaterThanOrEqual(4.5);
+  }
 });
 
 test("backups that need the owner put a dot in the warning's colour on «Ще» and on its row, read «Ще — є що перевірити», never «⚠», at 3:1 in both themes", async ({

@@ -316,18 +316,22 @@ async function damaged(
   );
 }
 
-/** A store's lists of existing stock: those in review, each its lines;
- * one approved, and one of a warehouse it shares, kept by another store. */
+/** A store's lists of existing stock: those in review, each its lines —
+ * ready to approve, unless `undecided` gives it lines with no answer yet
+ * (none: nothing matched, nothing to put in stock); one approved, and one
+ * of a warehouse it shares, kept by another store. */
 async function lists(
   page: Page,
   store: string,
   inReview: number[],
+  undecided: (number | null)[] = [],
 ): Promise<void> {
   const list = (
     at: number,
     status: string,
     lines: number,
     keeper = store,
+    open: number | null = null,
   ): Record<string, unknown> => {
     const id = `00000000-0000-4000-8000-4${String(at).padStart(11, "0")}`;
     const basis = (n: number): Record<string, number> => ({
@@ -353,11 +357,12 @@ async function lists(
       decided_at: null,
       summary: {
         lines,
-        pending: 0,
-        needs_review: 0,
-        resolved: lines,
+        // Unmatched and in doubt, both of them undecided.
+        pending: (open ?? 0) - Math.floor((open ?? 0) / 2),
+        needs_review: Math.floor((open ?? 0) / 2),
+        resolved: lines - (open ?? 0),
         skipped: 0,
-        allocations: lines,
+        allocations: open === 0 ? 0 : lines - (open ?? 0),
         units: lines,
         lines_differing_from_source: 0,
         lines_by_basis: basis(lines),
@@ -366,22 +371,27 @@ async function lists(
         parts_removed: 0,
         limits: { lines: 5000, allocations: 20000 },
       },
-      ready_to_approve: true,
+      ready_to_approve: open === null,
       application: null,
     };
   };
-  await page.route(`**/api/v1/snapshots?store_id=${store}&**`, async (route) => {
-    await route.fulfill({
-      json: {
-        items: [
-          ...inReview.map((lines, at) => list(at, "IN_REVIEW", lines)),
-          list(50, "APPLIED", 30),
-          list(51, "IN_REVIEW", 7, "00000000-0000-4000-8000-300000000000"),
-        ],
-        has_more: false,
-      },
-    });
-  });
+  await page.route(
+    `**/api/v1/snapshots?store_id=${store}&**`,
+    async (route) => {
+      await route.fulfill({
+        json: {
+          items: [
+            ...inReview.map((lines, at) =>
+              list(at, "IN_REVIEW", lines, store, undecided[at] ?? null),
+            ),
+            list(50, "APPLIED", 30),
+            list(51, "IN_REVIEW", 7, "00000000-0000-4000-8000-300000000000"),
+          ],
+          has_more: false,
+        },
+      });
+    },
+  );
 }
 
 /** The night's copy, made today at 03:15. */
@@ -501,6 +511,8 @@ interface Warehouse {
   /** The store's «Брак». */
   damaged?: boolean;
   paused?: boolean;
+  /** Nothing ever recorded in it: its opening list awaited. */
+  empty?: boolean;
 }
 
 /** A store's warehouses. */
@@ -524,7 +536,7 @@ async function warehouses(
           can_sell: place.damaged !== true,
           can_receive: true,
           damaged_returns: place.damaged === true,
-          awaiting_first_stock: false,
+          awaiting_first_stock: place.empty === true,
         })),
       });
     },
@@ -594,11 +606,25 @@ async function stocktakes(
 }
 
 // Nothing waits but what a journey says: «Брак» empty, no list to approve,
-// no close and no stocktake to tell of, the backups in order. A journey's
-// own stubs, set later, come first.
+// no warehouse awaiting its stock, no close and no stocktake to tell of, the
+// backups in order. A journey's own stubs, set later, come first.
 test.beforeEach(async ({ page }) => {
   await page.route("**/api/v1/damaged-units?**", async (route) => {
     await route.fulfill({ json: { units: [] } });
+  });
+  await page.route("**/api/v1/stock-locations?**", async (route) => {
+    const response = await route.fetch();
+    const places = (await response.json()) as Record<string, unknown>[];
+    // A journey's clock run on lets the read go before it is answered.
+    await route
+      .fulfill({
+        response,
+        json: places.map((place) => ({
+          ...place,
+          awaiting_first_stock: false,
+        })),
+      })
+      .catch(() => undefined);
   });
   await page.route("**/api/v1/snapshots?**", async (route) => {
     await route.fulfill({ json: { items: [], has_more: false } });
@@ -1443,7 +1469,7 @@ test("«Вас нічого не чекає.» from a read that has failed since
   );
 });
 
-test("a manager of one store: no backups and no lists to approve, «Брак» and the parcels by their rights", async ({
+test("a manager of one store: no backups, a list ready to approve the owner's, «Брак» and the parcels by their rights (stage 2, admin task list, P0-1)", async ({
   page,
 }) => {
   await report(page, [[centre, "Центр", centreDay]], null);
@@ -1466,7 +1492,209 @@ test("a manager of one store: no backups and no lists to approve, «Брак» a
     "Лоран шоколад M",
   );
   await expect(page.locator(".today-backups")).toHaveCount(0);
-  expect(urls.filter((url) => /\/(backups|snapshots)/.test(url))).toEqual([]);
+  // The lists read, to tell one still to finish: this one is ready, and
+  // waits on whoever approves (В-А1 (а)).
+  expect(urls.filter((url) => /\/backups/.test(url))).toEqual([]);
+  expect(
+    urls.filter((url) => /\/snapshots\?/.test(url)).length,
+  ).toBeGreaterThan(0);
+  await expect(tags(page).filter({ hasText: /початкові залишки/ })).toHaveCount(
+    0,
+  );
+});
+
+test("the lists by readiness: «Затвердьте» only those ready, «Доробіть» those with lines to decide, said how many — each where its right is (stage 2, admin task list, P0-1)", async ({
+  page,
+}) => {
+  await twoStores(page);
+  await orders(page, centre, [0, 1, 0]);
+  await orders(page, market, [0, 0, 0]);
+  // «Центр»: one ready, two with lines no one answered yet; «Ринок»: one
+  // where nothing matched, nothing to put in stock.
+  await lists(page, centre, [412, 9, 6], [null, 3, 2]);
+  await lists(page, market, [12], [0]);
+  await onToday(page);
+  await expect(
+    page.getByRole("heading", { name: "Чекає на вас · 3", exact: true }),
+  ).toBeVisible();
+  await expect(tags(page).locator("h3")).toHaveText([
+    "Затвердьте початкові залишки",
+    "Доробіть початкові залишки",
+    "Доробіть початкові залишки",
+  ]);
+  await expect(tags(page).locator(".today-tag-meta")).toHaveText([
+    "Центр · 412 рядків",
+    // The two lists' lines with no answer, summed.
+    "Центр · 5 рядків чекають рішення",
+    "Ринок · 12 рядків",
+  ]);
+  // Done from here in the open store; «Ринок»'s there.
+  await expect(tags(page).nth(0).getByRole("button")).toHaveText(
+    "Переглянути й затвердити",
+  );
+  await expect(tags(page).nth(1).getByRole("button")).toHaveText("Доробити");
+  await expect(tags(page).nth(2).getByRole("button")).toHaveCount(0);
+  await tags(page).nth(1).getByRole("button", { name: "Доробити" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Початкові залишки", exact: true }),
+  ).toBeVisible();
+});
+
+test("a manager is told of a list to finish, not of one to approve: «1 рядок чекає рішення», «Доробити» (stage 2, admin task list, P0-1; В-А1 (а))", async ({
+  page,
+}) => {
+  await report(page, [[centre, "Центр", centreDay]], null);
+  await drawer(page, centre, null);
+  await debts(page, centre, "0.00", 0);
+  await orders(page, centre, [0, 0, 0]);
+  await lists(page, centre, [5, 9], [null, 1]);
+  await onToday(
+    page,
+    launch(fixture.network_centre_manager_telegram_user_id, "Марко"),
+  );
+  await expect(tags(page).locator("h3")).toHaveText([
+    "Доробіть початкові залишки",
+  ]);
+  // One store: unnamed.
+  await expect(tags(page).locator(".today-tag-meta")).toHaveText(
+    "1 рядок чекає рішення",
+  );
+  await expect(tags(page).getByRole("button")).toHaveText("Доробити");
+});
+
+test("a warehouse nothing was ever recorded in is a tag for whoever makes the lists: named, or counted with their names, «Внести залишки» in the open store; a shared one once, told when every store has answered, «Брак», a paused one and one with a list begun never (stage 2, admin task list, P0-2; review, 2026-11-05)", async ({
+  page,
+}) => {
+  // Every heading the page ever showed, however briefly.
+  await page.addInitScript(() => {
+    const host = window as unknown as { headings: string[] };
+    host.headings = [];
+    new MutationObserver(() => {
+      for (const heading of document.querySelectorAll("h3")) {
+        const text = heading.textContent;
+        if (!host.headings.includes(text)) host.headings.push(text);
+      }
+    }).observe(document, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    });
+  });
+  await twoStores(page);
+  await orders(page, centre, [0, 1, 0]);
+  await orders(page, market, [0, 0, 0]);
+  const shared = "00000000-0000-4000-8000-600000000001";
+  // The warehouse a list in review is typed for (`lists`).
+  const begun = "00000000-0000-4000-8000-500000000000";
+  await warehouses(page, centre, [
+    { id: "00000000-0000-4000-8000-600000000000", name: "Основний" },
+    { id: shared, name: "Новий", empty: true },
+    { id: begun, name: "Зошит", empty: true },
+    {
+      id: "00000000-0000-4000-8000-600000000002",
+      name: "Брак",
+      damaged: true,
+      empty: true,
+    },
+    {
+      id: "00000000-0000-4000-8000-600000000003",
+      name: "Зимовий",
+      paused: true,
+      empty: true,
+    },
+  ]);
+  await warehouses(page, market, [
+    { id: shared, name: "Новий", empty: true },
+    { id: "00000000-0000-4000-8000-600000000004", name: "Північ", empty: true },
+    {
+      id: "00000000-0000-4000-8000-600000000005",
+      name: "Південь",
+      empty: true,
+    },
+  ]);
+  await lists(page, centre, [7], [2]);
+  // «Центр»'s lists answer only after «Ринок»'s reads have: the shared
+  // warehouse is never told under «Ринок» meanwhile, to move after.
+  let answer = (): void => undefined;
+  const held = new Promise<void>((done) => {
+    answer = done;
+  });
+  await page.route(
+    `**/api/v1/snapshots?store_id=${centre}&**`,
+    async (route) => {
+      await held;
+      await route.fallback();
+    },
+  );
+  const marketRead = Promise.all([
+    page.waitForResponse((response) =>
+      response.url().includes(`/api/v1/snapshots?store_id=${market}&`),
+    ),
+    page.waitForResponse((response) =>
+      response.url().endsWith(`/api/v1/stock-locations?store_id=${market}`),
+    ),
+  ]);
+  await onToday(page);
+  await marketRead;
+  await page.waitForTimeout(500);
+  answer();
+  await expect(tags(page).locator("h3")).toHaveText([
+    "Доробіть початкові залишки",
+    "Склад «Новий» ще чекає початкових залишків",
+    "2 склади ще чекають початкових залишків",
+  ]);
+  expect(
+    await page.evaluate(
+      () => (window as unknown as { headings: string[] }).headings,
+    ),
+  ).not.toContain("3 склади ще чекають початкових залишків");
+  await expect(tags(page).locator(".today-tag-meta")).toHaveText([
+    "Центр · 2 рядки чекають рішення",
+    "Центр · Поки їх немає, продажі тут — на папері",
+    "Ринок · Північ, Південь · Поки їх немає, продажі тут — на папері",
+  ]);
+  await expect(tags(page).nth(1).getByRole("button")).toHaveText(
+    "Внести залишки",
+  );
+  await expect(tags(page).nth(2).getByRole("button")).toHaveCount(0);
+  // The catalogue's mark, the ink's tone, as the lists' own tags.
+  expect(await tags(page).nth(1).locator("svg.icon").innerHTML()).toBe(
+    await tags(page).nth(0).locator("svg.icon").innerHTML(),
+  );
+  await tags(page)
+    .nth(1)
+    .getByRole("button", { name: "Внести залишки" })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Початкові залишки", exact: true }),
+  ).toBeVisible();
+});
+
+test("where no one may make the lists, no warehouse awaiting its stock is said, though the lists are read to approve (stage 2, admin task list, P0-2)", async ({
+  page,
+}) => {
+  await twoStores(page);
+  await orders(page, centre, [0, 1, 0]);
+  await orders(page, market, [0, 0, 0]);
+  await warehouses(page, market, [
+    { id: "00000000-0000-4000-8000-600000000004", name: "Північ", empty: true },
+  ]);
+  const urls = asked(page);
+  // «Ринок»'s lists only approved there: read, and no warehouse said.
+  await onToday(page, owner(), (store) => {
+    if (store.id === market)
+      store.permissions = store.permissions.filter(
+        (right) => right !== "snapshot:import",
+      );
+  });
+  await expect(
+    page.getByRole("heading", { name: "Вас нічого не чекає.", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText(/чекає початкових залишків/)).toHaveCount(0);
+  expect(
+    urls.filter((url) => url.startsWith(`/api/v1/snapshots?store_id=${market}`))
+      .length,
+  ).toBeGreaterThan(0);
 });
 
 // --- news: what someone else did --------------------------------------------

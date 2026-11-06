@@ -197,16 +197,20 @@ export function useDamaged(
   return byStore(shown, reads);
 }
 
-/** Each store's lists of existing stock, where this person approves them
- * (`snapshot:approve` there): «Початкові залишки»'s own ask, under its
- * prefix, so a list it approves or rejects is read again here at once. */
+/** Each store's lists of existing stock, where this person makes them or
+ * approves them (`snapshot:import` or `snapshot:approve` there, as the
+ * server lets either read them; stage 2, admin task list, P0-1):
+ * «Початкові залишки»'s own ask, under its prefix, so a list it saves,
+ * approves or rejects is read again here at once. */
 export function useStockLists(
   token: string,
   scopeKey: string,
   stores: readonly Store[],
 ): Map<string, UseQueryResult<{ items: StockList[]; has_more: boolean }>> {
-  const shown = stores.filter((store) =>
-    store.permissions.includes("snapshot:approve"),
+  const shown = stores.filter(
+    (store) =>
+      store.permissions.includes("snapshot:import") ||
+      store.permissions.includes("snapshot:approve"),
   );
   const reads = useQueries({
     queries: shown.map((store) => ({
@@ -220,6 +224,29 @@ export function useStockLists(
     })),
   });
   return byStore(shown, reads);
+}
+
+/** The lists of existing stock that wait on this person in a store
+ * (stage 2, admin task list, P0-1): ready, to approve, where they approve
+ * them; not ready yet, to finish, where they make them. Ready with only the
+ * making, or not ready with only the approving, waits on someone else (В-А1
+ * (а)). A list of a warehouse two stores share waits in the store that
+ * keeps it. */
+export function listsWaiting(
+  store: Store,
+  items: readonly StockList[],
+): { approve: StockList[]; finish: StockList[] } {
+  const open = items.filter(
+    (list) => list.status === "IN_REVIEW" && list.store_id === store.id,
+  );
+  return {
+    approve: store.permissions.includes("snapshot:approve")
+      ? open.filter((list) => list.ready_to_approve)
+      : [],
+    finish: store.permissions.includes("snapshot:import")
+      ? open.filter((list) => !list.ready_to_approve)
+      : [],
+  };
 }
 
 /** The closes of yesterday and today of every store whose money this

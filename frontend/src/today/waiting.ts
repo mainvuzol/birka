@@ -8,11 +8,13 @@ import type { Close } from "@/cash/types";
 import type { DamagedUnit } from "@/damaged/types";
 import type { StocktakeRecord } from "@/inventory/stocktakeTypes";
 import { plural } from "@/openings/types";
+import type { StockList } from "@/openings/types";
 import type { OrderItem, Store } from "@/orders/types";
 import { visible } from "@/shared/visible";
 import {
   ageOf,
   dayStores,
+  listsWaiting,
   useCloses,
   useDamaged,
   useNetworkBackups,
@@ -27,10 +29,12 @@ import { useSeen } from "./seen";
 /**
  * What «Сьогодні» says waits («Усе на бірці» task list, P0-6, items 3–8;
  * spec §6.9), in the frame's order: the backups, a drawer's difference, the
- * parcels to send, «Брак», the lists of existing stock to approve, a
- * stocktake finished. Each from a read the server already answers, by its
- * own right in its own store. Work goes by itself once done, at the next
- * reading; news — a drawer's difference, a stocktake — once seen («Бачу»).
+ * parcels to send, «Брак», the lists of existing stock to approve or to
+ * finish, a warehouse still waiting for its stock (stage 2, admin task
+ * list, P0-1, P0-2), a stocktake finished. Each from a read the server
+ * already answers, by its own right in its own store. Work goes by itself
+ * once done, at the next reading; news — a drawer's difference, a
+ * stocktake — once seen («Бачу»).
  */
 export type Kind =
   | "backups"
@@ -38,6 +42,8 @@ export type Kind =
   | "parcels"
   | "damaged"
   | "openings"
+  | "finish"
+  | "first"
   | "stocktake";
 
 export interface Tag {
@@ -295,37 +301,124 @@ export function useWaiting({
     ];
   });
 
+  /** «12 рядків», or «2 списки»: what a store's lists hold. */
+  const linesOf = (waiting: readonly StockList[]): string => {
+    const first = waiting[0];
+    return waiting.length === 1 && first !== undefined
+      ? `${String(first.summary.lines)} ${plural(
+          first.summary.lines,
+          "рядок",
+          "рядки",
+          "рядків",
+        )}`
+      : `${String(waiting.length)} ${plural(
+          waiting.length,
+          "список",
+          "списки",
+          "списків",
+        )}`;
+  };
+  // Ready, to approve; not ready, to finish — each by its own right there
+  // (stage 2, admin task list, P0-1).
   const approve = shown.flatMap((store): Tag[] => {
     const read = lists.get(store.id);
     if (!read?.data) return [];
-    // A list of a warehouse two stores share is seen from both: it waits
-    // in the store that keeps it.
-    const waiting = read.data.items.filter(
-      (list) => list.status === "IN_REVIEW" && list.store_id === store.id,
+    const waiting = listsWaiting(store, read.data.items);
+    const undecided = waiting.finish.reduce(
+      (n, list) => n + list.summary.pending + list.summary.needs_review,
+      0,
     );
-    const first = waiting[0];
-    if (first === undefined) return [];
+    return [
+      ...(waiting.approve.length > 0
+        ? [
+            {
+              key: `openings:${store.id}`,
+              kind: "openings" as const,
+              store,
+              title: "Затвердьте початкові залишки",
+              meta: [...named(store), linesOf(waiting.approve)],
+            },
+          ]
+        : []),
+      ...(waiting.finish.length > 0
+        ? [
+            {
+              key: `finish:${store.id}`,
+              kind: "finish" as const,
+              store,
+              title: "Доробіть початкові залишки",
+              meta: [
+                ...named(store),
+                // Its lines with no answer yet, unmatched or in doubt; a
+                // list with none holds nothing to put in stock: its lines.
+                undecided > 0
+                  ? `${String(undecided)} ${plural(
+                      undecided,
+                      "рядок чекає",
+                      "рядки чекають",
+                      "рядків чекають",
+                    )} рішення`
+                  : linesOf(waiting.finish),
+              ],
+            },
+          ]
+        : []),
+    ];
+  });
+
+  // A selling warehouse nothing was ever recorded in, and no list of it in
+  // review: the first thing to do (stage 2, admin task list, P0-2) — for
+  // whoever makes the lists there, who can tell no list is begun. Each
+  // warehouse once, through the first store of the day that sees it, the
+  // open one first; «Брак» and a paused one never. Told once every store's
+  // warehouses and lists have answered, as the stocktakes are: a shared one
+  // never moves between stores as they answer (review, 2026-11-05).
+  const awaited = new Set<string>();
+  const firstSettled =
+    settled &&
+    [...lists.values()].every(
+      (read) => read.data !== undefined || read.isError,
+    );
+  const first = (firstSettled ? shown : []).flatMap((store): Tag[] => {
+    if (!store.permissions.includes("snapshot:import")) return [];
+    const places = warehouses.get(store.id)?.data;
+    const begun = lists.get(store.id)?.data?.items;
+    if (places === undefined || begun === undefined) return [];
+    const empty = places.filter(
+      (location) =>
+        location.is_active &&
+        location.can_sell &&
+        !location.damaged_returns &&
+        location.awaiting_first_stock === true &&
+        !awaited.has(location.id) &&
+        !begun.some(
+          (list) =>
+            list.status === "IN_REVIEW" && list.location_id === location.id,
+        ),
+    );
+    const one = empty[0];
+    if (one === undefined) return [];
+    for (const location of empty) awaited.add(location.id);
     return [
       {
-        key: `openings:${store.id}`,
-        kind: "openings",
+        key: `first:${store.id}`,
+        kind: "first",
         store,
-        title: "Затвердьте початкові залишки",
+        title:
+          empty.length === 1
+            ? `Склад «${visible(one.name)}» ще чекає початкових залишків`
+            : `${String(empty.length)} ${plural(
+                empty.length,
+                "склад",
+                "склади",
+                "складів",
+              )} ще чекають початкових залишків`,
         meta: [
           ...named(store),
-          waiting.length === 1
-            ? `${String(first.summary.lines)} ${plural(
-                first.summary.lines,
-                "рядок",
-                "рядки",
-                "рядків",
-              )}`
-            : `${String(waiting.length)} ${plural(
-                waiting.length,
-                "список",
-                "списки",
-                "списків",
-              )}`,
+          ...(empty.length === 1
+            ? []
+            : [empty.map((location) => visible(location.name)).join(", ")]),
+          "Поки їх немає, продажі тут — на папері",
         ],
       },
     ];
@@ -424,6 +517,7 @@ export function useWaiting({
     ...parcels,
     ...inspect,
     ...approve,
+    ...first,
     ...finished,
   ];
   const seenAt = (tag: Tag): number | undefined =>

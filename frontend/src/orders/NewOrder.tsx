@@ -1,11 +1,18 @@
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { JSX } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError, errorText } from "@/shared/api";
+import { Eyelet } from "@/shared/Eyelet";
 import { usePanelRoom } from "@/shared/panel";
 import { Placeholder } from "@/shared/Placeholder";
+import { Sheet } from "@/shared/Sheet";
 import { Sum } from "@/shared/Sum";
-import { hideKeyboard } from "@/shared/telegram";
+import {
+  buzz,
+  hideKeyboard,
+  useAskBeforeClosing,
+  useMainButton,
+} from "@/shared/telegram";
 import { visible } from "@/shared/visible";
 import { Back } from "@/shared/Back";
 import { ScreenHeader } from "@/shared/ScreenHeader";
@@ -72,21 +79,27 @@ function shortText(short: Shortfall): string {
 }
 
 /**
- * «Нове замовлення» as the till sells (orders task list, P0-5): a few
- * letters of the model, a tap on its size puts a line in the order — from
- * that chip's warehouse, never another (business rule: no warehouse is
- * swapped), at the store's price for it, which the seller may change
- * (owner decision, 2026-10-23, В3 (а)) — then where it goes, and
- * «Замовити та зарезервувати» under the thumb. Only what the ledger holds
- * is reserved: no coat from the catalogue. The server reserves; a line it
- * finds short is marked with what is left, the rest kept as typed.
+ * «Нове замовлення» as the till sells (stage 2, orders task list, P0-5): a
+ * task screen, the menu stepped aside. A few letters of the model, a tap
+ * on its size puts a line in the order — from that cell's warehouse, never
+ * another (business rule: no warehouse is swapped), at the store's price
+ * for it, which the seller may change (owner decision, 2026-10-23, В3 (а))
+ * — kept in the tray «У замовленні» under the thumb and its sheet; then
+ * where it goes, one row of chips, and «Замовити та зарезервувати»,
+ * Telegram's MainButton or the dock's one button. Only what the ledger
+ * holds is reserved: no coat from the catalogue. The server reserves; a
+ * line it finds short is marked in the sheet with what is left, the rest
+ * kept as typed; any other refusal is said over «Куди». Telegram asks
+ * before closing while the order holds a line.
  */
 export function NewOrder({
   store,
   token,
   journalKey,
   blocked,
+  waiting,
   refused,
+  said,
   back,
   submit,
 }: {
@@ -95,8 +108,12 @@ export function NewOrder({
   /** The till's: an order lists the stock the till sells, read once. */
   journalKey: string;
   blocked: boolean;
+  /** «Замовити та зарезервувати» is being asked: the button turns. */
+  waiting: boolean;
   /** Why the last «Замовити та зарезервувати» was refused, if it was. */
   refused: unknown;
+  /** That refusal as the orders say it. */
+  said: string | null;
   back: () => void;
   submit: (
     lines: Line[],
@@ -114,14 +131,20 @@ export function NewOrder({
   const priceRefs = useRef(new Map<string, HTMLInputElement>());
   const [focusPrice, setFocusPrice] = useState<string | null>(null);
   const [draft, setDraft] = useState<DraftLine[]>([]);
+  // The sheet «У замовленні», opened by the tray's row, by a line with no
+  // price, and by the line the server found short.
+  const [sheetOpen, setSheetOpen] = useState(false);
   // Within Ukraine unless said otherwise, and then by a carrier, picked
   // now; the waybill comes when it is sent (owner decisions, 2026-10-01).
   const [destination, setDestination] = useState<Destination>("UKRAINE");
   const [carrier, setCarrier] = useState<Carrier | "">("");
   const [short, setShort] = useState<Shortfall | null>(null);
   const shortRef = useRef<HTMLParagraphElement>(null);
+  const alertRef = useRef<HTMLParagraphElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
-  const linesHeading = useId();
+  // The tray's row: the cursor's way back from the sheet when what opened
+  // it is gone.
+  const rowRef = useRef<HTMLButtonElement>(null);
   const cache = useQueryClient();
 
   const locations = useQuery({
@@ -134,7 +157,7 @@ export function NewOrder({
     (location) => location.is_active && location.can_sell,
   );
   const onlyWarehouse = sellable.length === 1 ? sellable[0] : undefined;
-  // Two or more: each chip and each line says its warehouse (owner
+  // Two or more: each cell and each line says its warehouse (owner
   // decision, 2026-10-17).
   const places = useMemo(() => {
     const rows = (locations.data ?? []).filter(
@@ -169,7 +192,7 @@ export function NewOrder({
             }),
         );
 
-  /** A chip tapped: a line of it at its price, or one more of it. */
+  /** A cell tapped: a line of it at its price, or one more of it. */
   function put(item: StockOption): void {
     if (!item.location_id) return;
     const line: Line = {
@@ -181,13 +204,19 @@ export function NewOrder({
       discount_amount: "0.00",
     };
     const at = draft.findIndex((d) => stockKey(d.line) === stockKey(line));
+    // The search done with, the keyboard goes — unless a new line's price
+    // is to be typed next; and a coat in the order is felt, as at the till.
+    if (item.suggested_price || at >= 0) hideKeyboard();
     if (at >= 0) {
       const held = draft[at];
-      if (held && held.line.quantity < most(held))
+      if (held && held.line.quantity < most(held)) {
         change(at, { quantity: held.line.quantity + 1 });
+        buzz("light");
+      }
       return;
     }
     if (draft.length >= 100) return;
+    buzz("light");
     const id = crypto.randomUUID();
     setDraft([
       ...draft,
@@ -201,7 +230,11 @@ export function NewOrder({
         available: item.available_quantity,
       },
     ]);
-    if (!item.suggested_price) setFocusPrice(id);
+    // A model with no price: the sheet opens, the cursor in its price.
+    if (!item.suggested_price) {
+      setSheetOpen(true);
+      setFocusPrice(id);
+    }
   }
 
   function change(
@@ -228,8 +261,8 @@ export function NewOrder({
     if (index === shortIndex && edit.quantity !== undefined) setShort(null);
   }
 
-  // Refused for want of stock: the line it names marked, with what may
-  // still be reserved, and the chips read again (P0-5).
+  // Refused for want of stock: the sheet opens on the line it names, with
+  // what may still be reserved, and the cells read again (P0-5).
   useEffect(() => {
     const found = shortOf(refused);
     setShort(found);
@@ -250,11 +283,39 @@ export function NewOrder({
       queryKey: ["sale-stock", journalKey, store.id],
     });
   }, [refused, cache, journalKey, store.id]);
+  const shortHere = short !== null && shortIndex >= 0;
+  useEffect(() => {
+    if (shortHere) setSheetOpen(true);
+  }, [shortHere, refused]);
   useEffect(() => {
     if (!short) return;
     shortRef.current?.scrollIntoView({ block: "nearest" });
     shortRef.current?.focus({ preventScroll: true });
-  }, [short]);
+  }, [short, sheetOpen]);
+  // Any other refusal — or a shortfall of a line no longer here — over
+  // «Куди», in view, the lines and the carrier kept. Read off the refusal
+  // itself, so a line's shortfall is never said there first.
+  const refusedShort = shortOf(refused);
+  const plate =
+    refused === null
+      ? null
+      : refusedShort === null
+        ? said
+        : short !== null && shortIndex < 0
+          ? errorText(refused)
+          : null;
+  useEffect(() => {
+    if (plate === null) return;
+    alertRef.current?.scrollIntoView({ block: "nearest" });
+    alertRef.current?.focus({ preventScroll: true });
+  }, [plate, refused]);
+  // An empty order closes its sheet; the cursor goes to the search, where
+  // the next model is found: the tray goes with the lines.
+  useEffect(() => {
+    if (draft.length > 0 || !sheetOpen) return;
+    setSheetOpen(false);
+    setFocusSearch(true);
+  }, [draft.length, sheetOpen]);
   useEffect(() => {
     if (focusPrice === null) return;
     priceRefs.current.get(focusPrice)?.focus();
@@ -266,7 +327,8 @@ export function NewOrder({
     searchRef.current.focus();
     setFocusSearch(false);
   }, [focusSearch, locations.status]);
-  usePanelRoom(panelRef, draft.length > 0);
+  // Telegram asks before closing while the order holds a line (§6, 2).
+  useAskBeforeClosing(draft.length > 0);
 
   const priced = draft.every((d) => d.line.unit_price !== "");
   const total = draft.reduce(
@@ -277,18 +339,57 @@ export function NewOrder({
   const units = draft.reduce((n, d) => n + d.line.quantity, 0);
   const noCarrier = destination === "UKRAINE" && carrier === "";
   const first = draft[0];
-  // What is ordered, as the panel says it (and a kept one's banner, P1-1).
-  const what =
-    draft.length === 1 && first
-      ? `${visible(first.name)} · ${visible(first.size)}${placeOf(first.line.source_location_id)}${first.line.quantity > 1 ? ` × ${String(first.line.quantity)}` : ""}`
-      : `У замовленні: ${String(units)} шт.`;
+  // A line, then the carrier: the button says what is missing (P0-5).
+  const words =
+    draft.length > 0 && noCarrier
+      ? "Оберіть перевізника"
+      : "Замовити та зарезервувати";
+  const ready = draft.length > 0 && priced && !noCarrier && !blocked;
+  function press(): void {
+    if (!ready || waiting) return;
+    // Pressed over the sheet, it goes: what the press comes to — a plate,
+    // a kept order — is said on the page, never under it (review,
+    // 2026-11-05); a shortfall opens it again on its line.
+    setSheetOpen(false);
+    submit(
+      draft.map((d) => d.line),
+      destination,
+      destination === "UKRAINE" && carrier !== "" ? carrier : null,
+      // What is ordered, as a kept one's banner says it (P1-1).
+      [
+        first
+          ? `${visible(first.name)} · ${visible(first.size)}${first.line.quantity > 1 ? ` × ${String(first.line.quantity)}` : ""}${draft.length > 1 ? ` + ще ${String(draft.length - 1)}` : ""}`
+          : "",
+        destination === "ABROAD"
+          ? "За кордон"
+          : carrier !== ""
+            ? carrierLabels[carrier]
+            : null,
+      ]
+        .filter(Boolean)
+        .join(" · "),
+    );
+  }
+  // Telegram's MainButton, set on entry and taken away on leaving (spec
+  // §6, 4); held until a line has its price and a carrier is chosen.
+  const main = useMainButton(words, press, {
+    progress: waiting,
+    active: ready,
+  });
+  usePanelRoom(panelRef, draft.length > 0 || !main);
+  const traySaid = `У замовленні · ${String(units)}${first ? ` · ${visible(first.name)} · ${visible(first.size)}` : ""}`;
+  const closeSheet = (): void => {
+    setSheetOpen(false);
+  };
 
   return (
     <>
       <ScreenHeader
         title="Нове замовлення"
-        back={
-          <Back go={back}>← До замовлень</Back>
+        back={<Back go={back}>← До замовлень</Back>}
+        // One warehouse: named in the screen's line, not chosen (P0-5).
+        lead={
+          onlyWarehouse ? `Склад: ${visible(onlyWarehouse.name)}` : undefined
         }
       />
       <section className="order-new">
@@ -307,166 +408,63 @@ export function NewOrder({
               Доступних складів немає. Зверніться до менеджера.
             </p>
           ) : (
-            <>
-              {onlyWarehouse && (
-                // One warehouse: named, not chosen (P0-5).
-                <p className="warehouse">Склад: {visible(onlyWarehouse.name)}</p>
-              )}
-              <StockSearch
-                text={text}
-                type={setText}
-                query={query}
-                stock={stock}
-                warehouse={onlyWarehouse?.name ?? ""}
-                places={places}
-                pick={put}
-                canAdd={(item) => {
-                  const held = draft.find(
-                    (d) =>
-                      stockKey(d.line) ===
-                      stockKey({
-                        source_location_id: item.location_id,
-                        product_variant_id: item.product_variant_id,
-                        size_id: item.size_id,
-                      }),
-                  );
-                  // A cell of no warehouse — a server from before every one
-                  // was listed — puts nothing in: none is guessed.
-                  if (!item.location_id) return false;
-                  return held
-                    ? held.line.quantity < most(held)
-                    : draft.length < 100;
-                }}
-                chosen={(item) =>
-                  draft.find(
-                    (d) =>
-                      stockKey(d.line) ===
-                      stockKey({
-                        source_location_id: item.location_id,
-                        product_variant_id: item.product_variant_id,
-                        size_id: item.size_id,
-                      }),
-                  )?.line.quantity ?? 0
-                }
-                chosenIn="у замовленні"
-                offerHeld={false}
-                sticky={false}
-                searchRef={searchRef}
-                failure={
-                  stock.error ? (
-                    <Unread
-                      error={stock.error}
-                      retry={() => {
-                        void stock.refetch();
-                      }}
-                    />
-                  ) : null
-                }
-                offer={null}
-              />
-            </>
-          )}
-          {draft.length > 0 && (
-            <div
-              className="order-lines"
-              role="group"
-              aria-labelledby={linesHeading}
-            >
-              <h3 id={linesHeading}>У замовленні</h3>
-              {draft.map((d, index) => (
-                <div
-                  className={index === shortIndex ? "line short" : "line"}
-                  key={d.id}
-                >
-                  <strong>
-                    {visible(d.name)} · {visible(d.size)}
-                    {placeOf(d.line.source_location_id)}
-                  </strong>
-                  <div className="line-edit">
-                    <div
-                      className="stepper"
-                      role="group"
-                      aria-label={`Кількість: ${visible(d.name)} · ${visible(d.size)}${placeOf(d.line.source_location_id)}`}
-                    >
-                      <button
-                        type="button"
-                        aria-label="Менше"
-                        disabled={d.line.quantity <= 1}
-                        onClick={() => {
-                          change(index, { quantity: d.line.quantity - 1 });
-                        }}
-                      >
-                        −
-                      </button>
-                      <output>{d.line.quantity}</output>
-                      <button
-                        type="button"
-                        aria-label="Більше"
-                        disabled={d.line.quantity >= most(d)}
-                        onClick={() => {
-                          change(index, { quantity: d.line.quantity + 1 });
-                        }}
-                      >
-                        +
-                      </button>
-                    </div>
-                    <label>
-                      Ціна, грн
-                      <input
-                        ref={(input) => {
-                          if (input) priceRefs.current.set(d.id, input);
-                          else priceRefs.current.delete(d.id);
-                        }}
-                        inputMode="decimal"
-                        // The keyboard's «Готово» puts it away (stage 2,
-                        // orders task list, P0-5).
-                        enterKeyHint="done"
-                        placeholder="0,00"
-                        value={d.price}
-                        onChange={(event) => {
-                          change(index, { price: event.target.value });
-                        }}
-                        onKeyDown={(event) => {
-                          if (event.key !== "Enter") return;
-                          event.preventDefault();
-                          hideKeyboard();
-                        }}
-                      />
-                    </label>
-                  </div>
-                  <PriceHint
-                    typed={d.price}
-                    price={d.line.unit_price}
-                    suggested={d.suggested}
-                  />
-                  {index === shortIndex && short && (
-                    <p
-                      className="line-short"
-                      role="alert"
-                      tabIndex={-1}
-                      ref={shortRef}
-                    >
-                      {shortText(short)}
-                    </p>
-                  )}
-                  <button
-                    type="button"
-                    className="quiet"
-                    onClick={() => {
-                      setDraft(draft.filter((_, i) => i !== index));
-                      if (index === shortIndex) setShort(null);
+            <StockSearch
+              text={text}
+              type={setText}
+              query={query}
+              stock={stock}
+              warehouse={onlyWarehouse?.name ?? ""}
+              places={places}
+              pick={put}
+              canAdd={(item) => {
+                const held = draft.find(
+                  (d) =>
+                    stockKey(d.line) ===
+                    stockKey({
+                      source_location_id: item.location_id,
+                      product_variant_id: item.product_variant_id,
+                      size_id: item.size_id,
+                    }),
+                );
+                // A cell of no warehouse — a server from before every one
+                // was listed — puts nothing in: none is guessed.
+                if (!item.location_id) return false;
+                return held
+                  ? held.line.quantity < most(held)
+                  : draft.length < 100;
+              }}
+              chosen={(item) =>
+                draft.find(
+                  (d) =>
+                    stockKey(d.line) ===
+                    stockKey({
+                      source_location_id: item.location_id,
+                      product_variant_id: item.product_variant_id,
+                      size_id: item.size_id,
+                    }),
+                )?.line.quantity ?? 0
+              }
+              chosenIn="у замовленні"
+              offerHeld={false}
+              sticky={false}
+              searchRef={searchRef}
+              failure={
+                stock.error ? (
+                  <Unread
+                    error={stock.error}
+                    retry={() => {
+                      void stock.refetch();
                     }}
-                  >
-                    Прибрати {visible(d.name)} · {visible(d.size)}
-                    {placeOf(d.line.source_location_id)}
-                  </button>
-                </div>
-              ))}
-            </div>
+                  />
+                ) : null
+              }
+              offer={null}
+            />
           )}
-          {short && shortIndex < 0 && (
-            // Short of a line no longer here: the server's words.
-            <p role="alert">{errorText(refused)}</p>
+          {plate !== null && (
+            <p role="alert" ref={alertRef} tabIndex={-1}>
+              {plate}
+            </p>
           )}
           <WhereTo
             destination={destination}
@@ -483,50 +481,197 @@ export function NewOrder({
               : "ТТН впишете, коли відправите."}
           </p>
         </fieldset>
-        {/* Under the thumb (P0-5): what is ordered, its sum, and the one
-            press, which says the carrier first when none is chosen — as
-            «Каса»'s «Оберіть новий спосіб». */}
-        {draft.length > 0 && (
-          <div className="pay-panel" ref={panelRef}>
-            <p className="pay-what">{what}</p>
-            <p className="pay-total">
-              Разом{" "}
-              {priced ? (
-                <Sum value={money(decimal(total))} />
-              ) : (
-                // A sum without a line's price is no sum to say.
-                <strong className="sum">—</strong>
-              )}
-            </p>
-            <button
-              type="button"
-              className="cash-panel-button"
-              disabled={blocked || !priced || noCarrier}
-              onClick={() => {
-                submit(
-                  draft.map((d) => d.line),
-                  destination,
-                  destination === "UKRAINE" && carrier !== "" ? carrier : null,
-                  [
-                    first
-                      ? `${visible(first.name)} · ${visible(first.size)}${first.line.quantity > 1 ? ` × ${String(first.line.quantity)}` : ""}${draft.length > 1 ? ` + ще ${String(draft.length - 1)}` : ""}`
-                      : what,
-                    destination === "ABROAD"
-                      ? "За кордон"
-                      : carrier !== ""
-                        ? carrierLabels[carrier]
-                        : null,
-                  ]
-                    .filter(Boolean)
-                    .join(" · "),
-                );
-              }}
-            >
-              {noCarrier ? "Оберіть перевізника" : "Замовити та зарезервувати"}
-            </button>
+        {/* The tray under the thumb (spec §6.15, as the till's): the order
+            in one row that opens its sheet, «Разом» — and outside Telegram
+            its MainButton as the dock's one button. */}
+        {(draft.length > 0 || !main) && (
+          <div
+            className={[
+              "pay-panel",
+              draft.length > 0 ? "till-tray order-tray" : "order-panel",
+              main ? "" : "order-dock",
+            ]
+              .filter(Boolean)
+              .join(" ")}
+            ref={panelRef}
+          >
+            {draft.length > 0 && (
+              <>
+                <button
+                  ref={rowRef}
+                  type="button"
+                  className="tray-basket"
+                  aria-haspopup="dialog"
+                  aria-label={traySaid}
+                  onClick={() => {
+                    // Not while it is sent: its answer is said on the page.
+                    if (!waiting) setSheetOpen(true);
+                  }}
+                >
+                  <span className="tray-count">У замовленні · {units}</span>
+                  {first && (
+                    <span className="tray-what">
+                      {visible(first.name)} · {visible(first.size)}
+                    </span>
+                  )}
+                  <span className="tray-open" aria-hidden="true">
+                    ›
+                  </span>
+                </button>
+                <p className="pay-total">
+                  Разом{" "}
+                  {priced ? (
+                    <Sum value={money(decimal(total))} />
+                  ) : (
+                    // A sum without a line's price is no sum to say.
+                    <strong className="sum">—</strong>
+                  )}
+                </p>
+              </>
+            )}
+            {!main && (
+              <button
+                type="button"
+                className="main-mimic"
+                disabled={!ready}
+                onClick={press}
+              >
+                {waiting ? (
+                  <>
+                    <Eyelet state="spin" size={20} />
+                    <span className="visually-hidden">{words}</span>
+                  </>
+                ) : (
+                  words
+                )}
+              </button>
+            )}
           </div>
         )}
       </section>
+      {sheetOpen && draft.length > 0 && (
+        <Sheet
+          title="У замовленні"
+          close={closeSheet}
+          fallback={rowRef}
+          foot={
+            <button
+              type="button"
+              className="quiet sheet-done"
+              onClick={closeSheet}
+            >
+              Готово
+            </button>
+          }
+        >
+          <fieldset disabled={blocked}>
+            {draft.map((d, index) => (
+              <div
+                className={index === shortIndex ? "line short" : "line"}
+                key={d.id}
+              >
+                <strong>
+                  {visible(d.name)} · {visible(d.size)}
+                </strong>
+                {/* Where it leaves from, under it (spec §6.16), as the
+                    till's basket says it. */}
+                {(places?.get(d.line.source_location_id) ??
+                  onlyWarehouse?.name) !== undefined && (
+                  <span className="line-place">
+                    Склад:{" "}
+                    {visible(
+                      places?.get(d.line.source_location_id) ??
+                        onlyWarehouse?.name ??
+                        "",
+                    )}
+                  </span>
+                )}
+                <div className="line-edit">
+                  <div
+                    className="stepper"
+                    role="group"
+                    aria-label={`Кількість: ${visible(d.name)} · ${visible(d.size)}${placeOf(d.line.source_location_id)}`}
+                  >
+                    <button
+                      type="button"
+                      aria-label="Менше"
+                      disabled={d.line.quantity <= 1}
+                      onClick={() => {
+                        change(index, { quantity: d.line.quantity - 1 });
+                        buzz("light");
+                      }}
+                    >
+                      −
+                    </button>
+                    <output>{d.line.quantity}</output>
+                    <button
+                      type="button"
+                      aria-label="Більше"
+                      disabled={d.line.quantity >= most(d)}
+                      onClick={() => {
+                        change(index, { quantity: d.line.quantity + 1 });
+                        buzz("light");
+                      }}
+                    >
+                      +
+                    </button>
+                  </div>
+                  <label>
+                    Ціна, грн
+                    <input
+                      ref={(input) => {
+                        if (input) priceRefs.current.set(d.id, input);
+                        else priceRefs.current.delete(d.id);
+                      }}
+                      inputMode="decimal"
+                      enterKeyHint="done"
+                      placeholder="0,00"
+                      value={d.price}
+                      onChange={(event) => {
+                        change(index, { price: event.target.value });
+                      }}
+                      // The keyboard's «Готово» closes the sheet, as its own
+                      // button does.
+                      onKeyDown={(event) => {
+                        if (event.key !== "Enter") return;
+                        event.preventDefault();
+                        hideKeyboard();
+                        closeSheet();
+                      }}
+                    />
+                  </label>
+                </div>
+                <PriceHint
+                  typed={d.price}
+                  price={d.line.unit_price}
+                  suggested={d.suggested}
+                />
+                {index === shortIndex && short && (
+                  <p
+                    className="line-short"
+                    role="alert"
+                    tabIndex={-1}
+                    ref={shortRef}
+                  >
+                    {shortText(short)}
+                  </p>
+                )}
+                <button
+                  type="button"
+                  className="quiet"
+                  onClick={() => {
+                    setDraft(draft.filter((_, i) => i !== index));
+                    if (index === shortIndex) setShort(null);
+                  }}
+                >
+                  Прибрати {visible(d.name)} · {visible(d.size)}
+                  {placeOf(d.line.source_location_id)}
+                </button>
+              </div>
+            ))}
+          </fieldset>
+        </Sheet>
+      )}
     </>
   );
 }
