@@ -251,18 +251,15 @@ test("«Постачальникам»: the returns to the sixty-first, twenty a
     sentBack(-1),
     40,
   );
-  // Nothing borrowed: one «Показати ще» on the screen.
-  await page.route("**/api/v1/borrowed?**", async (route) => {
-    await route.fulfill({ json: { items: [], has_more: false } });
-  });
   await enter(page, "Постачальникам");
-  const list = page.locator("section", {
-    has: page.getByRole("article", { name: /^Повернення Постачальник / }),
-  });
+  // A row each (stage 2, money task list, P0-4).
+  const rows = page
+    .getByRole("list", { name: "Повернення постачальникам" })
+    .getByRole("button", { name: /^Постачальник \d+ / });
   await toTheEnd(
-    page.getByRole("article", { name: /^Повернення Постачальник / }),
+    rows,
     page.getByRole("button", { name: "Показати ще", exact: true }),
-    list.last().getByRole("alert"),
+    page.locator(".supplier-returns").getByRole("alert"),
     asked,
   );
 });
@@ -270,9 +267,6 @@ test("«Постачальникам»: the returns to the sixty-first, twenty a
 test("«Позичене й під реалізацію»: the lots to the sixty-first, twenty a page, each once, a failed page keeping what was read", async ({
   page,
 }) => {
-  await page.route("**/api/v1/supplier-returns?**", async (route) => {
-    await route.fulfill({ json: { items: [], has_more: false } });
-  });
   const asked = await listed(
     page,
     "borrowed",
@@ -280,14 +274,15 @@ test("«Позичене й під реалізацію»: the lots to the sixty
     lot(-1),
     40,
   );
-  await enter(page, "Постачальникам");
-  const region = page.getByRole("region", {
-    name: "Позичене й під реалізацію",
-  });
+  // Its own screen, a tag each (P0-5).
+  await enter(page, "Позичене й під реалізацію");
+  const screen = page.locator("section.borrowed");
   await toTheEnd(
-    region.getByRole("article", { name: /^Позичене \d+, M від / }),
-    region.getByRole("button", { name: "Показати ще", exact: true }),
-    region.getByRole("alert"),
+    page
+      .getByRole("list", { name: "Позичене" })
+      .getByRole("article", { name: /^Позичене \d+, M$/ }),
+    screen.getByRole("button", { name: "Показати ще", exact: true }),
+    screen.getByRole("alert"),
     asked,
   );
   // Asked as before: what is still on hand.

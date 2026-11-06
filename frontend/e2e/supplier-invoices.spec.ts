@@ -7,6 +7,7 @@ import {
   menu,
   more,
   openStore,
+  pickSupplier,
   refuseOnce,
   rowNamed,
   section,
@@ -717,23 +718,39 @@ test("goods returned are set off against an invoice, and their return waits for 
     amount: "1200.00",
   });
 
-  // The goods stay with the supplier while it counts them.
+  // The goods stay with the supplier while it counts them: its row says
+  // what was counted, its screen why it stands (stage 2, money task list,
+  // P0-4).
   await section(page, "Постачальникам");
-  const card = page
-    .getByRole("article", { name: new RegExp(`^Повернення ${supplier}`) })
+  const row = page
+    .getByRole("list", { name: "Повернення постачальникам" })
+    .getByRole("button", { name: new RegExp(`^${supplier} `) })
     .filter({ hasText: "× 2" });
-  await expect(card).toContainText(
+  await expect(row.locator(".sticker")).toHaveText("Зараховано 1 200,00 грн");
+  await row.click();
+  await expect(
+    page.getByRole("heading", { name: supplier, exact: true }),
+  ).toBeVisible();
+  const counts = page.getByRole("list", { name: "Зараховано в накладні" });
+  await expect(counts).toContainText(
     "Постачальник зарахував 1 200,00 грн у накладну",
   );
-  await expect(card).toContainText(
+  await expect(page.locator(".supplier-return")).toContainText(
     "Щоб скасувати повернення, спершу скасуйте залік у «Накладних».",
   );
   await expect(
-    card.getByRole("button", { name: "Скасувати повернення" }),
+    page.getByRole("button", { name: "Скасувати повернення" }),
   ).toHaveCount(0);
 
-  await section(page, "Накладні");
-  await open(page, supplier);
+  // «Відкрити накладну ›» from its set-off (P1-3): the invoice's card, its
+  // way back to the return.
+  await counts.getByRole("button", { name: "Відкрити накладну" }).click();
+  await expect(
+    page.getByRole("heading", { name: supplier, exact: true }),
+  ).toBeVisible();
+  await expect(owes(page).locator(".invoice-owed-sum")).toHaveText(
+    "2 800,00 грн",
+  );
   // A line of the history pressed: its sheet asks why. A reader hears what
   // a press does.
   await expect(
@@ -758,9 +775,86 @@ test("goods returned are set off against an invoice, and their return waits for 
   await expect(undoneLine.getByRole("button")).toHaveCount(0);
   expect(await owed(page, invoiceId)).toBe("4000.00");
 
-  await section(page, "Постачальникам");
+  // A payment's answer lost on this card: the way back is held as
+  // «Постачальникам»'s row is, until the payment is checked.
+  let payment = true;
+  await page.route("**/api/v1/supplier-invoices/*/payments", async (route) => {
+    if (payment) {
+      payment = false;
+      await route.fetch();
+      await route.abort("connectionreset");
+    } else await route.continue();
+  });
+  await payOnCard(page).click();
+  await keyIn(page, "100");
+  await payButton(page).click();
+  const kept = page.locator(".stub-notice .stub");
+  await expect(kept).toHaveClass(/\bstub-kept\b/);
+  await back(page, "Накладна").click();
+  const toReturn = page.getByRole("button", { name: "Назад до «Повернення»" });
+  await expect(toReturn).toBeDisabled();
+  await kept
+    .getByRole("button", { name: "Перевірити результат оплати" })
+    .click();
+  await expect(kept).toHaveClass(/\bstub-recorded\b/);
+  await kept.getByRole("button", { name: "Зрозуміло" }).click();
+  await expect(toReturn).toBeEnabled();
+
+  // Back to the return, read again: the set-off gone, it is cancelled.
+  await toReturn.click();
   await expect(
-    card.getByRole("button", { name: "Скасувати повернення" }),
+    page.getByRole("heading", { name: supplier, exact: true }),
+  ).toBeVisible();
+  await expect(counts).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Скасувати повернення" }),
+  ).toBeVisible();
+
+  // Opened again once: a return made next, its answer lost and then
+  // confirmed, brings back the returns' list, never this return.
+  let lost = true;
+  await page.route("**/api/v1/supplier-returns", async (route) => {
+    if (route.request().method() === "POST" && lost) {
+      lost = false;
+      await route.fetch();
+      await route.abort("connectionreset");
+    } else await route.continue();
+  });
+  await page
+    .getByRole("button", { name: "Постачальникам", exact: true })
+    .click();
+  await page
+    .locator(".screen-title")
+    .getByRole("button", { name: "Повернути товар постачальнику" })
+    .click();
+  await pickSupplier(page, supplier, {
+    of: page.getByRole("group", { name: "Повернення постачальнику" }),
+  });
+  await page.getByRole("searchbox", { name: "Пошук моделі" }).fill(model);
+  await page
+    .getByRole("list", { name: "Товар на складі" })
+    .getByRole("button", { name: new RegExp(`^${model}`) })
+    .click();
+  await page
+    .getByRole("group", { name: /^Розмір L, вільно / })
+    .getByRole("button", { name: "Більше" })
+    .click();
+  await page
+    .getByRole("button", {
+      name: "Повернути постачальнику · 1 шт.",
+      exact: true,
+    })
+    .click();
+  await expect(kept).toHaveClass(/\bstub-kept\b/);
+  await kept
+    .getByRole("button", { name: "Перевірити результат повернення" })
+    .click();
+  await expect(kept).toHaveClass(/\bstub-recorded\b/);
+  await expect(
+    page.getByRole("heading", { name: "Постачальникам", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("list", { name: "Повернення постачальникам" }),
   ).toBeVisible();
 });
 

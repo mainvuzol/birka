@@ -592,7 +592,7 @@ test("the owner's fourth tab is «Гроші»: each place on its own, a line a 
   });
 });
 
-test("«Ще» › «Гроші» keeps only «Постачальникам» for whoever has the tab: «Каса», the report and «Накладні» are opened from «Гроші»", async ({
+test("«Ще» › «Гроші» keeps only the suppliers' — «Постачальникам», «Позичене й під реалізацію» — for whoever has the tab: «Каса», the report and «Накладні» are opened from «Гроші»", async ({
   page,
 }) => {
   await me(page);
@@ -606,7 +606,10 @@ test("«Ще» › «Гроші» keeps only «Постачальникам» fo
   const group = more
     .locator(".more-group")
     .filter({ has: page.getByRole("heading", { name: "Гроші" }) });
-  await expect(group.getByRole("button")).toHaveText([/^Постачальникам/]);
+  await expect(group.getByRole("button")).toHaveText([
+    /^Постачальникам/,
+    /^Позичене й під реалізацію/,
+  ]);
   for (const gone of ["Каса", "Звіт про продажі", "Накладні"])
     await expect(
       more.getByRole("button", { name: gone, exact: true }),

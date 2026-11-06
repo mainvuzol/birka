@@ -21,14 +21,15 @@ import type { Command, Sent } from "./invoiceWords";
 import type { Invoice, InvoiceEntry, ReturnPage } from "./types";
 
 /** No answer to a cancellation: pressed again, it is answered as it is. */
-const noAnswer =
+export const noAnswer =
   "Немає відповіді сервера. Натисніть ще раз — повторне натискання безпечне.";
 
 /**
  * A sheet that asks why before it is done (stage 2, money task list, P0-2):
- * what it does, «Чому …», and its yes, dark until a reason is given.
+ * what it does, «Чому …», and its yes, dark until a reason is given; a
+ * return's cancel too (P0-4).
  */
-function Reasoned({
+export function Reasoned({
   title,
   question,
   label,

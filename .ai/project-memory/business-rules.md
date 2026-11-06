@@ -6457,3 +6457,152 @@ reached.
     is now, never as the list last saw it (found by the set-off's journey:
     the card came back with the set-off's money still to take). Decided
     here.
+
+## Chosen in chat — 2026-11-06 (stage 2 batch 5: the suppliers' side — «Постачальникам» as rows, «Повернути постачальнику» a task screen, «Позичене й під реалізацію» a screen of tags, the ways between them; money P0-4, P0-5, P1-3)
+
+Chosen in chat on 2026-11-06 («Suppliers' side»), after #173: the fifth
+batch proposed after #173. The owner's questions stand by their (а): В2
+(«Позичене й під реалізацію» for whoever returns to suppliers, as before;
+«Продано» for whoever keeps the invoices) and В7 (a mark of sold opens a
+sheet: how many and the price for each before the press). No right, no
+server rule, no command and no figure changes: each command goes through
+the same journal with the same body; every sum is the server's.
+
+- **«Постачальникам» (money P0-4):**
+  - The head: «Постачальникам», «← Ще»; a «+» read «Повернути товар
+    постачальнику», held while another command's outcome is unknown, and
+    «Оновити». The supplier's field as a filter (P0-3).
+  - Each return a row, the newest first: the supplier, on the right «N
+    шт.»; «DD.MM · склад «X» · {хто}» or «DD.MM · з «Браку» «X» · {хто}»
+    (В6 (а)); its goods, two named — «Кокон графіт, M × 2 · Лоран, S × 1»
+    — and «+ ще N»; the stickers «Скасовано» (offline's tone, a cross) and
+    «Зараховано {сума}», the sum of the set-offs standing; a chevron. The
+    whole row opens the return.
+  - Under the rows «Позичене й під реалізацію ›» and «Список
+    постачальників ›».
+  - Nothing to show (spec §6.28): the blank mark, «Цей магазин ще нічого не
+    повертав постачальникам.», or with a supplier chosen «Постачальнику
+    «{Назва}» цей магазин ще нічого не повертав.» (decided here: the task
+    list names only the first), «Скільки постачальник за нього зарахував,
+    записують заліком у «Накладних».», a quiet «Повернути товар
+    постачальнику».
+- **The return's screen (P0-4):** «← Постачальникам»; the supplier its
+  title; «DD.MM, HH:MM · склад «X» · {хто}»; «Скасовано» with «DD.MM ·
+  {чому} · {хто}» once cancelled; its goods, its note; «Постачальник
+  зарахував {сума} у накладну · DD.MM» for each set-off standing, with
+  «Відкрити накладну ›» for whoever keeps the invoices (P1-3). No
+  MainButton.
+  - The return is read again as the screen opens, by its supplier's
+    returns (fifty at most), there being no read of one return: a set-off
+    cancelled in «Накладних» meanwhile is gone from it. Decided here.
+  - Quiet at the bottom «Скасувати повернення», held while another
+    command's outcome is unknown, opens the sheet «Скасувати повернення»:
+    «Товар повернеться на склад «X». Скасувати можна лише раз.» — «у
+    «Брак» «X»» for a unit from «Брак» (decided here) —, «Чому
+    скасовуємо», «Так, скасувати повернення», «Не скасовувати». A unit
+    from «Брак» is cancelled through «Брак», as before.
+  - Refused, the sheet goes and the words are said on the screen, the
+    return read again on a conflict; no answer at all, the words stay in
+    the sheet with its reason (decided here). Cancelled, the screen shows
+    the server's answer, so a return older than its supplier's fifty
+    newest shows its cancel too (from the review).
+  - While a set-off stands: «Щоб скасувати повернення, спершу скасуйте
+    залік у «Накладних».» in its place (owner decision, 2026-10-01).
+- **«Повернути постачальнику» (P0-4), a task screen, the menu aside:**
+  - «← Постачальникам», held while the return is sent the first time.
+  - The warehouse: one said in a line «Склад «X»»; two or more as chips,
+    none chosen beforehand; none, «Тут немає складу, з якого повертають.»
+    (decided here). Another warehouse chosen is another return: what was
+    counted and listed goes (decided here). Chosen, it stays chosen while
+    the warehouses are read again: what was counted is never sent from
+    another; one is said in a line only while it is the one (from the
+    review).
+  - The supplier's field (P0-3); picked, the cursor in the search.
+  - «Пошук моделі», the till's: the server's, with the warehouse, from two
+    letters; a model a row, its sizes free there under it «M 2 · L 1»;
+    «Ще товари» for the next page. Nothing free: «На складі «X» немає
+    вільного товару.», or «За «…» на складі «X» вільного товару немає.»
+    (decided here). A size an order holds whole is never offered.
+  - A model chosen: its name with «Змінити»; its sizes as steppers «− N
+    +», two to a row, «вільно N» under each — the most; «+» held there, a
+    number typed cut to it. «Додати ще модель» puts the counted sizes in
+    «У поверненні», each with «Прибрати».
+  - Said under the fields (decided here): «Оберіть постачальника.»; «Такий
+    рядок уже в списку. Приберіть його, щоб змінити кількість.» (one model
+    and size, one line); «В одному поверненні — до 100 рядків. Поверніть
+    ці, а решту — окремим поверненням.»
+  - «Примітка (необов’язково)» in one line; «N шт. · склад «X»» over the
+    button.
+  - Telegram's MainButton «Повернути постачальнику · N шт.» (a return
+    moves goods, never money); outside Telegram the dock's one button;
+    held at nought. Telegram asks before Бірка closes while anything is
+    counted.
+  - As it is sent, the sizes counted join «У поверненні»: refused, the
+    list is kept, the words over the button, the warehouse read again on a
+    conflict (decided here). The words stay while a count changes, as on
+    «Прийшов товар»; another supplier, warehouse, model added or line
+    taken away clears them.
+  - Recorded: a success buzz, «Повернено постачальнику «X»: N шт.» with
+    its mark, the stub — each line, «склад «X»» —, «Готово» to
+    «Постачальникам».
+- **«Список постачальників» (P0-4), a screen:** «← Постачальникам»;
+  «Пошук постачальника», every word matched in a name or a phone; a row a
+  supplier, its phone under it; «Нічого не знайшли за «…»». A tap opens
+  «Змінити постачальника»: «Назва», «Телефон», «Зберегти»; a name the list
+  holds already is said, never saved; none is deleted. Nothing on the list:
+  «Постачальників ще немає.» and «Нового додають у полі «Постачальник» —
+  там, де його обирають.» (decided here).
+- **«Позичене й під реалізацію» (P0-5; В2 (а), В7 (а)), a screen:**
+  - «← Ще», or «← Постачальникам», or «← Накладна» — wherever it was
+    opened from; «Оновити»; «На руках · Усе», the first chosen.
+  - Each lot a row tag, the newest first: the eyelet filled while some are
+    in hand, a knot once none are; «{модель}, {розмір}», on the right «на
+    руках N»; «Позичено у «X» · DD.MM · {склад}» or «Під реалізацію у …»;
+    «{ціна} за шт. · взято N · продано N · повернено N». The verb
+    «Продано» for whoever keeps the invoices (`supplier:debt`) while some
+    are in hand; the tag or its verb opens the lot's sheet; a lot with
+    none in hand opens nothing.
+  - The sheet: the model and size its title, both lines under it; «На
+    руках N» and «− 1 +», from one to all in hand; «Позначити проданим · N
+    шт.» (`supplier:debt`; the app's button, never the MainButton — it
+    records money) and «{ціна} за шт.» under it, as the server keeps it,
+    nothing multiplied; quiet, «Повернути постачальнику · N шт.». Refused,
+    the words in the sheet; a conflict reads the lots again, and the sheet
+    shows «На руках» as read, the count cut to it (from the review).
+  - Recorded, its stub: «Продано N шт.: у «Накладних» борг «X» {сума}.»,
+    the server's sum, with «Відкрити накладну ›»; or «Повернено
+    постачальнику «X»: N шт.»; «Готово» (Telegram's MainButton where it
+    is) to the lots.
+  - Nothing to show: «Позиченого на руках немає.» / «Цей магазин нічого не
+    позичав.», «Товар інших магазинів і постачальників: сплачують лише
+    продане, за домовленою ціною, непродане повертають. Береться через
+    «Прийшов товар».»
+  - A kept mark of sold, or a kept return of a lot, is «Позичене»'s: its
+    stub there, a banner on any other screen (P0-6), so Бірка opens there.
+  - «Прийшов товар»: «… Продане чи непродане позначають на екрані
+    «Позичене й під реалізацію».»
+- **The ways between them (P1-3):**
+  - «Ще» › «Гроші»: «Постачальникам», then «Позичене й під реалізацію»
+    (glyph `supplier`), for whoever returns to suppliers.
+  - A return's set-off → «Відкрити накладну ›» → the invoice's card with
+    «← Повернення» (read «Назад до «Повернення»»), back to that return,
+    read again (decided here).
+  - The sold stub → «Відкрити накладну ›» → the card with «← Позичене й під
+    реалізацію».
+  - The sold invoice's card → «Позичене й під реалізацію ›» under the
+    borrowed goods it is for, for whoever returns to suppliers → the lots
+    with «← Накладна», back to that card (decided here).
+  - An invoice opened from elsewhere and not found among its supplier's
+    fifty newest: that supplier's invoices, every one, not only those owed
+    (decided here). Opened with the invoice in hand (the sold stub), it
+    shows at once and is read again; that read never replaces a card paid
+    or changed meanwhile (from the review).
+  - Each way is held as the row of the screen it opens is (P0-6): «Назад
+    до «Повернення»», «← Позичене й під реалізацію», «← Постачальникам» and
+    «Позичене й під реалізацію ›» while «Постачальникам»'s row is held;
+    «Відкрити накладну ›» and «← Накладна» while «Накладні»'s is — held as
+    the row is at that moment, not as it was at the tap (from the review).
+  - A return opened again on the way back from its invoice is opened once:
+    the screen remade later (a kept return checked) opens the list (from
+    the review). Back on the list from any of its screens, its heading
+    takes the cursor (from the review).

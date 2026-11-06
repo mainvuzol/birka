@@ -130,7 +130,11 @@ import {
   doneText as invoiceDoneText,
   refusalText as invoiceRefusalText,
 } from "@/suppliers/Invoices";
-import { refusalText as borrowedRefusalText } from "@/suppliers/Borrowed";
+import type { InvoiceOpening } from "@/suppliers/Invoices";
+import {
+  Borrowed,
+  refusalText as borrowedRefusalText,
+} from "@/suppliers/Borrowed";
 import { invoiceKept, keptSaid, supplierReturnKept } from "@/suppliers/kept";
 import type { Invoice, InvoiceBody, SupplierReturn } from "@/suppliers/types";
 import { Models } from "@/catalog/Models";
@@ -207,6 +211,9 @@ type Tab =
   | "backups"
   | "stores"
   | "suppliers"
+  /** «Ще» › «Гроші» › «Позичене й під реалізацію», and «Постачальникам»'s
+   * row (stage 2, money task list, P0-5). */
+  | "borrowed"
   | "invoices"
   | "report"
   | "models"
@@ -718,7 +725,9 @@ function Workspace({
         // Its own count, kept beside it (owner decision, 2026-10-21).
         misses: saved?.misses ?? 0,
       });
-      if (saved) setTab("suppliers");
+      // Borrowed goods sent back are «Позичене й під реалізацію»'s (stage
+      // 2, money task list, P0-6).
+      if (saved) setTab(saved.body.stock_lot_id ? "borrowed" : "suppliers");
     } catch {
       setSupplierStorageError(true);
     }
@@ -766,12 +775,12 @@ function Workspace({
         // Its own count, kept beside it (owner decision, 2026-10-21).
         misses: saved?.misses ?? 0,
       });
-      // Borrowed goods marked sold are «Постачальникам»'s, where
-      // «Позичене й під реалізацію» is (stage 2, money task list, P0-6).
+      // Borrowed goods marked sold are «Позичене й під реалізацію»'s
+      // (stage 2, money task list, P0-6).
       if (saved)
         setTab(
           saved.body.kind === "sold" && canReturnToSupplier
-            ? "suppliers"
+            ? "borrowed"
             : "invoices",
         );
     } catch {
@@ -856,6 +865,19 @@ function Workspace({
   // So from «Гроші»: «← Гроші»; and «Надійшло»'s period, kept while the
   // report opened on it stands («Усе на бірці» sections task list, P0-7).
   const [fromMoney, setFromMoney] = useState<Tab | null>(null);
+  // The suppliers' screens opened from each other (stage 2, money task
+  // list, P1-3): «Позичене й під реалізацію» from «Ще», «Постачальникам» or
+  // a sold invoice's card, its «←» back there; an invoice opened from a
+  // return's set-off or a sold stub, the return to open again on the way
+  // back.
+  const [borrowedFrom, setBorrowedFrom] = useState<
+    "more" | "suppliers" | Invoice
+  >("more");
+  const [invoiceOpening, setInvoiceOpening] = useState<InvoiceOpening | null>(
+    null,
+  );
+  const [openingEpoch, setOpeningEpoch] = useState(0);
+  const [returnOpen, setReturnOpen] = useState<SupplierReturn | null>(null);
   // A model's detail, from the till's search: what found it, and what the
   // search held, to come back to; and the screen it opened, «← {модель}»
   // over it (sections task list, P0-6).
@@ -1082,10 +1104,14 @@ function Workspace({
   const [cashTask, setCashTask] = useState(false);
   // And while a supplier's invoice is paid (stage 2, money task list, P0-2).
   const [invoiceTask, setInvoiceTask] = useState(false);
+  // And while goods are returned to a supplier (stage 2, money task list,
+  // P0-4).
+  const [supplierTask, setSupplierTask] = useState(false);
   const taskScreen =
     ((tab === "deposit" || tab === "credits") && depositTask) ||
     (tab === "cash" && cashTask) ||
     (tab === "invoices" && invoiceTask) ||
+    (tab === "suppliers" && supplierTask) ||
     // And while a new order is made (stage 2, orders task list, P0-5).
     tab === "new";
   const creditKey = `birka:credit-pending:${me.organization_id}:${me.user_id}:${store.id}`;
@@ -2125,6 +2151,15 @@ function Workspace({
       shown: canReturnToSupplier,
       disabled: suppliersHeld,
     },
+    // By the right to return goods, as before (stage 2, money task list,
+    // P0-5; В2 (а)): its «Продано» is whoever keeps the invoices'.
+    {
+      tab: "borrowed",
+      label: "Позичене й під реалізацію",
+      icon: "supplier",
+      shown: canReturnToSupplier,
+      disabled: suppliersHeld,
+    },
     {
       tab: "invoices",
       label: "Накладні",
@@ -2334,14 +2369,14 @@ function Workspace({
         ...catalogueRow,
       ],
     },
-    // For whoever has «Гроші», only «Постачальникам» stays here (the
-    // frame's §2а, row 11).
+    // For whoever has «Гроші», only the suppliers' stay here (the frame's
+    // §2а, row 11; stage 2, money task list, P1-3).
     {
       title: "Гроші",
       rows: rowsOf(
         canSeeReport
-          ? ["suppliers"]
-          : ["cash", "report", "invoices", "suppliers"],
+          ? ["suppliers", "borrowed"]
+          : ["cash", "report", "invoices", "suppliers", "borrowed"],
       ),
     },
     { title: "Мережа", rows: rowsOf(["stores", "backups"]) },
@@ -2458,6 +2493,42 @@ function Workspace({
           (canSeeReport && moneyScreens.includes(section))
         ? moneyBack
         : moreBack;
+  /** An invoice in «Накладні», opened from outside them (stage 2, money
+   * task list, P1-3): marked as «Накладні» are. */
+  const openInvoice = (which: InvoiceOpening): void => {
+    setInvoiceOpening(which);
+    setOpeningEpoch((epoch) => epoch + 1);
+    setTab("invoices");
+    (canSeeReport ? moneyButton : moreButton).current?.focus();
+  };
+  /** One of «Ще»'s screens, from another's way. */
+  const toSection = (section: Tab): void => {
+    setTab(section);
+    moreButton.current?.focus();
+  };
+  // «Позичене й під реалізацію»'s «←»: where it was opened (P1-3).
+  const borrowedBack: MoreBack =
+    borrowedFrom === "more"
+      ? backOf("borrowed")
+      : borrowedFrom === "suppliers"
+        ? {
+            go: () => {
+              toSection("suppliers");
+            },
+            held: sending || suppliersHeld,
+            to: "Постачальникам",
+          }
+        : {
+            go: () => {
+              openInvoice({
+                id: borrowedFrom.id,
+                supplierId: borrowedFrom.supplier.id,
+                invoice: borrowedFrom,
+              });
+            },
+            held: sending || otherThanInvoices,
+            to: "Накладна",
+          };
   /** A tag's verb: its section, with «← Сьогодні». */
   const fromTag = (section: Tab) => (): void => {
     setTab(section);
@@ -2506,6 +2577,9 @@ function Workspace({
     if (tab === "today" || tab === "more") setFromToday(null);
     if (tab === "today" || tab === "more" || tab === "money")
       setFromMoney(null);
+    if (tab !== "borrowed" && tab !== "invoices") setBorrowedFrom("more");
+    if (tab !== "invoices") setInvoiceOpening(null);
+    if (tab !== "suppliers" && tab !== "invoices") setReturnOpen(null);
   }, [tab]);
   // Anywhere but the model and what it opened, its way back is forgotten,
   // and the search it held: the till takes it as it opens, once — opened
@@ -2604,10 +2678,13 @@ function Workspace({
     supplierCommand.busy && supplierCommand.firstSend
       ? null
       : supplierCommand.pending;
-  // Borrowed goods marked sold, or sent back, are «Постачальникам»'s.
+  // Borrowed goods marked sold, or sent back, are «Позичене й під
+  // реалізацію»'s (stage 2, money task list, P0-6).
   const invoiceOwn = (body: InvoiceBody): boolean =>
     tab ===
-    (body.kind === "sold" && canReturnToSupplier ? "suppliers" : "invoices");
+    (body.kind === "sold" && canReturnToSupplier ? "borrowed" : "invoices");
+  const returnOwn = (lot: string | null | undefined): boolean =>
+    tab === (lot ? "borrowed" : "suppliers");
   // Under either: why it is still unconfirmed, or — refused — why, while
   // that refusal stands.
   const invoiceSaid = keptInvoice
@@ -3097,7 +3174,7 @@ function Workspace({
       {invoiceSaid !== null && <p role="alert">{invoiceSaid}</p>}
       {keptSupplierReturn && (
         <Kept
-          own={tab === "suppliers"}
+          own={returnOwn(keptSupplierReturn.body.stock_lot_id)}
           title={`${supplierReturnKept.what} ще не підтверджено`}
           busy={supplierCommand.busy}
           byItself={false}
@@ -3113,7 +3190,7 @@ function Workspace({
         </Kept>
       )}
       {supplierSettled && (
-        <Settled own={tab === "suppliers"}>
+        <Settled own={returnOwn(supplierSettled.stock_lot_id)}>
           <h3>{`${supplierReturnKept.what} записано один раз`}</h3>
           <p>{returnedText(supplierSettled)}</p>
           <button
@@ -3552,9 +3629,76 @@ function Workspace({
             store={store}
             token={token}
             journalKey={supplierKey}
-            invoiceJournalKey={invoiceKey}
             blocked={otherThanSuppliers}
             back={moreBack}
+            task={setSupplierTask}
+            opened={returnOpen}
+            forget={() => {
+              setReturnOpen(null);
+            }}
+            openInvoice={
+              canSeeInvoices
+                ? {
+                    go: (setOff, item) => {
+                      setReturnOpen(item);
+                      openInvoice({
+                        id: setOff.invoice_id,
+                        supplierId: item.supplier.id,
+                        leave: {
+                          go: () => {
+                            toSection("suppliers");
+                          },
+                          held: sending || suppliersHeld,
+                          to: "Повернення",
+                        },
+                      });
+                    },
+                    held: otherThanInvoices,
+                  }
+                : undefined
+            }
+            openBorrowed={{
+              go: () => {
+                setBorrowedFrom("suppliers");
+                toSection("borrowed");
+              },
+              held: suppliersHeld,
+            }}
+          />
+        ) : // Never opened without the right: nothing is said of the rule
+        // («Усе на бірці» task list, P2-1).
+        null
+      ) : tab === "borrowed" ? (
+        canReturnToSupplier ? (
+          <Borrowed
+            key={suppliersEpoch}
+            store={store}
+            token={token}
+            journalKey={supplierKey}
+            invoiceJournalKey={invoiceKey}
+            blocked={otherThanSuppliers}
+            back={borrowedBack}
+            openInvoice={
+              canSeeInvoices
+                ? {
+                    go: (invoice) => {
+                      openInvoice({
+                        id: invoice.id,
+                        supplierId: invoice.supplier.id,
+                        invoice,
+                        leave: {
+                          go: () => {
+                            toSection("borrowed");
+                          },
+                          held: sending || suppliersHeld,
+                          to: "Позичене й під реалізацію",
+                        },
+                      });
+                    },
+                    held: otherThanInvoices,
+                  }
+                : undefined
+            }
           />
         ) : // Never opened without the right: nothing is said of the rule
         // («Усе на бірці» task list, P2-1).
@@ -3562,7 +3706,7 @@ function Workspace({
       ) : tab === "invoices" ? (
         canSeeInvoices ? (
           <Invoices
-            key={suppliersEpoch}
+            key={`${String(suppliersEpoch)}:${String(openingEpoch)}`}
             store={store}
             token={token}
             journalKey={invoiceKey}
@@ -3573,6 +3717,30 @@ function Workspace({
             )}
             back={backOf("invoices")}
             task={setInvoiceTask}
+            // Its way back held as that screen's row is now, not as it was
+            // at the tap that opened it.
+            opening={
+              invoiceOpening?.leave
+                ? {
+                    ...invoiceOpening,
+                    leave: {
+                      ...invoiceOpening.leave,
+                      held: sending || suppliersHeld,
+                    },
+                  }
+                : invoiceOpening
+            }
+            openBorrowed={
+              canReturnToSupplier
+                ? {
+                    go: (invoice) => {
+                      setBorrowedFrom(invoice);
+                      toSection("borrowed");
+                    },
+                    held: suppliersHeld,
+                  }
+                : undefined
+            }
           />
         ) : // Never opened without the right: nothing is said of the rule
         // («Усе на бірці» task list, P2-1).

@@ -6168,3 +6168,147 @@ section.receive-list {
 .invoice-result {
   margin-top: 12px;
 }
+/* «Постачальникам» (stage 2, money task list, P0-4): a return a row, 64
+   high — the supplier in ink and how many at the right, the day, where
+   from and who, its goods, «Скасовано» and «Зараховано» as stickers — and
+   the ways to «Позичене й під реалізацію» and «Список постачальників»
+   under them. */
+.return-rows,
+.return-models,
+.supplier-return-lines,
+.supplier-return-set-offs {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.return-row {
+  min-height: var(--h-row);
+}
+.return-row > .icon,
+.return-model > .icon {
+  flex: none;
+  color: var(--pencil);
+}
+.return-row-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.return-row-head .t-row {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.return-row-units {
+  flex: none;
+  font-weight: 600;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.return-row .sale-meta {
+  overflow-wrap: anywhere;
+}
+.return-row .sale-marks {
+  margin: 2px 0 0;
+}
+.supplier-ways {
+  margin-top: 16px;
+}
+/* One return: its goods in ink, a line each; what the supplier counted and
+   the way to its invoice; «Скасувати повернення» quiet at the bottom. */
+.supplier-return > .t-meta {
+  margin: 0 0 12px;
+  color: var(--pencil);
+  overflow-wrap: anywhere;
+}
+.supplier-return-cancelled {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin: 0 0 12px;
+}
+.supplier-return-cancelled .t-meta {
+  color: var(--pencil);
+  overflow-wrap: anywhere;
+}
+.supplier-return-lines li {
+  padding: 6px 0;
+  overflow-wrap: anywhere;
+}
+.supplier-return-set-offs {
+  margin-top: 12px;
+}
+.supplier-return-set-offs li {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+}
+.set-off-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 44px;
+  padding: 0;
+}
+.supplier-return-cancel {
+  margin-top: 24px;
+}
+/* «Повернути постачальнику»: a model found a row, its sizes free in pencil;
+   chosen, its steppers as «Прийшов товар»'s, «вільно N» under each. */
+.return-model {
+  min-height: 56px;
+}
+.receive-size-free {
+  grid-column: 1 / -1;
+  font-size: 13px;
+  line-height: 16px;
+  text-align: center;
+  color: var(--pencil);
+}
+/* «Позичене й під реалізацію» (P0-5): a lot a tag, how many in hand at the
+   right; its sheet a stepper, «Позначити проданим», the price for each
+   under it, and the quiet return. */
+.lot-on-hand {
+  flex: none;
+  font-weight: 600;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.lot-count {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 12px 0;
+}
+.lot-count .stepper button {
+  min-width: 48px;
+  padding: 0;
+  font-size: 22px;
+  border-radius: 12px;
+}
+.lot-count .stepper button[aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.lot-ways {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.lot-ways button {
+  width: 100%;
+}
+.lot-price {
+  margin: -4px 0 4px;
+  text-align: center;
+  color: var(--pencil);
+}
+.invoice-sold p {
+  margin: 0;
+}
