@@ -800,6 +800,9 @@ export function Receive({
                   }}
                   disabled={blocked || working}
                   kept={supplierDraft}
+                  // In «Як надійшов»: no sheet over a sheet (stage 2, money
+                  // task list, P0-3).
+                  inPlace
                 />
                 <p className="hint">
                   Позичене й під реалізацію сплачують, лише коли продадуть, за

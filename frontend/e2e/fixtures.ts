@@ -513,6 +513,70 @@ export async function receiveWayDone(sheet: Locator): Promise<void> {
   await expect(sheet).toHaveCount(0);
 }
 
+/** Where a supplier's field stands: `of` a form, when a screen has two —
+ * «Постачальникам»'s filter and its return's form — or `inside` another
+ * sheet («Як надійшов»), where its list opens in place. */
+export interface SupplierField {
+  of?: Locator;
+  inside?: Locator;
+}
+
+/** The supplier field (stage 2, money task list, P0-3) tapped: its sheet
+ * «Постачальник», once it takes taps — or, inside another sheet, its list
+ * opened in place under it. */
+export async function supplierList(
+  page: Page,
+  { of, inside }: SupplierField = {},
+): Promise<Locator> {
+  await (inside ?? of ?? page)
+    .getByRole("button", { name: /^Постачальник / })
+    .click();
+  if (inside) {
+    const list = inside.locator(".supplier-in-place");
+    await expect(list).toBeVisible();
+    return list;
+  }
+  const sheet = page.getByRole("dialog", { name: "Постачальник" });
+  await expect(sheet).toHaveAttribute("data-ready", "");
+  return sheet;
+}
+
+/** A supplier on the network's list, picked: the field, its name typed in
+ * the search, its row. */
+export async function pickSupplier(
+  page: Page,
+  name: string,
+  field: SupplierField = {},
+): Promise<void> {
+  const list = await supplierList(page, field);
+  await list.getByRole("searchbox", { name: "Пошук постачальника" }).fill(name);
+  await list
+    .locator(".supplier-row")
+    .filter({ has: page.getByText(name, { exact: true }) })
+    .click();
+  await expect(list).toHaveCount(0);
+}
+
+/** A supplier added from the field: «Новий постачальник», its name and
+ * phone, «Додати постачальника». Added, or found on the list, it is picked
+ * and its list is gone. */
+export async function addSupplier(
+  page: Page,
+  name: string,
+  phone: string | null = null,
+  field: SupplierField = {},
+): Promise<void> {
+  const list = await supplierList(page, field);
+  await list
+    .getByRole("button", { name: "Новий постачальник", exact: true })
+    .click();
+  await list.getByLabel("Назва постачальника").fill(name);
+  if (phone !== null)
+    await list.getByLabel("Телефон (необов’язково)").fill(phone);
+  await list.getByRole("button", { name: "Додати постачальника" }).click();
+  await expect(list).toHaveCount(0);
+}
+
 /** «Записати прихід · N шт.», the dock's one button outside Telegram. */
 export function recordReceipt(page: Page, units: number): Locator {
   return page.getByRole("button", {

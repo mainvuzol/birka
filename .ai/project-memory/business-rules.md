@@ -6302,3 +6302,158 @@ who is told of a list. The one server change closes what batch 2 found.
   §1): a kept one the server refuses is settled at once. What is refused
   before the lookup (the body itself) and a command id reused with
   another body keep their answer as before, as every other journal's.
+
+## Chosen in chat — 2026-11-06 (stage 2 batch 4: «Накладні» as tags, the invoice's card and its payment, the supplier's field and its sheet; money P0-1, P0-2, P0-3)
+
+Chosen in chat on 2026-11-06 (««Накладні» batch»), after #172: the fourth
+batch proposed after #172. The owner's questions stand by their (а): В3
+(the invoices one after another, the newest first, with the supplier's
+field and the total) and В9 (no line about «Видати з каси» on the
+payment). No right, no server rule, no command and no figure changes:
+every sum is the server's, each command goes through the same journal
+with the same body; what changes is how the invoices are drawn and
+reached.
+
+- **The supplier's field and its sheet (money P0-3):** at all four places
+  — «Нова накладна», «Постачальникам» (its filter and the return's form),
+  «Прийшов товар»'s «Як надійшов» and «Брак» — the supplier is a field
+  «Постачальник» showing «Оберіть ›» or «{Назва} · {телефон} ›», never a
+  native list.
+  - A tap opens the sheet «Постачальник»: «Пошук постачальника» with the
+    cursor in it, every word typed matched in a name or a phone, as the
+    till's search; a row a supplier, its phone under it; the one chosen
+    marked; a row picked closes the sheet with a choice's buzz, and on
+    «Нова накладна» the cursor goes on to «Сума за накладною, грн».
+  - «+ Новий постачальник» under the rows, or «+ Новий постачальник
+    «{набране}»» when what is typed matches none, which opens the name
+    (what was typed already in it) and «Телефон (необов’язково)» in the
+    sheet, «Додати постачальника» its foot, a quiet «Скасувати» back to
+    the list. A name already on the list is picked, never added: ««{Назва}»
+    уже є у списку — обрано його.» under the field. The sheet's title
+    stays «Постачальник» while a new one is typed. Decided here.
+  - Nothing matching what is typed: «Нічого не знайшли за «{набране}»»
+    under the rows, as «Сьогодні»'s search says, for a reader too (from
+    the review). The sheet closed, a new supplier begun is forgotten (spec
+    §6.29: nothing is remembered) — only «Як надійшов» keeps it; the sheet
+    is never closed while «Додати постачальника» waits for its answer
+    (from the review).
+  - Inside «Як надійшов», a sheet already, the list and its search open
+    in place under the field (its chevron turned up), never a sheet over a
+    sheet; a new supplier begun is kept while the sheet is closed, as
+    before. «Брак» is no sheet, so its field opens the sheet.
+  - As a filter («Накладні», «Постачальникам»): the field shows «Усі
+    постачальники ›» or the name; its sheet has «Усі постачальники» first
+    while nothing is typed, and nothing to add; on «Накладні» each row
+    says «винні {сума} · N накладні» from the server's summary, a supplier
+    owed nothing nothing under its name; elsewhere its phone. The filter's
+    name «Постачальник» is a reader's alone (visually hidden), as the
+    search's: «Усі постачальники ›» says what it is, and the total and
+    three tags fit over the menu on a 390×844 phone. Decided here.
+- **«Накладні» as tags (money P0-1; В3 (а)):**
+  - The head: «Накладні», «← Гроші» or «← Ще»; a «+» (read «Записати
+    накладну») where the store trades, never on the others' list; «Оновити».
+  - «Винні зараз · Усі», the first chosen; the supplier's field; the
+    total in ink — «Винні {сума} · N накладні», or with a supplier chosen
+    «Винні постачальнику «{Назва}» {сума} · N накладні»: a name is never
+    declined, so not the task list's «Винні «Ганні»»; «Нічого не винні» at
+    nought — and by it «дані на HH:MM» once five minutes old or a read
+    failed. Decided here.
+  - Each invoice a row tag, the newest first: its eyelet filled in ink
+    while owed, a knot once paid or written off, none once cancelled; the
+    supplier, and on the right in ink what is owed, or once closed the sum
+    on it; under them «DD.MM · {хто}», then «сплачено X з Y» once anything
+    is paid and «зараховано Z» once anything is set off — a line with
+    nothing paid says no «сплачено 0,00» (decided here); a closed one its
+    sticker with its glyph: «Сплачено повністю» (paid's tone, a check),
+    «Залишок списано» (neutral, a minus — decided here), «Скасовано»
+    (offline's tone, a cross); then «магазин «{Назва}»» for another
+    store's, the borrowed goods it is for, or its note. «Сплатити», the
+    tag's one verb, where the store trades and the invoice is owed, opens
+    the payment at once; the tag itself opens its card.
+  - Under the list «Накладні магазинів, що не працюють ›», where the store
+    trades: the same screen of theirs, «← Накладні», no total, no «+».
+  - Nothing to show (spec §6.28): the blank mark, the same words as before
+    («Зараз магазин нічого не винен постачальникам.» and the others),
+    «Кожна накладна — окремий борг: сплачують частинами, без графіка.» and
+    a quiet «Записати накладну» in the store's own list where it trades.
+  - A store that does not trade has no «Накладні», as before: its rights
+    are the reading ones (`asShown`), and `supplier:debt` is none of them;
+    its invoices are read and paid from a trading store's «Накладні
+    магазинів, що не працюють ›». «Ви винні постачальникам» on its
+    «Гроші» is a line with no way in.
+  - «Нова накладна», a screen of its own: the supplier's field, nothing
+    chosen; «Сума за накладною, грн», «Сплачено одразу, грн» (empty is
+    nought, as before), «Примітка (необов’язково)» in one line; the dock's
+    own button «Записати накладну», never Telegram's MainButton — it
+    records money. Recorded, its stub «Накладну записано»: the sum, «{Назва}
+    · {сума}», a perforation, «Залишок X.» or, knotted, «Накладну сплачено
+    повністю.»; «Готово» (Telegram's MainButton where it is) to its card.
+- **The invoice's card and its payment (money P0-2; В9 (а)):**
+  - The card: the supplier its title, «Записано {коли} · {хто} ·
+    {примітка}» under it; «Винні» and what is owed large, in ink, the bar
+    in the paid colour, «Сплачено X з Y · остання оплата DD.MM» («Сплачено
+    0,00 грн з Y» while nothing is paid: on the card the bar says it
+    anyway, unlike the tag's line), what was
+    set off and written off under it; a closed one its sticker and, once
+    cancelled, «DD.MM · {чому} · {хто}», the sum on it. «Історія» as a
+    thread: the day, a node filled once recorded, hollow once cancelled
+    with its sticker and «DD.MM · {чому} · {хто}»; «{що} {сума}», «{хто} ·
+    сплатив магазин «{Назва}» · {примітка}».
+  - «Сплатити», Telegram's MainButton, hidden while a sheet is over the
+    card; outside Telegram the dock's one button. Only where the store
+    trades and the invoice is owed.
+  - The payment, a task screen, the menu aside: the supplier its title,
+    «← Накладна» from the card or «← Накладні» from the list (decided
+    here); what is owed large; the app's keypad «Сума, грн» (never the
+    phone's keyboard) with «Увесь залишок {сума}»; more than is owed holds
+    the button and says «Це більше, ніж винні: залишок X. Сплатіть не
+    більше.» (decided here); «Сплатити {сума}», the dock's own button —
+    money is never paid by Telegram's MainButton. Telegram asks before
+    Бірка closes while a sum is typed. Recorded: a success buzz, its stub
+    «Оплату записано» — the sum, «{Назва} · накладна від DD.MM», «Залишок
+    X.» or knotted «Накладну сплачено повністю.» — and «Готово» to the card;
+    refused: an error buzz and the words over the keypad, the sum kept, the
+    invoice read again; lost: the journal's stub, as before.
+  - Behind the ⋯ by the title, a sheet named «Накладна «{Назва}» від
+    DD.MM»: «Зарахувати повернення» and «Скасувати накладну» where the
+    store trades and the invoice is its own and owed; «Списати залишок»
+    for the owner (`supplier:write_off`) — for a store that does not trade,
+    the network's owner. «Скасувати накладну» is dark while a payment or a
+    set-off on it stands, «Спершу скасуйте її оплати й заліки.» under it.
+    No ⋯ for whoever may do none of them.
+  - Each in a sheet of its own that asks why: «Списати залишок X?» —
+    «Залишок X закриється без оплати. Скасувати це потім не можна.»,
+    «Чому списуємо», «Так, списати X»; «Скасувати накладну» —
+    «Накладну записано помилково? Вона лишиться в історії як скасована.»,
+    «Чому скасовуємо», «Так, скасувати накладну», «Не скасовувати». A line
+    of the history that may be cancelled is pressed: «Скасувати: {що}
+    {сума}» — «{Що} {сума} записано помилково? Борг зросте на цю суму.»,
+    «Так, скасувати», «Не скасовувати». «Зарахувати повернення»: the
+    returns of this store to that supplier still standing, each a choice
+    («DD.MM · N шт. · склад «{назва}»», «уже зараховано X»), none chosen
+    beforehand; «Скільки зарахував постачальник, грн»; «Зарахувати X». The
+    sentences of the sheets are decided here.
+  - A set-off or a write-off recorded is said over the sum by a filled
+    eyelet, as an order's step, not as a stub (decided here). A refused
+    set-off is said in its sheet, the return chosen and the sum kept, as a
+    refused payment keeps its sum and as before (from the review); a
+    refused write-off or cancellation closes its sheet — its sentence
+    names a sum or a state that has moved on — and is said on the card;
+    either way the invoice is read again. A cancellation unanswered stays
+    in its sheet with «Немає відповіді сервера…», pressed again safely, as
+    before. Telegram's «Назад» closes a sheet, never the card under it.
+  - Paid, «← Накладна» goes to the card as the server answered, as
+    «Готово» does, never the card as it was before the payment (from the
+    review). An invoice read again after a refusal is shown only on a
+    screen that still shows it: an answer that comes once the person has
+    gone back never brings the screen back (from the review).
+  - For a reader: a line of the history that may be cancelled is read
+    «Скасувати: {день} {що} {сума} …»; a tag's «Сплатити» is described by
+    the supplier, the sum and the day, so two of one supplier's are told
+    apart (from the review).
+  - Whatever is recorded, paid, set off, written off or cancelled, the
+    list of invoices and the returns are read again at once, the list not
+    shown too: a card opened from it on the way back is the invoice as it
+    is now, never as the list last saw it (found by the set-off's journey:
+    the card came back with the set-off's money still to take). Decided
+    here.

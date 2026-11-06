@@ -3,6 +3,7 @@ import {
   expect,
   more,
   openStore,
+  pickSupplier,
   readsOf,
   receiveModel,
   receiveUnits,
@@ -11,6 +12,7 @@ import {
   recordReceipt,
   refuseOnce,
   section,
+  supplierList,
 } from "./fixtures";
 import type { Page, Request } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
@@ -194,10 +196,17 @@ test("jackets borrowed from another shop are taken at a price, marked sold, and 
     .click();
   // Whose goods is asked as soon as they are borrowed.
   await expect(
-    way.getByRole("combobox", { name: "Постачальник", exact: true }),
+    way.getByRole("button", { name: "Постачальник Оберіть", exact: true }),
   ).toBeVisible();
+  // Inside «Як надійшов», the list opens in place: never a sheet over a
+  // sheet (stage 2, money task list, P0-3).
+  const suppliers = await supplierList(page, { inside: way });
+  await expect(page.getByRole("dialog")).toHaveCount(1);
+  await expect(page.locator("select")).toHaveCount(0);
   // A supplier being added is kept while the sheet is closed.
-  await way.getByRole("button", { name: "+ Новий постачальник" }).click();
+  await suppliers
+    .getByRole("button", { name: "Новий постачальник", exact: true })
+    .click();
   await way.getByLabel("Назва постачальника").fill("Ще не додано");
   await receiveWayDone(way);
   await page.getByRole("button", { name: "Додати ще модель" }).click();
@@ -222,17 +231,13 @@ test("jackets borrowed from another shop are taken at a price, marked sold, and 
   // Another supplier's goods are another delivery: refused for the first,
   // the second goes under a new identity.
   way = await receiveWay(page);
-  await way
-    .getByRole("combobox", { name: "Постачальник", exact: true })
-    .selectOption({ label: other.name });
+  await pickSupplier(page, other.name, { inside: way });
   await receiveWayDone(way);
   await refuseOnce(page, "**/api/v1/inventory/receipts", 422);
   await recordReceipt(page, 3).click();
   await expect(page.getByText(/^Нічого не прийнято\./)).toBeVisible();
   way = await receiveWay(page);
-  await way
-    .getByRole("combobox", { name: "Постачальник", exact: true })
-    .selectOption({ label: supplier.name });
+  await pickSupplier(page, supplier.name, { inside: way });
   await receiveWayDone(way);
   await expect(
     page.getByRole("button", {
@@ -299,9 +304,7 @@ test("jackets borrowed from another shop are taken at a price, marked sold, and 
 
   await section(page, "Накладні");
   await expect(
-    page.getByRole("article", {
-      name: new RegExp(`^Накладна ${supplier.name}`),
-    }),
+    page.getByRole("article", { name: supplier.name, exact: true }),
   ).toContainText(`За продане позичене: ${coat.model} графіт, M × 2`);
 });
 
@@ -362,19 +365,26 @@ test("a mistaken «Продано» is undone by cancelling its invoice", async 
   await openAs(page, hanna);
   await section(page, "Накладні");
   await page
-    .getByRole("button", {
-      name: new RegExp(`^Відкрити накладну ${supplier.name} `),
-    })
+    .getByRole("article", { name: supplier.name, exact: true })
+    .locator(".order-row")
     .click();
   await expect(
     page.getByText(/Якщо позначили помилково — скасуйте накладну/),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Скасувати накладну" }).click();
-  await page.getByLabel("Чому скасовуємо").fill("ще не продали");
-  await page.getByRole("button", { name: "Так, скасувати накладну" }).click();
-  await expect(
-    page.getByText(/^Скасовано .* ще не продали/).first(),
-  ).toBeVisible();
+  // Behind the card's ⋯ (stage 2, money task list, P0-2).
+  await page.getByRole("button", { name: "Дії з накладною" }).click();
+  const ways = page.getByRole("dialog");
+  await expect(ways).toHaveAttribute("data-ready", "");
+  await ways.getByRole("button", { name: "Скасувати накладну" }).click();
+  // Its own sheet, once it takes taps.
+  const why = page.getByRole("dialog", { name: "Скасувати накладну" });
+  await expect(why).toHaveAttribute("data-ready", "");
+  await why.getByLabel("Чому скасовуємо").fill("ще не продали");
+  await why.getByRole("button", { name: "Так, скасувати накладну" }).click();
+  await expect(page.locator(".invoice-closed")).toContainText("Скасовано");
+  await expect(page.locator(".invoice-closed")).toContainText(
+    / · ще не продали · /,
+  );
 
   await section(page, "Постачальникам");
   await expect(card(page, coat, supplier.name)).toContainText(

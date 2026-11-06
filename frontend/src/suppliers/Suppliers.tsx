@@ -14,7 +14,7 @@ import { useBackOnSale } from "@/returns/places";
 import { visible } from "@/shared/visible";
 import { submitReturnToSupplier, useReturnToSupplier } from "./commands";
 import { Borrowed } from "./Borrowed";
-import { SupplierPicker, useSuppliers } from "./Picker";
+import { SupplierFilter, SupplierPicker, useSuppliers } from "./Picker";
 import type { ReturnPage, Supplier, SupplierReturn } from "./types";
 import { BackToMore } from "@/shared/More";
 import type { MoreBack } from "@/shared/More";
@@ -157,22 +157,13 @@ export function Suppliers({
             + Повернути товар постачальнику
           </button>
         )}
-        <label>
-          Постачальник у списку
-          <select
-            value={supplierId}
-            onChange={(event) => {
-              setSupplierId(event.target.value);
-            }}
-          >
-            <option value="">Усі постачальники</option>
-            {(suppliers.data ?? []).map((supplier) => (
-              <option key={supplier.id} value={supplier.id}>
-                {visible(supplier.name)}
-              </option>
-            ))}
-          </select>
-        </label>
+        <SupplierFilter
+          store={store}
+          token={token}
+          value={supplierId}
+          change={setSupplierId}
+          disabled={false}
+        />
         {returns.isPending ? (
           <p role="status">Завантажуємо повернення…</p>
         ) : returns.data === undefined ? (

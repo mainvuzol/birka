@@ -1080,9 +1080,12 @@ function Workspace({
   const [depositTask, setDepositTask] = useState(false);
   // And while the cash is counted («Усе на бірці» sections task list, P1-2).
   const [cashTask, setCashTask] = useState(false);
+  // And while a supplier's invoice is paid (stage 2, money task list, P0-2).
+  const [invoiceTask, setInvoiceTask] = useState(false);
   const taskScreen =
     ((tab === "deposit" || tab === "credits") && depositTask) ||
     (tab === "cash" && cashTask) ||
+    (tab === "invoices" && invoiceTask) ||
     // And while a new order is made (stage 2, orders task list, P0-5).
     tab === "new";
   const creditKey = `birka:credit-pending:${me.organization_id}:${me.user_id}:${store.id}`;
@@ -3569,6 +3572,7 @@ function Workspace({
               "supplier:write_off",
             )}
             back={backOf("invoices")}
+            task={setInvoiceTask}
           />
         ) : // Never opened without the right: nothing is said of the rule
         // («Усе на бірці» task list, P2-1).
