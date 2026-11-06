@@ -1,4 +1,11 @@
-import { test, expect, openStore, section } from "./fixtures";
+import {
+  test,
+  expect,
+  expectGlyphBeside,
+  expectStub,
+  openStore,
+  section,
+} from "./fixtures";
 import type { Locator, Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -1302,14 +1309,20 @@ test("«Клієнт забрав»: its sheet of five ways in two rows, each th
   const heading = page.getByRole("heading", { name: "Продаж записано" });
   await expect(heading).toBeFocused();
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  await expect(page.locator(".order-collected .way-pill")).toHaveText(
-    "Картка · Проведіть на терміналі",
+  // A sale, so its stub torn off as the till's: the way's sticker, what
+  // to do under it, the sum (stage 2, orders task list, P1-2).
+  await expect(page.locator(".order-collected .stub-recorded")).toBeVisible();
+  await expect(page.locator(".order-collected .way-pill")).toHaveText("Картка");
+  await expect(page.locator(".order-collected .stub-say")).toHaveText(
+    "Проведіть на терміналі",
   );
   // The server's sum, not what the phone showed.
-  await expect(page.locator(".order-collected .hand-back-sum")).toHaveText(
+  await expect(page.locator(".order-collected .stub-sum")).toHaveText(
     "1 100,00 грн",
   );
-  await expect(heading).toHaveAccessibleDescription("1 100,00 грн карткою.");
+  await expect(heading).toHaveAccessibleDescription(
+    "1 100,00 грн карткою. Проведіть на терміналі.",
+  );
   expect(server.sent).toEqual([
     {
       step: "collect",
@@ -1487,6 +1500,7 @@ test("a card's «Клієнт забрав» whose answer never came, confirmed 
   ).toHaveCount(0);
   // The way alone, never «Проведіть»: it may have been charged meanwhile.
   await expect(page.locator(".order-collected .way-pill")).toHaveText("Картка");
+  await expect(page.locator(".order-collected .stub-say")).toHaveCount(0);
   await expect(
     page.getByText(
       "Якщо картку ще не провели — проведіть на терміналі 1 200,15 грн. Якщо вже провели, поки сервер не відповідав, — не проводьте вдруге.",
@@ -1531,8 +1545,8 @@ test("«Клієнт забрав» in parts: terms not taken said over the ways
     page.getByRole("heading", { name: "Продаж записано" }),
   ).toBeFocused();
   // The part paid now large, the order's whole not over it.
-  await expect(page.locator(".order-collected .hand-back-sum")).toHaveText(
-    "500,00 грн",
+  await expect(page.locator(".order-collected .stub-sum")).toHaveText(
+    /^Сплачено зараз 500,00\sгрн$/,
   );
   await expect(page.locator(".order-total")).toHaveCount(0);
   await expect(page.locator(".order-collected .paid-owed")).toHaveText(
@@ -2678,6 +2692,71 @@ for (const [name, theme] of [
       await page.evaluate(() => document.documentElement.scrollWidth),
     ).toBeLessThanOrEqual(360);
     await page.screenshot({ path: `test-results/order-collect-${name}.png` });
+  });
+
+test("«Клієнт забрав» by each of its five ways is a sale's stub torn off, as the till's: the way's sticker — its glyph where the till has one — what to do under it, the server's sum (stage 2, orders task list, P1-2)", async ({
+  page,
+}) => {
+  for (const [label, glyph, say] of [
+    ["Готівка", true, null],
+    ["Картка", true, "Проведіть на терміналі"],
+    ["Переказ", true, "Перевірте, що переказ надійшов"],
+    ["Переказ наперед", false, null],
+    ["Накладений платіж", false, null],
+  ] as const) {
+    await open(page, { order: order({ status: "ARRIVED" }), sent: [] });
+    const taking = await ways(page);
+    await taking.getByRole("button", { name: label, exact: true }).click();
+    const done = page.locator(".order-collected");
+    await expect(
+      done.getByRole("heading", { name: "Продаж записано" }),
+    ).toBeFocused();
+    await expect(done.locator(".recorded-mark")).toBeVisible();
+    await expect(done.locator(".stub-recorded")).toBeVisible();
+    await expectStub(done, { way: label, say, sum: "1 200,15 грн" });
+    // Heard as seen: what to do after the sum and its way, as the till's
+    // stub reads (review, 2026-11-06).
+    const title = done.getByRole("heading", { name: "Продаж записано" });
+    if (say)
+      await expect(title).toHaveAccessibleDescription(
+        new RegExp(` ${say}\\.$`),
+      );
+    else
+      await expect(title).not.toHaveAccessibleDescription(
+        /Проведіть|Перевірте/,
+      );
+    await expect(done.locator(".way-pill svg.icon")).toHaveCount(glyph ? 1 : 0);
+    if (glyph) await expectGlyphBeside(done.locator(".way-pill"));
+    await expect(
+      done.getByRole("button", { name: "До замовлень", exact: true }),
+    ).toBeVisible();
+  }
+});
+
+for (const [name, theme] of [
+  ["light", { bg_color: "#ffffff", text_color: "#000000" }],
+  ["dark", { bg_color: "#17212b", text_color: "#f5f5f5" }],
+] as const)
+  test(`in the ${name} theme «Клієнт забрав»'s stub reads at 4.5:1 — its sticker, what to do, the sum — nothing wider than the phone (stage 2, orders task list, P1-2)`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 360, height: 640 });
+    await open(page, { order: order({ status: "ARRIVED" }), sent: [] }, theme);
+    const taking = await ways(page);
+    await taking.getByRole("button", { name: "Картка", exact: true }).click();
+    const done = page.locator(".order-collected");
+    await expect(done.locator(".stub-recorded")).toBeVisible();
+    for (const part of [
+      done.getByRole("heading", { name: "Продаж записано" }),
+      done.locator(".way-pill"),
+      done.locator(".stub-say"),
+      done.locator(".stub-sum .sum"),
+    ])
+      expect(await contrast(part)).toBeGreaterThanOrEqual(4.5);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(360);
+    await page.screenshot({ path: `test-results/order-collected-${name}.png` });
   });
 
 for (const [name, theme] of [

@@ -6606,3 +6606,93 @@ the same journal with the same body; every sum is the server's.
     the screen remade later (a kept return checked) opens the list (from
     the review). Back on the list from any of its screens, its heading
     takes the cursor (from the review).
+
+## Chosen in chat — 2026-11-06 (stage 2 batch 6: the return in the new system, here and at another store; «Клієнт забрав» as a stub; «Щось пішло не так» and «Застосунок не завантажився»; orders-paper P0-6, P2-1, P1-2, P1-5, P2-2)
+
+Chosen in chat on 2026-11-06 («Returns + orders' end»), after #174: the
+orders-paper task list's last five points. The owner's questions stand by
+their (а): В-ЗП6 (the menu steps aside on a return's form, as on «Внесок»
+and the cash's count) and В-ЗП7 («Продали ще до Бірки? Покличте менеджера
+— таке повернення вирішує він.» also under an empty search in the other
+stores). No right, no server rule, no command, no sum and no word of a
+return or a sale changes: each command goes through the same journal with
+the same body; every sum is the server's.
+
+- **A return's form a task's screen (P0-6, В-ЗП6 (а)):**
+  - The menu steps aside while one sale's return is open; «← До списку»
+    and Telegram's «Назад» lead back to the list, and the menu comes back
+    there. While a return is kept, «← До списку» is held, as before: the
+    form is left by the kept banner's check alone.
+  - The form's stickers carry their glyphs: «Оплата частинами» the owed
+    arrow, «Продано з паперу» / «Продано під час збою» the warning's
+    triangle. The sales list's rows stay as built (the task list keeps
+    them).
+  - A line is a row of 64 at least: «{Модель} · {розмір}» 17/600, its
+    price and what may come back in meta. «Цілі» and «Пошкоджені» side by
+    side, each its name over «− N +», the buttons 44 square; «Пошкоджені»
+    with «Брак»'s torn tag. Each «−» and «+» a light tap in the hand.
+  - «Без прокрутки» at 360 × 640 with one line is read as: the person
+    scrolls nothing — the line and the panel are whole on the screen once
+    a unit is counted. The app bringing the counted tag above the panel
+    itself, as before, stays (one plain line: 21 px; paid in parts from
+    paper, with both stickers: 138 px). The screen is not squeezed to keep
+    the title in view (decided here).
+  - The way stays a group of three radios, drawn as §6.7's switch
+    (segments on the field, the one chosen a card) and felt as a choice:
+    nothing chosen is a state of its own here — the sale's way not read —
+    which a mode switch does not have, and a reader hears a choice of
+    three. It is not `ModeSwitch`'s buttons (decided here).
+  - «В інших магазинах мережі» is the section's caption (13/700, in
+    capitals), still a heading; «← У своєму магазині» beside it.
+  - Nothing found, here or at the other stores, and no sale yet: §6.28's
+    blank tag, the words as they were, «Очистити» under them. What to do
+    next — «Купили в іншому магазині мережі? Шукати там», «Продали ще до
+    Бірки? …» — under the blank tag, centred with it.
+  - A refusal was already the error's plate (batch 1): unchanged.
+- **Whose money it is, inside the stub (P2-1):** «Товар куплено в іншому
+  магазині мережі — гроші віддаєте ви.» (and its paper's words) is a meta
+  line inside the return's stub, under the way's sticker and over the sum;
+  confirmed later, the same, with the money under its way.
+- **«Клієнт забрав» as a sale's stub (P1-2):**
+  - «Продаж записано» with the check in its eyelet, and the stub torn off,
+    as the till's receipt: the way's sticker with its glyph (cash, card,
+    transfer; «Переказ наперед» and «Накладений платіж» their words
+    alone); what to do the line under it — «Проведіть на терміналі»,
+    «Перевірте, що переказ надійшов» (the owner's words of 2026-10-23, В2
+    (а), split as the till's, none changed); the server's sum large.
+  - In parts, «Сплачено зараз» over the sum — heard before, now seen too;
+    what is owed the stub's meta.
+  - A kept one confirmed later: «Продаж записано один раз», no eyelet's
+    check, the way alone, and «Якщо картку ще не провели…» in ink inside
+    the stub.
+- **«Щось пішло не так» as the door (P1-5):** the app's name and mark over
+  a blank tag; the screen's title its one heading (it was «Бірка» as the
+  first heading and the title second). While the server is silent, the
+  owner's words and «Якщо сервер не відповідає, після перезапуску…» are
+  the paper's warning banner, read as a status — no longer an alert in the
+  error's colours. «Перезапустити» the one primary, 52 high; «Версія …» in
+  meta. Its words are as they were. The blank tag is now one shared piece
+  (`shared/BlankTag.tsx`) for the door and this screen.
+- **«Застосунок не завантажився» (P2-2):** the page before any code takes
+  the app's paper and ink, and their dark by the device's setting —
+  Telegram's own theme is not known before the app's code reads it. Set
+  on the page's element, so the app's own colours always win once it
+  comes. The owner's words on the warning's plate with its triangle. Still
+  shown only after 8 s. `index.html` grew by 1 371 bytes (the task list
+  allows 2 KB).
+- **From the batch's independent review (2026-11-06):**
+  - The warehouse for the intact ones (P0-6, its decision 4): deciding
+    chips 44, nothing chosen beforehand, the one chosen in the chosen
+    colours (§6.13) as «Куди»'s — no longer the action's colour.
+  - Returned at another store, paid in parts there, with nothing going
+    back: no way's sticker heads the stub, so whose money it is stands
+    first, kept clear of the stub's eyelet as a head is. Its words are as
+    they were («…гроші віддаєте ви.» even when nothing goes back — not
+    changed here).
+  - «Клієнт забрав»: what to do is heard too — the heading's description
+    is «{сума} {як}. Проведіть на терміналі.» / «…Перевірте, що переказ
+    надійшов.», as the till's stub reads its line; still nothing for a kept
+    one.
+  - «Щось пішло не так»: the status's place is on the screen from the
+    start, empty, and the paper's warning comes into it once the server
+    goes quiet, so it is heard as it comes. The banner itself has no role.

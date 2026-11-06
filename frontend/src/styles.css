@@ -907,8 +907,11 @@ nav:not(.tab-bar, .more-list) {
   border-top: 0;
 }
 
-/* A return: one block per sale line, the two counts side by side. */
+/* A return: one row per sale line (spec §6.8; stage 2, orders task list,
+   P0-6) — the model and size 17/600, the price and what may come back in
+   meta, the two counts side by side under them. */
 .line-return {
+  min-height: 64px;
   border-top: 1px solid var(--line);
   padding-top: 12px;
   margin-bottom: 12px;
@@ -919,8 +922,13 @@ nav:not(.tab-bar, .more-list) {
 .line-return h3 {
   margin: 0 0 4px;
   font-size: 17px;
-  font-weight: 700;
+  font-weight: 600;
+  line-height: 22px;
   overflow-wrap: anywhere;
+}
+.line-return-meta {
+  margin: 0;
+  color: var(--pencil);
 }
 /* A list line's size and its count: the size takes two shares, so its
    choice reads whole on a phone («Оберіть розмір», «Розмір невідомий»). */
@@ -1628,26 +1636,42 @@ html {
   gap: 6px;
   margin: 0 0 8px;
 }
+/* Each sticker its glyph and its word (spec §6.18). */
+.sale-marks .badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+/* «Цілі» and «Пошкоджені» in one row, each its name over «− N +», the
+   buttons 44 (stage 2, orders task list, P0-6): two fit at 360 px. */
 .return-steps {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 6px;
   margin-top: 10px;
 }
 .return-step {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 2px 2px 2px 12px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  padding: 6px 4px 4px;
   border-radius: 14px;
   background: var(--field);
 }
 .return-step-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px;
   font-weight: 650;
 }
+.return-step .stepper {
+  justify-content: space-between;
+}
 .return-step .stepper button {
-  min-width: 48px;
+  min-width: 44px;
+  min-height: 44px;
   padding: 0;
   font-size: 22px;
   border-radius: 12px;
@@ -1673,6 +1697,16 @@ html {
 .chip[aria-pressed="true"] {
   background: var(--accent);
   color: var(--on-accent);
+}
+/* Which warehouse takes the intact ones: deciding chips 44, the chosen one
+   in the chosen colours (spec §6.13), as «Куди» (stage 2, orders task list,
+   P0-6). */
+.return-place .chip {
+  min-height: 44px;
+}
+.return-place .chip[aria-pressed="true"] {
+  background: var(--chosen);
+  color: var(--on-chosen);
 }
 .return-place .hint {
   margin: 8px 0 0;
@@ -2353,7 +2387,16 @@ section.credits.customer-card {
 }
 .elsewhere-head h3 {
   margin: 0;
-  font-size: 15px;
+  color: var(--pencil);
+}
+/* Nothing found, here or there (spec §6.28): what to do next under the
+   blank tag, centred with it. */
+.returns-empty ~ .elsewhere-offer,
+.returns-empty ~ .returns-manager {
+  text-align: center;
+}
+.returns-empty ~ .elsewhere-offer button {
+  margin: 8px auto 0;
 }
 .elsewhere-offer {
   margin-top: 16px;
@@ -2468,6 +2511,7 @@ section.credits.customer-card {
   border-radius: 11px;
   text-align: center;
   color: var(--pencil);
+  font-weight: 650;
 }
 /* The whole segment is the radio's target. */
 .way-switch input {
@@ -2804,6 +2848,19 @@ section.credits.customer-card {
 }
 .blank-tag .blank-after {
   margin: 16px 0 0;
+}
+/* A screen that broke (stage 2, orders task list, P1-5): the door's blank
+   tag; the owner's words the paper's warning in it; «Перезапустити» its
+   one primary, 52 high. */
+.crashed .banner {
+  margin: 16px 0 0;
+}
+.crashed .blank-tag > button {
+  width: 100%;
+  min-height: var(--h-primary);
+  border-radius: var(--r-l);
+  font-size: 17px;
+  font-weight: 700;
 }
 /* A text button, «Спробувати ще раз» (spec §5.5 `button-s`, `link`). */
 .text-button {
@@ -4465,6 +4522,11 @@ section.cash-count {
 }
 .stub > .eyelet-knot {
   right: 32px;
+}
+/* Another store's line first, no sticker over it (nothing goes back): clear
+   of the eyelet, as a stub's head is (review, 2026-11-06). */
+.stub > .eyelet + .elsewhere-line {
+  margin-right: 32px;
 }
 .stub-kept {
   background-image: radial-gradient(

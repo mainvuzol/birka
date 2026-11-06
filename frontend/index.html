@@ -17,6 +17,13 @@
       crossorigin
     />
     <style>
+      /* The app's paper and ink before its code, in both themes (stage 2,
+         orders task list, P2-2): by element, so the app's own `:root`
+         always wins once it comes. */
+      html {
+        background: #ecede7;
+        color: #15170f;
+      }
       /* Shown only when the app's code never arrives: hidden for its first
          seconds, so a normal open never flashes it. React replaces it. */
       .not-loaded {
@@ -27,6 +34,38 @@
         padding: 24px 18px;
         font-family: ui-sans-serif, system-ui, sans-serif;
         line-height: 1.55;
+      }
+      /* The owner's words as the paper's warning: its triangle, its plate. */
+      .not-loaded-paper {
+        display: flex;
+        gap: 10px;
+        padding: 12px;
+        border-radius: 12px;
+        background: #faeecb;
+      }
+      .not-loaded-paper p {
+        margin: 0;
+      }
+      .not-loaded-paper svg {
+        flex: none;
+        margin-top: 2px;
+        fill: none;
+        stroke: #7a5200;
+        stroke-width: 1.75;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      @media (prefers-color-scheme: dark) {
+        html {
+          background: #0d0e0a;
+          color: #f1f2ea;
+        }
+        .not-loaded-paper {
+          background: #33280a;
+        }
+        .not-loaded-paper svg {
+          stroke: #f2c451;
+        }
       }
       @keyframes not-loaded-show {
         to {
@@ -42,11 +81,19 @@
           Застосунок не завантажився. Перевірте зв’язок і відкрийте його ще раз.
         </p>
         <!-- An outage, in practice: the owner's words (ADR-0013 §3). -->
-        <p>
-          Сервер не відповідає. Продавайте на папері: модель, розмір, ціна, як
-          оплачено, час. Коли сервер відповість — внесіть продажі до закриття
-          каси.
-        </p>
+        <div class="not-loaded-paper">
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+            <path
+              d="M10.27 4.5a2 2 0 0 1 3.46 0l7.5 13a2 2 0 0 1-1.73 3H4.5a2 2 0 0 1-1.73-3z"
+            />
+            <path d="M12 9.5V14M12 17h.01" />
+          </svg>
+          <p>
+            Сервер не відповідає. Продавайте на папері: модель, розмір, ціна, як
+            оплачено, час. Коли сервер відповість — внесіть продажі до закриття
+            каси.
+          </p>
+        </div>
       </div>
     </div>
     <script type="module" src="/src/main.tsx"></script>

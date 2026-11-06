@@ -646,7 +646,7 @@ test("switching to the other stores never shows this store's rows under their he
   await expect(page.getByText("Лоран шоколад")).toHaveCount(0);
 });
 
-test("nothing found here says to call the manager for goods sold before Бірка; nothing found elsewhere, not", async ({
+test("nothing found here says to call the manager for goods sold before Бірка, and so does nothing found elsewhere, each under its blank tag (stage 2, orders task list, P0-6, В-ЗП7 (а))", async ({
   page,
 }) => {
   await sales(page, [sale("Лоран шоколад", ago(0))]);
@@ -664,6 +664,7 @@ test("nothing found here says to call the manager for goods sold before Бірк
   ).toBeVisible();
   // В5 (а): the manager decides (returns task list, P1-6).
   await expect(before).toBeVisible();
+  await expect(page.locator(".returns-empty .orders-empty-mark")).toBeVisible();
   await page.getByRole("button", { name: "Шукати там" }).click();
   await expect(
     page.getByText(
@@ -673,7 +674,16 @@ test("nothing found here says to call the manager for goods sold before Бірк
       },
     ),
   ).toBeVisible();
-  await expect(before).toHaveCount(0);
+  // Nowhere left to look: the manager decides here too (В-ЗП7 (а)), under
+  // the blank tag and its «Очистити».
+  await expect(page.locator(".returns-empty .orders-empty-mark")).toBeVisible();
+  await expect(before).toBeVisible();
+  const clear = await page
+    .getByRole("button", { name: "Очистити", exact: true })
+    .boundingBox();
+  const hint = await before.boundingBox();
+  if (!clear || !hint) throw new Error("not laid out");
+  expect(hint.y).toBeGreaterThanOrEqual(clear.y + clear.height);
   // «Очистити» there: this store's list again.
   await page.getByRole("button", { name: "Очистити", exact: true }).click();
   await expect(

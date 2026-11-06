@@ -4,6 +4,7 @@ import {
   basketDone,
   basketSheet,
   fillLine,
+  menu,
   openStore,
   toTill,
   section,
@@ -469,10 +470,9 @@ test("a sale made by mistake is returned from its own receipt, by the usual rule
   // One tap, and the return of this very sale is open: no search.
   await page.getByRole("button", { name: "Оформити повернення" }).click();
   await expect(page.getByRole("heading", { name: "Повернення" })).toBeVisible();
-  // «Продаж» marked in the row; on one sale's return, no switch.
-  await expect(
-    sections(page).getByRole("button", { name: "Продаж", exact: true }),
-  ).toHaveAttribute("aria-current", "page");
+  // A task's screen: the menu steps aside (stage 2, orders task list, P0-6,
+  // В-ЗП6 (а)); on one sale's return, no switch.
+  await expect(menu(page)).toBeHidden();
   await expect(tillWays(page)).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "До списку", exact: true }),

@@ -6,7 +6,7 @@ import {
   openStore,
   sections,
 } from "./fixtures";
-import type { Page, Request, Response } from "@playwright/test";
+import type { Locator, Page, Request, Response } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 
@@ -148,6 +148,36 @@ async function seed(
   await page.goto("about:blank");
 }
 
+/** The WCAG contrast of an element's text against what it is drawn on. */
+async function contrast(element: Locator): Promise<number> {
+  return element.evaluate((node) => {
+    const rgb = (value: string): number[] =>
+      (value.match(/[\d.]+/g) ?? []).map(Number);
+    const luminance = ([r, g, b]: number[]): number => {
+      const channel = (c: number): number => {
+        const v = c / 255;
+        return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+      };
+      return (
+        0.2126 * channel(r ?? 0) +
+        0.7152 * channel(g ?? 0) +
+        0.0722 * channel(b ?? 0)
+      );
+    };
+    let ground: Element | null = node;
+    let background = "rgba(0, 0, 0, 0)";
+    while (ground) {
+      background = getComputedStyle(ground).backgroundColor;
+      const alpha = rgb(background)[3];
+      if (alpha === undefined || alpha > 0) break;
+      ground = ground.parentElement;
+    }
+    const fore = luminance(rgb(getComputedStyle(node).color));
+    const back = luminance(rgb(background));
+    return (Math.max(fore, back) + 0.05) / (Math.min(fore, back) + 0.05);
+  });
+}
+
 /** Opens the app on a store list that is not one: its screen throws. */
 async function openBroken(page: Page): Promise<void> {
   await collectNotes(page);
@@ -159,7 +189,13 @@ async function openBroken(page: Page): Promise<void> {
   await expect(
     page.getByRole("heading", { name: "Щось пішло не так" }),
   ).toBeVisible();
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Бірка");
+  // The door's blank tag (stage 2, orders task list, P1-5): the app's name
+  // over it, the screen's own title its heading.
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+    "Щось пішло не так",
+  );
+  await expect(page.locator("[data-crashed] .app-name")).toHaveText("Бірка");
+  await expect(page.locator("[data-crashed] .blank-tag")).toBeVisible();
 }
 
 test.describe("a screen that breaks", () => {
@@ -439,6 +475,11 @@ test.describe("a screen that breaks", () => {
     await openBroken(page);
     const crashed = page.locator("[data-crashed]");
     await expect(crashed).not.toContainText("Продавайте на папері");
+    // Its place said from the start, empty, so the words are heard as they
+    // come (review, 2026-11-06).
+    const said = crashed.getByRole("status");
+    await expect(said).toHaveCount(1);
+    await expect(said).toHaveText("");
     // The server stops answering: what the app's own requests note (the
     // class is the app's own, handed out by the development server).
     await page.evaluate(async (path) => {
@@ -453,10 +494,78 @@ test.describe("a screen that breaks", () => {
     await expect(crashed).toContainText(
       "Якщо сервер не відповідає, після перезапуску застосунок може не відкритися — продавайте на папері.",
     );
+    await expect(said).toContainText(
+      "Сервер не відповідає. Продавайте на папері",
+    );
     await expect(
       page.getByRole("button", { name: "Перезапустити" }),
     ).toBeVisible();
   });
+
+  for (const scheme of ["light", "dark"] as const)
+    test(`in the ${scheme} theme at 360 × 640 «Щось пішло не так» is the door's blank tag, «Перезапустити» in view, the server's silence the paper's warning — never an error's or a debt's colours — at 4.5:1 (stage 2, orders task list, P1-5)`, async ({
+      page,
+    }) => {
+      await page.emulateMedia({ colorScheme: scheme });
+      await page.setViewportSize({ width: 360, height: 640 });
+      await openBroken(page);
+      expect(
+        await page.evaluate(
+          () => matchMedia("(prefers-color-scheme: dark)").matches,
+        ),
+      ).toBe(scheme === "dark");
+      await page.evaluate(async (path) => {
+        const { noteUnreachable } = (await import(
+          path
+        )) as typeof import("../src/shared/reach");
+        noteUnreachable();
+      }, "/src/shared/reach.ts");
+      const crashed = page.locator("[data-crashed]");
+      const paper = crashed.locator(".banner-paper");
+      await expect(paper).toContainText(
+        "Сервер не відповідає. Продавайте на папері",
+      );
+      await expect(paper.locator(".banner-glyph svg.icon")).toHaveCount(1);
+      // A warning, never said as a fault: no alert on the screen.
+      await expect(crashed.getByRole("alert")).toHaveCount(0);
+      const grounds = await paper.evaluate((node) => {
+        const resolved = (value: string): string => {
+          const probe = document.createElement("i");
+          probe.style.backgroundColor = value;
+          document.body.append(probe);
+          const colour = getComputedStyle(probe).backgroundColor;
+          probe.remove();
+          return colour;
+        };
+        return {
+          own: getComputedStyle(node).backgroundColor,
+          warning: resolved("var(--warning-bg)"),
+          danger: resolved("var(--danger-bg)"),
+          debt: resolved("var(--debt-bg)"),
+        };
+      });
+      expect(grounds.own).toBe(grounds.warning);
+      expect(grounds.own).not.toBe(grounds.danger);
+      expect(grounds.own).not.toBe(grounds.debt);
+      for (const part of [
+        crashed.getByRole("heading", { name: "Щось пішло не так" }),
+        crashed.locator(".blank-body"),
+        paper.locator("p").first(),
+        paper.locator("p").last(),
+        crashed.getByRole("button", { name: "Перезапустити" }),
+        crashed.locator(".blank-after"),
+      ])
+        expect(await contrast(part)).toBeGreaterThanOrEqual(4.5);
+      const restart = crashed.getByRole("button", { name: "Перезапустити" });
+      await expect(restart).toBeInViewport({ ratio: 1 });
+      expect((await restart.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(
+        52,
+      );
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth),
+      ).toBeLessThanOrEqual(360);
+      await page.screenshot({ path: `test-results/crashed-${scheme}.png` });
+    });
 
   test("a note that cannot be sent is dropped without a word", async ({
     page,
@@ -499,12 +608,74 @@ test("the app's code that never arrives is said so, but only after a wait", asyn
   await page.waitForTimeout(3000);
   await expect(fallback).toBeHidden();
   await expect(fallback).toBeVisible({ timeout: 10_000 });
-  // An outage, in practice: the owner's words under it (ADR-0013 §3).
+  // An outage, in practice: the owner's words under it (ADR-0013 §3), on
+  // the paper's warning plate with its triangle (stage 2, orders task
+  // list, P2-2).
   await expect(
-    page.getByText(
-      "Сервер не відповідає. Продавайте на папері: модель, розмір, ціна, як оплачено, час. Коли сервер відповість — внесіть продажі до закриття каси.",
-    ),
+    page
+      .locator(".not-loaded-paper")
+      .getByText(
+        "Сервер не відповідає. Продавайте на папері: модель, розмір, ціна, як оплачено, час. Коли сервер відповість — внесіть продажі до закриття каси.",
+      ),
   ).toBeVisible();
+  await expect(page.locator(".not-loaded-paper svg")).toHaveCount(1);
+  // The app's paper and ink, before any of its code.
+  expect(
+    await page.evaluate(
+      () => getComputedStyle(document.documentElement).backgroundColor,
+    ),
+  ).toBe("rgb(236, 237, 231)");
+  expect(await contrast(fallback)).toBeGreaterThanOrEqual(4.5);
+  expect(
+    await contrast(page.locator(".not-loaded-paper p")),
+  ).toBeGreaterThanOrEqual(4.5);
+});
+
+test("the app's code that never arrives, in the dark theme: the paper's dark and its ink, the owner's words on the warning's plate, its triangle seen at 3:1, its words at 4.5:1 (stage 2, orders task list, P2-2)", async ({
+  page,
+}) => {
+  await page.emulateMedia({ colorScheme: "dark" });
+  await page.route("**/src/main.tsx", async (route) => {
+    await route.abort("connectionreset");
+  });
+  await page.goto(stubbedLaunch());
+  const fallback = page.getByText(
+    "Застосунок не завантажився. Перевірте зв’язок і відкрийте його ще раз.",
+  );
+  await expect(fallback).toBeVisible({ timeout: 12_000 });
+  expect(
+    await page.evaluate(
+      () => getComputedStyle(document.documentElement).backgroundColor,
+    ),
+  ).toBe("rgb(13, 14, 10)");
+  const plate = page.locator(".not-loaded-paper");
+  expect(await contrast(fallback)).toBeGreaterThanOrEqual(4.5);
+  expect(await contrast(plate.locator("p"))).toBeGreaterThanOrEqual(4.5);
+  // The triangle against its plate, as a glyph is seen (WCAG 1.4.11).
+  const glyph = await plate.evaluate((node) => {
+    const rgb = (value: string): number[] =>
+      (value.match(/[\d.]+/g) ?? []).map(Number);
+    const luminance = ([r, g, b]: number[]): number => {
+      const channel = (c: number): number => {
+        const v = c / 255;
+        return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+      };
+      return (
+        0.2126 * channel(r ?? 0) +
+        0.7152 * channel(g ?? 0) +
+        0.0722 * channel(b ?? 0)
+      );
+    };
+    const svg = node.querySelector("svg");
+    if (svg === null) throw new Error("no triangle");
+    const stroke = luminance(rgb(getComputedStyle(svg).stroke));
+    const ground = luminance(rgb(getComputedStyle(node).backgroundColor));
+    return (
+      (Math.max(stroke, ground) + 0.05) / (Math.min(stroke, ground) + 0.05)
+    );
+  });
+  expect(glyph).toBeGreaterThanOrEqual(3);
+  await page.screenshot({ path: "test-results/not-loaded-dark.png" });
 });
 
 test("an app that opens replaces the waiting text at once", async ({

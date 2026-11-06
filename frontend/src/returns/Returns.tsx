@@ -24,6 +24,7 @@ import { usePanelRoom } from "@/shared/panel";
 import { Placeholder } from "@/shared/Placeholder";
 import { Sum } from "@/shared/Sum";
 import { Eyelet } from "@/shared/Eyelet";
+import { Icon } from "@/shared/Icon";
 import { SendingLine } from "@/shared/Sending";
 import {
   PaperBanner,
@@ -80,6 +81,7 @@ export function Returns({
   opened,
   sell,
   mode = null,
+  task,
 }: {
   store: Store;
   token: string;
@@ -102,6 +104,9 @@ export function Returns({
    * (navigation task list, P0-1); none for anyone else.
    */
   mode?: JSX.Element | null;
+  /** A sale's return open: the menu steps aside, «← До списку» leaves it
+   * (spec S08; stage 2, orders task list, P0-6, В-ЗП6 (а)). */
+  task?: (shown: boolean) => void;
 }): JSX.Element {
   const cache = useQueryClient();
   // What the seller types, searched once they pause, from two letters, as
@@ -192,6 +197,17 @@ export function Returns({
     opened,
   ]);
 
+  const returning = selected !== null;
+  useEffect(() => {
+    task?.(returning);
+  }, [task, returning]);
+  useEffect(
+    () => () => {
+      task?.(false);
+    },
+    [task],
+  );
+
   async function settled(refund: Refund, sent: ReturnPart[]): Promise<void> {
     setDone({ refund, sent });
     setSelected(null);
@@ -272,9 +288,10 @@ export function Returns({
           />
         </form>
         {away && (
-          // Never mixed with this store's: headed, and left in one tap.
+          // Never mixed with this store's: headed, and left in one tap. The
+          // section's caption (spec §5; stage 2, orders task list, P0-6).
           <div className="toolbar elsewhere-head">
-            <h3>В інших магазинах мережі</h3>
+            <h3 className="t-label">В інших магазинах мережі</h3>
             <button
               type="button"
               className="quiet"
@@ -303,14 +320,16 @@ export function Returns({
             </button>
           </div>
         ) : listed.length === 0 ? (
+          // Nothing found (spec §6.28): a blank tag drawn, the words under
+          // it (stage 2, orders task list, P0-6).
           search ? (
-            <div className="empty">
-              <p>
+            <div className="orders-empty returns-empty">
+              <Icon name="mark-lg" className="orders-empty-mark" />
+              <p className="t-row">
                 {away
                   ? `В інших магазинах мережі за «${visible(search)}» продажів не знайдено.`
                   : `За «${visible(search)}» продажів не знайдено. Перевірте назву або очистіть пошук.`}
               </p>
-
               <button
                 type="button"
                 className="quiet"
@@ -324,7 +343,10 @@ export function Returns({
               </button>
             </div>
           ) : (
-            <p>Продажів у магазині ще немає.</p>
+            <div className="orders-empty returns-empty">
+              <Icon name="mark-lg" className="orders-empty-mark" />
+              <p className="t-row">Продажів у магазині ще немає.</p>
+            </div>
           )
         ) : (
           <>
@@ -411,16 +433,17 @@ export function Returns({
             </button>
           </p>
         )}
-        {!away &&
-          search !== "" &&
+        {search !== "" &&
           !!sales.data &&
           !sales.isPlaceholderData &&
           listed.length === 0 && (
             // Found in neither store, a coat sold from the notebook, before
             // Бірка: the manager decides (owner decision, 2026-10-17, В5 (а);
             // returns task list, P1-6). Said after the other stores' offer,
-            // which comes first.
-            <p className="hint">
+            // which comes first, and under the other stores' empty search
+            // too, where nothing is left to look in (stage 2, orders task
+            // list, P0-6, В-ЗП7 (а)).
+            <p className="hint returns-manager">
               Продали ще до Бірки? Покличте менеджера — таке повернення вирішує
               він.
             </p>
@@ -485,7 +508,12 @@ function Step({
 }): JSX.Element {
   return (
     <div className={damaged ? "return-step damaged" : "return-step"}>
-      <span className="return-step-name">{name}</span>
+      <span className="return-step-name">
+        {/* «Брак»'s torn tag beside its colour (spec §6.18; stage 2,
+            orders task list, P0-6). */}
+        {damaged && <Icon name="damaged" size={16} />}
+        {name}
+      </span>
       <div className="stepper">
         <button
           type="button"
@@ -654,6 +682,9 @@ function ReturnForm({
     from: HTMLElement,
   ): void {
     touched.current = from.closest(".line-return");
+    // A count, felt as the basket's (spec §4.4; stage 2, orders task list,
+    // P0-6).
+    buzz("light");
     setCounts({ ...counts, [id]: { ...(counts[id] ?? none), [field]: value } });
   }
 
@@ -730,12 +761,18 @@ function ReturnForm({
           {elsewhere && ` · магазин «${visible(sale.store_name)}»`}
         </p>
         {(sale.paid_in_parts || sale.outage) && (
+          // Stickers with their glyphs, so a meaning is never told by colour
+          // alone (spec §6.18; stage 2, orders task list, P0-6).
           <p className="sale-marks">
             {sale.paid_in_parts && (
-              <span className="badge debt">Оплата частинами</span>
+              <span className="badge debt">
+                <Icon name="owed" size={16} />
+                Оплата частинами
+              </span>
             )}
             {sale.outage && (
               <span className="badge warn">
+                <Icon name="warning" size={16} />
                 {sale.outage.first_days === true
                   ? "Продано з паперу"
                   : "Продано під час збою"}
@@ -767,7 +804,7 @@ function ReturnForm({
                 <h3 id={heading}>
                   {visible(item.display_name)} · {sizeLabel(item.size)}
                 </h3>
-                <p className="hint">
+                <p className="t-meta line-return-meta">
                   {money(item.final_unit_price)} за 1 шт. · можна повернути {left}{" "}
                   шт.
                   {item.refunded > 0 &&
@@ -938,6 +975,9 @@ function ReturnForm({
                     name="refund-method"
                     checked={way === option}
                     onChange={() => {
+                      // A choice, felt, as §6.7's switch (stage 2, orders
+                      // task list, P0-6).
+                      buzz("selection");
                       setChosenWay(option);
                     }}
                   />

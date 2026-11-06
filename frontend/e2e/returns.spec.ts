@@ -2,6 +2,7 @@ import {
   test,
   expect,
   expectStub,
+  menu,
   more,
   openStore,
   toTill,
@@ -189,7 +190,7 @@ test("one coat back intact goes where it was sold, one damaged to the store's «
   await expect(
     page.getByRole("heading", { name: new RegExp(`^${model}.* · M$`) }),
   ).toBeVisible();
-  await expect(page.locator(".line-return .hint")).toContainText(
+  await expect(page.locator(".line-return-meta")).toContainText(
     / за 1 шт\. · можна повернути 2 шт\.$/,
   );
   // Nothing counted, nothing to press: the state of each unit is the
@@ -357,8 +358,11 @@ test("a return whose outcome is unknown blocks the app until it is resent unchan
       `^Повернення: ${model}.* · M × 1 · 3\\s000,00\\sгрн готівкою — сервер не відповів\\. Двічі воно не запишеться, і гроші двічі не повернуться\\. Поки чекаємо, інші дії недоступні\\.`,
     ),
   );
+  // The form a task's screen, the menu aside (stage 2, orders task list,
+  // P0-6), and no way out of it while the return is kept.
+  await expect(menu(page)).toBeHidden();
   await expect(
-    page.getByRole("button", { name: "Продаж", exact: true }),
+    page.getByRole("button", { name: "До списку", exact: true }),
   ).toBeDisabled();
   // The panel is held as the form is: nothing pressed twice, no way changed.
   const panel = page.getByRole("group", { name: "Повернення: сума і спосіб" });

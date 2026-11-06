@@ -1579,8 +1579,8 @@ test("an order collected may be paid in parts, by the till's rules", async ({
     page.getByRole("heading", { name: "Продаж записано" }),
   ).toBeVisible();
   // The part paid now large, what is owed from the server's answer.
-  await expect(page.locator(".order-collected .hand-back-sum")).toHaveText(
-    "500,00 грн",
+  await expect(page.locator(".order-collected .stub-sum")).toHaveText(
+    /^Сплачено зараз 500,00\sгрн$/,
   );
   await expect(page.locator(".order-collected .paid-owed")).toHaveText(
     /^Покупець винен 2\s500,00\sгрн\. Наступні внески — у «Продажі» › «Внесок»\.$/,

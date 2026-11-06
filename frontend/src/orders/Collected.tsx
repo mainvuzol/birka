@@ -1,20 +1,20 @@
 import { useEffect, useId, useRef } from "react";
 import type { JSX } from "react";
+import { RecordedMark } from "@/shared/Eyelet";
 import { methodHow, methodLabels } from "@/shared/payment";
 import type { PaymentMethod } from "@/shared/payment";
+import { Stub, WaySticker } from "@/shared/Stub";
 import { Sum } from "@/shared/Sum";
 import { money } from "./types";
 import type { Order } from "./types";
 
-/** Over the sum taken: the way, and what to do with it, as the till's
- * receipt and a debt's payment say (orders task list, P0-3; owner decision,
- * 2026-10-23, В2 (а)). Ahead or through the carrier, nothing to do now. */
-const wayPills: Record<PaymentMethod, string> = {
-  CASH: "Готівка",
-  CARD: "Картка · Проведіть на терміналі",
-  TRANSFER: "Переказ · Перевірте, що переказ надійшов",
-  PREPAID_TRANSFER: "Переказ наперед",
-  CARRIER_COD: "Накладений платіж",
+/** Over the sum taken, under the way's sticker: what to do with it, as the
+ * till's receipt and a debt's payment say (orders task list, P0-3; owner
+ * decision, 2026-10-23, В2 (а)). Cash, ahead or through the carrier,
+ * nothing to do now. */
+const waySays: Partial<Record<PaymentMethod, string>> = {
+  CARD: "Проведіть на терміналі",
+  TRANSFER: "Перевірте, що переказ надійшов",
 };
 
 /**
@@ -69,7 +69,9 @@ export function SaleLinks({
  * «Клієнт забрав» recorded (orders task list, P0-3): «Продаж записано»,
  * the way with what to do, the sum taken large — the order's, or in parts
  * the part paid now — and what is owed, all from the server's answer; «До
- * замовлень», and the receipt's two quiet ways on.
+ * замовлень», and the receipt's two quiet ways on. A sale, so its stub torn
+ * off as the till's receipt is (spec §6.30; stage 2, orders task list,
+ * P1-2).
  *
  * `kept`: a «Клієнт забрав» whose answer was lost, confirmed later — «…
  * записано один раз», the way alone, never «Проведіть»: a card may have
@@ -98,32 +100,50 @@ export function Collected({
   const way = order.payment_method ?? null;
   const taken = order.credit ? order.credit.paid : order.total;
   const owed = owedText(order);
+  // Confirmed later, the way alone: a card may have been charged meanwhile.
+  const say = !kept && way ? (waySays[way] ?? null) : null;
   return (
     <div className={`paid-result order-collected${kept ? " kept" : ""}`}>
-      <h3 ref={heading} tabIndex={-1} aria-describedby={sentence}>
+      <h3
+        ref={heading}
+        tabIndex={-1}
+        aria-describedby={sentence}
+        className="result-title"
+      >
+        {!kept && <RecordedMark />}
         {kept ? "Продаж записано один раз" : "Продаж записано"}
       </h3>
-      <div className="hand-back">
+      <Stub state="recorded">
         {way && (
-          <p className="badge way-pill" aria-hidden="true">
-            {kept ? methodLabels[way] : wayPills[way]}
+          <p className="stub-head">
+            <WaySticker way={way} hidden />
           </p>
         )}
-        <p className="hand-back-sum" aria-hidden="true">
+        {say !== null && (
+          <p className="stub-say" aria-hidden="true">
+            {say}
+          </p>
+        )}
+        <p className="stub-sum" aria-hidden="true">
+          {order.credit && (
+            <span className="stub-sum-what">Сплачено зараз </span>
+          )}
           <Sum value={money(taken)} />
         </p>
         <p id={sentence} className="visually-hidden">
           {order.credit ? "Сплачено зараз " : ""}
           {money(taken)}
-          {way ? ` ${methodHow[way]}` : ""}.{owed ? ` ${owed}` : ""}
+          {way ? ` ${methodHow[way]}` : ""}.{say !== null ? ` ${say}.` : ""}
+          {owed ? ` ${owed}` : ""}
         </p>
-      </div>
-      {owed && (
-        <p className="paid-owed" aria-hidden="true">
-          {owed}
-        </p>
-      )}
-      {kept && way === "CARD" && <p>{chargeOnce(taken)}</p>}
+        {owed && (
+          <p className="stub-line paid-owed" aria-hidden="true">
+            {owed}
+          </p>
+        )}
+        {/* Said in ink: what to do at the terminal, or not. */}
+        {kept && way === "CARD" && <p>{chargeOnce(taken)}</p>}
+      </Stub>
       <div className="result-next">
         <button type="button" onClick={back}>
           До замовлень
