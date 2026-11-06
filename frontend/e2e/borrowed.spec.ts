@@ -1,6 +1,7 @@
 import {
   test,
   expect,
+  countTaps,
   more,
   openStore,
   pickSupplier,
@@ -11,19 +12,26 @@ import {
   receiveWayDone,
   recordReceipt,
   refuseOnce,
+  rowNamed,
   section,
   supplierList,
 } from "./fixtures";
-import type { Page, Request } from "@playwright/test";
+import type { Locator, Page, Request } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 
 /**
  * Goods borrowed from another shop, and goods under consignment (owner
  * decisions, 2026-10-01): taken through «Приймання» from a supplier at a
- * price agreed for each, by the owner and managers only; marked sold in
- * «Постачальникам», which is an invoice in «Накладні»; sent back unsold for
- * nothing. A mistaken «Продано» is undone by cancelling its invoice.
+ * price agreed for each, by the owner and managers only; marked sold on
+ * «Позичене й під реалізацію», which is an invoice in «Накладні»; sent back
+ * unsold for nothing. A mistaken «Продано» is undone by cancelling its
+ * invoice.
+ *
+ * Its own screen (stage 2, money task list, P0-5): a lot a tag, «На руках ·
+ * Усе», a sheet with how many and the price for each, a stub for what was
+ * recorded; «Відкрити накладну ›» from that stub, «Позичене й під
+ * реалізацію ›» from the sold invoice's card (P1-3).
  *
  * In the stores' own network: Ганна holds every right at «Центр», Ліда sells
  * there with a seller's rights.
@@ -60,11 +68,16 @@ function initData(telegramUserId: string): string {
   return fields.toString();
 }
 
-async function openAs(page: Page, telegramUserId: string): Promise<void> {
+/** Бірка at «Центр», as this person; in `theme`'s colours. */
+async function openAs(
+  page: Page,
+  telegramUserId: string,
+  theme?: Record<string, string>,
+): Promise<void> {
   await page.goto("about:blank");
-  await page.goto(
-    `/#${new URLSearchParams({ tgWebAppData: initData(telegramUserId) }).toString()}`,
-  );
+  const hash = new URLSearchParams({ tgWebAppData: initData(telegramUserId) });
+  if (theme) hash.set("tgWebAppThemeParams", JSON.stringify(theme));
+  await page.goto(`/#${hash.toString()}`);
   await openStore(page, "Центр CENTRE");
 }
 
@@ -169,10 +182,25 @@ async function onHand(page: Page, lotId: string): Promise<number | undefined> {
   return items.find((item) => item.stock_lot_id === lotId)?.on_hand;
 }
 
-function card(page: Page, coat: Coat, supplier: string) {
+/** A lot's tag on «Позичене й під реалізацію»: its model and size. */
+function tag(page: Page, coat: Coat): Locator {
   return page
-    .getByRole("region", { name: "Позичене й під реалізацію" })
-    .getByRole("article", { name: `${coat.model} графіт, M від ${supplier}` });
+    .getByRole("list", { name: "Позичене" })
+    .getByRole("article", { name: `${coat.model} графіт, M`, exact: true });
+}
+
+/** A lot's sheet, opened by its verb «Продано» or by the tag, once it
+ * takes taps. */
+async function lotSheet(page: Page, coat: Coat, by: "verb" | "tag") {
+  const lot = tag(page, coat);
+  await (
+    by === "verb"
+      ? lot.getByRole("button", { name: "Продано", exact: true })
+      : lot.locator(".order-row")
+  ).click();
+  const sheet = page.getByRole("dialog", { name: `${coat.model} графіт, M` });
+  await expect(sheet).toHaveAttribute("data-ready", "");
+  return sheet;
 }
 
 test("jackets borrowed from another shop are taken at a price, marked sold, and owed in «Накладні»", async ({
@@ -269,43 +297,80 @@ test("jackets borrowed from another shop are taken at a price, marked sold, and 
     }),
   ]);
 
-  await section(page, "Постачальникам");
-  const lot = card(page, coat, supplier.name);
+  // Its own screen, a row of «Ще» › «Гроші» (P0-5, P1-3).
+  await section(page, "Позичене й під реалізацію");
+  await expect(
+    page.getByRole("heading", { name: "Позичене й під реалізацію" }),
+  ).toBeVisible();
+  // On a list that is not empty, nothing explains it.
+  await expect(page.getByText(/Береться через/)).toHaveCount(0);
+  const lot = tag(page, coat);
+  await expect(lot).toContainText("на руках 3");
+  await expect(lot).toContainText(`Позичено у «${supplier.name}» · `);
   await expect(lot).toContainText(
-    "1 500,00 грн за шт. · взято 3 · продано 0 · повернено 0 · на руках 3",
+    "1 500,00 грн за шт. · взято 3 · продано 0 · повернено 0",
   );
-  await lot.getByLabel("Скільки, шт.").fill("2");
+  await expect(lot).toHaveClass(/\bfilled\b/);
+  // «Продано» opens its sheet: how many, and the price before the press
+  // (В7 (а)).
+  const sheet = await lotSheet(page, coat, "verb");
+  await expect(
+    sheet.getByRole("button", { name: "Позначити проданим · 1 шт." }),
+  ).toBeVisible();
+  await expect(
+    sheet.getByText("1 500,00 грн за шт.", { exact: true }),
+  ).toBeVisible();
+  await expect(sheet.getByRole("button", { name: "Менше" })).toHaveAttribute(
+    "aria-disabled",
+    "true",
+  );
+  await sheet.getByRole("button", { name: "Більше" }).click();
   // Refused once for a reason the screen does not name: its own words,
   // never an order's (owner decision, 2026-10-25).
   await refuseOnce(page, "**/api/v1/supplier-invoices/sold", 422);
-  await lot.getByRole("button", { name: "Продано" }).click();
+  await sheet
+    .getByRole("button", { name: "Позначити проданим · 2 шт." })
+    .click();
   await expect(
-    page.getByText("Не записано. Перевірте кількість та спробуйте ще раз.", {
+    sheet.getByText("Не записано. Перевірте кількість та спробуйте ще раз.", {
       exact: true,
     }),
   ).toBeVisible();
   const lotReads = readsOf(page, /\/api\/v1\/borrowed$/);
   await refuseOnce(page, "**/api/v1/supplier-invoices/sold", 409);
-  await lot.getByRole("button", { name: "Продано" }).click();
+  await sheet
+    .getByRole("button", { name: "Позначити проданим · 2 шт." })
+    .click();
   await expect(
-    page.getByText(
+    sheet.getByText(
       "Не записано: дані змінилися — перегляньте їх і спробуйте ще раз.",
       { exact: true },
     ),
   ).toBeVisible();
   await expect.poll(lotReads).toBeGreaterThan(0);
-  await lot.getByRole("button", { name: "Продано" }).click();
+  await sheet
+    .getByRole("button", { name: "Позначити проданим · 2 шт." })
+    .click();
+  // Its stub: the debt the server counted, and its invoice one tap away.
+  await expect(sheet).toHaveCount(0);
+  const said = `Продано 2 шт.: у «Накладних» борг «${supplier.name}» 3 000,00 грн.`;
+  await expect(page.getByText(said, { exact: true })).toBeFocused();
+  await page.getByRole("button", { name: "Відкрити накладну" }).click();
+  await expect(
+    page.getByRole("heading", { name: supplier.name, exact: true }),
+  ).toBeVisible();
   await expect(
     page.getByText(
-      `Продано 2 шт.: у «Накладних» борг «${supplier.name}» 3 000,00 грн.`,
+      new RegExp(`^За продане позичене: ${coat.model} графіт, M × 2\\.`),
     ),
   ).toBeVisible();
-  await expect(lot).toContainText("продано 2 · повернено 0 · на руках 1");
-
-  await section(page, "Накладні");
-  await expect(
-    page.getByRole("article", { name: supplier.name, exact: true }),
-  ).toContainText(`За продане позичене: ${coat.model} графіт, M × 2`);
+  // «←» back where it was opened: the lots, the stub gone.
+  await page
+    .getByRole("button", { name: "Назад до «Позичене й під реалізацію»" })
+    .click();
+  await expect(lot).toContainText("на руках 1");
+  await expect(lot).toContainText("продано 2 · повернено 0");
+  await expect(page.getByText(said, { exact: true })).toHaveCount(0);
 });
 
 test("unsold borrowed jackets go back to their supplier for nothing", async ({
@@ -316,17 +381,38 @@ test("unsold borrowed jackets go back to their supplier for nothing", async ({
   const lotId = await borrowed(page, coat, supplier.id, 2);
   const returns = posts(page, /\/supplier-returns$/);
   await openAs(page, hanna);
-  await section(page, "Постачальникам");
-  const lot = card(page, coat, supplier.name);
-  await lot.getByLabel("Скільки, шт.").fill("3");
-  await lot.getByRole("button", { name: "Повернути постачальнику" }).click();
-  await expect(lot.getByText("На руках лише 2 шт.")).toBeVisible();
-  await lot.getByLabel("Скільки, шт.").fill("2");
-  await lot.getByRole("button", { name: "Повернути постачальнику" }).click();
+  await section(page, "Позичене й під реалізацію");
+  // By the tag itself: no more than in hand.
+  const sheet = await lotSheet(page, coat, "tag");
+  await sheet.getByRole("button", { name: "Більше" }).click();
+  await expect(sheet.getByRole("button", { name: "Більше" })).toHaveAttribute(
+    "aria-disabled",
+    "true",
+  );
+  await sheet
+    .getByRole("button", { name: "Повернути постачальнику · 2 шт." })
+    .click();
+  await expect(sheet).toHaveCount(0);
   await expect(
-    page.getByText(`Повернено постачальнику «${supplier.name}»: 2 шт.`),
+    page.getByText(`Повернено постачальнику «${supplier.name}»: 2 шт.`, {
+      exact: true,
+    }),
   ).toBeVisible();
-  await expect(lot).toHaveCount(0);
+  // No «Відкрити накладну» for goods sent back: no invoice.
+  await expect(
+    page.getByRole("button", { name: "Відкрити накладну" }),
+  ).toHaveCount(0);
+  await page.getByRole("button", { name: "Готово", exact: true }).click();
+  // None in hand: gone from «На руках», a knot under «Усе», nothing to
+  // press.
+  await expect(tag(page, coat)).toHaveCount(0);
+  await page
+    .getByRole("group", { name: "Яке позичене" })
+    .getByRole("button", { name: "Усе" })
+    .click();
+  await expect(tag(page, coat)).toHaveClass(/\btied\b/);
+  await expect(tag(page, coat).getByRole("button")).toHaveCount(0);
+  await expect(tag(page, coat)).toContainText("на руках 0");
   expect(returns.bodies).toEqual([
     expect.objectContaining({
       supplier_id: supplier.id,
@@ -336,11 +422,25 @@ test("unsold borrowed jackets go back to their supplier for nothing", async ({
       ],
     }),
   ]);
+  await section(page, "Постачальникам");
   await expect(
-    page.getByRole("article", {
-      name: new RegExp(`^Повернення ${supplier.name}`),
-    }),
+    page
+      .getByRole("list", { name: "Повернення постачальникам" })
+      .getByRole("button", { name: new RegExp(`^${supplier.name} `) }),
   ).toContainText(`${coat.model} графіт, M × 2`);
+  // «Позичене й під реалізацію ›» under the returns, «← Постачальникам»
+  // back.
+  await page
+    .locator(".supplier-ways")
+    .getByRole("button", { name: "Позичене й під реалізацію" })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Позичене й під реалізацію" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Назад до «Постачальникам»" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Постачальникам", exact: true }),
+  ).toBeVisible();
   expect(await onHand(page, lotId)).toBe(0);
 });
 
@@ -385,11 +485,18 @@ test("a mistaken «Продано» is undone by cancelling its invoice", async 
   await expect(page.locator(".invoice-closed")).toContainText(
     / · ще не продали · /,
   );
-
-  await section(page, "Постачальникам");
-  await expect(card(page, coat, supplier.name)).toContainText(
-    "продано 0 · повернено 0 · на руках 1",
-  );
+  // From the card to its lot, and back to the card (P1-3).
+  await page.getByRole("button", { name: "Позичене й під реалізацію" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Позичене й під реалізацію" }),
+  ).toBeVisible();
+  await expect(tag(page, coat)).toContainText("на руках 1");
+  await expect(tag(page, coat)).toContainText("продано 0 · повернено 0");
+  await page.getByRole("button", { name: "Назад до «Накладна»" }).click();
+  await expect(
+    page.getByRole("heading", { name: supplier.name, exact: true }),
+  ).toBeVisible();
+  await expect(page.locator(".invoice-closed")).toContainText("Скасовано");
 });
 
 test("a seller takes only the shop's own goods", async ({ page }) => {
@@ -404,6 +511,33 @@ test("a seller takes only the shop's own goods", async ({ page }) => {
   await expect(
     page.getByRole("button", { name: "Постачальникам", exact: true }),
   ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Позичене й під реалізацію" }),
+  ).toHaveCount(0);
+});
+
+test("nothing borrowed: the blank tag, what is so, and what these goods are", async ({
+  page,
+}) => {
+  await page.route("**/api/v1/borrowed?*", async (route) => {
+    await route.fulfill({ json: { items: [], has_more: false } });
+  });
+  await openAs(page, hanna);
+  await section(page, "Позичене й під реалізацію");
+  const empty = page.locator(".orders-empty");
+  await expect(empty.locator(".t-row")).toHaveText(
+    "Позиченого на руках немає.",
+  );
+  await expect(empty.locator(".t-meta")).toHaveText(
+    "Товар інших магазинів і постачальників: сплачують лише продане, за домовленою ціною, непродане повертають. Береться через «Прийшов товар».",
+  );
+  await page
+    .getByRole("group", { name: "Яке позичене" })
+    .getByRole("button", { name: "Усе" })
+    .click();
+  await expect(empty.locator(".t-row")).toHaveText(
+    "Цей магазин нічого не позичав.",
+  );
 });
 
 test("a «Продано» whose answer is lost is resent unchanged, and counted once", async ({
@@ -423,12 +557,14 @@ test("a «Продано» whose answer is lost is resent unchanged, and counted
     } else await route.continue();
   });
   await openAs(page, hanna);
-  await section(page, "Постачальникам");
-  await card(page, coat, supplier.name)
-    .getByRole("button", { name: "Продано" })
+  await section(page, "Позичене й під реалізацію");
+  const sheet = await lotSheet(page, coat, "verb");
+  await sheet
+    .getByRole("button", { name: "Позначити проданим · 1 шт." })
     .click();
-  // On «Постачальникам», where «Позичене й під реалізацію» is: its stub,
-  // its own check (stage 2, money task list, P0-6).
+  // The sheet goes; on «Позичене й під реалізацію», its own screen, the
+  // stub, its own check (stage 2, money task list, P0-6).
+  await expect(sheet).toHaveCount(0);
   const kept = page.locator(".stub-notice .stub");
   await expect(kept).toHaveClass(/\bstub-kept\b/);
   await expect(
@@ -443,17 +579,21 @@ test("a «Продано» whose answer is lost is resent unchanged, and counted
   await expect(
     page.getByRole("button", { name: "Замовлення", exact: true }),
   ).toBeDisabled();
+  // Nothing marked meanwhile: the verbs held.
+  await expect(
+    tag(page, coat).getByRole("button", { name: "Продано", exact: true }),
+  ).toBeDisabled();
   // Written down before it was sent: a reload still knows what to ask
   // about, and opens where it was made.
   await page.reload();
   await openStore(page, "Центр CENTRE");
   const own = page.getByRole("heading", {
-    name: "Постачальникам",
+    name: "Позичене й під реалізацію",
     exact: true,
   });
   await expect(own).toBeVisible();
-  // Left, it is a banner over «Ще», and «Постачальникам»'s row stays open to
-  // it, its own screen (review, 2026-11-05).
+  // Left, it is a banner over «Ще», and its row stays open to it, its own
+  // screen (review, 2026-11-05).
   await more(page);
   await expect(
     page.locator(".banner-kept").getByRole("heading", {
@@ -461,7 +601,7 @@ test("a «Продано» whose answer is lost is resent unchanged, and counted
     }),
   ).toBeVisible();
   const row = page.getByRole("button", {
-    name: "Постачальникам",
+    name: "Позичене й під реалізацію",
     exact: true,
   });
   await expect(row).toBeEnabled();
@@ -482,3 +622,169 @@ test("a «Продано» whose answer is lost is resent unchanged, and counted
   expect(marks.bodies[1]).toEqual(marks.bodies[0]);
   expect(await onHand(page, lotId)).toBe(1);
 });
+
+test("a return of borrowed goods whose answer is lost is «Позичене»'s: its stub there, a banner on «Постачальникам»", async ({
+  page,
+}) => {
+  const coat = await aModel(page);
+  const supplier = await aSupplier(page);
+  const lotId = await borrowed(page, coat, supplier.id, 1);
+  let first = true;
+  await page.route("**/api/v1/supplier-returns", async (route) => {
+    if (route.request().method() === "POST" && first) {
+      first = false;
+      await route.fetch();
+      await route.abort("connectionreset");
+    } else await route.continue();
+  });
+  await openAs(page, hanna);
+  await section(page, "Позичене й під реалізацію");
+  const sheet = await lotSheet(page, coat, "tag");
+  await sheet
+    .getByRole("button", { name: "Повернути постачальнику · 1 шт." })
+    .click();
+  await expect(sheet).toHaveCount(0);
+  const kept = page.locator(".stub-notice .stub");
+  await expect(kept).toHaveClass(/\bstub-kept\b/);
+  await expect(
+    kept.getByRole("heading", {
+      name: "Повернення постачальнику ще не підтверджено",
+    }),
+  ).toBeVisible();
+  // Written down before it was sent: a reload opens where it was made.
+  await page.reload();
+  await openStore(page, "Центр CENTRE");
+  await expect(
+    page.getByRole("heading", {
+      name: "Позичене й під реалізацію",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(kept).toHaveClass(/\bstub-kept\b/);
+  // Not «Постачальникам»'s: a banner there, the same check.
+  await section(page, "Постачальникам");
+  await expect(kept).toHaveCount(0);
+  const banner = page.locator(".banner-kept");
+  await expect(
+    banner.getByRole("heading", {
+      name: "Повернення постачальнику ще не підтверджено",
+    }),
+  ).toBeVisible();
+  await banner
+    .getByRole("button", { name: "Перевірити результат повернення" })
+    .click();
+  await expect(
+    page.getByRole("heading", {
+      name: "Повернення постачальнику записано один раз",
+    }),
+  ).toBeVisible();
+  expect(await onHand(page, lotId)).toBe(0);
+});
+
+// --- what the task list measures --------------------------------------------
+
+test("one borrowed jacket is marked sold in four taps from «Ще», nothing scrolled, its price in the sheet before the press", async ({
+  page,
+}) => {
+  const coat = await aModel(page);
+  const supplier = await aSupplier(page);
+  await borrowed(page, coat, supplier.id, 2, "1500.00");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openAs(page, hanna);
+  const taps = await countTaps(page);
+  // «Ще», its row; the tag's verb; the sheet's button.
+  await more(page);
+  await page
+    .getByRole("navigation", { name: "Ще" })
+    .getByRole("button", { name: rowNamed("Позичене й під реалізацію") })
+    .click();
+  const verb = tag(page, coat).getByRole("button", {
+    name: "Продано",
+    exact: true,
+  });
+  await expect(verb).toBeInViewport();
+  await verb.click();
+  const sheet = page.getByRole("dialog", { name: `${coat.model} графіт, M` });
+  await expect(sheet).toHaveAttribute("data-ready", "");
+  await expect(sheet.locator(".lot-price")).toHaveText("1 500,00 грн за шт.");
+  const mark = sheet.getByRole("button", {
+    name: "Позначити проданим · 1 шт.",
+  });
+  await expect(mark).toBeInViewport();
+  await mark.click();
+  await expect(page.locator(".result-title")).toHaveText(
+    `Продано 1 шт.: у «Накладних» борг «${supplier.name}» 1 500,00 грн.`,
+  );
+  expect(await taps()).toBe(4);
+});
+
+for (const [name, theme] of [
+  ["light", { bg_color: "#ffffff", text_color: "#000000" }],
+  ["dark", { bg_color: "#17212b", text_color: "#f5f5f5" }],
+] as const)
+  test(`in the ${name} theme at 360 × 640 «Позичене»'s tags and a lot's sheet read at 4.5:1, nothing wider than the phone`, async ({
+    page,
+  }) => {
+    const coat = await aModel(page);
+    const supplier = await aSupplier(page);
+    await borrowed(page, coat, supplier.id, 2, "1500.00");
+    await page.setViewportSize({ width: 360, height: 640 });
+    await openAs(page, hanna, theme);
+    await section(page, "Позичене й під реалізацію");
+    const own = tag(page, coat);
+    for (const part of [
+      own.locator(".order-tag-title"),
+      own.locator(".lot-on-hand"),
+      own.locator(".order-tag-meta").first(),
+      own.locator(".order-tag-meta").nth(1),
+      own.getByRole("button", { name: "Продано", exact: true }),
+      page.locator(".mode-switch button").first(),
+      page.locator(".mode-switch button").nth(1),
+    ])
+      expect(await contrast(part)).toBeGreaterThanOrEqual(4.5);
+    await expect(page.locator("html")).toHaveJSProperty("scrollWidth", 360);
+    await page.screenshot({ path: `test-results/borrowed-${name}.png` });
+
+    const sheet = await lotSheet(page, coat, "tag");
+    for (const part of [
+      sheet.locator(".t-meta").first(),
+      sheet.locator(".lot-count .t-row"),
+      sheet.locator(".lot-count output"),
+      sheet.getByRole("button", { name: "Позначити проданим · 1 шт." }),
+      sheet.locator(".lot-price"),
+      sheet.getByRole("button", { name: "Повернути постачальнику · 1 шт." }),
+    ])
+      expect(await contrast(part)).toBeGreaterThanOrEqual(4.5);
+    await expect(page.locator("html")).toHaveJSProperty("scrollWidth", 360);
+    await page.screenshot({ path: `test-results/borrowed-lot-${name}.png` });
+  });
+
+/** The WCAG contrast of an element's text against what it is drawn on. */
+async function contrast(element: Locator): Promise<number> {
+  return element.evaluate((node) => {
+    const rgb = (value: string): number[] =>
+      (value.match(/[\d.]+/g) ?? []).map(Number);
+    const luminance = ([r, g, b]: number[]): number => {
+      const channel = (c: number): number => {
+        const v = c / 255;
+        return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+      };
+      return (
+        0.2126 * channel(r ?? 0) +
+        0.7152 * channel(g ?? 0) +
+        0.0722 * channel(b ?? 0)
+      );
+    };
+    let ground: Element | null = node;
+    let background = "rgba(0, 0, 0, 0)";
+    while (ground) {
+      background = getComputedStyle(ground).backgroundColor;
+      const alpha = rgb(background)[3];
+      if (alpha === undefined || alpha > 0) break;
+      ground = ground.parentElement;
+    }
+    const fore = luminance(rgb(getComputedStyle(node).color));
+    const back = luminance(rgb(background));
+    return (Math.max(fore, back) + 0.05) / (Math.min(fore, back) + 0.05);
+  });
+}

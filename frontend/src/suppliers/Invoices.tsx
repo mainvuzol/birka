@@ -47,15 +47,34 @@ export { doneText, refusalText } from "./invoiceWords";
 
 const pageSize = 20;
 
-/** Where the cards and the payment go back to. */
-type From = "list" | "elsewhere";
+/** Where the cards and the payment go back to: «outside», the screen that
+ * opened the invoice (`InvoiceOpening.leave`). */
+type From = "list" | "elsewhere" | "outside";
 
 type View =
   | { screen: "list" }
   | { screen: "elsewhere" }
+  /** An invoice opened from outside, being read. */
+  | { screen: "finding" }
   | { screen: "new" }
   | { screen: "card"; invoice: Invoice; from: From }
   | { screen: "pay"; invoice: Invoice; from: From; card: boolean };
+
+/**
+ * An invoice opened from outside «Накладні» (stage 2, money task list,
+ * P1-3): a return's set-off, the stub of borrowed goods marked sold, or the
+ * way back from «Позичене й під реалізацію» to the card that opened it.
+ * There is no read of one: its supplier's fifty newest are read, and one
+ * not among them opens «Накладні» with that supplier's, «Усі».
+ */
+export interface InvoiceOpening {
+  id: string;
+  supplierId: string;
+  /** Known already: shown at once, then as it is now. */
+  invoice?: Invoice;
+  /** Where the card's «←» goes, when not to the list: «← Повернення». */
+  leave?: MoreBack;
+}
 
 /** «3 накладні». */
 function invoicesCount(count: number): string {
@@ -87,6 +106,8 @@ export function Invoices({
   networkOwner = false,
   back,
   task,
+  opening = null,
+  openBorrowed,
 }: {
   store: Store;
   token: string;
@@ -102,6 +123,11 @@ export function Invoices({
   back?: MoreBack | undefined;
   /** Told while a payment's sum is typed: the menu steps aside (spec S21). */
   task?: (shown: boolean) => void;
+  /** Opened on one invoice, from outside (P1-3). */
+  opening?: InvoiceOpening | null;
+  /** The sold invoice's «Позичене й під реалізацію ›», for whoever returns
+   * goods to suppliers; held while that screen is. */
+  openBorrowed?: { go: (invoice: Invoice) => void; held: boolean } | undefined;
 }): JSX.Element {
   const cache = useQueryClient();
   // A kept operation is the app's: its stub over this screen, its banner
@@ -111,9 +137,71 @@ export function Invoices({
   // What is sent for the first time turns its button's ring; a kept one
   // checked again is its stub's to say.
   const sending = busy && firstSend ? (pending?.body.kind ?? null) : null;
-  const [view, setView] = useState<View>({ screen: "list" });
+  const leave = opening?.leave;
+  const [view, setView] = useState<View>(() =>
+    opening?.invoice
+      ? {
+          screen: "card",
+          invoice: opening.invoice,
+          from: leave ? "outside" : "list",
+        }
+      : opening
+        ? { screen: "finding" }
+        : { screen: "list" },
+  );
   const [supplierId, setSupplierId] = useState("");
   const [owedOnly, setOwedOnly] = useState(true);
+  // Opened from outside: the invoice as it is now, among its supplier's.
+  useEffect(() => {
+    if (!opening) return;
+    let gone = false;
+    void api<InvoicePage>(
+      `/supplier-invoices?store_id=${store.id}&supplier_id=${opening.supplierId}&limit=50`,
+      token,
+    ).then(
+      (page) => {
+        if (gone) return;
+        const found = page.items.find((item) => item.id === opening.id);
+        if (found)
+          setView((now) =>
+            now.screen === "finding"
+              ? {
+                  screen: "card",
+                  invoice: found,
+                  from: opening.leave ? "outside" : "list",
+                }
+              : // Only over the invoice it was opened with: one paid or
+                // changed meanwhile is newer than this read.
+                (now.screen === "card" || now.screen === "pay") &&
+                  now.invoice === opening.invoice
+                ? { ...now, invoice: found }
+                : now,
+          );
+        else showSupplier(opening.supplierId);
+      },
+      () => {
+        // Not read: shown as it was known, or the list says why.
+        if (!gone) showSupplier(opening.supplierId);
+      },
+    );
+    return () => {
+      gone = true;
+    };
+    // Once, as it opens: a remount opens it again.
+  }, []);
+  /** Not found among the newest: that supplier's, all of them — unless
+   * it is shown already, as it was known. */
+  function showSupplier(id: string): void {
+    if (opening?.invoice) return;
+    setSupplierId(id);
+    setOwedOnly(false);
+    setView({ screen: "list" });
+  }
+  /** Back where a card or a payment came from. */
+  function backTo(from: From): void {
+    if (from === "outside") leave?.go();
+    else setView({ screen: from });
+  }
   const paying = view.screen === "pay";
   useEffect(() => {
     task?.(paying);
@@ -230,11 +318,9 @@ export function Invoices({
         readAgain={readAgain}
         changed={shown}
         back={() => {
-          setView(
-            view.card
-              ? { screen: "card", invoice: view.invoice, from: view.from }
-              : { screen: view.from },
-          );
+          if (view.card)
+            setView({ screen: "card", invoice: view.invoice, from: view.from });
+          else backTo(view.from);
         }}
         done={(invoice) => {
           setView({ screen: "card", invoice, from: view.from });
@@ -268,9 +354,35 @@ export function Invoices({
           });
         }}
         back={() => {
-          setView({ screen: view.from });
+          backTo(view.from);
         }}
+        backTo={view.from === "outside" && leave?.to ? leave.to : "Накладні"}
+        backHeld={view.from === "outside" && leave ? leave.held : false}
+        {...(openBorrowed
+          ? {
+              openBorrowed: {
+                go: () => {
+                  openBorrowed.go(view.invoice);
+                },
+                held: openBorrowed.held,
+              },
+            }
+          : {})}
       />
+    );
+
+  const listBack = leave ?? back;
+  if (view.screen === "finding")
+    return (
+      <>
+        <ScreenHeader
+          title="Накладні"
+          back={listBack && <BackToMore back={listBack} />}
+        />
+        <section className="invoices">
+          <p role="status">Завантажуємо накладну…</p>
+        </section>
+      </>
     );
 
   const elsewhere = view.screen === "elsewhere";
@@ -297,7 +409,8 @@ export function Invoices({
             Накладні
           </Back>
         ) : (
-          back && <BackToMore back={back} />
+          // Opened from outside and not found: back there.
+          listBack && <BackToMore back={listBack} />
         )
       }
       open={(invoice) => {
@@ -801,6 +914,9 @@ function InvoiceDetail({
   changed,
   pay,
   back,
+  backTo,
+  backHeld,
+  openBorrowed,
 }: {
   store: Store;
   token: string;
@@ -815,6 +931,12 @@ function InvoiceDetail({
   changed: (invoice: Invoice) => void;
   pay: () => void;
   back: () => void;
+  /** «← Накладні», or the screen that opened it: «← Повернення». */
+  backTo: string;
+  /** That screen held, as its row is. */
+  backHeld: boolean;
+  /** Its borrowed goods' screen, for whoever returns goods (P1-3). */
+  openBorrowed?: { go: () => void; held: boolean };
 }): JSX.Element {
   const [recorded, setRecorded] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
@@ -850,9 +972,15 @@ function InvoiceDetail({
         focusable
         title={visible(invoice.supplier.name)}
         back={
-          <Back go={back} held={held && sending !== null}>
+          <Back
+            go={back}
+            held={(held && sending !== null) || backHeld}
+            {...(backTo === "Накладні"
+              ? {}
+              : { label: `Назад до «${backTo}»` })}
+          >
             <span aria-hidden="true">← </span>
-            Накладні
+            {backTo}
           </Back>
         }
         aside={
@@ -894,11 +1022,24 @@ function InvoiceDetail({
           {invoice.note && ` · ${visible(invoice.note)}`}
         </p>
         {invoice.sold && (
-          <p>
-            За продане позичене: {visible(invoice.sold.label)} ×{" "}
-            {invoice.sold.quantity}. Якщо позначили помилково — скасуйте накладну,
-            і товар знову буде «на руках».
-          </p>
+          <div className="invoice-sold">
+            <p>
+              За продане позичене: {visible(invoice.sold.label)} ×{" "}
+              {invoice.sold.quantity}. Якщо позначили помилково — скасуйте
+              накладну, і товар знову буде «на руках».
+            </p>
+            {openBorrowed && (
+              <button
+                type="button"
+                className="quiet set-off-open"
+                disabled={openBorrowed.held}
+                onClick={openBorrowed.go}
+              >
+                Позичене й під реалізацію
+                <Icon name="chevron-right" size={16} />
+              </button>
+            )}
+          </div>
         )}
         {elsewhere && (
           <Banner kind="blocked" as="div">

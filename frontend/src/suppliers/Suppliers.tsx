@@ -1,29 +1,37 @@
-import { useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { JSX } from "react";
-import {
-  useInfiniteQuery,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
-import { ApiError, api, errorText, inOwnWords, isConflict } from "@/shared/api";
+import { useInfiniteQuery } from "@tanstack/react-query";
+import { api } from "@/shared/api";
 import { Unread } from "@/shared/Unread";
-import { money } from "@/orders/types";
-import { sizeLabel } from "@/returns/types";
-import type { StockOption, Store } from "@/orders/types";
-import { useBackOnSale } from "@/returns/places";
+import { decimal, kopecks, money } from "@/orders/types";
+import type { Store } from "@/orders/types";
 import { visible } from "@/shared/visible";
-import { submitReturnToSupplier, useReturnToSupplier } from "./commands";
-import { Borrowed } from "./Borrowed";
-import { SupplierFilter, SupplierPicker, useSuppliers } from "./Picker";
-import type { ReturnPage, Supplier, SupplierReturn } from "./types";
+import { Icon } from "@/shared/Icon";
+import { shortDay } from "@/credits/format";
+import { useReturnToSupplier } from "./commands";
+import { NewReturn } from "./NewReturn";
+import { SupplierFilter, useSuppliers } from "./Picker";
+import { ReturnDetail } from "./ReturnDetail";
+import { SupplierList } from "./SupplierList";
+import { goodsText, placeText, unitsOf } from "./returnWords";
+import type { ReturnPage, SetOff, SupplierReturn } from "./types";
 import { BackToMore } from "@/shared/More";
 import type { MoreBack } from "@/shared/More";
 import { ScreenHeader } from "@/shared/ScreenHeader";
 
+export { refusalText, returnedText } from "./returnWords";
+
 const pageSize = 20;
 
+type View =
+  | { screen: "list" }
+  | { screen: "return"; item: SupplierReturn }
+  | { screen: "new" }
+  | { screen: "suppliers" };
+
 /**
- * Goods returned to a supplier (owner decisions, 2026-10-01).
+ * Goods returned to a supplier (owner decisions, 2026-10-01; stage 2, money
+ * task list, P0-4).
  *
  * The owner and managers send goods back from a warehouse — one document
  * with a list — to a supplier picked from the network's list or added on
@@ -31,34 +39,62 @@ const pageSize = 20;
  * saying why, and its goods come back where they left. A confirmed unit
  * from «Брак» goes back from «Брак»; it is listed here too, and cancelled
  * through «Брак».
+ *
+ * The returns are rows, the newest first, the supplier's field over them
+ * and «+» in the heading; a row opens the return, «+» «Повернути
+ * постачальнику» with the menu aside. «Позичене й під реалізацію ›» and
+ * «Список постачальників ›» stand under them.
  */
 export function Suppliers({
   store,
   token,
   journalKey,
-  invoiceJournalKey,
   blocked,
   back,
+  task,
+  opened = null,
+  forget,
+  openInvoice,
+  openBorrowed,
 }: {
   store: Store;
   token: string;
   journalKey: string;
-  /** The invoices' journal, through which borrowed goods are marked sold. */
-  invoiceJournalKey: string;
   /** Another command's outcome is unknown: nothing new until it is settled. */
   blocked: boolean;
   /** «← Ще» over the heading: a section opened from «Ще» (navigation task
    * list, P0-4). */
   back?: MoreBack | undefined;
+  /** Told while a return is made: the menu steps aside. */
+  task?: (shown: boolean) => void;
+  /** The return open when its invoice was: opened again on the way back. */
+  opened?: SupplierReturn | null;
+  /** Told once it is: it is never opened again by itself. */
+  forget?: () => void;
+  /** A set-off's invoice in «Накладні», for whoever keeps them (P1-3). */
+  openInvoice?:
+    | {
+        go: (setOff: SetOff, item: SupplierReturn) => void;
+        held: boolean;
+      }
+    | undefined;
+  /** «Позичене й під реалізацію» (P0-5); held while its row is. */
+  openBorrowed?: { go: () => void; held: boolean } | undefined;
 }): JSX.Element {
-  const cache = useQueryClient();
   // A kept return is the app's: its stub over this screen, its banner over
   // any other, its check (stage 2, money task list, P0-6).
   const { busy, pending } = useReturnToSupplier();
-  const [making, setMaking] = useState(false);
-  const [done, setDone] = useState<string | null>(null);
+  const working = busy || pending !== null;
+  const [view, setView] = useState<View>(
+    opened ? { screen: "return", item: opened } : { screen: "list" },
+  );
+  // Opened once: a remount — a kept return checked — opens the list.
+  useEffect(() => {
+    if (opened) forget?.();
+    // Once, as it opens.
+  }, []);
   const [supplierId, setSupplierId] = useState("");
-  const suppliers = useSuppliers(store, token);
+  const suppliers = useSuppliers(store, token, supplierId !== "");
   // Page by page: the server takes fifty at most (stage 2, money task list,
   // P0-7).
   const returns = useInfiniteQuery({
@@ -84,79 +120,107 @@ export function Suppliers({
         .map((item) => [item.id, item]),
     ).values(),
   ];
-  const working = busy || pending !== null;
+  const making = view.screen === "new";
+  useEffect(() => {
+    task?.(making);
+  }, [task, making]);
+  useEffect(
+    () => () => {
+      task?.(false);
+    },
+    [task],
+  );
+  // Each screen begins at its top; back on the list, its heading takes the
+  // cursor, the button pressed being gone — never as the section opens.
+  const screen = view.screen;
+  const title = useRef<HTMLHeadingElement>(null);
+  const was = useRef(screen);
+  useEffect(() => {
+    if (was.current === screen) return;
+    was.current = screen;
+    window.scrollTo(0, 0);
+    if (screen === "list") title.current?.focus();
+  }, [screen]);
+  const toList = (): void => {
+    setView({ screen: "list" });
+  };
 
-  async function settled(result: SupplierReturn): Promise<void> {
-    setMaking(false);
-    setDone(returnedText(result));
-    await Promise.all([
-      cache.invalidateQueries({ queryKey: ["supplier-returns", store.id] }),
-      cache.invalidateQueries({ queryKey: ["sale-stock"] }),
-    ]);
+  if (view.screen === "new")
+    return (
+      <NewReturn
+        store={store}
+        token={token}
+        journalKey={journalKey}
+        blocked={blocked}
+        back={toList}
+        done={toList}
+      />
+    );
+
+  if (view.screen === "return") {
+    const item = view.item;
+    return (
+      <ReturnDetail
+        key={item.id}
+        store={store}
+        token={token}
+        item={item}
+        held={blocked || working}
+        back={toList}
+        openInvoice={
+          openInvoice && {
+            go: (setOff) => {
+              openInvoice.go(setOff, item);
+            },
+            held: openInvoice.held,
+          }
+        }
+      />
+    );
   }
 
+  if (view.screen === "suppliers")
+    return <SupplierList store={store} token={token} back={toList} />;
+
+  const make = (): void => {
+    setView({ screen: "new" });
+  };
+  const chosen =
+    supplierId === ""
+      ? undefined
+      : suppliers.data?.find((one) => one.id === supplierId);
   return (
     <>
       <ScreenHeader
+        ref={title}
+        focusable
         title="Постачальникам"
         back={back && <BackToMore back={back} />}
         aside={
-          <button
-            className="quiet"
-            disabled={returns.isFetching}
-            onClick={() => {
-              void returns.refetch();
-            }}
-          >
-            Оновити
-          </button>
+          <span className="invoice-head-ways">
+            <button
+              type="button"
+              className="debt-more"
+              aria-label="Повернути товар постачальнику"
+              disabled={blocked || working}
+              onClick={make}
+            >
+              <Icon name="plus" />
+            </button>
+            <button
+              type="button"
+              className="quiet"
+              disabled={returns.isFetching}
+              onClick={() => {
+                void returns.refetch();
+              }}
+            >
+              Оновити
+            </button>
+          </span>
         }
       />
-      <section>
-        <p className="hint">
-          Товар, повернений постачальнику: непроданий зі складу або брак із
-          розділу «Брак». Скільки постачальник за нього зарахував, записують
-          заліком у «Накладних».
-        </p>
-        {done && <p role="status">{done}</p>}
-        {making ? (
-          <NewReturn
-            store={store}
-            token={token}
-            disabled={blocked || working}
-            cancel={() => {
-              setMaking(false);
-            }}
-            send={async (body) => {
-              setDone(null);
-              const outcome = await submitReturnToSupplier(journalKey, token, {
-                // A new transport key per attempt; the return's identity is
-                // `command_id`, which is what makes a late retry safe.
-                key: crypto.randomUUID(),
-                body,
-              });
-              if (outcome.kind === "done") await settled(outcome.result);
-              else if (outcome.kind === "refused") {
-                if (isConflict(outcome.error))
-                  await cache.invalidateQueries({
-                    queryKey: ["supplier-returns", store.id],
-                  });
-                return refusalText(outcome.error);
-              }
-              return null;
-            }}
-          />
-        ) : (
-          <button
-            disabled={blocked || working}
-            onClick={() => {
-              setDone(null);
-              setMaking(true);
-            }}
-          >
-            + Повернути товар постачальнику
-          </button>
-        )}
+      <section className="supplier-returns">
         <SupplierFilter
           store={store}
           token={token}
@@ -174,28 +238,41 @@ export function Suppliers({
             }}
           />
         ) : listed.length === 0 ? (
-          <p>Цей магазин ще нічого не повертав постачальникам.</p>
+          // Nothing (spec §6.28): the blank mark, what is so now, and what
+          // the supplier counts of a return.
+          <div className="orders-empty">
+            <Icon name="mark-lg" className="orders-empty-mark" />
+            <p className="t-row">
+              {supplierId
+                ? `Постачальнику «${visible(chosen?.name ?? "")}» цей магазин ще нічого не повертав.`
+                : "Цей магазин ще нічого не повертав постачальникам."}
+            </p>
+            <p className="t-meta">
+              Скільки постачальник за нього зарахував, записують заліком у
+              «Накладних».
+            </p>
+            <button
+              type="button"
+              className="quiet"
+              disabled={blocked || working}
+              onClick={make}
+            >
+              Повернути товар постачальнику
+            </button>
+          </div>
         ) : (
           <>
-            {listed.map((item) => (
-              <ReturnCard
-                key={item.id}
-                item={item}
-                token={token}
-                disabled={blocked || working}
-                changed={() => {
-                  void Promise.all([
-                    cache.invalidateQueries({
-                      queryKey: ["supplier-returns", store.id],
-                    }),
-                    cache.invalidateQueries({ queryKey: ["sale-stock"] }),
-                    cache.invalidateQueries({
-                      queryKey: ["damaged-units", store.id],
-                    }),
-                  ]);
-                }}
-              />
-            ))}
+            <ul className="return-rows" aria-label="Повернення постачальникам">
+              {listed.map((item) => (
+                <ReturnRow
+                  key={item.id}
+                  item={item}
+                  open={() => {
+                    setView({ screen: "return", item });
+                  }}
+                />
+              ))}
+            </ul>
             {/* A page that failed keeps the returns already read. */}
             {returns.error && (
               <Unread
@@ -220,515 +297,104 @@ export function Suppliers({
             )}
           </>
         )}
-        <Borrowed
-          store={store}
-          token={token}
-          journalKey={journalKey}
-          invoiceJournalKey={invoiceJournalKey}
-          blocked={blocked || working}
-        />
-        <SupplierList
-          store={store}
-          token={token}
-          suppliers={suppliers.data ?? []}
-        />
+        <div className="cash-rows supplier-ways">
+          {openBorrowed && (
+            <WayRow
+              title="Позичене й під реалізацію"
+              held={openBorrowed.held}
+              open={openBorrowed.go}
+            />
+          )}
+          <WayRow
+            title="Список постачальників"
+            open={() => {
+              setView({ screen: "suppliers" });
+            }}
+          />
+        </div>
       </section>
     </>
   );
 }
 
-function NewReturn({
-  store,
-  token,
-  disabled,
-  cancel,
-  send,
-}: {
-  store: Store;
-  token: string;
-  disabled: boolean;
-  cancel: () => void;
-  send: (body: {
-    command_id: string;
-    store_id: string;
-    location_id: string;
-    supplier_id: string;
-    lines: { product_variant_id: string; size_id: string; quantity: number }[];
-    note: string | null;
-  }) => Promise<string | null>;
-}): JSX.Element {
-  const places = useBackOnSale(store, token, true);
-  const [location, setLocation] = useState("");
-  const [supplier, setSupplier] = useState("");
-  const [offset, setOffset] = useState(0);
-  const [filter, setFilter] = useState("");
-  const [counts, setCounts] = useState<Record<string, string>>({});
-  const [note, setNote] = useState("");
-  const [problem, setProblem] = useState<string | null>(null);
-  const stock = useQuery({
-    queryKey: ["stock-options", store.id, location, offset],
-    queryFn: () =>
-      api<{ items: StockOption[]; has_more: boolean }>(
-        `/catalog/stock-options?store_id=${store.id}&location_id=${location}&limit=100&offset=${String(offset)}`,
-        token,
-      ),
-    enabled: location !== "",
-    retry: false,
-  });
-  const key = (option: StockOption): string =>
-    `${option.product_variant_id}:${option.size_id}`;
-  const options = (stock.data?.items ?? []).filter(
-    (option) =>
-      option.available_quantity > 0 &&
-      option.display_name.toLowerCase().includes(filter.trim().toLowerCase()),
-  );
-  const chosen = Object.entries(counts)
-    .map(([id, count]) => ({ id, quantity: Number(count) }))
-    .filter((line) => Number.isInteger(line.quantity) && line.quantity > 0);
-  const units = chosen.reduce((sum, line) => sum + line.quantity, 0);
-
-  function submit(): void {
-    setProblem(null);
-    if (!location || !supplier) {
-      setProblem("Оберіть склад і постачальника.");
-      return;
-    }
-    if (chosen.length === 0) {
-      setProblem("Вкажіть, скільки чого повертаєте.");
-      return;
-    }
-    const all = stock.data?.items ?? [];
-    for (const line of chosen) {
-      const option = all.find((item) => key(item) === line.id);
-      if (option && line.quantity > option.available_quantity) {
-        setProblem(
-          `${visible(option.display_name)}, ${visible(option.size_label)}: вільно лише ${String(option.available_quantity)} шт.`,
-        );
-        return;
-      }
-    }
-    void send({
-      // Its permanent name (I20). A resend after a lost answer comes from
-      // the journal, which keeps this one; a refused attempt wrote nothing.
-      command_id: crypto.randomUUID(),
-      store_id: store.id,
-      location_id: location,
-      supplier_id: supplier,
-      lines: chosen.map((line) => {
-        const [variant = "", size = ""] = line.id.split(":");
-        return {
-          product_variant_id: variant,
-          size_id: size,
-          quantity: line.quantity,
-        };
-      }),
-      note: note.trim() || null,
-    }).then((refusal) => {
-      if (refusal) setProblem(refusal);
-    });
-  }
-
-  return (
-    <fieldset disabled={disabled}>
-      <legend>Нове повернення постачальнику</legend>
-      <label>
-        Склад
-        <select
-          value={location}
-          onChange={(event) => {
-            setLocation(event.target.value);
-            setOffset(0);
-            setCounts({});
-          }}
-        >
-          <option value="">Оберіть склад</option>
-          {(places.data ?? []).map((place) => (
-            <option key={place.id} value={place.id}>
-              {visible(place.name)}
-            </option>
-          ))}
-        </select>
-      </label>
-      <SupplierPicker
-        store={store}
-        token={token}
-        value={supplier}
-        change={setSupplier}
-        disabled={disabled}
-      />
-      {location && (
-        <>
-          <label>
-            Пошук моделі
-            <input
-              type="search"
-              value={filter}
-              onChange={(event) => {
-                setFilter(event.target.value);
-              }}
-            />
-          </label>
-          {stock.isPending ? (
-            <p role="status">Завантажуємо залишки…</p>
-          ) : stock.error ? (
-            <Unread
-              error={stock.error}
-              retry={() => {
-                void stock.refetch();
-              }}
-            />
-          ) : options.length === 0 ? (
-            <p>На цьому складі немає вільного товару.</p>
-          ) : (
-            <ul aria-label="Товар на складі">
-              {options.map((option) => (
-                <li key={key(option)}>
-                  <label>
-                    {visible(option.display_name)}, {visible(option.size_label)}{" "}
-                    · вільно {option.available_quantity}
-                    <input
-                      inputMode="numeric"
-                      aria-label={`Повернути: ${visible(option.display_name)}, ${visible(option.size_label)}`}
-                      value={counts[key(option)] ?? ""}
-                      placeholder="0"
-                      onChange={(event) => {
-                        setCounts({
-                          ...counts,
-                          [key(option)]: event.target.value.replace(/\D/g, ""),
-                        });
-                      }}
-                    />
-                  </label>
-                </li>
-              ))}
-            </ul>
-          )}
-          {stock.data?.has_more && (
-            <button
-              type="button"
-              className="quiet"
-              onClick={() => {
-                setOffset(offset + 100);
-              }}
-            >
-              Наступні товари
-            </button>
-          )}
-        </>
-      )}
-      <label>
-        Примітка (необов’язково)
-        <textarea
-          value={note}
-          maxLength={1000}
-          onChange={(event) => {
-            setNote(event.target.value);
-          }}
-        />
-      </label>
-      {problem && <p role="alert">{problem}</p>}
-      <div className="actions">
-        <button type="button" disabled={units === 0} onClick={submit}>
-          Повернути постачальнику {units > 0 ? `${String(units)} шт.` : ""}
-        </button>
-        <button type="button" className="quiet" onClick={cancel}>
-          Скасувати
-        </button>
-      </div>
-    </fieldset>
-  );
-}
-
-function ReturnCard({
+/**
+ * One return as a row (spec §6.8; stage 2, money task list, P0-4): the
+ * supplier, at the right how many went back; the day, where from and who;
+ * its goods, two named and «+ ще N»; «Скасовано» and «Зараховано …» as
+ * stickers. The whole row opens it.
+ */
+function ReturnRow({
   item,
-  token,
-  disabled,
-  changed,
+  open,
 }: {
   item: SupplierReturn;
-  token: string;
-  disabled: boolean;
-  changed: () => void;
+  open: () => void;
 }): JSX.Element {
-  const [asking, setAsking] = useState(false);
-  const [reason, setReason] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState<string | null>(null);
-
-  async function undo(): Promise<void> {
-    setBusy(true);
-    setProblem(null);
-    try {
-      // A unit from «Брак» comes back through «Брак». Pressed twice, either
-      // is answered as it is: a return is cancelled once.
-      if (item.damaged_unit_id)
-        await api(
-          `/damaged-units/${item.damaged_unit_id}/cancel-supplier-return`,
-          token,
-          { supplier_return_id: item.id, reason: reason.trim() },
-        );
-      else
-        await api(`/supplier-returns/${item.id}/cancel`, token, {
-          reason: reason.trim(),
-        });
-      setAsking(false);
-      changed();
-    } catch (error) {
-      if (isConflict(error)) changed();
-      setProblem(
-        error instanceof ApiError
-          ? refusalText(error)
-          : "Немає відповіді сервера. Натисніть ще раз — повторне натискання безпечне.",
-      );
-    } finally {
-      setBusy(false);
-    }
-  }
-
+  const meta = useId();
+  const counted = item.set_offs.reduce(
+    (sum, setOff) => sum + (kopecks(setOff.amount) ?? 0n),
+    0n,
+  );
   return (
-    <article
-      className="order-card"
-      aria-label={`Повернення ${visible(item.supplier.name)} від ${when(item.at)}`}
-    >
-      <strong>{visible(item.supplier.name)}</strong>
-      <small>
-        {when(item.at)} · {item.damaged_unit_id ? "з «Браку»" : "склад"} «
-        {visible(item.location_name)}» · {visible(item.by)}
-      </small>
-      <ul aria-label="Що повернули">
-        {item.lines.map((line) => (
-          <li key={`${line.product_variant_id}:${line.size_id}`}>
-            {visible(line.display_name)}, {sizeLabel(line.size)} ×{" "}
-            {line.quantity}
-          </li>
-        ))}
-      </ul>
-      {item.note && <p className="hint">{visible(item.note)}</p>}
-      {item.set_offs.length > 0 && (
-        <ul aria-label="Зараховано в накладні">
-          {item.set_offs.map((setOff) => (
-            <li key={setOff.entry_id}>
-              Постачальник зарахував {money(setOff.amount)} у накладну ·{" "}
-              {when(setOff.at)}
-            </li>
-          ))}
-        </ul>
-      )}
-      {item.cancelled ? (
-        <p className="badge">
-          Скасовано {when(item.cancelled.at)} · {visible(item.cancelled.reason)}{" "}
-          · {visible(item.cancelled.by)}
-        </p>
-      ) : asking ? (
-        <div className="notice">
-          <p>
-            Товар повернеться {item.damaged_unit_id ? "у «Брак»" : "на склад"} «
-            {visible(item.location_name)}». Скасувати можна лише раз.
-          </p>
-          <label>
-            Чому скасовуємо
-            <textarea
-              value={reason}
-              maxLength={1000}
-              onChange={(event) => {
-                setReason(event.target.value);
-              }}
-            />
-          </label>
-          <div className="actions">
-            <button
-              disabled={disabled || busy || reason.trim() === ""}
-              onClick={() => {
-                void undo();
-              }}
-            >
-              Так, скасувати повернення
-            </button>
-            <button
-              className="quiet"
-              onClick={() => {
-                setAsking(false);
-              }}
-            >
-              Не скасовувати
-            </button>
-          </div>
-        </div>
-      ) : item.set_offs.length > 0 ? (
-        // The goods stay with the supplier while it counts them (owner
-        // decision, 2026-10-01).
-        <p className="hint">
-          Щоб скасувати повернення, спершу скасуйте залік у «Накладних».
-        </p>
-      ) : (
-        <button
-          className="quiet"
-          disabled={disabled}
-          onClick={() => {
-            setProblem(null);
-            setAsking(true);
-          }}
-        >
-          Скасувати повернення
-        </button>
-      )}
-      {problem && <p role="alert">{problem}</p>}
-    </article>
+    <li>
+      <button
+        type="button"
+        className="sale-row return-row"
+        aria-describedby={meta}
+        onClick={open}
+      >
+        <span className="sale-main">
+          <span className="return-row-head">
+            <span className="t-row">{visible(item.supplier.name)}</span>
+            <span className="return-row-units">{unitsOf(item)} шт.</span>
+          </span>
+          <span className="sale-meta" id={meta}>
+            {shortDay(item.at)} · {placeText(item)} · {visible(item.by)}
+          </span>
+          <span className="sale-meta">{goodsText(item)}</span>
+          {(item.cancelled || counted > 0n) && (
+            <span className="sale-marks">
+              {item.cancelled && (
+                <span className="sticker tone-offline">
+                  <Icon name="close" size={16} />
+                  Скасовано
+                </span>
+              )}
+              {counted > 0n && (
+                <span className="sticker">
+                  Зараховано {money(decimal(counted))}
+                </span>
+              )}
+            </span>
+          )}
+        </span>
+        <Icon name="chevron-right" size={16} />
+      </button>
+    </li>
   );
 }
 
-function SupplierList({
-  store,
-  token,
-  suppliers,
+/** A way to another of the suppliers' screens, a row with its chevron. */
+function WayRow({
+  title,
+  held = false,
+  open,
 }: {
-  store: Store;
-  token: string;
-  suppliers: Supplier[];
-}): JSX.Element | null {
-  const cache = useQueryClient();
-  const [editing, setEditing] = useState<Supplier | null>(null);
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [problem, setProblem] = useState<string | null>(null);
-  if (suppliers.length === 0) return null;
-
-  async function save(): Promise<void> {
-    if (!editing) return;
-    setProblem(null);
-    try {
-      await api(
-        `/suppliers/${editing.id}`,
-        token,
-        { store_id: store.id, name: name.trim(), phone: phone.trim() || null },
-        undefined,
-        "PUT",
-      );
-      setEditing(null);
-      await Promise.all([
-        cache.invalidateQueries({ queryKey: ["suppliers", store.id] }),
-        cache.invalidateQueries({ queryKey: ["supplier-returns", store.id] }),
-      ]);
-    } catch (error) {
-      if (isConflict(error))
-        await cache.invalidateQueries({ queryKey: ["suppliers", store.id] });
-      setProblem(
-        error instanceof ApiError && error.details.reason === "DUPLICATE"
-          ? `«${visible(String(error.details.name))}» уже є у списку.`
-          : inOwnWords(
-              errorText(error),
-              "Постачальника не збережено. Перевірте назву й телефон та спробуйте ще раз.",
-              "Постачальника не збережено: дані змінилися — перегляньте їх і спробуйте ще раз.",
-            ),
-      );
-    }
-  }
-
+  title: string;
+  held?: boolean;
+  open: () => void;
+}): JSX.Element {
   return (
-    <details>
-      <summary>Список постачальників</summary>
-      <ul aria-label="Постачальники">
-        {suppliers.map((supplier) => (
-          <li key={supplier.id}>
-            {editing?.id === supplier.id ? (
-              <div className="actions">
-                <label>
-                  Назва
-                  <input
-                    value={name}
-                    maxLength={200}
-                    onChange={(event) => {
-                      setName(event.target.value);
-                    }}
-                  />
-                </label>
-                <label>
-                  Телефон
-                  <input
-                    value={phone}
-                    maxLength={40}
-                    onChange={(event) => {
-                      setPhone(event.target.value);
-                    }}
-                  />
-                </label>
-                <button
-                  disabled={name.trim() === ""}
-                  onClick={() => {
-                    void save();
-                  }}
-                >
-                  Зберегти
-                </button>
-                <button
-                  className="quiet"
-                  onClick={() => {
-                    setEditing(null);
-                  }}
-                >
-                  Скасувати
-                </button>
-              </div>
-            ) : (
-              <>
-                {visible(supplier.name)}
-                {supplier.phone && ` · ${visible(supplier.phone)}`}{" "}
-                <button
-                  className="quiet"
-                  onClick={() => {
-                    setProblem(null);
-                    setEditing(supplier);
-                    setName(supplier.name);
-                    setPhone(supplier.phone ?? "");
-                  }}
-                >
-                  Змінити {visible(supplier.name)}
-                </button>
-              </>
-            )}
-          </li>
-        ))}
-      </ul>
-      {problem && <p role="alert">{problem}</p>}
-    </details>
-  );
-}
-
-function when(iso: string): string {
-  return new Date(iso).toLocaleString("uk-UA", {
-    dateStyle: "short",
-    timeStyle: "short",
-  });
-}
-
-/** What a return recorded, said once: here, and on a kept one's stub torn
- * off (stage 2, money task list, P0-6). */
-export function returnedText(result: SupplierReturn): string {
-  return `Повернено постачальнику «${visible(result.supplier.name)}»: ${String(
-    result.lines.reduce((units, line) => units + line.quantity, 0),
-  )} шт.`;
-}
-
-/** Why a return was not taken, in this screen's words: here, and under a
- * kept one checked (stage 2, money task list, P0-6). */
-export function refusalText(error: unknown): string {
-  if (error instanceof ApiError) {
-    if (error.code === "INSUFFICIENT_STOCK")
-      return "Вільного товару вже менше, ніж ви повертаєте: частину могли продати чи забронювати. Оновіть і перевірте кількість.";
-    switch (error.details.reason) {
-      case "FROM_DAMAGED":
-        return "Брак повертають постачальнику з розділу «Брак».";
-      case "DUPLICATE_LINE":
-        return "Кожну модель і розмір — один раз, з усією кількістю.";
-      case "NO_REASON":
-        return "Вкажіть, чому скасовуєте.";
-      case "SET_OFF":
-        return "Постачальник зарахував це повернення в накладну — спершу скасуйте залік у «Накладних».";
-    }
-  }
-  return inOwnWords(
-    errorText(error),
-    "Не записано. Перевірте повернення та спробуйте ще раз.",
-    "Не записано: дані повернення змінилися — перегляньте їх і спробуйте ще раз.",
+    <button
+      type="button"
+      className="sale-row cash-row"
+      disabled={held}
+      onClick={open}
+    >
+      <span className="sale-main">
+        <span className="cash-row-title">{title}</span>
+      </span>
+      <Icon name="chevron-right" size={16} />
+    </button>
   );
 }

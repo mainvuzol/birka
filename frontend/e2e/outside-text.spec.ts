@@ -347,9 +347,10 @@ test("text from outside is shown with its hidden characters marked, on every scr
     `${tag}${marks[RLO]}№ 12`,
   );
 
-  // «Постачальникам»: the list of suppliers, and the one to receive from.
+  // «Постачальникам» › «Список постачальників», a screen of its own (stage
+  // 2, money task list, P0-4).
   await open(page, fixture.telegram_user_id, "Оля", "Постачальникам");
-  await page.getByText("Список постачальників").click();
+  await page.getByRole("button", { name: "Список постачальників" }).click();
   await expect(
     page
       .getByRole("list", { name: "Постачальники" })

@@ -87,7 +87,8 @@ function warehouseWords(name: string): string {
  * Borrowed goods, and goods under consignment, are owed for once sold: only
  * whoever keeps the suppliers' debts takes them, from a supplier on the list,
  * at a price agreed for each (owner decisions, 2026-10-01). They are marked
- * sold, or sent back, from «Постачальникам».
+ * sold, or sent back, from «Позичене й під реалізацію» (stage 2, money task
+ * list, P0-5).
  */
 export function Receive({
   store,
@@ -806,8 +807,8 @@ export function Receive({
                 />
                 <p className="hint">
                   Позичене й під реалізацію сплачують, лише коли продадуть, за
-                  домовленою ціною. Продане чи непродане позначають у
-                  «Постачальникам».
+                  домовленою ціною. Продане чи непродане позначають на екрані
+                  «Позичене й під реалізацію».
                 </p>
               </>
             )}

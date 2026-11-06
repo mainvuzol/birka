@@ -734,7 +734,7 @@ test("whoever holds no right of the drawer has no «Каса»: no tab, no row, 
   expect(await groups(page).allTextContents()).not.toContain("Гроші");
 });
 
-test("the owner's menu is «Сьогодні · Продаж · Замовлення · Гроші · Ще» at 360 px; «Ще» holds five groups in the design's order, only «Постачальникам» among the money, «← Ще» back from each («Усе на бірці» task list, P0-4; sections task list, P0-7)", async ({
+test("the owner's menu is «Сьогодні · Продаж · Замовлення · Гроші · Ще» at 360 px; «Ще» holds five groups in the design's order, only the suppliers' among the money, «← Ще» back from each («Усе на бірці» task list, P0-4; sections task list, P0-7; stage 2, money task list, P1-3)", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 360, height: 640 });
@@ -766,6 +766,7 @@ test("the owner's menu is «Сьогодні · Продаж · Замовлен
     /^Товар і каталог (\d+\+? на затвердження · )?(\d+\+? доробити · )?перевірка, моделі, початкові залишки$/,
     // «Каса», the report and «Накладні» are «Гроші»'s (P0-7).
     "Постачальникам",
+    "Позичене й під реалізацію",
     "Магазини",
     /^Резервні копії (в порядку|потрібна ваша увага)/,
     "Змінити магазин Основний",
@@ -804,6 +805,7 @@ test("the owner's menu is «Сьогодні · Продаж · Замовлен
     [/^Брак( |$)/, "Брак"],
     ["Інвентаризація", "Інвентаризація"],
     ["Постачальникам", "Постачальникам"],
+    ["Позичене й під реалізацію", "Позичене й під реалізацію"],
     ["Магазини", "Магазини"],
     [/^Резервні копії( |$)/, "Резервні копії"],
   ] as const) {
