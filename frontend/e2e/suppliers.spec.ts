@@ -1,6 +1,7 @@
 import {
   test,
   expect,
+  addSupplier,
   more,
   openStore,
   readsOf,
@@ -8,7 +9,7 @@ import {
   section,
   sections,
 } from "./fixtures";
-import type { Page, Request } from "@playwright/test";
+import type { Locator, Page, Request } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 
@@ -162,15 +163,21 @@ async function newReturn(page: Page): Promise<void> {
     });
 }
 
-async function addSupplier(page: Page, name: string): Promise<void> {
-  await page.getByRole("button", { name: "+ Новий постачальник" }).click();
-  await page.getByLabel("Назва постачальника").fill(name);
-  await page.getByLabel("Телефон (необов’язково)").fill("067 123 45 67");
-  await page.getByRole("button", { name: "Додати постачальника" }).click();
-  // Added, or found on the list: either way the form closes on it, picked.
-  await expect(
-    page.getByRole("button", { name: "+ Новий постачальник" }),
-  ).toBeVisible();
+/** The new return's form, under «Постачальникам»'s own filter. */
+function returnForm(page: Page): Locator {
+  return page.getByRole("group", { name: "Нове повернення постачальнику" });
+}
+
+/** A supplier added from a field (stage 2, money task list, P0-3) — the
+ * return form's, or «Брак»'s — with a phone: added, or found on the list,
+ * it is picked. */
+async function addOne(page: Page, name: string, of?: Locator): Promise<void> {
+  await addSupplier(page, name, "067 123 45 67", of ? { of } : {});
+}
+
+/** The return's field: the supplier picked, as it shows it. */
+function supplierField(page: Page): Locator {
+  return returnForm(page).getByRole("button", { name: /^Постачальник / });
 }
 
 test("goods go back to a supplier from a warehouse, and come back when it is cancelled", async ({
@@ -180,10 +187,10 @@ test("goods go back to a supplier from a warehouse, and come back when it is can
   const supplier = `Беларді ${randomUUID().slice(0, 6)}`;
   const sent = posts(page, "/api/v1/supplier-returns");
   await newReturn(page);
-  await addSupplier(page, supplier);
-  await expect(
-    page.getByRole("combobox", { name: "Постачальник", exact: true }),
-  ).toHaveValue(/.+/);
+  await addOne(page, supplier, returnForm(page));
+  await expect(supplierField(page)).toHaveAccessibleName(
+    `Постачальник ${supplier} · 067 123 45 67`,
+  );
   await page.getByLabel("Пошук моделі").fill(coat.model);
   await page.getByLabel(`Повернути: ${coat.model}`, { exact: false }).fill("2");
   await page.getByLabel("Примітка (необов’язково)").fill("не продалось");
@@ -314,17 +321,87 @@ test("a supplier is never written twice: the one on the list is picked", async (
 }) => {
   const supplier = `Арно ${randomUUID().slice(0, 6)}`;
   await newReturn(page);
-  await addSupplier(page, supplier);
-  const picked = await page
-    .getByRole("combobox", { name: "Постачальник", exact: true })
-    .inputValue();
-  await addSupplier(page, `  ${supplier.toUpperCase()} `);
+  await addOne(page, supplier, returnForm(page));
+  await addOne(page, `  ${supplier.toUpperCase()} `, returnForm(page));
   await expect(
     page.getByText(`«${supplier}» уже є у списку — обрано його.`),
   ).toBeVisible();
+  // Picked, never added twice: the field shows the one on the list.
+  await expect(supplierField(page)).toHaveAccessibleName(
+    `Постачальник ${supplier} · 067 123 45 67`,
+  );
   await expect(
-    page.getByRole("combobox", { name: "Постачальник", exact: true }),
-  ).toHaveValue(picked);
+    page.getByRole("combobox", { name: /Постачальник/ }),
+  ).toHaveCount(0);
+});
+
+test("the returns are narrowed to a supplier from its sheet: «Усі постачальники» first, the phone under each, nothing to add", async ({
+  page,
+}) => {
+  const supplier = `Фільтр ${randomUUID().slice(0, 6)}`;
+  const added = await page.request.post("/api/v1/suppliers", {
+    headers: await headersOf(page, hanna),
+    data: {
+      store_id: fixture.network_centre_store_id,
+      name: supplier,
+      phone: "067 765 43 21",
+    },
+  });
+  expect(added.status()).toBe(201);
+  const supplierId = ((await added.json()) as { id: string }).id;
+  await openAs(page, hanna);
+  await openStore(page, "Центр CENTRE");
+  await section(page, "Постачальникам");
+  // One field, never a native list (stage 2, money task list, P0-3).
+  await expect(
+    page.getByRole("combobox", { name: /Постачальник/ }),
+  ).toHaveCount(0);
+  const field = page.getByRole("button", {
+    name: "Постачальник Усі постачальники",
+    exact: true,
+  });
+  await field.click();
+  const sheet = page.getByRole("dialog", { name: "Постачальник" });
+  await expect(sheet).toHaveAttribute("data-ready", "");
+  await expect(
+    sheet.getByRole("searchbox", { name: "Пошук постачальника" }),
+  ).toBeFocused();
+  await expect(sheet.locator(".supplier-row").first()).toHaveText(
+    "Усі постачальники",
+  );
+  await expect(sheet.locator(".supplier-row").first()).toHaveAttribute(
+    "aria-current",
+    "true",
+  );
+  await expect(
+    sheet.getByRole("button", { name: /Новий постачальник/ }),
+  ).toHaveCount(0);
+  // Nothing found: said, for a reader too.
+  await sheet
+    .getByRole("searchbox", { name: "Пошук постачальника" })
+    .fill(`${supplier} нікого`);
+  await expect(sheet.locator(".supplier-row")).toHaveCount(0);
+  await expect(sheet.getByRole("status")).toHaveText(
+    `Нічого не знайшли за «${supplier} нікого»`,
+  );
+  // Every word typed, of a name or a phone.
+  await sheet
+    .getByRole("searchbox", { name: "Пошук постачальника" })
+    .fill(`${supplier.split(" ")[1] ?? ""} 765`);
+  const row = sheet.locator(".supplier-row");
+  await expect(row).toHaveCount(1);
+  await expect(row.locator(".t-meta")).toHaveText("067 765 43 21");
+  const narrowed = page.waitForRequest(
+    (request) =>
+      request.url().includes("/api/v1/supplier-returns?") &&
+      request.url().includes(`supplier_id=${supplierId}`),
+  );
+  await row.click();
+  await narrowed;
+  await expect(sheet).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: `Постачальник ${supplier}`, exact: true }),
+  ).toBeVisible();
 });
 
 test("a confirmed unit goes back to its supplier from «Брак», and comes back there when cancelled", async ({
@@ -382,7 +459,12 @@ test("a confirmed unit goes back to its supplier from «Брак», and comes ba
   await expect(
     unit.getByRole("button", { name: "Так, повернути постачальнику" }),
   ).toBeDisabled();
-  await addSupplier(page, supplier);
+  // The supplier's field, its sheet: never a native list (stage 2, money
+  // task list, P0-3).
+  await expect(
+    unit.getByRole("combobox", { name: /Постачальник/ }),
+  ).toHaveCount(0);
+  await addOne(page, supplier);
   await unit
     .getByRole("button", { name: "Так, повернути постачальнику" })
     .click();
@@ -421,7 +503,7 @@ test("a return whose answer is lost is resent unchanged, and takes the goods onc
     } else await route.continue();
   });
   await newReturn(page);
-  await addSupplier(page, `Втрачений ${randomUUID().slice(0, 6)}`);
+  await addOne(page, `Втрачений ${randomUUID().slice(0, 6)}`, returnForm(page));
   await page.getByLabel("Пошук моделі").fill(coat.model);
   await page.getByLabel(`Повернути: ${coat.model}`, { exact: false }).fill("1");
   await page

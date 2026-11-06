@@ -229,10 +229,10 @@ test("«Накладні»: «Показати ще» to the sixty-first invoice
   );
   await enter(page, "Накладні");
   const list = page.locator("section", {
-    has: page.getByRole("article", { name: /^Накладна Постачальник / }),
+    has: page.getByRole("article", { name: /^Постачальник / }),
   });
   await toTheEnd(
-    page.getByRole("article", { name: /^Накладна Постачальник / }),
+    page.getByRole("article", { name: /^Постачальник / }),
     page.getByRole("button", { name: "Показати ще", exact: true }),
     list.last().getByRole("alert"),
     asked,

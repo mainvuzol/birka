@@ -16,6 +16,7 @@ export function SearchField({
   change,
   inputRef,
   maxLength = 200,
+  autoFocus = false,
 }: {
   label: string;
   placeholder: string;
@@ -24,6 +25,9 @@ export function SearchField({
   inputRef: RefObject<HTMLInputElement>;
   /** What the server takes for this search. */
   maxLength?: number;
+  /** Mounted by a tap: the cursor in it at once, the keyboard with it
+   * (iOS opens it only inside the tap). */
+  autoFocus?: boolean;
 }): JSX.Element {
   return (
     <div className="search-field">
@@ -32,6 +36,7 @@ export function SearchField({
         <Icon name="search" size={20} />
         <input
           ref={inputRef}
+          autoFocus={autoFocus}
           type="search"
           maxLength={maxLength}
           enterKeyHint="search"

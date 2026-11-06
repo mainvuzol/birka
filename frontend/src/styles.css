@@ -5936,3 +5936,235 @@ section.receive-list {
 .receive-list h2 {
   margin: 0;
 }
+/* The field a supplier is chosen by (stage 2, money task list, P0-3): its
+   name over a button 52 high, as the search, with what is chosen and a
+   chevron; the sheet's rows in the lists' rhythm, 56 high, the chosen one
+   ticked; «+ Новий постачальник» under them. */
+.pick-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 16px 0;
+}
+.pick-label {
+  font-size: 14px;
+  font-weight: 650;
+}
+.pick-value {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-height: var(--h-search);
+  padding: 0 12px 0 16px;
+  border: 1px solid var(--edge);
+  border-radius: var(--r-l);
+  background: var(--card);
+  color: var(--ink);
+  font-weight: 400;
+  text-align: left;
+}
+.pick-value .icon {
+  color: var(--pencil);
+}
+.pick-shown {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.supplier-list .search-field {
+  margin-bottom: 4px;
+}
+.supplier-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.supplier-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 56px;
+  padding: 10px 4px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink);
+  font-weight: 400;
+  text-align: left;
+}
+.supplier-row-main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.supplier-row .t-meta {
+  color: var(--pencil);
+}
+.supplier-add {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 52px;
+  margin-top: 12px;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+.supplier-new {
+  margin: 0;
+}
+.supplier-in-place {
+  margin: 0 0 16px;
+}
+/* «Накладні» (stage 2, money task list, P0-1): the «+» and «Оновити» by the
+   title; the total in ink, never the debts' red, its age beside it; the
+   invoices as tags, their sums on the right in ink; «Накладні магазинів,
+   що не працюють ›» a row under them. */
+.invoice-head-ways {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.invoice-total {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  min-height: 34px;
+  margin: 4px 0 16px;
+}
+.invoice-total-line {
+  margin: 0;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.invoice-total-line .t-money-l {
+  white-space: nowrap;
+}
+.invoice-tag-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+}
+.invoice-tag-head .order-tag-title {
+  min-width: 0;
+}
+.invoice-tag-sum {
+  flex: none;
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 24px;
+  color: var(--ink);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.invoice-elsewhere {
+  margin-top: 16px;
+  border-top: 1px solid var(--line);
+  color: var(--ink);
+}
+.invoice-elsewhere .icon {
+  color: var(--pencil);
+}
+/* The invoice's card and its payment (P0-2): what is owed 56 in ink, the
+   bar of what is paid in the paid's green; a closed one its sticker and
+   its sum. */
+.invoice-owed,
+.invoice-closed {
+  margin: 12px 0 16px;
+}
+.invoice-owed p,
+.invoice-closed p {
+  margin: 0;
+}
+.invoice-owed-sum {
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.invoice-bar span {
+  background: var(--paid);
+}
+.invoice-closed-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+}
+.invoice-closed-head .t-meta {
+  color: var(--pencil);
+  overflow-wrap: anywhere;
+}
+.invoice-closed .invoice-owed-sum {
+  margin-top: 8px;
+}
+.invoice-done {
+  --tone: var(--success);
+}
+/* A line of the history that may be cancelled: the thread's row a button
+   its whole width; a cancelled one's node hollow, its sticker under it. */
+.timeline-press {
+  width: 100%;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink);
+  font-weight: 400;
+  text-align: left;
+}
+.timeline-node.hollow {
+  background: var(--card);
+  box-shadow: inset 0 0 0 1.5px var(--edge);
+}
+.timeline-main .sticker {
+  margin-top: 4px;
+}
+/* «Зарахувати повернення»: a return a choice, none beforehand, the one
+   chosen in the chosen colours (spec §6.13). */
+.set-off-returns {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.set-off-return {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  min-height: 56px;
+  padding: 10px 14px;
+  border: 1px solid var(--edge);
+  border-radius: var(--r-l);
+  background: var(--card);
+  color: var(--ink);
+  font-weight: 400;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.set-off-return .t-meta {
+  color: var(--pencil);
+}
+.set-off-return[aria-pressed="true"] {
+  border-color: var(--chosen);
+  background: var(--chosen);
+  color: var(--on-chosen);
+}
+.set-off-return[aria-pressed="true"] .t-meta {
+  color: var(--on-chosen);
+}
+.invoice-result {
+  margin-top: 12px;
+}

@@ -1,44 +1,70 @@
-import { useState } from "react";
-import type { JSX } from "react";
+import { useEffect, useRef, useState } from "react";
+import type { JSX, ReactNode } from "react";
 import {
   useInfiniteQuery,
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { ApiError, api, errorText, inOwnWords } from "@/shared/api";
+import { api } from "@/shared/api";
 import { Unread } from "@/shared/Unread";
 import { decimal, kopecks, money } from "@/orders/types";
 import type { Store } from "@/orders/types";
-import { asInput } from "@/prices/SuggestedPrice";
+import { plural } from "@/openings/types";
 import { visible } from "@/shared/visible";
-import { submitInvoiceCommand, useInvoiceCommand } from "./invoiceCommands";
-import { SupplierPicker, useSuppliers } from "./Picker";
-import type {
-  Invoice,
-  InvoiceBody,
-  InvoiceEntry,
-  InvoicePage,
-  InvoiceStatus,
-  ReturnPage,
-  SupplierDebts,
-} from "./types";
 import { BackToMore } from "@/shared/More";
 import type { MoreBack } from "@/shared/More";
 import { Back } from "@/shared/Back";
+import { Banner } from "@/shared/Banner";
+import { Eyelet } from "@/shared/Eyelet";
+import { Icon } from "@/shared/Icon";
+import { ModeSwitch } from "@/shared/ModeSwitch";
+import { usePanelRoom } from "@/shared/panel";
 import { ScreenHeader } from "@/shared/ScreenHeader";
+import { SendingLine } from "@/shared/Sending";
+import { Sum } from "@/shared/Sum";
+import { buzz, useMainButton } from "@/shared/telegram";
+import { ageOf } from "@/today/reads";
+import { Stamp, staleOf, useNow } from "@/today/age";
+import { shortDay, shortWhen } from "@/credits/format";
+import { submitInvoiceCommand, useInvoiceCommand } from "./invoiceCommands";
+import { SupplierFilter, SupplierPicker } from "./Picker";
+import { InvoiceActions, EntryCancel } from "./InvoiceActions";
+import { InvoiceOwed, Progress } from "./InvoiceOwed";
+import { InvoicePay } from "./InvoicePay";
+import { InvoiceRecorded } from "./InvoiceRecorded";
+import { InvoiceSticker } from "./InvoiceSticker";
+import { InvoiceTag } from "./InvoiceTag";
+import { entryLabels, refusalText } from "./invoiceWords";
+import type { Command, Sent } from "./invoiceWords";
+import type {
+  Invoice,
+  InvoiceEntry,
+  InvoicePage,
+  SupplierDebts,
+} from "./types";
+
+export { doneText, refusalText } from "./invoiceWords";
 
 const pageSize = 20;
 
-/** What a command says without its name and the store it was sent from. */
-type Command =
-  | Omit<Extract<InvoiceBody, { kind: "invoice" }>, "command_id" | "store_id">
-  | Omit<Extract<InvoiceBody, { kind: "payment" }>, "command_id" | "store_id">
-  | Omit<Extract<InvoiceBody, { kind: "set-off" }>, "command_id" | "store_id">
-  | Omit<Extract<InvoiceBody, { kind: "write-off" }>, "command_id" | "store_id">
-  | Omit<Extract<InvoiceBody, { kind: "sold" }>, "command_id" | "store_id">;
+/** Where the cards and the payment go back to. */
+type From = "list" | "elsewhere";
+
+type View =
+  | { screen: "list" }
+  | { screen: "elsewhere" }
+  | { screen: "new" }
+  | { screen: "card"; invoice: Invoice; from: From }
+  | { screen: "pay"; invoice: Invoice; from: From; card: boolean };
+
+/** «3 накладні». */
+function invoicesCount(count: number): string {
+  return `${String(count)}\u00a0${plural(count, "накладна", "накладні", "накладних")}`;
+}
 
 /**
- * What the store owes its suppliers (owner decisions, 2026-10-01).
+ * What the store owes its suppliers (owner decisions, 2026-10-01; stage 2,
+ * money task list, P0-1, P0-2).
  *
  * An invoice is recorded on its own — a supplier from the list, the sum on
  * it, what was paid at once, a note — and each is its own debt, paid in
@@ -47,6 +73,10 @@ type Command =
  * invoice itself recorded by mistake is cancelled, saying why; the owner
  * writes off what the supplier forgave. Each store keeps its own; while a
  * store does not trade, any store of the network that trades pays.
+ *
+ * The invoices are tags, «Винні зараз · Усі» and one field of the
+ * supplier over them, the total in ink; an invoice opens its card, and
+ * «Сплатити» its payment on the app's keypad, the menu aside.
  */
 export function Invoices({
   store,
@@ -56,6 +86,7 @@ export function Invoices({
   readOnly = false,
   networkOwner = false,
   back,
+  task,
 }: {
   store: Store;
   token: string;
@@ -69,19 +100,269 @@ export function Invoices({
   /** «← Ще» over the heading: a section opened from «Ще» (navigation task
    * list, P0-4). */
   back?: MoreBack | undefined;
+  /** Told while a payment's sum is typed: the menu steps aside (spec S21). */
+  task?: (shown: boolean) => void;
 }): JSX.Element {
   const cache = useQueryClient();
   // A kept operation is the app's: its stub over this screen, its banner
   // over any other, its check (stage 2, money task list, P0-6).
-  const { busy, pending } = useInvoiceCommand();
-  const [making, setMaking] = useState(false);
-  const [done, setDone] = useState<string | null>(null);
-  const [selected, setSelected] = useState<Invoice | null>(null);
+  const { busy, pending, firstSend } = useInvoiceCommand();
+  const working = busy || pending !== null;
+  // What is sent for the first time turns its button's ring; a kept one
+  // checked again is its stub's to say.
+  const sending = busy && firstSend ? (pending?.body.kind ?? null) : null;
+  const [view, setView] = useState<View>({ screen: "list" });
   const [supplierId, setSupplierId] = useState("");
   const [owedOnly, setOwedOnly] = useState(true);
-  // Whose invoices: this store's, or those of the stores that do not trade.
-  const [elsewhere, setElsewhere] = useState(false);
-  const suppliers = useSuppliers(store, token);
+  const paying = view.screen === "pay";
+  useEffect(() => {
+    task?.(paying);
+  }, [task, paying]);
+  useEffect(
+    () => () => {
+      task?.(false);
+    },
+    [task],
+  );
+  // Each screen begins at its top.
+  const screen = view.screen;
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [screen]);
+
+  // Read again at once, the list not shown too: a card opened from it on the
+  // way back is the invoice as it is now, never as it was before.
+  function reread(): void {
+    void cache.invalidateQueries({
+      queryKey: ["supplier-invoices", store.id],
+      refetchType: "all",
+    });
+    void cache.invalidateQueries({ queryKey: ["supplier-returns", store.id] });
+  }
+
+  // The invoice as the server answered it, on whichever screen still shows
+  // it: an answer that comes once the person has moved on never brings a
+  // screen back.
+  function shown(invoice: Invoice): void {
+    setView((now) =>
+      (now.screen === "card" || now.screen === "pay") &&
+      now.invoice.id === invoice.id
+        ? { ...now, invoice }
+        : now,
+    );
+  }
+
+  /** Send one command that records money, through the journal. */
+  async function send(command: Command): Promise<Sent> {
+    const outcome = await submitInvoiceCommand(journalKey, token, {
+      // A new transport key per attempt; the command's identity is
+      // `command_id`, made here once: a resend after a lost answer comes
+      // from the journal, which keeps it.
+      key: crypto.randomUUID(),
+      body: {
+        ...command,
+        command_id: crypto.randomUUID(),
+        store_id: store.id,
+      },
+    });
+    // A buzz in the hand once the server answers (spec §4.4); a lost answer
+    // is the journal's, its stub over the screen.
+    if (outcome.kind === "done") {
+      buzz("success");
+      reread();
+      return { kind: "done", invoice: outcome.result };
+    }
+    if (outcome.kind === "refused") {
+      buzz("error");
+      return { kind: "refused", text: refusalText(outcome.error) };
+    }
+    return { kind: "unknown" };
+  }
+
+  /** The invoice as it is now, read again after a refusal: there is no
+   * read of one, so its supplier's are read (no backend change). */
+  async function readAgain(invoice: Invoice): Promise<Invoice | null> {
+    try {
+      const [current] = (
+        await api<InvoicePage>(
+          `/supplier-invoices?store_id=${store.id}&supplier_id=${invoice.supplier.id}${
+            invoice.store_id !== store.id ? "&elsewhere=true" : ""
+          }&limit=50`,
+          token,
+        )
+      ).items.filter((item) => item.id === invoice.id);
+      return current ?? null;
+    } catch {
+      // What was shown stays; the refusal says what to do.
+      return null;
+    }
+  }
+
+  const held = blocked || working;
+
+  if (view.screen === "new")
+    return (
+      <NewInvoice
+        store={store}
+        token={token}
+        held={held}
+        pressing={sending === "invoice"}
+        send={send}
+        back={() => {
+          setView({ screen: "list" });
+        }}
+        opened={(invoice) => {
+          setView({ screen: "card", invoice, from: "list" });
+        }}
+      />
+    );
+
+  if (view.screen === "pay")
+    return (
+      <InvoicePay
+        key={view.invoice.id}
+        store={store}
+        invoice={view.invoice}
+        held={held}
+        pressing={sending === "payment"}
+        backTo={view.card ? "Накладна" : "Накладні"}
+        send={send}
+        readAgain={readAgain}
+        changed={shown}
+        back={() => {
+          setView(
+            view.card
+              ? { screen: "card", invoice: view.invoice, from: view.from }
+              : { screen: view.from },
+          );
+        }}
+        done={(invoice) => {
+          setView({ screen: "card", invoice, from: view.from });
+        }}
+      />
+    );
+
+  if (view.screen === "card")
+    return (
+      <InvoiceDetail
+        key={view.invoice.id}
+        store={store}
+        token={token}
+        held={held}
+        sending={sending}
+        readOnly={readOnly}
+        networkOwner={networkOwner}
+        invoice={view.invoice}
+        send={send}
+        readAgain={readAgain}
+        changed={(invoice) => {
+          shown(invoice);
+          reread();
+        }}
+        pay={() => {
+          setView({
+            screen: "pay",
+            invoice: view.invoice,
+            from: view.from,
+            card: true,
+          });
+        }}
+        back={() => {
+          setView({ screen: view.from });
+        }}
+      />
+    );
+
+  const elsewhere = view.screen === "elsewhere";
+  return (
+    <InvoiceList
+      key={view.screen}
+      store={store}
+      token={token}
+      elsewhere={elsewhere}
+      readOnly={readOnly}
+      held={held}
+      supplierId={supplierId}
+      setSupplierId={setSupplierId}
+      owedOnly={owedOnly}
+      setOwedOnly={setOwedOnly}
+      back={
+        elsewhere ? (
+          <Back
+            go={() => {
+              setView({ screen: "list" });
+            }}
+          >
+            <span aria-hidden="true">← </span>
+            Накладні
+          </Back>
+        ) : (
+          back && <BackToMore back={back} />
+        )
+      }
+      open={(invoice) => {
+        setView({
+          screen: "card",
+          invoice,
+          from: elsewhere ? "elsewhere" : "list",
+        });
+      }}
+      pay={(invoice) => {
+        setView({
+          screen: "pay",
+          invoice,
+          from: elsewhere ? "elsewhere" : "list",
+          card: false,
+        });
+      }}
+      make={() => {
+        setView({ screen: "new" });
+      }}
+      toElsewhere={() => {
+        setView({ screen: "elsewhere" });
+      }}
+    />
+  );
+}
+
+/**
+ * «Накладні» (stage 2, money task list, P0-1): «Винні зараз · Усі», the
+ * supplier's field, the total in ink and the invoices as tags, the newest
+ * first, page by page; «Накладні магазинів, що не працюють ›» under them.
+ * Those of the stores that do not trade are the same screen, with no total
+ * and nothing new.
+ */
+function InvoiceList({
+  store,
+  token,
+  elsewhere,
+  readOnly,
+  held,
+  supplierId,
+  setSupplierId,
+  owedOnly,
+  setOwedOnly,
+  back,
+  open,
+  pay,
+  make,
+  toElsewhere,
+}: {
+  store: Store;
+  token: string;
+  elsewhere: boolean;
+  readOnly: boolean;
+  held: boolean;
+  supplierId: string;
+  setSupplierId: (id: string) => void;
+  owedOnly: boolean;
+  setOwedOnly: (owed: boolean) => void;
+  back: ReactNode;
+  open: (invoice: Invoice) => void;
+  pay: (invoice: Invoice) => void;
+  make: () => void;
+  toElsewhere: () => void;
+}): JSX.Element {
   // Page by page, as «Закриття» reads: the server takes fifty at most, so a
   // page that grew past it was refused on the third «Показати ще» (stage 2,
   // money task list, P0-7).
@@ -117,185 +398,127 @@ export function Invoices({
         `/supplier-invoices/summary?store_id=${store.id}`,
         token,
       ),
+    enabled: !elsewhere,
     retry: false,
   });
-  const working = busy || pending !== null;
-
-  async function settled(invoice: Invoice, command: Command): Promise<void> {
-    setMaking(false);
-    setDone(doneText(invoice, command));
-    setSelected(invoice);
-    await Promise.all([
-      cache.invalidateQueries({ queryKey: ["supplier-invoices", store.id] }),
-      cache.invalidateQueries({ queryKey: ["supplier-returns", store.id] }),
-    ]);
-  }
-
-  /** Send one command that records money, through the journal. */
-  async function send(command: Command): Promise<string | null> {
-    setDone(null);
-    const outcome = await submitInvoiceCommand(journalKey, token, {
-      // A new transport key per attempt; the command's identity is
-      // `command_id`, made here once: a resend after a lost answer comes
-      // from the journal, which keeps it.
-      key: crypto.randomUUID(),
-      body: {
-        ...command,
-        command_id: crypto.randomUUID(),
-        store_id: store.id,
-      },
-    });
-    if (outcome.kind === "done") {
-      await settled(outcome.result, command);
-      return null;
-    }
-    if (outcome.kind === "refused") return refusalText(outcome.error);
-    return null;
-  }
-
-  if (selected)
-    return (
-      <>
-        <InvoiceDetail
-          store={store}
-          token={token}
-          blocked={blocked || working}
-          readOnly={readOnly}
-          networkOwner={networkOwner}
-          invoice={selected}
-          done={done}
-          send={send}
-          changed={(invoice) => {
-            setSelected(invoice);
-            void cache.invalidateQueries({
-              queryKey: ["supplier-invoices", store.id],
-            });
-            void cache.invalidateQueries({
-              queryKey: ["supplier-returns", store.id],
-            });
-          }}
-          back={() => {
-            setDone(null);
-            setSelected(null);
-          }}
-        />
-      </>
-    );
+  const now = useNow();
+  const age = ageOf([summary]);
+  const debts = summary.data;
+  const chosenDebt =
+    supplierId === ""
+      ? null
+      : debts?.suppliers.find((debt) => debt.supplier.id === supplierId);
+  // A new invoice and «Сплатити» where the store trades, and only for its
+  // own invoices; those of the stores that do not trade are paid here too.
+  const makes = !readOnly && !elsewhere;
+  const pays = !readOnly;
 
   return (
     <>
       <ScreenHeader
-        title="Накладні"
-        back={back && <BackToMore back={back} />}
+        title={elsewhere ? "Накладні магазинів, що не працюють" : "Накладні"}
+        back={back}
+        wraps
         aside={
-          <button
-            className="quiet"
-            disabled={invoices.isFetching}
-            onClick={() => {
-              void invoices.refetch();
-              void summary.refetch();
-            }}
-          >
-            Оновити
-          </button>
+          <span className="invoice-head-ways">
+            {makes && (
+              <button
+                type="button"
+                className="debt-more"
+                aria-label="Записати накладну"
+                disabled={held}
+                onClick={make}
+              >
+                <Icon name="plus" />
+              </button>
+            )}
+            <button
+              type="button"
+              className="quiet"
+              disabled={invoices.isFetching}
+              onClick={() => {
+                void invoices.refetch();
+                if (!elsewhere) void summary.refetch();
+              }}
+            >
+              Оновити
+            </button>
+          </span>
         }
       />
-      <section>
-        <p className="hint">
-          {readOnly
-            ? "Магазин не торгує: його накладні тут лише для перегляду. Сплачує будь-який магазин мережі, що працює."
-            : "Що магазин винен постачальникам. Кожна накладна — окремий борг: сплачують частинами, без графіка, а повернений постачальнику товар зараховують заліком."}
-        </p>
-        {done && <p role="status">{done}</p>}
-        {!readOnly && (
-          <label>
-            Чиї накладні
-            <select
-              value={elsewhere ? "ELSEWHERE" : "HERE"}
-              onChange={(event) => {
-                setElsewhere(event.target.value === "ELSEWHERE");
-              }}
-            >
-              <option value="HERE">Цього магазину</option>
-              <option value="ELSEWHERE">
-                Магазинів, що заблоковані чи закриті
-              </option>
-            </select>
-          </label>
+      <section className="invoices">
+        {readOnly && (
+          <p className="hint">
+            Магазин не торгує: його накладні тут лише для перегляду. Сплачує
+            будь-який магазин мережі, що працює.
+          </p>
         )}
-        {!elsewhere && summary.data && (
-          <div
-            className="section-block"
-            aria-label="Скільки магазин винен постачальникам"
-          >
-            <p className="total">
-              Магазин винен постачальникам{" "}
-              <strong>{money(summary.data.owed)}</strong>
-            </p>
-            {summary.data.suppliers.length > 0 && (
-              <ul aria-label="Борги за постачальниками">
-                {summary.data.suppliers.map((debt) => (
-                  <li key={debt.supplier.id}>
-                    {visible(debt.supplier.name)} — {money(debt.owed)}
-                    {debt.invoices > 1 &&
-                      ` · накладних: ${String(debt.invoices)}`}
-                  </li>
-                ))}
-              </ul>
+        <ModeSwitch
+          label="Які накладні"
+          modes={[
+            { mode: "open", label: "Винні зараз" },
+            { mode: "all", label: "Усі" },
+          ]}
+          current={owedOnly ? "open" : "all"}
+          choose={(mode) => {
+            setOwedOnly(mode === "open");
+          }}
+          disabled={false}
+          filters
+        />
+        <SupplierFilter
+          store={store}
+          token={token}
+          value={supplierId}
+          change={setSupplierId}
+          disabled={false}
+          {...(debts && !elsewhere
+            ? {
+                metaOf: (supplier) => {
+                  const debt = debts.suppliers.find(
+                    (each) => each.supplier.id === supplier.id,
+                  );
+                  return debt
+                    ? `винні ${money(debt.owed)} · ${invoicesCount(debt.invoices)}`
+                    : null;
+                },
+              }
+            : {})}
+        />
+        {!elsewhere && (
+          <div className="invoice-total" aria-live="polite">
+            {debts === undefined ? (
+              summary.isPending && (
+                <span className="skeleton-line" aria-hidden="true">
+                  <span>Винні 00 000,00 грн · 0 накладних</span>
+                </span>
+              )
+            ) : chosenDebt === undefined ||
+              (chosenDebt === null && debts.invoices === 0) ? (
+              <p className="invoice-total-line t-row">Нічого не винні</p>
+            ) : (
+              <p className="invoice-total-line">
+                <span className="t-row">
+                  {chosenDebt
+                    ? `Винні постачальнику «${visible(chosenDebt.supplier.name)}»`
+                    : "Винні"}
+                </span>{" "}
+                <span className="t-money-l">
+                  <Sum
+                    value={money(chosenDebt ? chosenDebt.owed : debts.owed)}
+                  />
+                </span>{" "}
+                <span className="t-row">
+                  ·{" "}
+                  {invoicesCount(
+                    chosenDebt ? chosenDebt.invoices : debts.invoices,
+                  )}
+                </span>
+              </p>
             )}
+            {staleOf(age, now) && <Stamp age={age} now={now} />}
           </div>
         )}
-        {!readOnly &&
-          !elsewhere &&
-          (making ? (
-            <NewInvoice
-              store={store}
-              token={token}
-              disabled={blocked || working}
-              cancel={() => {
-                setMaking(false);
-              }}
-              send={send}
-            />
-          ) : (
-            <button
-              disabled={blocked || working}
-              onClick={() => {
-                setDone(null);
-                setMaking(true);
-              }}
-            >
-              + Записати накладну
-            </button>
-          ))}
-        <label>
-          Постачальник
-          <select
-            value={supplierId}
-            onChange={(event) => {
-              setSupplierId(event.target.value);
-            }}
-          >
-            <option value="">Усі постачальники</option>
-            {(suppliers.data ?? []).map((supplier) => (
-              <option key={supplier.id} value={supplier.id}>
-                {visible(supplier.name)}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Показати
-          <select
-            value={owedOnly ? "OPEN" : "ALL"}
-            onChange={(event) => {
-              setOwedOnly(event.target.value === "OPEN");
-            }}
-          >
-            <option value="OPEN">Ще не сплачені</option>
-            <option value="ALL">Усі, разом зі сплаченими й скасованими</option>
-          </select>
-        </label>
         {invoices.isPending ? (
           <p role="status">Завантажуємо накладні…</p>
         ) : invoices.data === undefined ? (
@@ -306,51 +529,57 @@ export function Invoices({
             }}
           />
         ) : listed.length === 0 ? (
-          <p>
-            {elsewhere
-              ? "Магазини, що не працюють, нічого не винні постачальникам."
-              : owedOnly
-                ? "Зараз магазин нічого не винен постачальникам."
-                : "У цьому магазині ще не записували накладних."}
-          </p>
+          // Nothing (spec §6.28): the blank mark, what is so now, and what an
+          // invoice is.
+          <div className="orders-empty">
+            <Icon name="mark-lg" className="orders-empty-mark" />
+            <p className="t-row">
+              {elsewhere
+                ? "Магазини, що не працюють, нічого не винні постачальникам."
+                : owedOnly
+                  ? "Зараз магазин нічого не винен постачальникам."
+                  : "У цьому магазині ще не записували накладних."}
+            </p>
+            {!elsewhere && (
+              <p className="t-meta">
+                Кожна накладна — окремий борг: сплачують частинами, без графіка.
+              </p>
+            )}
+            {makes && (
+              <button
+                type="button"
+                className="quiet"
+                disabled={held}
+                onClick={make}
+              >
+                Записати накладну
+              </button>
+            )}
+          </div>
         ) : (
           <>
-            {listed.map((invoice) => (
-              <article
-                className="order-card"
-                key={invoice.id}
-                aria-label={`Накладна ${visible(invoice.supplier.name)} від ${when(invoice.at)}`}
-              >
-                <strong>{visible(invoice.supplier.name)}</strong>
-                <small>
-                  {when(invoice.at)} · {visible(invoice.by)}
-                  {invoice.store_id !== store.id &&
-                    ` · магазин «${visible(invoice.store_name)}»`}
-                </small>
-                <p>
-                  {invoice.status === "OPEN"
-                    ? `Винні ${money(invoice.owed)} з ${money(invoice.amount)}`
-                    : `${statusLabels[invoice.status]} · ${money(invoice.amount)}`}
-                </p>
-                {invoice.note && <p className="hint">{visible(invoice.note)}</p>}
-                {invoice.sold && (
-                  <p className="hint">
-                    За продане позичене: {visible(invoice.sold.label)} ×{" "}
-                    {invoice.sold.quantity}
-                  </p>
-                )}
-                <button
-                  className="quiet"
-                  onClick={() => {
-                    setDone(null);
-                    setSelected(invoice);
+            <ul className="order-tags invoice-tags" aria-label="Накладні">
+              {listed.map((invoice) => (
+                <InvoiceTag
+                  key={invoice.id}
+                  invoice={invoice}
+                  storeId={store.id}
+                  open={() => {
+                    open(invoice);
                   }}
-                >
-                  Відкрити накладну {visible(invoice.supplier.name)} від{" "}
-                  {when(invoice.at)}
-                </button>
-              </article>
-            ))}
+                  pay={
+                    pays && invoice.status === "OPEN"
+                      ? {
+                          held,
+                          go: () => {
+                            pay(invoice);
+                          },
+                        }
+                      : undefined
+                  }
+                />
+              ))}
+            </ul>
             {/* A page that failed keeps the invoices already read. */}
             {invoices.error && (
               <Unread
@@ -375,29 +604,57 @@ export function Invoices({
             )}
           </>
         )}
+        {makes && (
+          <button
+            type="button"
+            className="sale-row invoice-elsewhere"
+            onClick={toElsewhere}
+          >
+            <span className="sale-main t-row">
+              Накладні магазинів, що не працюють
+            </span>
+            <Icon name="chevron-right" size={20} />
+          </button>
+        )}
       </section>
     </>
   );
 }
 
+/**
+ * «Нова накладна», a screen of its own (stage 2, money task list, P0-1):
+ * the supplier from the sheet, nothing chosen beforehand, then the sum on
+ * the invoice, what was paid at once — none is a choice too — and a note;
+ * «Записати накладну» the dock's own button, never Telegram's: it records
+ * money. Recorded, its stub: the supplier and the sum, what is left, and
+ * «Готово» to its card.
+ */
 function NewInvoice({
   store,
   token,
-  disabled,
-  cancel,
+  held,
+  pressing,
   send,
+  back,
+  opened,
 }: {
   store: Store;
   token: string;
-  disabled: boolean;
-  cancel: () => void;
-  send: (command: Command) => Promise<string | null>;
+  held: boolean;
+  pressing: boolean;
+  send: (command: Command) => Promise<Sent>;
+  back: () => void;
+  opened: (invoice: Invoice) => void;
 }): JSX.Element {
   const [supplier, setSupplier] = useState("");
   const [amount, setAmount] = useState("");
   const [paidNow, setPaidNow] = useState("");
   const [note, setNote] = useState("");
   const [problem, setProblem] = useState<string | null>(null);
+  const [recorded, setRecorded] = useState<Invoice | null>(null);
+  const sum = useRef<HTMLInputElement>(null);
+  const dock = useRef<HTMLDivElement>(null);
+  usePanelRoom(dock, recorded === null);
 
   function submit(): void {
     setProblem(null);
@@ -426,164 +683,214 @@ function NewInvoice({
       amount: decimal(total),
       paid_now: decimal(paid),
       note: note.trim() || null,
-    }).then((refusal) => {
-      if (refusal) setProblem(refusal);
-    });
-  }
-
-  return (
-    <fieldset disabled={disabled}>
-      <legend>Нова накладна</legend>
-      <SupplierPicker
-        store={store}
-        token={token}
-        value={supplier}
-        change={setSupplier}
-        disabled={disabled}
-      />
-      <label>
-        Сума за накладною, грн
-        <input
-          inputMode="decimal"
-          placeholder="0,00"
-          value={amount}
-          onChange={(event) => {
-            setAmount(event.target.value);
-          }}
-        />
-      </label>
-      <label>
-        Сплачено одразу, грн
-        <input
-          inputMode="decimal"
-          placeholder="0,00"
-          value={paidNow}
-          onChange={(event) => {
-            setPaidNow(event.target.value);
-          }}
-        />
-      </label>
-      <label>
-        Примітка (необов’язково)
-        <textarea
-          value={note}
-          maxLength={1000}
-          onChange={(event) => {
-            setNote(event.target.value);
-          }}
-        />
-      </label>
-      {problem && <p role="alert">{problem}</p>}
-      <div className="actions">
-        <button type="button" onClick={submit}>
-          Записати накладну
-        </button>
-        <button type="button" className="quiet" onClick={cancel}>
-          Скасувати
-        </button>
-      </div>
-    </fieldset>
-  );
-}
-
-function InvoiceDetail({
-  store,
-  token,
-  blocked,
-  readOnly,
-  networkOwner,
-  invoice,
-  done,
-  send,
-  changed,
-  back,
-}: {
-  store: Store;
-  token: string;
-  blocked: boolean;
-  readOnly: boolean;
-  networkOwner: boolean;
-  invoice: Invoice;
-  done: string | null;
-  send: (command: Command) => Promise<string | null>;
-  changed: (invoice: Invoice) => void;
-  back: () => void;
-}): JSX.Element {
-  const [amount, setAmount] = useState("");
-  const [asking, setAsking] = useState(false);
-  const [reason, setReason] = useState("");
-  const [problem, setProblem] = useState<string | null>(null);
-  // Another store's invoice, paid here because that one does not trade.
-  const elsewhere = invoice.store_id !== store.id;
-  const open = invoice.status === "OPEN";
-  // The owner writes off; for a store that does not trade, the network's.
-  const mayWriteOff =
-    invoice.store_state === "ACTIVE"
-      ? !readOnly && store.permissions.includes("supplier:write_off")
-      : networkOwner;
-  const owed = kopecks(invoice.owed) ?? 0n;
-  const standing = invoice.entries.filter(
-    (entry) => entry.cancelled === null && entry.kind !== "WRITE_OFF",
-  );
-
-  async function refusedThen(refusal: string | null): Promise<void> {
-    if (!refusal) return;
-    setProblem(refusal);
-    // Refused because the invoice moved on: show it as it is now.
-    try {
-      const [current] = (
-        await api<InvoicePage>(
-          `/supplier-invoices?store_id=${store.id}&supplier_id=${invoice.supplier.id}${
-            elsewhere ? "&elsewhere=true" : ""
-          }&limit=50`,
-          token,
-        )
-      ).items.filter((item) => item.id === invoice.id);
-      if (current) changed(current);
-    } catch {
-      // What was shown stays; the refusal says what to do.
-    }
-  }
-
-  function pay(): void {
-    setProblem(null);
-    const cents = kopecks(amount);
-    if (cents === null || cents <= 0n) {
-      setProblem("Вкажіть суму оплати з точністю до копійок.");
-      return;
-    }
-    if (cents > owed) {
-      setProblem(
-        `Це більше, ніж винні: залишок ${money(invoice.owed)}. Сплатіть не більше.`,
-      );
-      return;
-    }
-    void send({
-      kind: "payment",
-      invoice_id: invoice.id,
-      amount: decimal(cents),
-      ...(elsewhere ? { elsewhere: true } : {}),
-    }).then((refusal) => {
-      setAmount("");
-      void refusedThen(refusal);
+    }).then((sent) => {
+      if (sent.kind === "done") setRecorded(sent.invoice);
+      else if (sent.kind === "refused") setProblem(sent.text);
     });
   }
 
   return (
     <>
       <ScreenHeader
-        pushed
-        title="Накладна"
-        aside={
-          <Back go={back} className="quiet">
-            До списку накладних
+        title="Нова накладна"
+        back={
+          <Back go={back} held={pressing}>
+            <span aria-hidden="true">← </span>
+            Накладні
           </Back>
         }
       />
-      <section>
-        <h3>{visible(invoice.supplier.name)}</h3>
-        <p className="hint">
-          Записано {when(invoice.at)} · {visible(invoice.by)}
+      <section className="invoices">
+        {recorded ? (
+          <InvoiceRecorded
+            title="Накладну записано"
+            invoice={recorded}
+            sum={recorded.amount}
+            line={`${visible(recorded.supplier.name)} · ${money(recorded.amount)}`}
+            next={() => {
+              opened(recorded);
+            }}
+          />
+        ) : (
+          <>
+            <fieldset disabled={held}>
+              <legend className="visually-hidden">Нова накладна</legend>
+              <SupplierPicker
+                store={store}
+                token={token}
+                value={supplier}
+                change={setSupplier}
+                disabled={held}
+                next={sum}
+              />
+              <label>
+                Сума за накладною, грн
+                <input
+                  ref={sum}
+                  inputMode="decimal"
+                  enterKeyHint="next"
+                  placeholder="0,00"
+                  value={amount}
+                  onChange={(event) => {
+                    setAmount(event.target.value);
+                  }}
+                />
+              </label>
+              <label>
+                Сплачено одразу, грн
+                <input
+                  inputMode="decimal"
+                  enterKeyHint="next"
+                  placeholder="0,00"
+                  value={paidNow}
+                  onChange={(event) => {
+                    setPaidNow(event.target.value);
+                  }}
+                />
+              </label>
+              <label>
+                Примітка (необов’язково)
+                <input
+                  value={note}
+                  maxLength={1000}
+                  enterKeyHint="done"
+                  onChange={(event) => {
+                    setNote(event.target.value);
+                  }}
+                />
+              </label>
+            </fieldset>
+            {problem && <p role="alert">{problem}</p>}
+            <div className="pay-panel order-dock" ref={dock}>
+              <SendingLine busy={pressing} />
+              <button
+                type="button"
+                className={pressing ? "sheet-done pressed" : "sheet-done"}
+                disabled={held}
+                onClick={submit}
+              >
+                {pressing && <Eyelet state="spin" size={20} />}
+                Записати накладну
+              </button>
+            </div>
+          </>
+        )}
+      </section>
+    </>
+  );
+}
+
+/**
+ * One invoice (stage 2, money task list, P0-2): the supplier for a title,
+ * when and who recorded it under it; what is owed large, in ink, and how
+ * much is paid; the history as a thread. «Сплатити» is Telegram's
+ * MainButton — the dock's one button outside it — and opens the payment;
+ * the rare ways stand behind the ⋯ by the title. A set-off or a write-off
+ * recorded is said over the sum, by its filled eyelet.
+ */
+function InvoiceDetail({
+  store,
+  token,
+  held,
+  sending,
+  readOnly,
+  networkOwner,
+  invoice,
+  send,
+  readAgain,
+  changed,
+  pay,
+  back,
+}: {
+  store: Store;
+  token: string;
+  held: boolean;
+  /** What the journal sends for the first time. */
+  sending: Command["kind"] | null;
+  readOnly: boolean;
+  networkOwner: boolean;
+  invoice: Invoice;
+  send: (command: Command) => Promise<Sent>;
+  readAgain: (invoice: Invoice) => Promise<Invoice | null>;
+  changed: (invoice: Invoice) => void;
+  pay: () => void;
+  back: () => void;
+}): JSX.Element {
+  const [recorded, setRecorded] = useState<string | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+  // A sheet over the card: «Сплатити» steps aside.
+  const [acting, setActing] = useState(false);
+  const [cancelling, setCancelling] = useState<InvoiceEntry | null>(null);
+  const name = useRef<HTMLHeadingElement>(null);
+  // Another store's invoice, paid here because that one does not trade.
+  const elsewhere = invoice.store_id !== store.id;
+  const open = invoice.status === "OPEN";
+  const takes = open && !readOnly;
+  const main = useMainButton("Сплатити", pay, {
+    shown: takes && !acting && cancelling === null,
+    active: !held,
+  });
+  const dock = useRef<HTMLDivElement>(null);
+  usePanelRoom(dock, takes && !main);
+  const said = useRef<HTMLParagraphElement>(null);
+  useEffect(() => {
+    if (problem !== null || recorded !== null)
+      said.current?.scrollIntoView({ block: "nearest" });
+  }, [problem, recorded]);
+
+  async function shownAgain(): Promise<void> {
+    const current = await readAgain(invoice);
+    if (current) changed(current);
+  }
+
+  return (
+    <>
+      <ScreenHeader
+        ref={name}
+        focusable
+        title={visible(invoice.supplier.name)}
+        back={
+          <Back go={back} held={held && sending !== null}>
+            <span aria-hidden="true">← </span>
+            Накладні
+          </Back>
+        }
+        aside={
+          <InvoiceActions
+            store={store}
+            token={token}
+            held={held}
+            sending={sending}
+            readOnly={readOnly}
+            networkOwner={networkOwner}
+            invoice={invoice}
+            send={send}
+            opened={setActing}
+            fallback={name}
+            recorded={(text, current) => {
+              setProblem(null);
+              setRecorded(text);
+              changed(current);
+            }}
+            cancelled={(current) => {
+              setProblem(null);
+              setRecorded(null);
+              changed(current);
+            }}
+            refused={(text) => {
+              setRecorded(null);
+              setProblem(text);
+              void shownAgain();
+            }}
+            stale={() => {
+              void shownAgain();
+            }}
+          />
+        }
+      />
+      <section className="invoices invoice-detail">
+        <p className="hint debt-context">
+          Записано {shortWhen(invoice.at)} · {visible(invoice.by)}
           {invoice.note && ` · ${visible(invoice.note)}`}
         </p>
         {invoice.sold && (
@@ -594,565 +901,181 @@ function InvoiceDetail({
           </p>
         )}
         {elsewhere && (
-          <p className="notice">
-            Накладна магазину «{visible(invoice.store_name)}», який зараз{" "}
-            {invoice.store_state === "ARCHIVED" ? "закрито" : "заблоковано"}.
-            Сплачує цей магазин; борг лишається за «{visible(invoice.store_name)}
-            ».
+          <Banner kind="blocked" as="div">
+            <p>
+              Накладна магазину «{visible(invoice.store_name)}», який зараз{" "}
+              {invoice.store_state === "ARCHIVED" ? "закрито" : "заблоковано"}.
+              Сплачує цей магазин; борг лишається за «
+              {visible(invoice.store_name)}».
+            </p>
+          </Banner>
+        )}
+        {recorded && (
+          // Said over the sum by its filled eyelet, as an order's step
+          // (stage 2, money task list, P0-2).
+          <p className="step-done invoice-done" role="status" ref={said}>
+            <Eyelet state="filled" size={12} />
+            {recorded}
           </p>
         )}
-        <dl className="debt">
-          <dt>Сума за накладною</dt>
-          <dd>{money(invoice.amount)}</dd>
-          <dt>Сплачено</dt>
-          <dd>{money(invoice.paid)}</dd>
-          {(kopecks(invoice.set_off) ?? 0n) > 0n && (
-            <>
-              <dt>Зараховано за повернений товар</dt>
-              <dd>{money(invoice.set_off)}</dd>
-            </>
-          )}
-          {(kopecks(invoice.written_off) ?? 0n) > 0n && (
-            <>
-              <dt>Списано</dt>
-              <dd>{money(invoice.written_off)}</dd>
-            </>
-          )}
-          <dt>Залишок</dt>
-          <dd>
-            <strong>{money(invoice.owed)}</strong>
-          </dd>
-        </dl>
-        {!open && (
-          <p className="badge">
-            {statusLabels[invoice.status]}
-            {invoice.cancelled &&
-              ` ${when(invoice.cancelled.at)} · ${visible(invoice.cancelled.reason)} · ${visible(invoice.cancelled.by)}`}
+        {problem && (
+          <p role="alert" ref={said}>
+            {problem}
           </p>
         )}
-        {done && <p role="status">{done}</p>}
-        {problem && <p role="alert">{problem}</p>}
-        {open && !readOnly && (
-          <fieldset disabled={blocked}>
-            <legend>Оплата</legend>
-            <label>
-              Сума оплати, грн
-              <input
-                inputMode="decimal"
-                placeholder="0,00"
-                value={amount}
-                onChange={(event) => {
-                  setAmount(event.target.value);
-                }}
-              />
-            </label>
-            <div className="actions">
-              <button type="button" onClick={pay}>
-                Сплатити
-              </button>
-              <button
-                type="button"
-                className="quiet"
-                onClick={() => {
-                  setAmount(asInput(invoice.owed));
-                }}
-              >
-                Увесь залишок
-              </button>
-            </div>
-          </fieldset>
+        {invoice.status === "OPEN" ? (
+          <InvoiceOwed invoice={invoice} />
+        ) : (
+          <div className="invoice-closed">
+            <p className="invoice-closed-head">
+              <InvoiceSticker status={invoice.status} />
+              {invoice.cancelled && (
+                <span className="t-meta">
+                  {shortDay(invoice.cancelled.at)} ·{" "}
+                  {visible(invoice.cancelled.reason)} ·{" "}
+                  {visible(invoice.cancelled.by)}
+                </span>
+              )}
+            </p>
+            <p className="invoice-owed-sum t-money-l">
+              <Sum value={money(invoice.amount)} />
+            </p>
+            {invoice.status !== "CANCELLED" && <Progress invoice={invoice} />}
+          </div>
         )}
-        {open && !readOnly && !elsewhere && (
-          <SetOffForm
-            store={store}
-            token={token}
-            invoice={invoice}
-            disabled={blocked}
-            send={(supplierReturnId, cents) => {
-              setProblem(null);
-              return send({
-                kind: "set-off",
-                invoice_id: invoice.id,
-                supplier_return_id: supplierReturnId,
-                amount: decimal(cents),
-              }).then((refusal) => {
-                void refusedThen(refusal);
-                return refusal;
-              });
-            }}
-          />
-        )}
-        {open && mayWriteOff && (
-          <fieldset disabled={blocked}>
-            <legend>Списання</legend>
-            {asking ? (
-              <div className="notice">
-                <p>
-                  Залишок {money(invoice.owed)} закриється без оплати. Скасувати
-                  це потім не можна.
-                </p>
-                <label>
-                  Чому списуємо
-                  <textarea
-                    value={reason}
-                    maxLength={1000}
-                    onChange={(event) => {
-                      setReason(event.target.value);
-                    }}
-                  />
-                </label>
-                <div className="actions">
-                  <button
-                    type="button"
-                    disabled={reason.trim() === ""}
-                    onClick={() => {
-                      setProblem(null);
-                      void send({
-                        kind: "write-off",
-                        invoice_id: invoice.id,
-                        reason: reason.trim(),
-                      }).then((refusal) => {
-                        setAsking(false);
-                        setReason("");
-                        void refusedThen(refusal);
-                      });
-                    }}
-                  >
-                    Так, списати {money(invoice.owed)}
-                  </button>
-                  <button
-                    type="button"
-                    className="quiet"
-                    onClick={() => {
-                      setAsking(false);
-                    }}
-                  >
-                    Скасувати
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <button
-                type="button"
-                className="quiet"
-                onClick={() => {
-                  setProblem(null);
-                  setAsking(true);
-                }}
-              >
-                Списати залишок
-              </button>
-            )}
-          </fieldset>
-        )}
-        <h3>Історія</h3>
+        <h3 className="t-label customer-history-title">Історія</h3>
         {invoice.entries.length === 0 ? (
           <p>Оплат і заліків ще не було.</p>
         ) : (
-          <ul aria-label="Історія накладної">
+          <ul className="timeline" aria-label="Історія накладної">
             {invoice.entries.map((entry) => (
               <EntryRow
                 key={entry.id}
-                store={store}
-                token={token}
-                invoice={invoice}
                 entry={entry}
                 // A payment is cancelled where it may be made now; a set-off
                 // in the store that owes. A write-off is final.
-                cancellable={
+                cancel={
                   !readOnly &&
                   entry.cancelled === null &&
                   (invoice.status === "OPEN" || invoice.status === "SETTLED") &&
                   (entry.kind === "PAYMENT" ||
                     (entry.kind === "SET_OFF" && !elsewhere))
+                    ? {
+                        held,
+                        go: () => {
+                          setCancelling(entry);
+                        },
+                      }
+                    : undefined
                 }
-                disabled={blocked}
-                changed={changed}
               />
             ))}
           </ul>
         )}
-        {open &&
-          !readOnly &&
-          !elsewhere &&
-          (standing.length > 0 ? (
-            <p className="hint">
-              Щоб скасувати накладну, спершу скасуйте її оплати й заліки.
-            </p>
-          ) : (
-            <Reasoned
-              label="Скасувати накладну"
-              question="Накладну записано помилково? Вона лишиться в історії як скасована."
-              confirm="Так, скасувати накладну"
-              disabled={blocked}
-              run={(why) =>
-                api<Invoice>(`/supplier-invoices/${invoice.id}/cancel`, token, {
-                  reason: why,
-                })
-              }
-              changed={changed}
-            />
-          ))}
+        {cancelling && (
+          <EntryCancel
+            store={store}
+            token={token}
+            invoice={invoice}
+            entry={cancelling}
+            held={held}
+            fallback={name}
+            close={() => {
+              setCancelling(null);
+            }}
+            cancelled={(current) => {
+              setCancelling(null);
+              setProblem(null);
+              setRecorded(null);
+              changed(current);
+            }}
+            refused={(text) => {
+              setCancelling(null);
+              setRecorded(null);
+              setProblem(text);
+              void shownAgain();
+            }}
+          />
+        )}
+        {takes && !main && (
+          // Outside Telegram, its MainButton as the dock's one button.
+          <div className="pay-panel order-dock" ref={dock}>
+            <button
+              type="button"
+              className="main-mimic"
+              disabled={held}
+              onClick={pay}
+            >
+              Сплатити
+            </button>
+          </div>
+        )}
       </section>
     </>
   );
 }
 
-function SetOffForm({
-  store,
-  token,
-  invoice,
-  disabled,
-  send,
-}: {
-  store: Store;
-  token: string;
-  invoice: Invoice;
-  disabled: boolean;
-  send: (supplierReturnId: string, cents: bigint) => Promise<string | null>;
-}): JSX.Element {
-  const [open, setOpen] = useState(false);
-  const [chosen, setChosen] = useState("");
-  const [amount, setAmount] = useState("");
-  const [problem, setProblem] = useState<string | null>(null);
-  const returns = useQuery({
-    queryKey: ["supplier-returns", store.id, invoice.supplier.id, "set-off"],
-    queryFn: () =>
-      api<ReturnPage>(
-        `/supplier-returns?store_id=${store.id}&supplier_id=${invoice.supplier.id}&limit=50`,
-        token,
-      ),
-    enabled: open,
-    retry: false,
-  });
-  // Only what still stands: a cancelled return's goods came back.
-  const standing = (returns.data?.items ?? []).filter(
-    (item) => item.cancelled === null,
-  );
-
-  function submit(): void {
-    setProblem(null);
-    const cents = kopecks(amount);
-    if (!chosen) {
-      setProblem("Оберіть повернення.");
-      return;
-    }
-    if (cents === null || cents <= 0n) {
-      setProblem("Вкажіть суму заліку з точністю до копійок.");
-      return;
-    }
-    if (cents > (kopecks(invoice.owed) ?? 0n)) {
-      setProblem(
-        `Це більше, ніж винні: залишок ${money(invoice.owed)}. Решту зарахуйте на іншу накладну.`,
-      );
-      return;
-    }
-    void send(chosen, cents).then((refusal) => {
-      if (!refusal) {
-        setOpen(false);
-        setChosen("");
-        setAmount("");
-      }
-    });
-  }
-
-  if (!open)
-    return (
-      <button
-        className="quiet"
-        disabled={disabled}
-        onClick={() => {
-          setOpen(true);
-        }}
-      >
-        Залік за повернений товар
-      </button>
-    );
-
-  return (
-    <fieldset disabled={disabled}>
-      <legend>Залік за повернений товар</legend>
-      {returns.isPending ? (
-        <p role="status">Завантажуємо повернення…</p>
-      ) : returns.error ? (
-        <Unread
-          error={returns.error}
-          retry={() => {
-            void returns.refetch();
-          }}
-        />
-      ) : standing.length === 0 ? (
-        <p>
-          Цей магазин нічого не повертав постачальнику «
-          {visible(invoice.supplier.name)}».
-        </p>
-      ) : (
-        <label>
-          Повернення
-          <select
-            value={chosen}
-            onChange={(event) => {
-              setChosen(event.target.value);
-            }}
-          >
-            <option value="">Оберіть повернення</option>
-            {standing.map((item) => {
-              const counted = item.set_offs.reduce(
-                (sum, setOff) => sum + (kopecks(setOff.amount) ?? 0n),
-                0n,
-              );
-              return (
-                <option key={item.id} value={item.id}>
-                  {when(item.at)} ·{" "}
-                  {item.lines.reduce((units, line) => units + line.quantity, 0)}{" "}
-                  шт.
-                  {counted > 0n &&
-                    ` · уже зараховано ${money(decimal(counted))}`}
-                </option>
-              );
-            })}
-          </select>
-        </label>
-      )}
-      <label>
-        Скільки зарахував постачальник, грн
-        <input
-          inputMode="decimal"
-          placeholder="0,00"
-          value={amount}
-          onChange={(event) => {
-            setAmount(event.target.value);
-          }}
-        />
-      </label>
-      {problem && <p role="alert">{problem}</p>}
-      <div className="actions">
-        <button type="button" onClick={submit}>
-          Зарахувати
-        </button>
-        <button
-          type="button"
-          className="quiet"
-          onClick={() => {
-            setOpen(false);
-          }}
-        >
-          Скасувати
-        </button>
-      </div>
-    </fieldset>
-  );
-}
-
+/**
+ * One line of the invoice's history (spec §6.21): the day, its node on the
+ * thread — filled once recorded, hollow once cancelled, with its sticker —
+ * what it was and its sum, who, the store that paid and the note. One that
+ * may be cancelled is a button the line's whole width, opening the sheet
+ * that asks why; the others are never pressed.
+ */
 function EntryRow({
-  store,
-  token,
-  invoice,
   entry,
-  cancellable,
-  disabled,
-  changed,
+  cancel,
 }: {
-  store: Store;
-  token: string;
-  invoice: Invoice;
   entry: InvoiceEntry;
-  cancellable: boolean;
-  disabled: boolean;
-  changed: (invoice: Invoice) => void;
+  cancel?: { held: boolean; go: () => void } | undefined;
 }): JSX.Element {
-  const elsewhere = invoice.store_id !== store.id;
-  return (
+  const inside = (
+    <>
+      <span className="timeline-day">{shortDay(entry.at)}</span>
+      <span
+        className={`timeline-node${entry.cancelled ? " hollow" : ""}`}
+        aria-hidden="true"
+      />
+      <span className="timeline-main">
+        <span className="timeline-what">
+          {entryLabels[entry.kind]} {money(entry.amount)}
+        </span>
+        <span className="timeline-meta">
+          {[
+            visible(entry.by),
+            ...(entry.paid_at
+              ? [`сплатив магазин «${visible(entry.paid_at)}»`]
+              : []),
+            ...(entry.note ? [visible(entry.note)] : []),
+          ].join(" · ")}
+        </span>
+        {entry.cancelled && (
+          <>
+            <InvoiceSticker status="CANCELLED" />
+            <span className="timeline-meta">
+              {shortDay(entry.cancelled.at)} · {visible(entry.cancelled.reason)}{" "}
+              · {visible(entry.cancelled.by)}
+            </span>
+          </>
+        )}
+      </span>
+    </>
+  );
+  return cancel ? (
     <li>
-      {when(entry.at)} · {entryLabels[entry.kind]} {money(entry.amount)} ·{" "}
-      {visible(entry.by)}
-      {entry.paid_at && ` · сплатив магазин «${visible(entry.paid_at)}»`}
-      {entry.note && ` · ${visible(entry.note)}`}
-      {entry.cancelled ? (
-        <p className="badge">
-          Скасовано {when(entry.cancelled.at)} ·{" "}
-          {visible(entry.cancelled.reason)} · {visible(entry.cancelled.by)}
-        </p>
-      ) : (
-        cancellable && (
-          <Reasoned
-            label={`Скасувати: ${entryLabels[entry.kind].toLowerCase()} ${money(entry.amount)}`}
-            question={`${entryLabels[entry.kind]} ${money(entry.amount)} записано помилково? Борг зросте на цю суму.`}
-            confirm="Так, скасувати"
-            disabled={disabled}
-            run={(why) =>
-              api<Invoice>(
-                `/supplier-invoices/${invoice.id}/entries/${entry.id}/cancel`,
-                token,
-                {
-                  reason: why,
-                  // A payment made here for a store that does not trade.
-                  ...(elsewhere ? { store_id: store.id } : {}),
-                },
-              )
-            }
-            changed={changed}
-          />
-        )
-      )}
+      <button
+        type="button"
+        className="timeline-row timeline-press"
+        aria-haspopup="dialog"
+        disabled={cancel.held}
+        onClick={cancel.go}
+      >
+        {/* What a press does, for a reader: the sheet is «Скасувати: …». */}
+        <span className="visually-hidden">Скасувати: </span>
+        {inside}
+      </button>
     </li>
-  );
-}
-
-/** A cancellation, saying why. Pressed twice, it is answered as it is. */
-function Reasoned({
-  label,
-  question,
-  confirm,
-  disabled,
-  run,
-  changed,
-}: {
-  label: string;
-  question: string;
-  confirm: string;
-  disabled: boolean;
-  run: (reason: string) => Promise<Invoice>;
-  changed: (invoice: Invoice) => void;
-}): JSX.Element {
-  const [asking, setAsking] = useState(false);
-  const [reason, setReason] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState<string | null>(null);
-
-  async function undo(): Promise<void> {
-    setBusy(true);
-    setProblem(null);
-    try {
-      const invoice = await run(reason.trim());
-      setAsking(false);
-      setReason("");
-      changed(invoice);
-    } catch (error) {
-      setProblem(
-        error instanceof ApiError
-          ? refusalText(error)
-          : "Немає відповіді сервера. Натисніть ще раз — повторне натискання безпечне.",
-      );
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return asking ? (
-    <div className="notice">
-      <p>{question}</p>
-      <label>
-        Чому скасовуємо
-        <textarea
-          value={reason}
-          maxLength={1000}
-          onChange={(event) => {
-            setReason(event.target.value);
-          }}
-        />
-      </label>
-      <div className="actions">
-        <button
-          disabled={disabled || busy || reason.trim() === ""}
-          onClick={() => {
-            void undo();
-          }}
-        >
-          {confirm}
-        </button>
-        <button
-          className="quiet"
-          onClick={() => {
-            setAsking(false);
-          }}
-        >
-          Не скасовувати
-        </button>
-      </div>
-      {problem && <p role="alert">{problem}</p>}
-    </div>
   ) : (
-    <button
-      className="quiet"
-      disabled={disabled}
-      onClick={() => {
-        setProblem(null);
-        setAsking(true);
-      }}
-    >
-      {label}
-    </button>
-  );
-}
-
-const statusLabels: Record<InvoiceStatus, string> = {
-  OPEN: "Винні",
-  SETTLED: "Сплачено повністю",
-  WRITTEN_OFF: "Залишок списано",
-  CANCELLED: "Скасовано",
-};
-
-const entryLabels: Record<InvoiceEntry["kind"], string> = {
-  PAYMENT: "Оплата",
-  SET_OFF: "Залік за повернення",
-  WRITE_OFF: "Списано",
-};
-
-/** What an operation recorded, said once: here, and on a kept one's stub
- * torn off (stage 2, money task list, P0-6). */
-export function doneText(invoice: Invoice, command: Command): string {
-  const rest =
-    invoice.status === "SETTLED"
-      ? "Накладну сплачено повністю."
-      : `Залишок ${money(invoice.owed)}.`;
-  switch (command.kind) {
-    case "invoice":
-      return `Накладну «${visible(invoice.supplier.name)}» на ${money(invoice.amount)} записано. ${rest}`;
-    case "payment":
-      return `Оплату ${money(command.amount)} записано. ${rest}`;
-    case "set-off":
-      return `Залік ${money(command.amount)} записано. ${rest}`;
-    case "write-off":
-      return `Списано ${money(invoice.written_off)}.`;
-    case "sold":
-      return `Продано з позиченого: ${visible(invoice.sold?.label ?? "")} × ${String(command.quantity)}. Борг «${visible(invoice.supplier.name)}» ${money(invoice.amount)} — у «Накладних».`;
-  }
-}
-
-function when(iso: string): string {
-  return new Date(iso).toLocaleString("uk-UA", {
-    dateStyle: "short",
-    timeStyle: "short",
-  });
-}
-
-/** Why an operation was not taken, in this screen's words: here, and under
- * a kept one checked (stage 2, money task list, P0-6). */
-export function refusalText(error: unknown): string {
-  if (error instanceof ApiError) {
-    switch (error.details.reason) {
-      case "MORE_THAN_OWED":
-        return `Це більше, ніж винні: залишок ${money(String(error.details.owed))}.`;
-      case "NOT_OWED":
-        return "За цією накладною вже нічого не винні.";
-      case "NO_REASON":
-        return "Вкажіть, чому.";
-      case "PAID_WHERE_OWED":
-        return "Магазин, чия це накладна, знову працює — сплачує він.";
-      case "OTHER_SUPPLIER":
-        return "Це повернення іншому постачальнику.";
-      case "RETURN_CANCELLED":
-        return "Це повернення скасовано: товар повернувся на склад.";
-      case "ENTRIES_STAND":
-        return "Спершу скасуйте оплати й заліки цієї накладної.";
-      case "WRITTEN_OFF":
-        return "Списане лишається списаним.";
-    }
-  }
-  return inOwnWords(
-    errorText(error),
-    "Не записано. Перевірте дані та спробуйте ще раз.",
-    "Не записано: дані змінилися — перегляньте їх і спробуйте ще раз.",
+    <li className="timeline-row">{inside}</li>
   );
 }
