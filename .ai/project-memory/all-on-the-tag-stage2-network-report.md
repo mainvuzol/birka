@@ -210,6 +210,32 @@ caught.
   the full run.
 - **The checks:** `tsc -b`, `eslint src e2e` and Prettier (whole files; my
   own hunks in `App.tsx` and `styles.css`) are clean. No backend change.
+- **CI on #176 (head e676e2e2):** the end-to-end check failed on two
+  journeys this batch does not touch. Both had failed on main's runs
+  before (42351148961, 42279273576, 42250523233, 42179022979). Both were
+  steadied in the journeys alone, with nothing they prove taken away:
+  - `orders-new.spec.ts` «a new order whose answer never came»: its stub
+    lost only the first `POST /orders`. On CI's slower runner any other
+    read's answer made the phone check the order by itself first
+    (ADR-0013 §4.3), so «Перевірити результат замовлення» was disabled,
+    then gone, before the journey could press it. The stub's new
+    `loseAll` loses every answer until the press. The journey then checks
+    that every body sent was the same command byte for byte, with
+    nothing only shown in it. Before, it checked exactly two bodies. The
+    warning is still felt once. «The MainButton pressed over the sheet
+    «У замовленні»» used the same single loss and now uses `loseAll`
+    too.
+  - `today.spec.ts` «at most twenty reads…»: «Tearing down "context"
+    exceeded the test timeout». The trace shows two warehouse reads
+    still in their `route.fetch` when the fixture's
+    `unrouteAll({ behavior: "wait" })` began. The first to finish
+    made Playwright 1.63 drop the page's interception, and the second
+    request went on to the server unrouted. Its handler's late `fulfill`
+    then failed «Route is already handled!», and the wait never ended.
+    The journey now ends only once every read it saw asked has been
+    answered (`answered()`, from `requestfinished` / `requestfailed`).
+  - Run locally six times each (`--repeat-each 6`): 18 of 18. `tsc -b`,
+    `eslint src e2e` and Prettier on my own hunks are clean.
 
 ## For the owner
 

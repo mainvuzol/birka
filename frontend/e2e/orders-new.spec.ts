@@ -134,6 +134,9 @@ interface Server {
   fail?: { status: number; json: Record<string, unknown> };
   /** The next `POST /orders` never answered, the server never reached. */
   lose?: boolean;
+  /** Every `POST /orders` never answered while set: any other answer
+   * meanwhile has the phone check a kept order at once (CI, #176). */
+  loseAll?: boolean;
   /** The next read of an order fails with the server's own error. */
   loseRead?: boolean;
 }
@@ -233,7 +236,7 @@ async function stub(page: Page, server: Server): Promise<void> {
       }
       const body = request.postDataJSON() as Record<string, unknown>;
       server.made.push(body);
-      if (server.lose) {
+      if (server.lose || server.loseAll) {
         server.lose = false;
         await route.abort("failed");
         return;
@@ -1037,7 +1040,7 @@ test("the MainButton pressed over the sheet «У замовленні»: the she
   // Its answer lost, pressed over the sheet again: the check is on the
   // page, under the finger.
   // (Each answer once: the refusal is spent.)
-  stubbed.lose = true;
+  stubbed.loseAll = true;
   await basketSheet(page);
   await pressMain(page);
   await expect(sheet(page)).toHaveCount(0);
@@ -1045,6 +1048,7 @@ test("the MainButton pressed over the sheet «У замовленні»: the she
     name: "Перевірити результат замовлення",
   });
   await expect(retry).toBeEnabled();
+  stubbed.loseAll = false;
   const settled = page.locator(".order-done .stub-recorded");
   const pressed = retry.click().catch(() => undefined);
   await Promise.race([pressed, settled.waitFor()]);
@@ -1054,7 +1058,9 @@ test("the MainButton pressed over the sheet «У замовленні»: the she
 test("a new order whose answer never came: checked again with the same command, it says what it reserved (orders task list, P0-5; review, 2026-10-24)", async ({
   page,
 }) => {
-  const stubbed = server({ lose: true });
+  // Every answer lost until the check is pressed: the phone's own checks
+  // meanwhile lost too, so the check stays to press.
+  const stubbed = server({ loseAll: true });
   await open(page, stubbed);
   await chip(page, `${loran}:${sizeM}`).click();
   await carrier(page, "Нова пошта");
@@ -1080,14 +1086,16 @@ test("a new order whose answer never came: checked again with the same command, 
   // Pressed — unless the phone, answered meanwhile by another read, checks
   // it by itself first (ADR-0013 §4.3): either way, the same command, and
   // the same stub as at once (P1-3).
+  stubbed.loseAll = false;
   const stub = page.locator(".order-done .stub-recorded");
   const pressed = retry.click().catch(() => undefined);
   await Promise.race([pressed, stub.waitFor()]);
   await reserved(page, 1);
-  expect(stubbed.made).toHaveLength(2);
-  expect(stubbed.made[1]?.command_id).toBe(stubbed.made[0]?.command_id);
-  // Byte for byte, and nothing only shown in it (P1-1).
-  expect(stubbed.made[1]).toEqual(stubbed.made[0]);
+  // Each time the same command: byte for byte, and nothing only shown in
+  // it (P1-1).
+  expect(stubbed.made.length).toBeGreaterThanOrEqual(2);
+  expect(stubbed.made[0]?.command_id).toEqual(expect.any(String));
+  for (const sent of stubbed.made) expect(sent).toEqual(stubbed.made[0]);
   expect(stubbed.made[0]).not.toHaveProperty("shown");
   expect(await buzzes(page)).toEqual([
     warned,

@@ -1,5 +1,5 @@
 import { test, expect, menu, openStore, section } from "./fixtures";
-import type { Locator, Page, Route } from "@playwright/test";
+import type { Locator, Page, Request, Route } from "@playwright/test";
 import { createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
 
@@ -2323,6 +2323,20 @@ function asked(page: Page): string[] {
   return urls;
 }
 
+/** The API reads the page has had answered, or given up on, as `asked`
+ * counts them. */
+function answered(page: Page): string[] {
+  const urls: string[] = [];
+  const done = (request: Request): void => {
+    const url = new URL(request.url());
+    if (request.method() === "GET" && url.pathname.startsWith("/api/v1/"))
+      urls.push(`${url.pathname}${url.search}`);
+  };
+  page.on("requestfinished", done);
+  page.on("requestfailed", done);
+  return urls;
+}
+
 /** How many of «Сьогодні»'s own reads were asked: the report, each
  * store's drawer, debts and open orders; its «Брак» and lists to approve;
  * the network's backups. */
@@ -2349,6 +2363,7 @@ test("at most twenty reads as it opens, none again within a minute, each again a
   await page.setViewportSize({ width: 390, height: 741 });
   await twoStores(page);
   const urls = asked(page);
+  const settled = answered(page);
   await onToday(page);
   await expect(dayTag(page).locator(".day-online")).toBeVisible();
   await expect(dayTag(page).getByText(/^Винні /)).toHaveCount(2);
@@ -2402,6 +2417,9 @@ test("at most twenty reads as it opens, none again within a minute, each again a
       closes: 2,
       stocktakes: 2,
     });
+  // Ended once every read asked is answered: a route still fetching as the
+  // page lets go of its routes would hold the teardown (CI, #176).
+  await expect.poll(() => settled.length).toBe(urls.length);
 });
 
 test("in Telegram's dark theme the day-tag's debts and an old stamp read at 4.5:1", async ({
