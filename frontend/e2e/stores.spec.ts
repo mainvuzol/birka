@@ -500,11 +500,12 @@ test("the owner blocks a store; its seller sees only that, and the owner reads i
   await section(page, "Брак");
   await expect(page.getByText(/тут лише перегляд/)).toBeVisible();
   await expect(
-    page.locator("[data-status=AWAITING] .damaged-unit").first(),
+    page.locator(".damaged-unit[data-status=AWAITING]").first(),
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Взяти на перевірку" }),
   ).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Вирішити" })).toHaveCount(0);
 
   // Unblocked, Петро works as before.
   await section(page, "Магазини");

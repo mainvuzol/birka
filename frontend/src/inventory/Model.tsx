@@ -203,6 +203,8 @@ export function Model({
   const fix = useRef<HTMLButtonElement>(null);
   const [sheet, setSheet] = useState<"price" | "correct" | "more" | null>(null);
   const [editing, setEditing] = useState<StockOption | null>(null);
+  const [fixFoot, setFixFoot] = useState<HTMLDivElement | null>(null);
+  const [priceFoot, setPriceFoot] = useState<HTMLDivElement | null>(null);
   const [said, setSaid] = useState<Said | null>(null);
   // A correction and a count each wait for the other to settle, as on
   // «Залишки».
@@ -576,6 +578,8 @@ export function Model({
           close={() => {
             if (!saving) setSheet(null);
           }}
+          // The form's own button, outside Telegram, kept in view under it.
+          foot={<div ref={setPriceFoot} />}
         >
           <PriceEditor
             store={store}
@@ -583,19 +587,27 @@ export function Model({
             scopeKey={scopeKey}
             variantId={opened.variantId}
             blocked={blocked}
+            foot={priceFoot}
             onSaving={setSaving}
             onDone={() => {
               setSheet(null);
               setSaid({ kind: "priced", name });
             }}
-            onCancel={() => {
-              setSheet(null);
-            }}
           />
         </Sheet>
       )}
       {sheet === "correct" && (
-        <Sheet title={visible(name)} close={closeFix} fallback={fix}>
+        <Sheet
+          title={
+            editing
+              ? `${visible(name)} · ${visible(sizeName(editing))}`
+              : visible(name)
+          }
+          close={closeFix}
+          fallback={fix}
+          // The form's own button, outside Telegram, kept in view under it.
+          foot={editing ? <div ref={setFixFoot} /> : undefined}
+        >
           {editing ? (
             <Correction
               key={`${editing.size_id}:${editing.location_id}`}
@@ -604,6 +616,12 @@ export function Model({
               journalKey={journalKey}
               blocked={correcting}
               locationId={editing.location_id}
+              place={
+                locations.data.find(
+                  (location) => location.id === editing.location_id,
+                )?.name
+              }
+              foot={fixFoot}
               target={{
                 product_variant_id: editing.product_variant_id,
                 size_id: editing.size_id,
@@ -617,9 +635,6 @@ export function Model({
                 setEditing(null);
                 setSaid({ kind: "corrected", corrected });
                 readAgain();
-              }}
-              onCancel={() => {
-                setEditing(null);
               }}
               onRefused={readAgain}
               // Settled from the app's notice, which the sheet would cover,

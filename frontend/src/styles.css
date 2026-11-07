@@ -1034,20 +1034,83 @@ section.backups {
   flex: 2 1 0;
 }
 
-/* A unit in «Брак»: what it is, where it came from, who is looking. */
+/* A unit in «Брак» a row tag (spec §6.9; stage 2, goods task list, P0-4):
+   its eyelet dashed while it waits, a ring while someone looks at it,
+   filled in «Брак»'s colour once confirmed, its right edge torn. */
+/* «Брак» (stage 2, goods task list, P0-4): its row tags on the paper, as
+   «Гроші»'s and «Борги»'s, never a card round cards; the switch the
+   screen's width, each segment as wide as its words at 15 — «Підтверджений»
+   whole at 360 px (review, 2026-11-07). */
+.goods-part.damaged {
+  margin: 12px 0 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+}
+.damaged .mode-switch {
+  grid-auto-columns: auto;
+  margin-bottom: 12px;
+}
+.damaged .mode-switch button {
+  font-size: 15px;
+}
+.damaged .order-tags {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
 .damaged-unit {
+  position: relative;
+}
+.order-tag.tone-damaged {
+  --tone: var(--damaged);
+}
+.order-tag.dashed .order-tag-eyelet {
+  border: 1.5px dashed var(--tone);
+}
+.damaged-unit.torn::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 4px;
+  background: conic-gradient(from 45deg at 0 50%, var(--paper) 90deg, #0000 0) 0
+    0 / 4px 8px repeat-y;
+  pointer-events: none;
+}
+/* A row gone while its stub stands: its place alone, so nothing under it
+   moves. */
+.damaged-held {
+  visibility: hidden;
+}
+/* The unit's sheet: what it is, then its decisions one under another, the
+   sheet's whole width; a warehouse chosen in the chosen colours. */
+.damaged-sheet {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 12px 0;
-  border-top: 1px solid var(--line);
+  gap: 8px;
 }
-.damaged-unit:first-of-type {
-  border-top: 0;
+.damaged-sheet p {
+  margin: 0;
 }
-.damaged-unit .actions {
+.damaged-sheet .damaged-ask {
   margin-top: 8px;
-  flex-wrap: wrap;
+}
+.damaged-ways {
+  display: grid;
+  gap: 8px;
+}
+.damaged-ways button {
+  width: 100%;
+}
+.damaged-place .chip {
+  min-height: 44px;
+}
+.damaged-place .chip[aria-pressed="true"] {
+  background: var(--chosen);
+  color: var(--on-chosen);
 }
 
 /* The sales report's two days, side by side and as wide as each other. */
@@ -2667,11 +2730,18 @@ section.credits.customer-card {
   font-weight: 650;
 }
 /* The price's two (stage 2, admin task list, P1-2): one row at 360 px, a
-   long store's name cut short with «…»; its whole name is still read. */
+   long store's name cut short with «…»; its whole name is still read. At
+   15, as «Гроші»'s four, «Для всіх магазинів» always whole and the store's
+   in the rest: two equal halves cut it beside «Основний» (stage 2, goods
+   task list, P1-4). */
+.price-scope {
+  grid-template-columns: max-content minmax(0, 1fr);
+}
 .price-scope button {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+  font-size: 15px;
 }
 .mode-switch button[aria-current="page"],
 .mode-switch button[aria-pressed="true"] {
@@ -3420,6 +3490,45 @@ section.cash-count {
   min-height: var(--touch);
   padding: 8px 12px;
   font-size: 15px;
+}
+/* A correction (stage 2, goods task list, P1-3): the reason a chip, the
+   way where it is asked, the line of what the ledger becomes over the
+   keypad, the note folded under it. */
+.correction {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.correction > p {
+  margin: 0;
+}
+.correction .reason-chips {
+  margin: 0;
+}
+.correction .count-live {
+  margin: 4px 0 0;
+}
+.correction-note {
+  align-self: flex-start;
+  min-height: var(--touch);
+}
+/* A price (stage 2, goods task list, P1-4): for all stores or this one,
+   what stands now, the sum on the keypad, its removal quiet under it. */
+.price-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+.sheet-body > .price-form {
+  margin-top: 0;
+}
+.price-form > p {
+  margin: 0;
+}
+.price-remove {
+  align-self: flex-start;
+  min-height: var(--touch);
 }
 /* A reason owed, on «Каса»'s main screen: its close, and the way to it. */
 .cash-owed {

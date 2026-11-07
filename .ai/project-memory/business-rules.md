@@ -6969,3 +6969,151 @@ as before.
   - The start's sheet, refused as one is open, gives the cursor back to
     «Продовжити» on the tag that stands in place of «Почати
     інвентаризацію».
+
+## Chosen in chat — 2026-11-07 (stage 2 batch 9: «Брак» — its life cycle and where «Оглянути» leads; the correction's and the price's sheets in the model's detail; goods P0-4, P1-3, P1-4)
+
+Chosen in chat on 2026-11-07 («Goods: «Брак» + S23 sheets»), after #177:
+the goods task list's P0-4, P1-3 and P1-4 in one batch. The owner's
+questions stand by their (а): В-Г4 (returning a unit to sale stays two
+steps, the warehouse named on the yes), В-Г8 (no history of «Брак»: what
+became of a unit is said only by the stub right after it is recorded — the
+server keeps only what is in «Брак»). No right, no server rule, no command
+and no field changes: every step is the command it was
+(`/damaged-units/{id}/take | return-to-sale | confirm | write-off |
+return-to-supplier`, `POST /inventory/adjustments`, `POST
+/catalog/prices`), with the same bodies; a unit goes back to the warehouse
+it was sold from, or — sold from another store's own warehouse — to one of
+this store's the person picks; «На перевірці» is seen by others and keeps
+nobody from deciding; «Повернути постачальнику» needs `supplier:return`;
+the reasons, the 10 000 limit, «never below nought», the reserve and the
+size not known only reduced stand as before; the shared price and the
+store's own, `expected_price` and «1 850,00 грн» stand as before.
+
+- **«Брак», the screen (P0-4):**
+  - «Брак», its line and «Оновити» as before; under them one switch, «Які
+    речі»: «Чекають 2 · На перевірці 1 · Підтверджений 3» (a segment with
+    nothing has no number). The rows on the paper, as «Гроші»'s and
+    «Борги»'s, never a card round cards; the switch the screen's width, each
+    segment as wide as its words at 15 px, so «Підтверджений 3» is whole at
+    360 px (decided here, from the review: three equal thirds inside a card
+    cut it).
+  - It opens on the first segment with something in it — so from
+    «Сьогодні»'s «Оглянути» and from «Ще»'s «Брак · N …» on «Чекають»,
+    which is what they count. The segment is fixed once the list is read
+    afresh, so a unit taken or decided never moves the screen to another
+    segment (decided here).
+  - Oldest first in every segment, by when the unit came back — sorted on
+    the phone, whatever order the server gives (decided here).
+  - A row tag a unit (§6.9): its eyelet dashed while it waits, a ring while
+    someone looks at it, filled in «Брак»'s colour (`--damaged`) with the
+    tag's edge torn once confirmed. «Марсель молочний · M» — the model's
+    one name as the catalogue spells it, then the size, as batch 8's sheet
+    (decided here: the task list's «Марсель · молочний · M» splits a name
+    the app holds whole); «Оглядає Тетяна з 11:40» («з 06.11, 11:40»
+    another day); «Повернули 03.11 · продано зі складу «Основний»» — the
+    task list's «з «Основного»» declines a name, which the app cannot do
+    for any name (decided here, as batch 8); its note.
+  - One verb: «Взяти на перевірку» while it waits — recorded at once, felt
+    lightly, its sheet open at once; «Вирішити» otherwise, opening it.
+  - A segment with nothing: the empty tag 64 and «Нічого не чекає
+    перевірки.» / «Зараз ніхто не оглядає.» / «Підтвердженого браку
+    немає.»; nothing in «Брак» at all: «У «Брак» зараз нічого немає.» and no
+    switch (decided here: nothing to switch between).
+  - A store that does not trade: the rows without verbs, and «Магазин не
+    торгує: тут лише перегляд.» (decided here; the hint about trading the
+    old screen gave is gone with its buttons).
+- **The unit's sheet (P0-4):** its title the unit's name; who looks, when it
+  came back, its note.
+  - Under inspection: «Повернути в продаж» and «Брак підтверджений», one
+    under the other, quiet. Confirmed: «Списати», «Повернути
+    постачальнику» (only with `supplier:return`) and «Перевірити ще раз».
+  - «Перевірити ще раз» records at once, felt lightly, and the sheet stays
+    on the inspected unit's two ways (decided here: the task list says it
+    records at once, not that the sheet closes).
+  - Each decision is a second step in the sheet:
+    - back on sale: «Повернути в продаж на склад «Основний», звідки його
+      продали?» and «Так, повернути на «Основний»» (В-Г4 (а));
+    - sold from another store's own warehouse: «Його продали з власного
+      складу іншого магазину. Оберіть склад вашого магазину.», this store's
+      warehouses as chips («Склад вашого магазину»), the yes «Оберіть склад»
+      and held until one is chosen; none at all: «Тут немає складу, куди
+      повернути в продаж.» (decided here);
+    - confirmed and written off: «Що з товаром (необов’язково)» / «Чому
+      списуємо (необов’язково)», «Так, брак підтверджений» / «Так, списати»;
+    - to a supplier: the supplier's field as «Постачальникам» draws it, in
+      the sheet, «Примітка для постачальника (необов’язково)», «Так,
+      повернути постачальнику», held until a supplier is chosen.
+  - The yes is Telegram's MainButton, shown only in the second step;
+    outside Telegram the sheet's own at its foot. A tap carried from the
+    way chosen onto the yes risen in its place is let go for 0.7 s, as the
+    sheets' own (decided here). Telegram's «Назад», Escape and the scrim
+    close the whole sheet, nothing recorded (decided here: never back to
+    the first step).
+  - Refused: in the sheet, in the words of before, felt as an error.
+- **What became of it (P0-4; В-Г8 (а)):** recorded, felt as a success, the
+  sheet goes and a stub `recorded` stands over the list: «Повернули в
+  продаж: Марсель молочний · M → «Основний»», «Брак підтверджений: …»,
+  «Списали: …», «Повернули постачальнику «…»: …», and «Ви оглядаєте: …»
+  once taken. The cursor lands on it. The row leaves its segment without a
+  jump: its place is held, empty, among the rows still there, while the
+  stub stands — until another segment is chosen, «Оновити» is pressed or
+  the next step is recorded (decided here). The last row gone from a
+  segment, it says it is empty under the stub; the last unit gone from
+  «Брак», the stub stands over «У «Брак» зараз нічого немає.» (decided
+  here, from the review). The unit drawn as the server answered at once, before
+  the list is read again (decided here). Recording also reads again the
+  till's stock (`sale-stock`), where a unit back on sale shows (decided
+  here).
+- **The correction's sheet (P1-3):**
+  - Its title the model and the size, «Лоран шоколад · M», and under it
+    «Склад «Основний»» (decided here: the sheet says where).
+  - The five reasons as chips («Причина»), a «selection» buzz; «Додати ·
+    Списати» («Що зробити») only where the way is asked and both are
+    possible — «Списати» first, as before — never where the sign is
+    already the only one (decided here).
+  - The line over the keypad: «В обліку 3», and «В обліку 3 → 1 · −2» once
+    a number that may be recorded is typed.
+  - The app's keypad of pieces, once a reason is chosen: «Фактично, шт.»
+    for a recount, «Списати, шт.» for damaged and lost, «Скільки, шт.»
+    otherwise.
+  - The note folded: «Додати примітку», then «Примітка», the cursor in it
+    (decided here).
+  - A number that cannot be recorded — «Вкажіть кількість від 1.», «В
+    обліку лише 3 шт. — …», … — said under the keypad as it is typed, and
+    read with the sum.
+  - «Записати · −2 шт.» (no number until one is typed); Telegram's
+    MainButton in the sheet, the sheet's own at its foot outside Telegram;
+    no «Скасувати» — «Назад» leaves. Four taps and the number. Recorded:
+    a success buzz and the stub as before; refused: a warning buzz, why in
+    the words of before.
+  - Where the correction stands on a screen and not in a sheet — «Залишки»,
+    a stocktake's «Знайшли товар…» — its own button under it and
+    «Скасувати» stay, never Telegram's MainButton: a screen may hold its
+    own (decided here). There it is a group named «Виправити залишок:
+    {модель} · {розмір}», as its fieldset named it, and «Скасувати» is held
+    while it is recorded (from the review).
+- **The price's sheet (P1-4):**
+  - «Для всіх магазинів · Лише «Основний»» as before (P1-2), where both
+    may be set; at 15 px, «Для всіх магазинів» whole and the store's name
+    in the rest, cut with «…» only when it does not fit (decided here: two
+    equal halves cut «Для всіх магазинів» beside «Основний» at 360 px).
+  - «Зараз: …» as before; the sum on the app's keypad, its comma, «Нова
+    ціна, грн», empty as it opens — «Зараз» names the price that stands, and
+    a sum already full to its kopecks would take no figure typed (decided
+    here, from the review: the old field started with the price).
+  - «Зберегти · 3 600,00 грн» («Зберегти» while nothing is typed);
+    Telegram's MainButton in the sheet, the sheet's own at its foot outside
+    Telegram; no «Скасувати» — «Назад» leaves. Two taps and the sum. A sum
+    of nought: the button held and «Ціну вкажіть у гривнях, до копійок,
+    більше нуля, наприклад 1850,50.» said as it is typed (decided here:
+    said as typed, not on a press). «1850,» reads as 1 850,00 (decided
+    here).
+  - «Прибрати ціну «Основний»» quiet for the store's own; «Прибрати
+    спільну ціну» as before.
+  - Saved: a success buzz and the stub «Ціну продажу збережено: …» as
+    before; refused: an error buzz, in the words of before.
+  - Where goods arrive and on «Залишки» it stands on the screen: its own
+    button and «Скасувати», never Telegram's MainButton — «Приймання» has
+    its own «Записати прихід» (decided here). There it is a group named
+    «Змінити ціну продажу», as its fieldset was, and «Скасувати» is held
+    while it is saved (from the review).
