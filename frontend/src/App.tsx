@@ -1109,12 +1109,15 @@ function Workspace({
   const [supplierTask, setSupplierTask] = useState(false);
   // And while a sale's return is made (stage 2, orders task list, P0-6).
   const [returnTask, setReturnTask] = useState(false);
+  // And while a warehouse is counted (stage 2, goods task list, P0-3).
+  const [stocktakeTask, setStocktakeTask] = useState(false);
   const taskScreen =
     ((tab === "deposit" || tab === "credits") && depositTask) ||
     (tab === "cash" && cashTask) ||
     (tab === "invoices" && invoiceTask) ||
     (tab === "suppliers" && supplierTask) ||
     (tab === "returns" && returnTask) ||
+    (tab === "stocktaking" && stocktakeTask) ||
     // And while a new order is made (stage 2, orders task list, P0-5).
     tab === "new";
   const creditKey = `birka:credit-pending:${me.organization_id}:${me.user_id}:${store.id}`;
@@ -3443,6 +3446,7 @@ function Workspace({
               otherThanAdjustment || adjustmentStorageError || countStorageError
             }
             back={modelBack("stocktaking")}
+            task={setStocktakeTask}
           />
         ) : null
       ) : tab === "returns" ? (

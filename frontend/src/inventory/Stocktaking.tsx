@@ -27,8 +27,9 @@ import type { StocktakeRecord } from "./stocktakeTypes";
  * Only a warehouse whose stock may be corrected is offered — active,
  * received into, never «Брак» — chosen by the person while there are two
  * or more, never by the screen; the only one is said and taken. Counting
- * replaces the rest until the person leaves it (owner decisions,
- * 2026-10-10; ADR-0022).
+ * is a task's screen of its own, the menu aside, until the person leaves
+ * it (owner decisions, 2026-10-10; ADR-0022; stage 2, goods task list,
+ * P0-2, P0-3).
  */
 export function Stocktaking({
   store,
@@ -38,6 +39,7 @@ export function Stocktaking({
   countKey,
   blocked,
   back,
+  task,
 }: {
   store: Store;
   token: string;
@@ -49,6 +51,8 @@ export function Stocktaking({
   blocked: boolean;
   /** «← Ще», or «← {модель}» from a model's ⋯. */
   back: MoreBack;
+  /** The menu steps aside while a warehouse is counted (P0-3). */
+  task?: (shown: boolean) => void;
 }): JSX.Element | null {
   const cache = useQueryClient();
   const [chosen, setChosen] = useState("");
@@ -119,6 +123,29 @@ export function Stocktaking({
   // («Усе на бірці» task list, P2-1).
   if (!allowed) return null;
 
+  // A count is its warehouse's: the only one gone and another the only one
+  // now, it is never counted there (review, 2026-11-01).
+  if (selected && counting?.location_id === selected.id)
+    return (
+      <Stocktake
+        store={store}
+        token={token}
+        scopeKey={scopeKey}
+        journalKey={countKey}
+        blocked={countingBlocked}
+        location={selected}
+        record={counting}
+        task={task}
+        onLeave={() => {
+          setCounting(null);
+          window.scrollTo(0, 0);
+          void cache.invalidateQueries({
+            queryKey: ["inventory-stock"],
+          });
+        }}
+      />
+    );
+
   return (
     <>
       <ScreenHeader title="Інвентаризація" back={<BackToMore back={back} />} />
@@ -167,85 +194,63 @@ export function Stocktaking({
                 ))}
               </div>
             )}
-            {selected &&
-              // A count is its warehouse's: the only one gone and another
-              // the only one now, it is never counted there (review,
-              // 2026-11-01).
-              (counting?.location_id === selected.id ? (
-                <Stocktake
+            {selected && (
+              <>
+                <Stocktakes
                   store={store}
                   token={token}
                   scopeKey={scopeKey}
-                  journalKey={countKey}
                   blocked={countingBlocked}
                   location={selected}
-                  record={counting}
-                  onLeave={() => {
-                    setCounting(null);
-                    void cache.invalidateQueries({
-                      queryKey: ["inventory-stock"],
-                    });
+                  onCount={(record) => {
+                    setCounting(record);
+                    setFinding(false);
+                    setFound(null);
                   }}
                 />
-              ) : (
-                <>
-                  <Stocktakes
-                    store={store}
-                    token={token}
-                    scopeKey={scopeKey}
-                    blocked={countingBlocked}
-                    location={selected}
-                    canCount
-                    onCount={(record) => {
-                      setCounting(record);
-                      setFinding(false);
-                      setFound(null);
-                    }}
-                  />
-                  {found && (
-                    <p role="status">
-                      Коригування записано: {visible(found.target.name)} ·{" "}
-                      {visible(found.target.size)} —{" "}
-                      {reasonLabels[found.reason]}, облік{" "}
-                      {found.adjustment.quantity_before} →{" "}
-                      {found.adjustment.quantity_after}.
-                    </p>
-                  )}
-                  {store.permissions.includes("inventory:receive") &&
-                    (finding ? (
-                      <FoundGoods
-                        key={selected.id}
-                        store={store}
-                        token={token}
-                        scopeKey={scopeKey}
-                        journalKey={journalKey}
-                        blocked={correcting}
-                        locationId={selected.id}
-                        onDone={done}
-                        onCancel={() => {
-                          setFinding(false);
-                        }}
-                        onRefused={() => {
-                          void cache.invalidateQueries({
-                            queryKey: ["inventory-stock"],
-                          });
-                        }}
-                      />
-                    ) : (
-                      <button
-                        type="button"
-                        className="quiet"
-                        disabled={blocked}
-                        onClick={() => {
-                          setFinding(true);
-                          setFound(null);
-                        }}
-                      >
-                        Знайшли товар, якого немає в списку
-                      </button>
-                    ))}
-                </>
-              ))}
+                {found && (
+                  <p role="status">
+                    Коригування записано: {visible(found.target.name)} ·{" "}
+                    {visible(found.target.size)} — {reasonLabels[found.reason]},
+                    облік {found.adjustment.quantity_before} →{" "}
+                    {found.adjustment.quantity_after}.
+                  </p>
+                )}
+                {store.permissions.includes("inventory:receive") &&
+                  (finding ? (
+                    <FoundGoods
+                      key={selected.id}
+                      store={store}
+                      token={token}
+                      scopeKey={scopeKey}
+                      journalKey={journalKey}
+                      blocked={correcting}
+                      locationId={selected.id}
+                      onDone={done}
+                      onCancel={() => {
+                        setFinding(false);
+                      }}
+                      onRefused={() => {
+                        void cache.invalidateQueries({
+                          queryKey: ["inventory-stock"],
+                        });
+                      }}
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      className="quiet"
+                      disabled={blocked}
+                      onClick={() => {
+                        setFinding(true);
+                        setFound(null);
+                      }}
+                    >
+                      Знайшли товар, якого немає в списку
+                    </button>
+                  ))}
+              </>
+            )}
           </>
         )}
       </section>

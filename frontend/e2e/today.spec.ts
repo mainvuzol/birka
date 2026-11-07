@@ -1041,6 +1041,8 @@ test("the parcels' line opens «Замовлення», with «+» when a store 
   await twoStores(page);
   await page.unroute(`**/api/v1/orders?store_id=${market}&**`);
   await orders(page, market, [1, 0, 0], true);
+  const urls = asked(page);
+  const settled = answered(page);
   await onToday(page);
   const line = dayTag(page).getByRole("button", { name: /^Онлайн:/ });
   await expect(line).toHaveText(
@@ -1050,6 +1052,10 @@ test("the parcels' line opens «Замовлення», with «+» when a store 
   await expect(
     page.getByRole("heading", { name: "Замовлення", exact: true }),
   ).toBeVisible();
+  // Ended once every read asked is answered: «Замовлення»'s own, asked as
+  // it opens, may still be on their routes as the page lets go of them,
+  // which holds the teardown (CI, #177; as #176).
+  await expect.poll(() => settled.length).toBe(urls.length);
 });
 
 // --- what waits -------------------------------------------------------------

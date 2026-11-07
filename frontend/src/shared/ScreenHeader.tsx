@@ -50,6 +50,10 @@ export const ScreenHeader = forwardRef<
     lead?: string | undefined;
     /** What the line says after the person: the count's time (spec S26). */
     after?: string;
+    /** The line's words in place of the store and the person, on a task's
+     * screen that says its own: «Почато о 10:20 · Тетяна» (stage 2, goods
+     * task list, P0-3). */
+    context?: string;
   }
 >(function ScreenHeader(
   {
@@ -63,6 +67,7 @@ export const ScreenHeader = forwardRef<
     className,
     lead,
     after,
+    context,
   },
   ref,
 ) {
@@ -93,8 +98,12 @@ export const ScreenHeader = forwardRef<
       {line && (
         <div className="store-line">
           <p className="t-meta">
-            {lead ?? visible(line.store)} · {visible(line.person)}
-            {after !== undefined && ` · ${after}`}
+            {context ?? (
+              <>
+                {lead ?? visible(line.store)} · {visible(line.person)}
+                {after !== undefined && ` · ${after}`}
+              </>
+            )}
           </p>
           {line.changeStore && (
             <button
