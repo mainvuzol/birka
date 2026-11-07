@@ -496,22 +496,22 @@ test("a position sold while it was counted is refused and counted again, alone, 
   page,
 }) => {
   // The list shows one more than the warehouse holds, as it would if a sale
-  // had taken a coat after the list was read.
-  let stale = true;
+  // had taken a coat after the list was read — and goes on showing it, as
+  // a read again that comes late would: the sheet counts against what the
+  // server saw under its lock (review, 2026-10-10).
   await page.route("**/api/v1/stocktakes/*/positions?**", async (route) => {
     const response = await route.fetch();
     const body = (await response.json()) as {
       items: { size_label: string; quantity: number }[];
     };
-    if (stale)
-      for (const item of body.items)
-        if (item.size_label === "M") item.quantity += 1;
+    for (const item of body.items)
+      if (item.size_label === "M") item.quantity += 1;
     await route.fulfill({ response, json: body });
   });
+  const sent = counts(page);
   await enter(page, "Склад, де рахують знову");
   await begin(page);
   const shown = await onRecord(page);
-  stale = false;
   const sheet = await openCount(page);
   await type(sheet, shown - 1);
   await record(sheet, shown - 1).click();
@@ -534,6 +534,10 @@ test("a position sold while it was counted is refused and counted again, alone, 
   await expect(
     page.getByRole("heading", { name: "Підрахунок ще не підтверджено" }),
   ).toHaveCount(0);
+  expect(sent.map((body) => body.expected_quantity)).toEqual([
+    shown,
+    shown - 1,
+  ]);
 });
 
 test("a count whose outcome is unknown blocks the app until it is resent unchanged", async ({
@@ -707,7 +711,8 @@ function marselAndLoran(): Stubbed[] {
 }
 
 /** Fifty-two positions: two models of one size, then twenty-five of two —
- * so the fiftieth is a model's first size once the first model is gone. */
+ * so the fiftieth is a model's first size once the first model is gone —
+ * and before them one that holds nothing until goods arrive. */
 function many(): Stubbed[] {
   const one = (name: string): Stubbed => ({
     variant: randomUUID(),
@@ -727,7 +732,12 @@ function many(): Stubbed[] {
       held: 0,
     }));
   });
-  return [one("Модель А"), one("Модель Б"), ...models.flat()];
+  return [
+    { ...one("Модель 0"), qty: 0 },
+    one("Модель А"),
+    one("Модель Б"),
+    ...models.flat(),
+  ];
 }
 
 /** A stocktake the server answers for in this journey alone: its
@@ -742,6 +752,8 @@ function stubbed(
   started: () => number;
   /** Counted by someone else, as it stands. */
   elsewhere: (name: string, code: Size) => void;
+  /** Goods received into it meanwhile. */
+  arrive: (name: string, code: Size, qty: number) => void;
 }> {
   const stocktake = randomUUID();
   const size: Record<Size, string> = {
@@ -917,6 +929,11 @@ function stubbed(
       order,
     });
   };
+  const arrive = (name: string, code: Size, qty: number): void => {
+    const p = positions.find((x) => x.name === name && x.size === code);
+    if (!p) throw new Error(`${name} · ${code}: no such position`);
+    ledger.set(keyOf(p), qty);
+  };
   return (async () => {
     await page.route("**/api/v1/stocktakes**", answer);
     // The organization's order of sizes, receiving's to read.
@@ -929,7 +946,7 @@ function stubbed(
         })),
       });
     });
-    return { sent, started: () => starts, elsewhere };
+    return { sent, started: () => starts, elsewhere, arrive };
   })();
 }
 
@@ -1191,7 +1208,9 @@ test("inside Telegram a model of four sizes is one tag, its cells in the sizes' 
   // does not come back with it (review, 2026-11-07).
   await pressBack();
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  await expect(toast(page)).toHaveCount(0);
+  // Read once: a toast back would stand its 4 s, outlasting a retried check.
+  await page.waitForTimeout(300);
+  expect(await toast(page).count()).toBe(0);
   await expect(
     page.getByRole("heading", {
       level: 1,
@@ -1318,6 +1337,9 @@ test("a long count inside Telegram: «Показати ще» waits while the li
   const split = counting(page).getByRole("group", { name: "Модель 25" });
   await expect(split.locator(".count-cell")).toHaveText(["Sв обліку 2"]);
   await expect(more).toBeEnabled();
+  // Goods arrive meanwhile for a position before them all: the next page
+  // read from its place begins with «Модель 25»'s S again — shown once.
+  server.arrive("Модель 0", "M", 1);
   await more.click();
   await expect(split).toHaveCount(1);
   await expect(split.locator(".count-cell")).toHaveText([
@@ -1355,6 +1377,31 @@ test("a long count inside Telegram: «Показати ще» waits while the li
   );
   expect(server.sent.map((body) => body.counted_quantity)).toEqual([1, 2]);
 
+  // Two cells of a model counted while the list's read is late: the sheet
+  // goes on to M, and after it closes — S recorded in it already, though
+  // the list still shows it.
+  gate = new Promise((resolve) => {
+    release = resolve;
+  });
+  await counting(page)
+    .getByRole("group", { name: "Модель 02" })
+    .locator(".count-cell")
+    .first()
+    .click();
+  const both = await countSheet(page);
+  await expect(both).toHaveAccessibleName("Модель 02 · S");
+  await type(both, 2);
+  await pressMain();
+  await expect(both).toHaveAccessibleName("Модель 02 · M");
+  await type(both, 2);
+  await pressMain();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  release();
+  gate = null;
+  expect(server.sent.map((body) => body.counted_quantity)).toEqual([
+    1, 2, 2, 2,
+  ]);
+
   // «Завершити», its sheet, Telegram's «Так, завершити».
   await page.getByRole("button", { name: "Завершити", exact: true }).click();
   const end = page.getByRole("dialog", {
@@ -1363,7 +1410,7 @@ test("a long count inside Telegram: «Показати ще» waits while the li
   await expect(end).toHaveAttribute("data-ready", "");
   await expect(end.locator(".finish-sum")).toHaveText(["Розбіжностей немає"]);
   await expect(
-    end.getByText("Не перевірено позицій: 49 — їхні залишки не зміняться."),
+    end.getByText("Не перевірено позицій: 48 — їхні залишки не зміняться."),
   ).toBeVisible();
   await expect
     .poll(main)
@@ -1382,24 +1429,41 @@ test("a long count inside Telegram: «Показати ще» waits while the li
   await pressMain();
   const done = page.getByRole("region", { name: "Інвентаризацію завершено" });
   await expect(done.locator(".stub-line")).toHaveText([
-    "Пораховано позицій: 3",
+    "Пораховано позицій: 5",
     "Розбіжностей немає",
   ]);
   await expect(
-    done.getByText("Не перевірено позицій: 49 — їхні залишки не змінювались."),
+    done.getByText("Не перевірено позицій: 48 — їхні залишки не змінювались."),
   ).toBeVisible();
   await expect(result).toBeVisible();
   // Pressed again after it, the entry: the finished one first in
-  // «Попередні», «Почати інвентаризацію» Telegram's again.
+  // «Попередні» at once, from what the finish answered — never «Продовжити»
+  // while the list is read again (held here) — and «Почати інвентаризацію»
+  // Telegram's again.
+  let listed = (): void => undefined;
+  const held = new Promise<void>((resolve) => {
+    listed = resolve;
+  });
+  await page.route(
+    (url) =>
+      url.pathname.endsWith("/stocktakes") &&
+      url.searchParams.has("location_id"),
+    async (route) => {
+      await held;
+      await route.fallback();
+    },
+  );
   await page.waitForTimeout(700);
   await pressMain();
   const history = page.getByRole("list", { name: "Попередні інвентаризації" });
   await expect(history.getByRole("listitem").first()).toContainText(
-    "Розбіжностей немає · не перевірено 49",
+    "Розбіжностей немає · не перевірено 48",
   );
   await expect(history.getByRole("listitem").first()).toContainText(
     /Тетяна · \d\d:\d\d/,
   );
+  await expect(page.getByRole("button", { name: "Продовжити" })).toHaveCount(0);
+  listed();
   await expect
     .poll(main)
     .toMatchObject({ is_visible: true, text: "Почати інвентаризацію" });
