@@ -231,20 +231,29 @@ test("a correction refused for too many requests keeps its count, and is written
   await sheet
     .getByRole("button", { name: /^M, Склад перерахунку, в обліку \d+$/ })
     .click();
-  await page.getByRole("radio", { name: "Втрачено" }).click();
-  await page.getByLabel("Скільки списати, шт.").fill("1");
-  await page.getByRole("button", { name: "Записати коригування" }).click();
+  // The reason a chip, the pieces on the keypad, the number on the button
+  // (stage 2, goods task list, P1-3).
+  await sheet
+    .getByRole("group", { name: "Причина" })
+    .getByRole("button", { name: "Втрачено", exact: true })
+    .click();
+  await page.getByLabel("Списати, шт.").fill("1");
+  const record = sheet.getByRole("button", {
+    name: "Записати · −1 шт.",
+    exact: true,
+  });
+  await record.click();
 
   const alert = page.getByRole("alert");
   await expect(alert).toContainText(WAIT);
   await expect(alert).toContainText("Нічого не записано.");
   // The count still stands; nothing is kept as unknown.
-  await expect(page.getByLabel("Скільки списати, шт.")).toHaveValue("1");
+  await expect(page.getByLabel("Списати, шт.")).toHaveValue("1");
   await expect(
     page.getByRole("heading", { name: "Коригування ще не підтверджено" }),
   ).toHaveCount(0);
 
-  await page.getByRole("button", { name: "Записати коригування" }).click();
+  await record.click();
   await expect(page.getByRole("status")).toContainText(
     `Втрачено, облік ${String(before)} → ${String(before - 1)}.`,
   );

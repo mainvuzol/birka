@@ -1,6 +1,7 @@
 import {
   test,
   expect,
+  countTaps,
   gridCell,
   more,
   openModel,
@@ -107,6 +108,35 @@ async function stocktaking(page: Page): Promise<void> {
     .click();
 }
 
+/** A reason's chip (stage 2, goods task list, P1-3). */
+function reason(page: Page, name: string): Locator {
+  return page
+    .getByRole("group", { name: "Причина" })
+    .getByRole("button", { name, exact: true });
+}
+
+/** «Записати · −2 шт.», the form's own outside Telegram. */
+function record(page: Page, delta: string): Locator {
+  return page.getByRole("button", {
+    name: `Записати · ${delta} шт.`,
+    exact: true,
+  });
+}
+
+/** What the ledger holds and becomes, over the keypad. */
+function live(page: Page): Locator {
+  return page.locator(".correction .count-live");
+}
+
+/** A number on the keypad, a key at a time. */
+async function type(page: Page, count: number): Promise<void> {
+  for (const key of String(count))
+    await page
+      .locator(".correction .keypad-keys")
+      .getByRole("button", { name: key, exact: true })
+      .click();
+}
+
 function adjustments(page: Page): AdjustmentBody[] {
   const sent: AdjustmentBody[] = [];
   page.on("request", (request: Request) => {
@@ -126,12 +156,17 @@ test("a stocktake states what the shelf holds, and the ledger takes the differen
   await enter(page);
   const system = await units(here(page));
   await correct(page);
-  await expect(page.getByText(`В обліку: ${String(system)}`)).toBeVisible();
-  await page.getByRole("radio", { name: "Перерахунок" }).click();
-  await page.getByLabel("Фактично на складі, шт.").fill(String(system - 2));
-  await expect(
-    page.getByText(`Облік ${String(system)} → ${String(system - 2)} (−2)`),
-  ).toBeVisible();
+  await expect(live(page)).toHaveText(`В обліку ${String(system)}`);
+  await expect(page.getByText("Склад «Склад перерахунку»")).toBeVisible();
+  await reason(page, "Перерахунок").click();
+  await expect(reason(page, "Перерахунок")).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await type(page, system - 2);
+  await expect(live(page)).toHaveText(
+    `В обліку ${String(system)} → ${String(system - 2)} · −2`,
+  );
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth > innerWidth,
@@ -144,7 +179,7 @@ test("a stocktake states what the shelf holds, and the ledger takes the differen
   // Refused once for a reason the screen does not name: its own words,
   // never an order's (owner decision, 2026-10-25).
   await refuseOnce(page, "**/api/v1/inventory/adjustments", 422);
-  await page.getByRole("button", { name: "Записати коригування" }).click();
+  await record(page, "−2").click();
   await expect(
     page.getByText(
       "Перевірте кількість та спробуйте ще раз. Нічого не записано.",
@@ -152,9 +187,10 @@ test("a stocktake states what the shelf holds, and the ledger takes the differen
     ),
   ).toBeVisible();
   // Counted again, as the form asks after a refusal.
-  await page.getByLabel("Фактично на складі, шт.").fill(String(system - 2));
+  await expect(page.getByLabel("Фактично, шт.")).toHaveValue("");
+  await page.getByLabel("Фактично, шт.").fill(String(system - 2));
   await refuseOnce(page, "**/api/v1/inventory/adjustments", 409);
-  await page.getByRole("button", { name: "Записати коригування" }).click();
+  await record(page, "−2").click();
   await expect(
     page.getByText(
       "Облік змінився — перерахуйте товар і спробуйте ще раз. Нічого не записано.",
@@ -163,7 +199,7 @@ test("a stocktake states what the shelf holds, and the ledger takes the differen
   ).toBeVisible();
   // «Брак» changes only through returns and its own section: said, never a
   // count to make again (owner decision, 2026-10-01).
-  await page.getByLabel("Фактично на складі, шт.").fill(String(system - 2));
+  await page.getByLabel("Фактично, шт.").fill(String(system - 2));
   await page.route(
     "**/api/v1/inventory/adjustments",
     async (route) => {
@@ -179,15 +215,15 @@ test("a stocktake states what the shelf holds, and the ledger takes the differen
     },
     { times: 1 },
   );
-  await page.getByRole("button", { name: "Записати коригування" }).click();
+  await record(page, "−2").click();
   await expect(
     page.getByText(
       "Залишок «Браку» змінюють лише повернення й розділ «Брак». Нічого не записано.",
       { exact: true },
     ),
   ).toBeVisible();
-  await page.getByLabel("Фактично на складі, шт.").fill(String(system - 2));
-  await page.getByRole("button", { name: "Записати коригування" }).click();
+  await page.getByLabel("Фактично, шт.").fill(String(system - 2));
+  await record(page, "−2").click();
 
   // The sheet closes; a stub over the grid says it, and the grid is read
   // again.
@@ -214,6 +250,93 @@ test("a stocktake states what the shelf holds, and the ledger takes the differen
   });
 });
 
+test("in the model's sheet a correction is four taps and its number: the cell, a reason's chip, the keypad of pieces under the ledger's line, «Записати · +1 шт.»; «Додати · Списати» where the way is asked; no «Скасувати» — the sheet's «Назад» leaves, nothing recorded; at 360 px nothing goes past the screen (stage 2, goods task list, P1-3)", async ({
+  page,
+}) => {
+  const sent = adjustments(page);
+  await page.setViewportSize({ width: 360, height: 780 });
+  await enter(page);
+  const system = await units(here(page));
+  const taps = await countTaps(page);
+  await page.getByRole("button", { name: "Виправити залишок" }).click();
+  const sheet = page.getByRole("dialog");
+  await expect(sheet).toHaveAttribute("data-ready", "");
+  await sheet
+    .getByRole("button", { name: /^M, Склад перерахунку, в обліку \d+$/ })
+    .click();
+  await expect(sheet.getByRole("heading")).toHaveText(/ · M$/);
+  // Where: the grid said it, the sheet over it says it again.
+  await expect(
+    sheet.getByText("Склад «Склад перерахунку»", { exact: true }),
+  ).toBeVisible();
+  await expect(sheet.getByRole("button", { name: "Скасувати" })).toHaveCount(0);
+  // The keypad comes with the reason; the phone's keyboard never.
+  await expect(sheet.locator(".keypad")).toHaveCount(0);
+  await reason(page, "Перерахунок").click();
+  await expect(page.getByLabel("Фактично, шт.")).toHaveAttribute(
+    "inputmode",
+    "none",
+  );
+  await expect(page.getByRole("group", { name: "Що зробити" })).toHaveCount(0);
+  // One more on the shelf than the ledger holds: the warehouse never runs
+  // down as the journey runs again (review, 2026-11-07).
+  await type(page, system + 1);
+  await expect(live(page)).toHaveText(
+    `В обліку ${String(system)} → ${String(system + 1)} · +1`,
+  );
+  await expect(sheet.locator(".sheet-foot").getByRole("button")).toHaveText([
+    "Записати · +1 шт.",
+  ]);
+  // Light and dark: the sheet on the card's ground, nothing past the screen.
+  for (const [scheme, card] of [
+    ["light", "rgb(255, 255, 255)"],
+    ["dark", "rgb(24, 26, 20)"],
+  ] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    await expect(sheet).toHaveCSS("background-color", card);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(360);
+    await page.screenshot({
+      path: `test-results/correction-sheet-${scheme}.png`,
+    });
+  }
+  await record(page, "+1").click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByRole("status")).toContainText(
+    `Перерахунок, облік ${String(system)} → ${String(system + 1)}.`,
+  );
+  expect(await taps()).toBe(4 + String(system + 1).length);
+
+  // A way asked: «Списати» first, as before; «Додати» chosen, the sign
+  // follows.
+  await page.getByRole("button", { name: "Виправити залишок" }).click();
+  await expect(sheet).toHaveAttribute("data-ready", "");
+  await sheet
+    .getByRole("button", { name: /^M, Склад перерахунку, в обліку \d+$/ })
+    .click();
+  await reason(page, "Інше").click();
+  const way = page.getByRole("group", { name: "Що зробити" });
+  await expect(way.getByRole("button")).toHaveText(["Додати", "Списати"]);
+  await expect(way.getByRole("button", { name: "Списати" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await type(page, 2);
+  await expect(record(page, "−2")).toBeEnabled();
+  await way.getByRole("button", { name: "Додати" }).click();
+  await expect(live(page)).toHaveText(
+    `В обліку ${String(system + 1)} → ${String(system + 3)} · +2`,
+  );
+  await expect(record(page, "+2")).toBeEnabled();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Виправити залишок" }),
+  ).toBeFocused();
+  expect(sent).toHaveLength(1);
+});
+
 test("damaged goods are written off by how many, whatever the balance", async ({
   page,
 }) => {
@@ -221,10 +344,20 @@ test("damaged goods are written off by how many, whatever the balance", async ({
   await enter(page);
   const system = await units(here(page));
   await correct(page);
-  await page.getByRole("radio", { name: "Пошкоджено" }).click();
-  await page.getByLabel("Скільки списати, шт.").fill("1");
+  await reason(page, "Пошкоджено").click();
+  // A number that cannot be taken is said under it, and read with it
+  // (review, 2026-11-07).
+  await type(page, 0);
+  await expect(page.getByLabel("Списати, шт.")).toHaveAccessibleDescription(
+    /Вкажіть кількість від 1\./,
+  );
+  await type(page, 1);
+  await expect(page.getByLabel("Примітка")).toHaveCount(0);
+  await page.getByRole("button", { name: "Додати примітку" }).click();
+  // Unfolded, the cursor in it.
+  await expect(page.getByLabel("Примітка")).toBeFocused();
   await page.getByLabel("Примітка").fill("Пляма на рукаві");
-  await page.getByRole("button", { name: "Записати коригування" }).click();
+  await record(page, "−1").click();
   await expect(page.getByRole("status")).toContainText(
     `Пошкоджено, облік ${String(system)} → ${String(system - 1)}.`,
   );
@@ -258,17 +391,17 @@ test("a count made against a balance that has since moved is refused, and asks f
   const shown = await units(here(page));
   stale = false;
   await correct(page);
-  await page.getByRole("radio", { name: "Перерахунок" }).click();
-  await page.getByLabel("Фактично на складі, шт.").fill(String(shown - 3));
-  await page.getByRole("button", { name: "Записати коригування" }).click();
+  await reason(page, "Перерахунок").click();
+  await page.getByLabel("Фактично, шт.").fill(String(shown - 3));
+  await record(page, "−3").click();
 
   await expect(page.getByRole("alert")).toContainText(
     `облік змінився: було ${String(shown)}, тепер ${String(shown - 1)}`,
   );
   await expect(page.getByRole("alert")).toContainText("Нічого не записано.");
   // The form now judges the count from what the server saw.
-  await expect(page.getByText(`В обліку: ${String(shown - 1)}`)).toBeVisible();
-  await expect(page.getByLabel("Фактично на складі, шт.")).toHaveValue("");
+  await expect(live(page)).toHaveText(`В обліку ${String(shown - 1)}`);
+  await expect(page.getByLabel("Фактично, шт.")).toHaveValue("");
   await expect(
     page.getByRole("heading", { name: "Коригування ще не підтверджено" }),
   ).toHaveCount(0);
@@ -277,11 +410,26 @@ test("a count made against a balance that has since moved is refused, and asks f
   await page.unrouteAll({ behavior: "ignoreErrors" });
 });
 
-test("goods the system holds none of are found in the catalogue and counted from zero", async ({
+test("goods the system holds none of are found in the catalogue and counted from zero; inside Telegram the form on «Інвентаризація» keeps its own button, never the MainButton, which is the screen's (stage 2, goods task list, P1-3)", async ({
   page,
 }) => {
   const sent = adjustments(page);
-  await login(page);
+  await page.addInitScript(() => {
+    const host = window as unknown as {
+      TelegramWebviewProxy: {
+        postEvent: (event: string, data: string) => void;
+      };
+      mains: { text?: string }[];
+    };
+    host.mains = [];
+    host.TelegramWebviewProxy = {
+      postEvent: (event, data) => {
+        if (event === "web_app_setup_main_button")
+          host.mains.push(JSON.parse(data) as { text?: string });
+      },
+    };
+  });
+  await login(page, "8.0");
   await section(page, "Інвентаризація");
   await stocktaking(page);
   await page
@@ -293,17 +441,28 @@ test("goods the system holds none of are found in the catalogue and counted from
   await page
     .getByRole("combobox", { name: "Розмір" })
     .selectOption({ label: "L" });
-  await expect(page.getByText("В обліку: 0")).toBeVisible();
+  await expect(live(page)).toHaveText("В обліку 0");
   // Nothing to write off where nothing is held.
-  await expect(page.getByRole("radio", { name: "Пошкоджено" })).toHaveCount(0);
-  await expect(page.getByRole("radio", { name: "Втрачено" })).toHaveCount(0);
-  await page.getByRole("radio", { name: "Перерахунок" }).click();
-  await page.getByLabel("Фактично на складі, шт.").fill("2");
-  await page.getByRole("button", { name: "Записати коригування" }).click();
+  await expect(page.getByRole("group", { name: "Причина" })).toHaveText(
+    "ПерерахунокПомилка облікуІнше",
+  );
+  await reason(page, "Перерахунок").click();
+  await type(page, 2);
+  await expect(page.locator(".correction .count-foot")).toHaveText(
+    "Записати · +2 шт.",
+  );
+  await record(page, "+2").click();
 
   await expect(page.getByRole("status")).toContainText(
     "L — Перерахунок, облік 0 → 2.",
   );
+  expect(
+    (
+      await page.evaluate(
+        () => (window as unknown as { mains: { text?: string }[] }).mains,
+      )
+    ).filter((one) => one.text?.startsWith("Записати")),
+  ).toEqual([]);
   expect(sent[0]).toMatchObject({ quantity_delta: 2, expected_quantity: 0 });
   // The model's grid holds it now.
   await section(page, "Продаж");
@@ -337,13 +496,13 @@ test("found goods that turn out to be held are counted against what is held", as
   await page
     .getByRole("combobox", { name: "Розмір" })
     .selectOption({ label: "M" });
-  await page.getByRole("radio", { name: "Перерахунок" }).click();
-  await page.getByLabel("Фактично на складі, шт.").fill("1");
-  await page.getByRole("button", { name: "Записати коригування" }).click();
+  await reason(page, "Перерахунок").click();
+  await type(page, 1);
+  await record(page, "+1").click();
   await expect(page.getByRole("alert")).toContainText(
     `уже є в обліку цього складу: ${String(held)} шт.`,
   );
-  await expect(page.getByText(`В обліку: ${String(held)}`)).toBeVisible();
+  await expect(live(page)).toHaveText(`В обліку ${String(held)}`);
   await page.getByRole("button", { name: `Назад до «${name}»` }).click();
   await expect(here(page)).toHaveText(String(held));
 });
@@ -364,9 +523,15 @@ test("a correction whose outcome is unknown blocks the app until it is resent un
       postEvent: (event, data) => {
         if (event === "web_app_setup_closing_behavior")
           host.asked = JSON.parse(data) as unknown;
+        if (event === "web_app_setup_main_button")
+          (host as unknown as { main: unknown }).main = JSON.parse(
+            data,
+          ) as unknown;
       },
     };
   });
+  const main = (): Promise<unknown> =>
+    page.evaluate(() => (window as unknown as { main: unknown }).main);
   const asked = (): Promise<unknown> =>
     page.evaluate(() => (window as unknown as { asked: unknown }).asked);
   const keys: (string | null)[] = [];
@@ -390,9 +555,24 @@ test("a correction whose outcome is unknown blocks the app until it is resent un
   await enter(page, "Лоран", lorans, "9.1");
   const system = await units(here(page));
   await correct(page);
-  await page.getByRole("radio", { name: "Втрачено" }).click();
-  await page.getByLabel("Скільки списати, шт.").fill("1");
-  await page.getByRole("button", { name: "Записати коригування" }).click();
+  await reason(page, "Втрачено").click();
+  await page.getByLabel("Списати, шт.").fill("1");
+  // Telegram's MainButton, its words the change (stage 2, goods task list,
+  // P1-3).
+  await expect.poll(main).toMatchObject({
+    is_visible: true,
+    is_active: true,
+    text: "Записати · −1 шт.",
+  });
+  await expect(record(page, "−1")).toHaveCount(0);
+  await page.evaluate(() => {
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        data: JSON.stringify({ eventType: "main_button_pressed" }),
+        source: window.parent,
+      }),
+    );
+  });
   // Its first send in flight: the sheet stands, and the attempt is on the
   // phone already, so Telegram is not asked until it is kept (review,
   // 2026-11-05).
@@ -529,18 +709,17 @@ test("a reserved balance's cell is held, and a size not known is only reduced", 
   await sheet
     .getByRole("button", { name: /^розмір невідомий, Склад перерахунку/ })
     .click();
-  await page.getByRole("radio", { name: "Перерахунок" }).click();
-  await page.getByLabel("Фактично на складі, шт.").fill("5");
+  await reason(page, "Перерахунок").click();
+  await page.getByLabel("Фактично, шт.").fill("5");
   await expect(
     page.getByText("Облік товару з невідомим розміром можна лише зменшити."),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Записати коригування" }).click();
-  await page.getByRole("radio", { name: "Помилка обліку" }).click();
-  await expect(
-    page.getByRole("radio", { name: "Додати до обліку" }),
-  ).toBeDisabled();
-  await expect(
-    page.getByRole("radio", { name: "Списати з обліку" }),
-  ).toHaveAttribute("aria-checked", "true");
+  await expect(record(page, "+2")).toBeDisabled();
+  // Only taken away: the way is not asked, the sign says it.
+  await reason(page, "Помилка обліку").click();
+  await expect(page.getByRole("group", { name: "Що зробити" })).toHaveCount(0);
+  await page.getByLabel("Скільки, шт.").fill("2");
+  await expect(live(page)).toHaveText("В обліку 3 → 1 · −2");
+  await expect(record(page, "−2")).toBeEnabled();
   expect(sent).toEqual([]);
 });

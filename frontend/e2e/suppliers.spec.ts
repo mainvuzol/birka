@@ -679,24 +679,42 @@ test("a confirmed unit goes back to its supplier from «Брак», and comes ba
   await section(page, "Брак");
   const unit = page.getByRole("article", { name: coat.model });
   await unit.getByRole("button", { name: "Взяти на перевірку" }).click();
-  await unit.getByRole("button", { name: "Брак підтверджений" }).click();
-  await unit.getByRole("button", { name: "Так, брак підтверджений" }).click();
-  await unit.getByRole("button", { name: "Повернути постачальнику" }).click();
-  await expect(
-    unit.getByLabel("Примітка для постачальника (необов’язково)"),
-  ).toHaveAccessibleDescription("Без імен і телефонів покупців.");
-  await expect(
-    unit.getByRole("button", { name: "Так, повернути постачальнику" }),
-  ).toBeDisabled();
-  // The supplier's field, its sheet: never a native list (stage 2, money
-  // task list, P0-3).
-  await expect(
-    unit.getByRole("combobox", { name: /Постачальник/ }),
-  ).toHaveCount(0);
-  await addOne(page, supplier);
-  await unit
-    .getByRole("button", { name: "Так, повернути постачальнику" })
+  const sheet = page.getByRole("dialog", { name: new RegExp(coat.model) });
+  await expect(sheet).toHaveAttribute("data-ready", "");
+  await sheet.getByRole("button", { name: "Брак підтверджений" }).click();
+  const confirmed = sheet.getByRole("button", {
+    name: "Так, брак підтверджений",
+  });
+  await expect(confirmed).toHaveAttribute("data-ready", "");
+  await confirmed.click();
+  await expect(sheet).toHaveCount(0);
+  await page
+    .getByRole("group", { name: "Які речі" })
+    .getByRole("button", { name: /^Підтверджений/ })
     .click();
+  await unit.getByRole("button", { name: "Вирішити" }).click();
+  await expect(sheet).toHaveAttribute("data-ready", "");
+  await sheet.getByRole("button", { name: "Повернути постачальнику" }).click();
+  await expect(
+    sheet.getByLabel("Примітка для постачальника (необов’язково)"),
+  ).toHaveAccessibleDescription("Без імен і телефонів покупців.");
+  const toSupplier = sheet.getByRole("button", {
+    name: "Так, повернути постачальнику",
+  });
+  await expect(toSupplier).toBeDisabled();
+  // The supplier's field, its list in place in the unit's sheet: never a
+  // native list, never a sheet over a sheet (stage 2, money task list,
+  // P0-3).
+  await expect(
+    sheet.getByRole("combobox", { name: /Постачальник/ }),
+  ).toHaveCount(0);
+  await addSupplier(page, supplier, "067 123 45 67", { inside: sheet });
+  await expect(toSupplier).toHaveAttribute("data-ready", "");
+  await toSupplier.click();
+  await expect(sheet).toHaveCount(0);
+  await expect(page.locator(".stub-notice p")).toHaveText(
+    `Повернули постачальнику «${supplier}»: ${coat.model} беж · M`,
+  );
   await expect(unit).toHaveCount(0);
 
   await section(page, "Постачальникам");
@@ -714,11 +732,11 @@ test("a confirmed unit goes back to its supplier from «Брак», and comes ba
   );
 
   await section(page, "Брак");
-  await expect(
-    page
-      .locator("[data-status=CONFIRMED]")
-      .getByRole("article", { name: coat.model }),
-  ).toBeVisible();
+  await page
+    .getByRole("group", { name: "Які речі" })
+    .getByRole("button", { name: /^Підтверджений/ })
+    .click();
+  await expect(unit).toHaveAttribute("data-status", "CONFIRMED");
 });
 
 test("a return whose answer is lost is resent unchanged, and takes the goods once", async ({

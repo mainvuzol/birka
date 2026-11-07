@@ -3,6 +3,7 @@ import {
   expect,
   basketDone,
   basketSheet,
+  countTaps,
   openModel,
   openStore,
   readsOf,
@@ -155,6 +156,24 @@ function scope(
     });
 }
 
+/** The form's one button, «Зберегти · 1 850,50 грн»: the sheet's own
+ * outside Telegram, in its foot; on a screen, under the form. */
+function save(within: Page | Locator, sum?: string): Locator {
+  return within.getByRole("button", {
+    name: sum === undefined ? "Зберегти" : `Зберегти · ${sum} грн`,
+    exact: true,
+  });
+}
+
+/** A key of the price's keypad: a digit, «Кома» or «Стерти». */
+async function keys(sheet: Locator, ...pressed: string[]): Promise<void> {
+  for (const key of pressed)
+    await sheet
+      .locator(".keypad-keys")
+      .getByRole("button", { name: key, exact: true })
+      .click();
+}
+
 /** «Змінити ціну», the price editor in a sheet named by the model. */
 async function priceSheet(page: Page, name: string): Promise<Locator> {
   await page.getByRole("button", { name: "Змінити ціну", exact: true }).click();
@@ -178,9 +197,10 @@ test("a store's price set on a model's detail is what its till suggests", async 
 
   const sheet = await priceSheet(page, priced.name);
   await scope(sheet, "STORE").click();
+  // A sum of nothing is said so as it is typed, and saves nothing.
   await sheet.getByLabel("Нова ціна, грн").fill("0");
-  await sheet.getByRole("button", { name: "Зберегти ціну" }).click();
   await expect(sheet.getByRole("alert")).toContainText("більше нуля");
+  await expect(save(sheet)).toBeDisabled();
   // While it is saved, the sheet stays, though asked to close: its answer
   // is the sheet's to say (review, 2026-11-01).
   let answer = (): void => undefined;
@@ -194,9 +214,9 @@ test("a store's price set on a model's detail is what its till suggests", async 
     await route.fallback();
   });
   await sheet.getByLabel("Нова ціна, грн").fill("1850,50");
-  const save = sheet.getByRole("button", { name: "Зберегти ціну" });
-  await save.click();
-  await expect(save).toBeDisabled();
+  const saving = save(sheet, "1 850,50");
+  await saving.click();
+  await expect(saving).toBeDisabled();
   await page.locator(".sheet-scrim").click({ position: { x: 20, y: 20 } });
   await expect(sheet).toBeVisible();
   answer();
@@ -281,7 +301,9 @@ test("the owner sets the shared price where goods arrive, and the store's own ov
   // Refused once for a reason the screen does not name: its own words,
   // never an order's (owner decision, 2026-10-25).
   await refuseOnce(page, "**/api/v1/catalog/prices", 422);
-  await page.getByRole("button", { name: "Зберегти ціну" }).click();
+  // On a screen, the form's own button under it, and «Скасувати».
+  await expect(page.getByRole("button", { name: "Скасувати" })).toBeVisible();
+  await save(page, "2 000,00").click();
   await expect(
     page.getByText("Ціну не збережено. Перевірте суму та спробуйте ще раз.", {
       exact: true,
@@ -289,7 +311,7 @@ test("the owner sets the shared price where goods arrive, and the store's own ov
   ).toBeVisible();
   const priceReads = readsOf(page, /\/api\/v1\/catalog\/prices$/);
   await refuseOnce(page, "**/api/v1/catalog/prices", 409);
-  await page.getByRole("button", { name: "Зберегти ціну" }).click();
+  await save(page, "2 000,00").click();
   await expect(
     page.getByText(
       "Ціну не збережено: її щойно змінили — перевірте й збережіть ще раз.",
@@ -298,7 +320,7 @@ test("the owner sets the shared price where goods arrive, and the store's own ov
   ).toBeVisible();
   await expect.poll(priceReads).toBeGreaterThan(0);
   await page.getByLabel("Нова ціна, грн").fill("2000");
-  await page.getByRole("button", { name: "Зберегти ціну" }).click();
+  await save(page, "2 000,00").click();
   await expect(
     page.getByText("Ціна продажу: 2 000,00 грн — спільна для всіх магазинів"),
   ).toBeVisible();
@@ -309,7 +331,7 @@ test("the owner sets the shared price where goods arrive, and the store's own ov
     page.getByText("Зараз: своєї ціни немає, діє спільна 2 000,00 грн."),
   ).toBeVisible();
   await page.getByLabel("Нова ціна, грн").fill("1900");
-  await page.getByRole("button", { name: "Зберегти ціну" }).click();
+  await save(page, "1 900,00").click();
   await expect(
     page.getByText("Ціна продажу: 1 900,00 грн — ціна магазину «Основний»"),
   ).toBeVisible();
@@ -317,7 +339,7 @@ test("the owner sets the shared price where goods arrive, and the store's own ov
   // Removing the store's own price brings the shared one back.
   await page.getByRole("button", { name: "Змінити ціну продажу" }).click();
   await expect(scope(page, "STORE")).toHaveAttribute("aria-pressed", "true");
-  await page.getByRole("button", { name: "Прибрати ціну магазину" }).click();
+  await page.getByRole("button", { name: "Прибрати ціну «Основний»" }).click();
   await expect(
     page.getByText("Ціна продажу: 2 000,00 грн — спільна для всіх магазинів"),
   ).toBeVisible();
@@ -383,6 +405,197 @@ test("for all stores or for this one: two segments on one row at 360 px, the sam
   await expect(all).toHaveAttribute("aria-pressed", "false");
 });
 
+test("in the model's sheet a price is two taps and its sum: «Змінити ціну», the sum on the app's keypad, with its comma, and «Зберегти · 3 600,00 грн» in the sheet's foot; no «Скасувати» — «Назад» leaves, nothing saved; «Прибрати ціну «Основний»» quiet; at 360 px nothing goes past the screen (stage 2, goods task list, P1-4)", async ({
+  page,
+}) => {
+  const priced = await model(page, await token(page));
+  await sellsFrom(page, fixture.returns_location_id);
+  const posted: unknown[] = [];
+  page.on("request", (request: Request) => {
+    if (
+      request.method() === "POST" &&
+      request.url().endsWith("/api/v1/catalog/prices")
+    )
+      posted.push(request.postDataJSON());
+  });
+  await page.setViewportSize({ width: 360, height: 780 });
+  await enter(page, seller);
+  const hero = await detail(page, priced.name);
+  const taps = await countTaps(page);
+  let sheet = await priceSheet(page, priced.name);
+  await expect(sheet.getByRole("button", { name: "Скасувати" })).toHaveCount(0);
+  const sum = sheet.getByLabel("Нова ціна, грн");
+  // The phone's keyboard never opens over it.
+  await expect(sum).toHaveAttribute("inputmode", "none");
+  const foot = sheet.locator(".sheet-foot").getByRole("button");
+  await expect(foot).toHaveText(["Зберегти"]);
+  await expect(foot).toBeDisabled();
+  await keys(sheet, "3", "6", "0", "0");
+  await expect(sum).toHaveValue(/^3\s600$/);
+  await expect(foot).toHaveText(["Зберегти · 3 600,00 грн"]);
+  // «Для всіх магазинів» whole beside a short store's name too.
+  expect(
+    await scope(sheet, "ORGANIZATION").evaluate(
+      (node) => node.scrollWidth <= node.clientWidth,
+    ),
+  ).toBe(true);
+  // Light and dark: the sheet on the card's ground, nothing past the screen.
+  for (const [scheme, card] of [
+    ["light", "rgb(255, 255, 255)"],
+    ["dark", "rgb(24, 26, 20)"],
+  ] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    await expect(sheet).toHaveCSS("background-color", card);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(360);
+    await page.screenshot({ path: `test-results/price-sheet-${scheme}.png` });
+  }
+  await foot.click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByRole("status")).toContainText(
+    `Ціну продажу збережено: ${priced.name}`,
+  );
+  await expect(hero).toContainText("Ціна продажу 3 600,00 грн");
+  expect(await taps()).toBe(2 + 4);
+  expect(posted).toEqual([
+    expect.objectContaining({
+      applies_to: "ORGANIZATION",
+      suggested_price: "3600.00",
+    }),
+  ]);
+
+  // The store's own, its kopecks after the comma.
+  sheet = await priceSheet(page, priced.name);
+  await scope(sheet, "STORE").click();
+  // Empty, «Зараз» naming the price that stands: a sum full to its kopecks
+  // would take no figure (review, 2026-11-07).
+  await expect(
+    sheet.getByText("Зараз: своєї ціни немає, діє спільна 3 600,00 грн."),
+  ).toBeVisible();
+  await expect(sum).toHaveValue("");
+  await keys(sheet, "3", "6", "0", "0", "Кома");
+  await expect(save(sheet, "3 600,00")).toBeEnabled();
+  await keys(sheet, "5");
+  await expect(sum).toHaveValue(/^3\s600,5$/);
+  await save(sheet, "3 600,50").click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(hero).toContainText("Ціна продажу 3 600,50 грн");
+  expect(posted[1]).toMatchObject({
+    applies_to: "STORE",
+    expected_price: null,
+    suggested_price: "3600.50",
+  });
+
+  // Removed, quietly: the shared one stands again.
+  sheet = await priceSheet(page, priced.name);
+  await expect(scope(sheet, "STORE")).toHaveAttribute("aria-pressed", "true");
+  const remove = sheet.getByRole("button", {
+    name: "Прибрати ціну «Основний»",
+    exact: true,
+  });
+  await expect(remove).toHaveClass(/\bquiet\b/);
+  await remove.click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(hero).toContainText("Ціна продажу 3 600,00 грн");
+  expect(posted[2]).toMatchObject({
+    applies_to: "STORE",
+    expected_price: "3600.50",
+    suggested_price: null,
+  });
+
+  // «Назад» leaves it, nothing saved.
+  sheet = await priceSheet(page, priced.name);
+  await keys(sheet, "9");
+  await expect(sum).toHaveValue("9");
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Змінити ціну", exact: true }),
+  ).toBeFocused();
+  expect(posted).toHaveLength(3);
+});
+
+test("in Telegram the price sheet's one button is its MainButton, «Зберегти · 3 600,00 грн», there only while the sheet is, inactive till a sum is typed (stage 2, goods task list, P1-4)", async ({
+  page,
+}) => {
+  const priced = await model(page, await token(page));
+  await sellsFrom(page, fixture.returns_location_id);
+  await page.addInitScript(() => {
+    const host = window as unknown as {
+      TelegramWebviewProxy: {
+        postEvent: (event: string, data: string) => void;
+      };
+      told: [string, unknown][];
+    };
+    host.told = [];
+    host.TelegramWebviewProxy = {
+      postEvent: (event, data) => {
+        host.told.push([event, data ? (JSON.parse(data) as unknown) : null]);
+      },
+    };
+  });
+  const told = (event: string): Promise<unknown[]> =>
+    page.evaluate(
+      (wanted) =>
+        (window as unknown as { told: [string, unknown][] }).told
+          .filter(([name]) => name === wanted)
+          .map(([, data]) => data),
+      event,
+    );
+  const main = async (): Promise<unknown> =>
+    (await told("web_app_setup_main_button")).at(-1) ?? null;
+  const shown = async (): Promise<boolean> =>
+    ((await main()) as { is_visible?: boolean } | null)?.is_visible ?? false;
+  await page.goto(
+    `/#${new URLSearchParams({
+      tgWebAppData: initData(seller.id, seller.name),
+      tgWebAppVersion: "8.0",
+    }).toString()}`,
+  );
+  await openStore(page, "Основний MAIN");
+  const hero = await detail(page, priced.name);
+  await expect.poll(shown).toBe(false);
+  const sheet = await priceSheet(page, priced.name);
+  await expect.poll(main).toMatchObject({
+    is_visible: true,
+    is_active: false,
+    text: "Зберегти",
+  });
+  // Telegram's, never one of the sheet's own.
+  await expect(sheet.locator(".main-mimic")).toHaveCount(0);
+  await keys(sheet, "3", "6", "0", "0");
+  await expect.poll(main).toMatchObject({
+    is_visible: true,
+    is_active: true,
+    text: "Зберегти · 3\u00a0600,00\u00a0грн",
+  });
+  const sent = page.waitForRequest(
+    (request) =>
+      request.method() === "POST" &&
+      request.url().endsWith("/api/v1/catalog/prices"),
+  );
+  await page.evaluate(() => {
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        data: JSON.stringify({ eventType: "main_button_pressed" }),
+        source: window.parent,
+      }),
+    );
+  });
+  expect((await sent).postDataJSON()).toMatchObject({
+    applies_to: "ORGANIZATION",
+    suggested_price: "3600.00",
+  });
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(hero).toContainText("Ціна продажу 3 600,00 грн");
+  expect(await told("web_app_trigger_haptic_feedback")).toContainEqual({
+    type: "notification",
+    notification_type: "success",
+  });
+  await expect.poll(shown).toBe(false);
+});
+
 test("a price someone else changed meanwhile is not overwritten unseen", async ({
   page,
 }) => {
@@ -406,13 +619,13 @@ test("a price someone else changed meanwhile is not overwritten unseen", async (
   });
   expect(elsewhere.status()).toBe(200);
 
-  await sheet.getByRole("button", { name: "Зберегти ціну" }).click();
+  await save(sheet, "1 850,00").click();
   await expect(sheet.getByRole("alert")).toContainText(
     "Цю ціну щойно змінив хтось інший: тепер 1 700,00 грн",
   );
   await expect(sheet.getByText("Зараз: 1 700,00 грн")).toBeVisible();
   // Now seen, it is saved over.
-  await sheet.getByRole("button", { name: "Зберегти ціну" }).click();
+  await save(sheet, "1 850,00").click();
   await expect(sheet).toHaveCount(0);
   await expect(hero).toContainText("Ціна продажу 1 850,00 грн");
 });
@@ -449,7 +662,7 @@ test("whoever may set only this store's price is told so, and sets that", async 
       request.url().endsWith("/api/v1/catalog/prices"),
   );
   await sheet.getByLabel("Нова ціна, грн").fill("1850");
-  await sheet.getByRole("button", { name: "Зберегти ціну" }).click();
+  await save(sheet, "1 850,00").click();
   expect((await sent).postDataJSON()).toMatchObject({
     applies_to: "STORE",
     suggested_price: "1850.00",

@@ -1055,7 +1055,7 @@ test("the parcels' line opens «Замовлення», with «+» when a store 
   // Ended once every read asked is answered: «Замовлення»'s own, asked as
   // it opens, may still be on their routes as the page lets go of them,
   // which holds the teardown (CI, #177; as #176).
-  await expect.poll(() => settled.length).toBe(urls.length);
+  await expect.poll(() => unanswered(urls, settled)).toEqual([]);
 });
 
 // --- what waits -------------------------------------------------------------
@@ -1262,6 +1262,16 @@ test("each verb opens its section, and its «←» comes back to «Сьогод�
   // «← Ще», as before.
   await waiting(page).getByRole("button", { name: "Оглянути" }).click();
   await expect(back).toBeVisible();
+  // «Чекають», what the tag counts (stage 2, goods task list, P0-4); its
+  // order, the oldest on top, is «Брак»'s own journey's.
+  await expect(
+    page
+      .getByRole("group", { name: "Які речі" })
+      .getByRole("button", { name: "Чекають 1", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator(".damaged-unit .order-tag-title")).toHaveText([
+    "Кокон графіт · M",
+  ]);
   await tab(page, "Продаж").click();
   await section(page, "Брак");
   await expect(
@@ -1429,6 +1439,8 @@ test("a read that fails again: what waits says how old it is by its heading, its
   await twoStores(page);
   await parcels(page, centre, [[["Лоран шоколад", "M", 1]]]);
   await orders(page, market, [0, 0, 0]);
+  const urls = asked(page);
+  const settled = answered(page);
   await onToday(page);
   await expect(tags(page)).toHaveText([/^Відправити 1 посилку/]);
   const stamp = page.locator(".today-waiting-head .day-stamp");
@@ -1448,6 +1460,10 @@ test("a read that fails again: what waits says how old it is by its heading, its
   await tab(page, "Сьогодні").click();
   await expect(stamp).toHaveText(/^дані на \d\d:\d\d$/);
   await expect(tags(page)).toHaveText([/^Відправити 1 посилку/]);
+  // Ended once every read asked is answered: «Продаж»'s, asked as the clock
+  // runs on, may still be on their routes as the page lets go of them,
+  // which holds the teardown (batch 9's full run; as #176, #177).
+  await expect.poll(() => unanswered(urls, settled)).toEqual([]);
 });
 
 test("«Вас нічого не чекає.» from a read that has failed since says how old", async ({
@@ -1457,6 +1473,8 @@ test("«Вас нічого не чекає.» from a read that has failed since
   await twoStores(page);
   await orders(page, centre, [0, 1, 0]);
   await orders(page, market, [0, 0, 0]);
+  const urls = asked(page);
+  const settled = answered(page);
   await onToday(page);
   const empty = page.locator(".today-empty");
   await expect(empty).toContainText("Вас нічого не чекає.");
@@ -1473,6 +1491,10 @@ test("«Вас нічого не чекає.» from a read that has failed since
   await expect(empty.locator(".day-stamp")).toHaveText(
     /^дані на \d\d:\d\d$/,
   );
+  // Ended once every read asked is answered: «Продаж»'s, asked as the clock
+  // runs on, may still be on their routes as the page lets go of them,
+  // which holds the teardown (batch 9's full run; as #176, #177).
+  await expect.poll(() => unanswered(urls, settled)).toEqual([]);
 });
 
 test("a manager of one store: no backups, a list ready to approve the owner's, «Брак» and the parcels by their rights (stage 2, admin task list, P0-1)", async ({
@@ -2343,6 +2365,24 @@ function answered(page: Page): string[] {
   return urls;
 }
 
+/** The reads asked and not yet answered: each as many times as it was
+ * asked, less as many times as it was answered. Counted by read, not in
+ * all: one answered more often than asked never stands in for another
+ * (2026-11-07: «Замовлення» opened, 20 answers came to 19 reads asked, and
+ * the counts never met). */
+function unanswered(
+  urls: readonly string[],
+  settled: readonly string[],
+): string[] {
+  const left = [...settled];
+  return urls.filter((url) => {
+    const at = left.indexOf(url);
+    if (at === -1) return true;
+    left.splice(at, 1);
+    return false;
+  });
+}
+
 /** How many of «Сьогодні»'s own reads were asked: the report, each
  * store's drawer, debts and open orders; its «Брак» and lists to approve;
  * the network's backups. */
@@ -2425,7 +2465,7 @@ test("at most twenty reads as it opens, none again within a minute, each again a
     });
   // Ended once every read asked is answered: a route still fetching as the
   // page lets go of its routes would hold the teardown (CI, #176).
-  await expect.poll(() => settled.length).toBe(urls.length);
+  await expect.poll(() => unanswered(urls, settled)).toEqual([]);
 });
 
 test("in Telegram's dark theme the day-tag's debts and an old stamp read at 4.5:1", async ({

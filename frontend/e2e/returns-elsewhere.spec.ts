@@ -437,15 +437,29 @@ test("a unit from the other store's own warehouse goes back on sale here, where 
   await section(page, "Брак");
   const unit = page.getByRole("article").filter({ hasText: model });
   await unit.getByRole("button", { name: "Взяти на перевірку" }).click();
-  await unit.getByRole("button", { name: "Повернути в продаж" }).click();
-  const confirm = unit.getByRole("button", { name: /Так, повернути на/ });
-  await expect(confirm).toHaveCount(0);
-  await unit
-    .getByLabel("Повернути в продаж на склад вашого магазину")
-    .selectOption(fixture.returns_location_id);
-  await unit
-    .getByRole("button", { name: "Так, повернути на «Склад повернень»" })
+  const sheet = page.getByRole("dialog", { name: new RegExp(model) });
+  await expect(sheet).toHaveAttribute("data-ready", "");
+  await sheet.getByRole("button", { name: "Повернути в продаж" }).click();
+  await expect(sheet).toContainText(
+    "Його продали з власного складу іншого магазину. Оберіть склад вашого магазину.",
+  );
+  // None chosen beforehand: the yes waits for one, a chip each, never a
+  // native list (stage 2, goods task list, P0-4).
+  await expect(sheet.getByRole("combobox")).toHaveCount(0);
+  await expect(sheet.locator(".main-mimic")).toHaveText("Оберіть склад");
+  await expect(sheet.locator(".main-mimic")).toBeDisabled();
+  await sheet
+    .getByRole("group", { name: "Склад вашого магазину" })
+    .getByRole("button", { name: "Склад повернень", exact: true })
     .click();
+  const confirm = sheet.getByRole("button", {
+    name: "Так, повернути на «Склад повернень»",
+  });
+  await expect(confirm).toHaveAttribute("data-ready", "");
+  await confirm.click();
+  await expect(page.locator(".stub-notice p")).toHaveText(
+    `Повернули в продаж: ${model} графіт · M → «Склад повернень»`,
+  );
   await expect(unit).toHaveCount(0);
   expect(await held(page, fixture.returns_location_id, variant)).toBe(
     before + 1,

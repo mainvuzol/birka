@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import type { JSX } from "react";
+import { createPortal } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ApiError,
@@ -9,7 +10,10 @@ import {
   isConflict,
   readText,
 } from "@/shared/api";
+import { Eyelet } from "@/shared/Eyelet";
+import { Keypad } from "@/shared/Keypad";
 import { ModeSwitch } from "@/shared/ModeSwitch";
+import { buzz, useMainButton } from "@/shared/telegram";
 import { visible } from "@/shared/visible";
 import { decimal, kopecks, money } from "@/orders/types";
 import type { Store } from "@/orders/types";
@@ -105,13 +109,23 @@ export function SuggestedPrice({
   );
 }
 
-/** Change, set or remove one price — the shared one or this store's own. */
+/**
+ * Change, set or remove one price — the shared one or this store's own.
+ *
+ * Drawn in the tag's system (stage 2, goods task list, P1-4): «Для всіх
+ * магазинів · Лише «{магазин}»» where both may be set; the sum on the app's
+ * keypad, with its comma; «Прибрати ціну «{магазин}»» quiet. Its one button,
+ * «Зберегти · 3 600,00 грн», is Telegram's MainButton in a sheet — outside
+ * Telegram its own, in `foot` —; on a screen, which may have a MainButton
+ * of its own («Записати прихід»), the form's own, with «Скасувати».
+ */
 export function PriceEditor({
   store,
   token,
   scopeKey,
   variantId,
   blocked,
+  foot,
   onSaving,
   onDone,
   onCancel,
@@ -121,10 +135,14 @@ export function PriceEditor({
   scopeKey: string;
   variantId: string;
   blocked: boolean;
+  /** In a sheet: its foot, where the form's own button stands outside
+   * Telegram, null until it is drawn. None on a screen. */
+  foot?: HTMLElement | null | undefined;
   /** Whether a price is being saved: a sheet keeps it open till it is. */
   onSaving?: (saving: boolean) => void;
   onDone: (prices: Prices) => void;
-  onCancel: () => void;
+  /** On a screen: «Скасувати». In a sheet, «Назад» closes it. */
+  onCancel?: (() => void) | undefined;
 }): JSX.Element {
   const prices = usePrices(store, token, scopeKey, variantId);
   if (prices.isPending) return <p role="status">Завантажуємо ціну продажу…</p>;
@@ -153,6 +171,7 @@ export function PriceEditor({
       refetch={async () => {
         await prices.refetch();
       }}
+      foot={foot}
       {...(onSaving ? { onSaving } : {})}
       onDone={onDone}
       onCancel={onCancel}
@@ -168,6 +187,7 @@ function Form({
   blocked,
   prices,
   refetch,
+  foot,
   onSaving,
   onDone,
   onCancel,
@@ -179,9 +199,10 @@ function Form({
   blocked: boolean;
   prices: Prices;
   refetch: () => Promise<void>;
+  foot: HTMLElement | null | undefined;
   onSaving?: (saving: boolean) => void;
   onDone: (prices: Prices) => void;
-  onCancel: () => void;
+  onCancel: (() => void) | undefined;
 }): JSX.Element {
   const cache = useQueryClient();
   // A store with its own price is changing that one; otherwise whoever may
@@ -190,10 +211,9 @@ function Form({
   const [appliesTo, setAppliesTo] = useState<AppliesTo>(
     prices.store_price === null && mayShare ? "ORGANIZATION" : "STORE",
   );
-  const [text, setText] = useState(() => {
-    const start = prices.store_price ?? prices.shared_price;
-    return start === null ? "" : asInput(start);
-  });
+  // Empty: «Зараз: …» names the price that stands, and a sum already full
+  // to its kopecks would take no figure typed (review, 2026-11-07).
+  const [text, setText] = useState("");
   const [problem, setProblem] = useState("");
   const [busy, setBusy] = useState(false);
   // What the screen shows for the chosen price is what the change is stated
@@ -218,8 +238,10 @@ function Form({
         cache.invalidateQueries({ queryKey: ["sale-stock"] }),
         cache.invalidateQueries({ queryKey: ["inventory-stock"] }),
       ]);
+      buzz("success");
       onDone(result);
     } catch (error) {
+      buzz("error");
       if (error instanceof ApiError && error.code === "PRICE_CHANGED") {
         const now = error.details.current;
         setProblem(
@@ -244,9 +266,53 @@ function Form({
     }
   }
 
+  const zeroId = useId();
+  // The sum on the keypad: «1850,5», «1850,» on its way to kopecks, or "".
+  const cents = text === "" ? null : kopecks(text.replace(/,$/, ""));
+  const held = blocked || busy;
+  const ready = cents !== null && cents > 0n && !held;
+  const words =
+    cents === null || cents === 0n
+      ? "Зберегти"
+      : `Зберегти · ${money(decimal(cents))}`;
+  const press = (): void => {
+    if (!ready) return;
+    void save(decimal(cents));
+  };
+  // In a sheet, Telegram's MainButton; on a screen, which may have its own,
+  // the form's own button.
+  const inSheet = foot !== undefined;
+  // Telegram's, only where it was put up: on a screen inside Telegram the
+  // form's own button stands (review, 2026-11-07).
+  const main =
+    useMainButton(words, press, {
+      shown: inSheet,
+      progress: busy,
+      active: ready,
+    }) && inSheet;
+  const own = (
+    <button
+      type="button"
+      className="sheet-done main-mimic"
+      disabled={!ready && !busy}
+      aria-disabled={busy || undefined}
+      onClick={press}
+    >
+      {busy ? (
+        <>
+          <Eyelet state="spin" size={20} />
+          <span className="visually-hidden">{words}</span>
+        </>
+      ) : (
+        words
+      )}
+    </button>
+  );
+
   return (
-    <fieldset disabled={blocked || busy}>
-      <legend>Змінити ціну продажу</legend>
+    // On a screen it is named, as its fieldset named it; in a sheet the
+    // sheet's title does (review, 2026-11-07).
+    <div className="price-form" role="group" aria-label="Змінити ціну продажу">
       {mayShare ? (
         // For all stores or for this one: seen at once and one tap, two
         // segments, never a list's wheel; the same price first as before
@@ -262,7 +328,7 @@ function Form({
             setAppliesTo(mode);
             setProblem("");
           }}
-          disabled={blocked || busy}
+          disabled={held}
           filters
           className="price-scope"
         />
@@ -282,52 +348,55 @@ function Form({
             : "не задана"}
         . На касі продавець може домовитися про іншу ціну.
       </p>
-      <label>
-        Нова ціна, грн
-        <input
-          inputMode="decimal"
-          placeholder="0,00"
-          value={text}
-          onChange={(event) => {
-            setText(event.target.value);
-          }}
-        />
-      </label>
+      <Keypad
+        label="Нова ціна, грн"
+        value={text}
+        change={(next) => {
+          setText(next);
+          setProblem("");
+        }}
+        disabled={held}
+        invalid={cents === 0n}
+        {...(cents === 0n ? { describedBy: zeroId } : {})}
+      />
+      {cents === 0n && (
+        <p role="alert" id={zeroId}>
+          Ціну вкажіть у гривнях, до копійок, більше нуля, наприклад 1850,50.
+        </p>
+      )}
       {problem && <p role="alert">{problem}</p>}
-      <div className="actions">
+      {current !== null && (
         <button
           type="button"
+          className="quiet price-remove"
+          disabled={held}
           onClick={() => {
-            const cents = kopecks(text);
-            if (cents === null || cents === 0n) {
-              setProblem(
-                "Ціну вкажіть у гривнях, до копійок, більше нуля, наприклад 1850,50.",
-              );
-              return;
-            }
-            void save(decimal(cents));
+            void save(null);
           }}
         >
-          Зберегти ціну
+          {appliesTo === "STORE"
+            ? `Прибрати ціну «${visible(store.name)}»`
+            : "Прибрати спільну ціну"}
         </button>
-        {current !== null && (
-          <button
-            type="button"
-            className="quiet"
-            onClick={() => {
-              void save(null);
-            }}
-          >
-            {appliesTo === "STORE"
-              ? "Прибрати ціну магазину"
-              : "Прибрати спільну ціну"}
-          </button>
-        )}
-        <button type="button" className="quiet" onClick={onCancel}>
+      )}
+      {!main &&
+        (foot === undefined ? (
+          <div className="count-foot">{own}</div>
+        ) : (
+          // A sheet's foot not there yet: it comes at once, the button in it.
+          foot && createPortal(own, foot)
+        ))}
+      {onCancel && (
+        <button
+          type="button"
+          className="quiet"
+          disabled={busy}
+          onClick={onCancel}
+        >
           Скасувати
         </button>
-      </div>
-    </fieldset>
+      )}
+    </div>
   );
 }
 

@@ -898,6 +898,24 @@ test("inside Telegram the MainButton records it: held at nothing counted, put aw
   await expect
     .poll(async () => (await told("web_app_setup_closing_behavior")).at(-1))
     .toEqual({ need_confirmation: true });
+  // The price's form on the screen keeps its own button: the MainButton
+  // stays «Записати прихід» (stage 2, goods task list, P1-4).
+  await page
+    .getByRole("button", { name: /^(Задати|Змінити) ціну продажу$/ })
+    .click();
+  const price = page.getByRole("group", { name: "Змінити ціну продажу" });
+  await price
+    .locator(".keypad-keys")
+    .getByRole("button", { name: "5", exact: true })
+    .click();
+  await expect(
+    price.getByRole("button", { name: "Зберегти · 5,00 грн" }),
+  ).toBeVisible();
+  await expect
+    .poll(main)
+    .toMatchObject({ is_visible: true, text: "Записати прихід · 1 шт." });
+  await price.getByRole("button", { name: "Скасувати" }).click();
+  await expect(price).toHaveCount(0);
   // Under the sheet it is put away, and back once the sheet closes.
   const sheet = await receiveWay(page);
   await expect.poll(main).toMatchObject({ is_visible: false });

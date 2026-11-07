@@ -1,13 +1,17 @@
-import { useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { JSX } from "react";
+import { createPortal } from "react-dom";
 import { errorText, inOwnWords } from "@/shared/api";
-import type { ApiError } from "@/shared/api";
 import { visible } from "@/shared/visible";
+import type { ApiError } from "@/shared/api";
+import { Eyelet } from "@/shared/Eyelet";
+import { Keypad } from "@/shared/Keypad";
+import { ModeSwitch } from "@/shared/ModeSwitch";
+import { buzz, useMainButton } from "@/shared/telegram";
 import type { Store } from "@/orders/types";
 import { submitAdjustment, useAdjustmentCommand } from "./adjustmentCommands";
 import { reasonLabels } from "./adjustmentTypes";
 import type { Adjustment, AdjustmentReason } from "./adjustmentTypes";
-
 /** One balance at one warehouse, as the screen last read it. */
 export interface Target {
   product_variant_id: string;
@@ -25,6 +29,11 @@ export interface Corrected {
   adjustment: Adjustment;
 }
 
+/** «−2», «+3»: a change of pieces, its sign always said. */
+function signedPieces(delta: number): string {
+  return `${delta > 0 ? "+" : "−"}${String(Math.abs(delta))}`;
+}
+
 /**
  * Correct one balance, with a reason (`POST /inventory/adjustments`).
  *
@@ -38,6 +47,16 @@ export interface Corrected {
  * delivery moved the balance meanwhile, the server refuses it as
  * `STOCK_CHANGED` and nothing is written. Damaged or lost goods are a number
  * of units whatever the balance, so they send only the change.
+ *
+ * Drawn in the tag's system (stage 2, goods task list, P1-3): the reason a
+ * chip; «Додати · Списати» where the way is asked; the number on the app's
+ * keypad of pieces, the line over it saying what the ledger holds and what
+ * it becomes, «В обліку 3 → 1 · −2»; the note folded. Its one button,
+ * «Записати · −2 шт.», is Telegram's MainButton in a sheet — outside
+ * Telegram its own, in `foot`, where the sheet keeps it in view —; on a
+ * screen, which may have a MainButton of its own, the form's own under it.
+ * «Назад» leaves it, closing its sheet; `onCancel`, where it stands on a
+ * screen, is its «Скасувати».
  */
 export function Correction({
   store,
@@ -46,6 +65,8 @@ export function Correction({
   blocked,
   locationId,
   target,
+  place,
+  foot,
   onDone,
   onCancel,
   onRefused,
@@ -57,8 +78,14 @@ export function Correction({
   blocked: boolean;
   locationId: string;
   target: Target;
+  /** The warehouse's name, where the screen does not say it. */
+  place?: string | undefined;
+  /** Where its own button stands outside Telegram: a sheet's foot, null
+   * until it is drawn. None, under the form. */
+  foot?: HTMLElement | null | undefined;
   onDone: (corrected: Corrected) => void;
-  onCancel: () => void;
+  /** On a screen, not a sheet: «Скасувати». */
+  onCancel?: (() => void) | undefined;
   /** The balances may be stale: read them again. */
   onRefused: () => void;
   /** The answer lost: the app's notice, kept over every screen, settles
@@ -71,12 +98,20 @@ export function Correction({
   const [reason, setReason] = useState<AdjustmentReason | null>(null);
   const [count, setCount] = useState("");
   const [direction, setDirection] = useState<"add" | "remove">("remove");
+  const [noting, setNoting] = useState(false);
   const [note, setNote] = useState("");
-  const [tried, setTried] = useState(false);
   // The server's answer, which only it can give; the form's own checks are
   // `invalid` below and are shown as the person types.
   const [refusal, setRefusal] = useState("");
   const { busy, pending } = useAdjustmentCommand();
+  const lineId = useId();
+  const invalidId = useId();
+  // The note unfolded: the cursor in it, never lost with the button gone
+  // (review, 2026-11-07).
+  const noteField = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (noting) noteField.current?.focus();
+  }, [noting]);
 
   // Nothing to write off where the system holds nothing, and a size that is
   // not known is never added (ADR-0005 §3): it enters only from a legacy list.
@@ -94,7 +129,7 @@ export function Correction({
           : direction
       : null;
 
-  const typed = /^\d{1,5}$/.test(count.trim()) ? Number(count.trim()) : null;
+  const typed = /^\d{1,5}$/.test(count) ? Number(count) : null;
   const delta =
     reason === null || typed === null
       ? null
@@ -105,28 +140,32 @@ export function Correction({
           : signed === "add"
             ? typed
             : -typed;
+  // What is wrong with the number typed, said as it is typed; "" where
+  // nothing is.
   const invalid =
-    reason === null
-      ? "Оберіть причину."
-      : typed === null
+    delta === null
+      ? null
+      : delta === 0
         ? reason === "STOCKTAKE"
-          ? "Вкажіть, скільки одиниць фактично на складі."
-          : "Вкажіть кількість одиниць."
-        : delta === 0
-          ? reason === "STOCKTAKE"
-            ? "Облік збігається з фактом — виправляти нічого."
-            : "Вкажіть кількість від 1."
-          : delta !== null && system + delta < 0
-            ? `В обліку лише ${String(system)} шт. — більше списати не можна.`
-            : delta !== null && delta > 0 && target.sizeIsUnknown
-              ? "Облік товару з невідомим розміром можна лише зменшити."
-              : delta !== null && Math.abs(delta) > 10000
-                ? "За один раз можна змінити облік не більше ніж на 10000 шт."
-                : "";
+          ? "Облік збігається з фактом — виправляти нічого."
+          : "Вкажіть кількість від 1."
+        : system + delta < 0
+          ? `В обліку лише ${String(system)} шт. — більше списати не можна.`
+          : delta > 0 && target.sizeIsUnknown
+            ? "Облік товару з невідомим розміром можна лише зменшити."
+            : Math.abs(delta) > 10000
+              ? "За один раз можна змінити облік не більше ніж на 10000 шт."
+              : "";
+
+  const working = blocked || busy || pending !== null;
+  const ready = invalid === "" && !working;
+  const words =
+    delta === null || delta === 0
+      ? "Записати"
+      : `Записати · ${signedPieces(delta)} шт.`;
 
   async function send(): Promise<void> {
-    setTried(true);
-    if (invalid || delta === null || reason === null) return;
+    if (!ready || reason === null || delta === null) return;
     setRefusal("");
     const trimmed = note.trim();
     const outcome = await submitAdjustment(journalKey, token, {
@@ -147,8 +186,10 @@ export function Correction({
       },
     });
     if (outcome.kind === "done") {
+      buzz("success");
       onDone({ target, reason, adjustment: outcome.result });
     } else if (outcome.kind === "refused") {
+      buzz("warning");
       setRefusal(refusalText(outcome.error, system));
       const actual = outcome.error.details.actual;
       if (outcome.error.code === "STOCK_CHANGED" && typeof actual === "number")
@@ -156,29 +197,63 @@ export function Correction({
       // A person past their requests (ADR-0020) counted right: the same count
       // is sent again after the wait. Any other refusal asks for a recount.
       if (outcome.error.code !== "TOO_MANY_REQUESTS") setCount("");
-      setTried(false);
       onRefused();
     } else onLost?.();
   }
+  const press = (): void => {
+    void send();
+  };
+  // In a sheet, Telegram's MainButton; on a screen, which may have its own,
+  // the form's own button.
+  const inSheet = foot !== undefined;
+  // Telegram's, only where it was put up: on a screen inside Telegram the
+  // form's own button stands (review, 2026-11-07).
+  const main =
+    useMainButton(words, press, {
+      shown: inSheet && reason !== null,
+      progress: busy,
+      active: ready,
+    }) && inSheet;
+  const own = (
+    <button
+      type="button"
+      className="sheet-done main-mimic"
+      disabled={!ready && !busy}
+      aria-disabled={busy || undefined}
+      onClick={press}
+    >
+      {busy ? (
+        <>
+          <Eyelet state="spin" size={20} />
+          <span className="visually-hidden">{words}</span>
+        </>
+      ) : (
+        words
+      )}
+    </button>
+  );
 
-  const working = blocked || busy || pending !== null;
   return (
-    <fieldset disabled={working}>
-      <legend>
-        Виправити залишок: {visible(target.name)} · {visible(target.size)}
-      </legend>
-      <p>
-        В обліку: <strong>{system}</strong>
-      </p>
-      <div role="radiogroup" aria-label="Причина" className="choices">
+    // On a screen it is named, as its fieldset named it; in a sheet the
+    // sheet's title does (review, 2026-11-07).
+    <div
+      className="correction"
+      role="group"
+      aria-label={`Виправити залишок: ${visible(target.name)} · ${visible(target.size)}`}
+    >
+      {place !== undefined && (
+        <p className="t-meta">Склад «{visible(place)}»</p>
+      )}
+      <div className="chips reason-chips" role="group" aria-label="Причина">
         {reasons.map((key) => (
           <button
             type="button"
-            role="radio"
-            aria-checked={reason === key}
+            className="chip"
+            aria-pressed={reason === key}
             key={key}
-            className={reason === key ? "active" : "quiet"}
+            disabled={working}
             onClick={() => {
+              if (reason !== key) buzz("selection");
               setReason(key);
               setRefusal("");
             }}
@@ -187,87 +262,104 @@ export function Correction({
           </button>
         ))}
       </div>
-      {signed !== null && (
-        <div role="radiogroup" aria-label="Що зробити" className="choices">
-          <button
-            type="button"
-            role="radio"
-            aria-checked={signed === "add"}
-            className={signed === "add" ? "active" : "quiet"}
-            disabled={!canAdd}
-            onClick={() => {
-              setDirection("add");
-            }}
-          >
-            Додати до обліку
-          </button>
-          <button
-            type="button"
-            role="radio"
-            aria-checked={signed === "remove"}
-            className={signed === "remove" ? "active" : "quiet"}
-            disabled={!canRemove}
-            onClick={() => {
-              setDirection("remove");
-            }}
-          >
-            Списати з обліку
-          </button>
-        </div>
+      {signed !== null && canAdd && canRemove && (
+        <ModeSwitch
+          label="Що зробити"
+          modes={[
+            { mode: "add", label: "Додати" },
+            { mode: "remove", label: "Списати" },
+          ]}
+          current={signed}
+          choose={(mode) => {
+            setDirection(mode);
+            setRefusal("");
+          }}
+          disabled={working}
+          filters
+        />
       )}
+      <p className="t-row count-live" id={lineId}>
+        В обліку {system}
+        {delta !== null && invalid === "" && (
+          <>
+            {" "}
+            → {system + delta} · {signedPieces(delta)}
+          </>
+        )}
+      </p>
       {reason !== null && (
+        <Keypad
+          pieces
+          label={
+            reason === "STOCKTAKE"
+              ? "Фактично, шт."
+              : reason === "DAMAGED" || reason === "LOST"
+                ? "Списати, шт."
+                : "Скільки, шт."
+          }
+          value={count}
+          change={(next) => {
+            setCount(next);
+            setRefusal("");
+          }}
+          disabled={working}
+          invalid={Boolean(invalid)}
+          // What is wrong with the number, as it is said under it.
+          describedBy={invalid ? `${lineId} ${invalidId}` : lineId}
+        />
+      )}
+      {invalid && (
+        <p role="alert" id={invalidId}>
+          {invalid}
+        </p>
+      )}
+      {refusal && <p role="alert">{refusal}</p>}
+      {noting ? (
         <label>
-          {reason === "STOCKTAKE"
-            ? "Фактично на складі, шт."
-            : reason === "DAMAGED" || reason === "LOST"
-              ? "Скільки списати, шт."
-              : "Скільки, шт."}
+          Примітка
           <input
-            inputMode="numeric"
-            value={count}
+            ref={noteField}
+            value={note}
+            maxLength={500}
+            placeholder={reason === "OTHER" ? "Що сталося" : "не обов’язково"}
+            disabled={working}
             onChange={(event) => {
-              setCount(event.target.value);
-              setRefusal("");
+              setNote(event.target.value);
             }}
           />
         </label>
-      )}
-      {reason !== null && typed !== null && !invalid && delta !== null && (
-        <p className="total">
-          Облік{" "}
-          <strong>
-            {system} → {system + delta} ({delta > 0 ? "+" : "−"}
-            {Math.abs(delta)})
-          </strong>
-        </p>
-      )}
-      <label>
-        Примітка
-        <input
-          value={note}
-          maxLength={500}
-          placeholder={reason === "OTHER" ? "Що сталося" : "не обов’язково"}
-          onChange={(event) => {
-            setNote(event.target.value);
-          }}
-        />
-      </label>
-      {invalid && (tried || count !== "") && <p role="alert">{invalid}</p>}
-      {refusal && <p role="alert">{refusal}</p>}
-      <div className="actions">
+      ) : (
         <button
           type="button"
+          className="quiet correction-note"
+          aria-expanded="false"
+          disabled={working}
           onClick={() => {
-            void send();
+            setNoting(true);
           }}
         >
-          Записати коригування
+          Додати примітку
         </button>
-        <button type="button" className="quiet" onClick={onCancel}>
+      )}
+      {!main &&
+        reason !== null &&
+        (foot === undefined ? (
+          <div className="count-foot">{own}</div>
+        ) : (
+          // A sheet's foot not there yet: it comes at once, the button in it.
+          foot && createPortal(own, foot)
+        ))}
+      {onCancel && (
+        <button
+          type="button"
+          className="quiet"
+          disabled={busy}
+          onClick={onCancel}
+        >
           Скасувати
         </button>
-      </div>
-    </fieldset>
+      )}
+    </div>
   );
 }
 

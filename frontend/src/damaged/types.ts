@@ -1,6 +1,12 @@
 /** `GET /damaged-units`: units a return put in the store's «Брак». */
 export type DamagedStatus =
-  "AWAITING" | "INSPECTING" | "CONFIRMED" | "RETURNED" | "WRITTEN_OFF";
+  | "AWAITING"
+  | "INSPECTING"
+  | "CONFIRMED"
+  | "RETURNED"
+  | "WRITTEN_OFF"
+  // Returned to its supplier: gone from «Брак» while that return stands.
+  | "SUPPLIER";
 
 export interface DamagedUnit {
   id: string;
