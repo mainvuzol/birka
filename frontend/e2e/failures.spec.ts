@@ -838,21 +838,40 @@ test.describe("trouble on the server, in «Резервні копії»", () =>
     // section from it.
     await backups.click();
 
+    // Each trouble open now a row that waits: what, since when, why; the
+    // watcher one line under them (stage 2, admin task list, P0-5).
     const block = page.locator('[data-server="TROUBLE"]');
-    await expect(block.getByRole("heading")).toHaveText("Проблема на сервері");
-    const now = block.locator('[data-troubles="open"] > li');
+    const now = block
+      .getByRole("list", { name: "Проблема на сервері" })
+      .locator("li");
     await expect(now).toHaveCount(1);
-    await expect(now).toContainText("Сервер не відповідає");
+    await expect(
+      now.getByRole("heading", { name: "Сервер не відповідає", level: 3 }),
+    ).toBeVisible();
+    await expect(now.locator(".today-tag")).toHaveClass(/tone-warning/);
     await expect(now).toContainText("уже 25 хв");
     await expect(now).toContainText("База даних не відповідає.");
     await expect(block.locator("[data-watcher]")).toHaveText(
-      "Сторож перевіряв 2 хв тому.",
+      "Стан сервера · сторож перевіряв 2 хв тому",
     );
-    const past = block.locator('[data-troubles="recent"] > li');
+    // What was wrong this week: one line, its list in a sheet.
+    await expect(block.locator('[data-troubles="recent"]')).toHaveCount(0);
+    await block
+      .getByRole("button", { name: "Минулі проблеми за 7 днів · 1" })
+      .click();
+    const sheet = page.getByRole("dialog", {
+      name: "Минулі проблеми за 7 днів",
+    });
+    const past = sheet.locator('[data-troubles="recent"] > li');
     await expect(past).toHaveCount(1);
     await expect(past).toContainText("Закінчувалося місце на диску");
     await expect(past).toContainText("тривало 3 год");
     await expect(past).toContainText("На диску сервера лишилося 9 % місця.");
+    await page.keyboard.press("Escape");
+    await expect(sheet).toHaveCount(0);
+    await expect(
+      block.getByRole("button", { name: "Минулі проблеми за 7 днів · 1" }),
+    ).toBeFocused();
     // The backups' own verdict is untouched.
     await expect(
       page.locator('[data-state="OK"]').getByRole("heading"),
@@ -877,25 +896,32 @@ test.describe("trouble on the server, in «Резервні копії»", () =>
     }));
     await open(page);
     const watcher = page.locator("[data-watcher]");
+    // All well: one line (stage 2, admin task list, P0-5).
     await expect(page.locator('[data-server="OK"]')).toBeVisible();
     await expect(watcher).toHaveText(
-      "Сторож перевіряв щойно. Проблем не помічено.",
+      "Стан сервера · проблем не помічено · сторож перевіряв щойно",
     );
+    await expect(page.locator(".backups-now .today-tag")).toHaveCount(0);
     await expect(tab(page)).toHaveText("Ще");
 
+    // Quiet: a row that waits, its title the watcher's words, what it means
+    // under them.
     const refresh = page.getByRole("button", { name: "Оновити" });
+    const quiet =
+      "Поки він мовчить, бот нічого не напише — ні про копії, ні про сервер. Перевірте його за інструкцією сервера.";
     lookedMinutesAgo = 40;
     await refresh.click();
-    await expect(page.locator('[data-server="SILENT"]')).toBeVisible();
-    await expect(watcher).toHaveText(
-      "Сторож перевіряв 40 хв тому. Поки він мовчить, бот нічого не напише — ні про копії, ні про сервер. Перевірте його за інструкцією сервера.",
-    );
+    const silent = page.locator('[data-server="SILENT"]');
+    await expect(silent).toBeVisible();
+    await expect(watcher).toHaveRole("heading");
+    await expect(watcher).toHaveText("Сторож перевіряв 40 хв тому.");
+    await expect(silent.locator(".today-tag")).toHaveClass(/tone-warning/);
+    await expect(silent.locator(".backups-why")).toHaveText(quiet);
 
     lookedMinutesAgo = null;
     await refresh.click();
-    await expect(watcher).toHaveText(
-      "Сторож ще не перевіряв сервер. Поки він мовчить, бот нічого не напише — ні про копії, ні про сервер. Перевірте його за інструкцією сервера.",
-    );
+    await expect(watcher).toHaveText("Сторож ще не перевіряв сервер.");
+    await expect(silent.locator(".backups-why")).toHaveText(quiet);
     // The section shows the quiet watcher; the tab is marked for trouble only.
     await expect(tab(page)).toHaveText("Ще");
   });

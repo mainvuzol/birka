@@ -186,12 +186,25 @@ export function journal<
     };
   }
 
+  /** An attempt as it was written down: one cut short or not even JSON is
+   * as unreadable as one of the wrong shape, and says so in the journal's
+   * own words (stage 2, admin task list, P2-3; review, 2026-11-07). */
+  function parsed(storageKey: string, raw: string): Attempt<Body> {
+    let value: unknown;
+    try {
+      value = JSON.parse(raw);
+    } catch {
+      throw new Error(corrupt);
+    }
+    return validate(storageKey, value);
+  }
+
   function load(storageKey: string): Attempt<Body> | null {
     const raw = localStorage.getItem(storageKey);
     if (!raw) return null;
     // Anything found on disk was sent, or may have been.
     const attempt = {
-      ...validate(storageKey, JSON.parse(raw)),
+      ...parsed(storageKey, raw),
       ambiguous: true,
     };
     localStorage.setItem(storageKey, JSON.stringify(attempt));
@@ -225,7 +238,7 @@ export function journal<
       const saved = localStorage.getItem(storageKey);
       let existing: Attempt<Body> | null = null;
       if (saved) {
-        existing = validate(storageKey, JSON.parse(saved));
+        existing = parsed(storageKey, saved);
         if (existing.body.command_id !== current.body.command_id) {
           use.setState({ pending: existing });
           throw new Error(unfinished);

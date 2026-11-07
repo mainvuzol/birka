@@ -541,6 +541,25 @@ export function App(): JSX.Element {
           setStoreId("");
         }
       : undefined;
+  // No store to choose: one blank tag, the owner the one to ask, as on
+  // every screen before a store (spec §6.28; stage 2, admin task list,
+  // P2-3).
+  if (me.data.stores.length === 0)
+    return (
+      <main className="before-store">
+        <p className="opened-as app-name">
+          <span className="avatar" aria-hidden="true">
+            <Icon name="mark" />
+          </span>
+          <span>Бірка</span>
+        </p>
+        <BlankTag>
+          <h1 className="t-title-l">Магазинів поки немає</h1>
+          <p className="blank-body">Зверніться до власника.</p>
+          <button onClick={readAgain}>Спробувати ще раз</button>
+        </BlankTag>
+      </main>
+    );
   return (
     <main>
       {!store ? (
@@ -558,36 +577,32 @@ export function App(): JSX.Element {
             </p>
           </header>
           <section className="door">
-            {me.data.stores.length === 0 ? (
-              <p>Доступних магазинів немає. Зверніться до адміністратора.</p>
-            ) : (
-              me.data.stores.map((s) => (
-                <button
-                  type="button"
-                  className="store-tag tag-hero tag-outline"
-                  key={s.id}
-                  onClick={() => {
-                    // A choice, felt (spec §4.4; «Усе на бірці» task list,
-                    // P1-2).
-                    buzz("selection");
-                    setStoreId(s.id);
-                  }}
-                >
-                  <span className="store-tag-in">
-                    <span className="store-tag-name">{visible(s.name)}</span>
-                    <span className="t-meta store-tag-code">
-                      {visible(s.code)}
-                    </span>
-                    {/* Its state in its words, as before, on a sticker. */}
-                    {s.state !== "ACTIVE" && (
-                      <span className="badge store-tag-state">
-                        {stateText(s)}
-                      </span>
-                    )}
+            {me.data.stores.map((s) => (
+              <button
+                type="button"
+                className="store-tag tag-hero tag-outline"
+                key={s.id}
+                onClick={() => {
+                  // A choice, felt (spec §4.4; «Усе на бірці» task list,
+                  // P1-2).
+                  buzz("selection");
+                  setStoreId(s.id);
+                }}
+              >
+                <span className="store-tag-in">
+                  <span className="store-tag-name">{visible(s.name)}</span>
+                  <span className="t-meta store-tag-code">
+                    {visible(s.code)}
                   </span>
-                </button>
-              ))
-            )}
+                  {/* Its state in its words, as before, on a sticker. */}
+                  {s.state !== "ACTIVE" && (
+                    <span className="badge store-tag-state">
+                      {stateText(s)}
+                    </span>
+                  )}
+                </span>
+              </button>
+            ))}
           </section>
         </>
       ) : store.state !== "ACTIVE" && store.permissions.length === 0 ? (
@@ -3833,7 +3848,9 @@ function Workspace({
             storeId={store.id}
             token={token}
             journalKey={storesKey}
-            blocked={otherThanStores}
+            // Its own kept change unreadable: nothing to change it with
+            // either (review, 2026-11-07).
+            blocked={otherThanStores || storesStorageError}
             changed={storesChanged}
             back={moreBack}
           />

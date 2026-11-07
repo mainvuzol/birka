@@ -1,6 +1,7 @@
 import {
   test,
   expect,
+  countTaps,
   expectStub,
   menu,
   more,
@@ -9,7 +10,7 @@ import {
   section,
   sections,
 } from "./fixtures";
-import type { Page, Request } from "@playwright/test";
+import type { Locator, Page, Request } from "@playwright/test";
 import { createHmac, randomBytes, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 
@@ -60,13 +61,59 @@ function initData(telegramUserId: string): string {
   return fields.toString();
 }
 
-/** The app, opened from Telegram by this person. */
-async function openAs(page: Page, telegramUserId: string): Promise<void> {
+/** The app, opened from Telegram 8.0 by this person: its «Назад», its
+ * buzzes and its MainButton are Telegram's — or, `outside`, from a Telegram
+ * too old for them, the MainButton the page's own dock. */
+async function openAs(
+  page: Page,
+  telegramUserId: string,
+  {
+    theme,
+    outside = false,
+  }: { theme?: Record<string, string>; outside?: boolean } = {},
+): Promise<void> {
   // A change of the hash alone would not reload the app.
   await page.goto("about:blank");
-  await page.goto(
-    `/#${new URLSearchParams({ tgWebAppData: initData(telegramUserId) }).toString()}`,
-  );
+  const hash = new URLSearchParams({ tgWebAppData: initData(telegramUserId) });
+  if (!outside) hash.set("tgWebAppVersion", "8.0");
+  if (theme) hash.set("tgWebAppThemeParams", JSON.stringify(theme));
+  await page.goto(`/#${hash.toString()}`);
+}
+
+/** Telegram's «Назад» pressed. */
+async function pressBack(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        data: JSON.stringify({ eventType: "back_button_pressed" }),
+        source: window.parent,
+      }),
+    );
+  });
+}
+
+/** What the app tells Telegram: its buzzes. */
+async function hearBuzzes(page: Page): Promise<() => Promise<unknown[]>> {
+  await page.addInitScript(() => {
+    const host = window as unknown as {
+      TelegramWebviewProxy: {
+        postEvent: (event: string, data: string) => void;
+      };
+      buzzes: string[];
+    };
+    host.buzzes = [];
+    host.TelegramWebviewProxy = {
+      postEvent: (event, data) => {
+        if (event === "web_app_trigger_haptic_feedback") host.buzzes.push(data);
+      },
+    };
+  });
+  return () =>
+    page.evaluate(() =>
+      (window as unknown as { buzzes: string[] }).buzzes.map(
+        (data) => JSON.parse(data) as unknown,
+      ),
+    );
 }
 
 async function tokenOf(page: Page, telegramUserId: string): Promise<string> {
@@ -206,8 +253,34 @@ async function keyIn(page: Page, sum: string): Promise<void> {
       .click();
 }
 
+/** A store's own screen (stage 2, admin task list, P0-3). */
 function card(page: Page, name: string) {
   return page.getByRole("article", { name: `Магазин ${name}` });
+}
+
+/** A store's tag on «Магазини», as a reader hears it: its name, and its
+ * state with since when while it does not trade. */
+function storeTag(page: Page, name: string): Locator {
+  return page.getByRole("button", {
+    name: new RegExp(`^Магазин ${name}(, |$)`),
+  });
+}
+
+/** A store's own screen, opened by its tag: its name takes the cursor. */
+async function storeScreen(page: Page, name: string): Promise<Locator> {
+  await storeTag(page, name).click();
+  const screen = card(page, name);
+  await expect(
+    screen.getByRole("heading", { name, exact: true, level: 1 }),
+  ).toBeFocused();
+  return screen;
+}
+
+/** The question a state's button asks (P0-4), once it takes taps. */
+async function stateSheet(page: Page, title: string): Promise<Locator> {
+  const sheet = page.getByRole("dialog", { name: title });
+  await expect(sheet).toHaveAttribute("data-ready", "");
+  return sheet;
 }
 
 async function storesSection(page: Page): Promise<void> {
@@ -222,28 +295,48 @@ test("the owner blocks a store; its seller sees only that, and the owner reads i
   await settle(page, fixture.network_market_store_id, "ACTIVE");
   await damagedAtTheMarket(page);
   const changes = posts(page, "/state");
+  const buzzes = await hearBuzzes(page);
   await storesSection(page);
-  const market = card(page, "Ринок");
+  // Nothing to press on the list but a store's tag: its state's buttons
+  // are on its own screen (stage 2, admin task list, P0-3).
+  await expect(page.getByRole("button", { name: "Заблокувати" })).toHaveCount(
+    0,
+  );
+  const market = await storeScreen(page, "Ринок");
   await market.getByRole("button", { name: "Заблокувати" }).click();
+  // Asked in a sheet, a reason needed: what follows, and who reads the
+  // reason under its field (P0-4).
+  const sheet = await stateSheet(page, "Заблокувати «Ринок»?");
+  const yes = sheet.getByRole("button", { name: "Так, заблокувати «Ринок»" });
   // Never without a reason.
-  await expect(
-    market.getByRole("button", { name: "Так, заблокувати «Ринок»" }),
-  ).toBeDisabled();
-  await market.getByLabel(/^Причина/).fill("Ревізія каси");
+  await expect(yes).toBeDisabled();
+  await expect(sheet).toContainText(
+    "Борги його покупців приймає будь-який магазин, що працює.",
+  );
+  const why = sheet.getByLabel(/^Причина/);
+  await expect(why).toHaveAccessibleDescription(
+    "Її бачите ви й менеджери мережі, не продавці.",
+  );
+  await why.fill("Ревізія каси");
   // Refused once for a reason the screen does not name: its own words,
-  // never an order's (owner decision, 2026-10-25).
+  // never an order's (owner decision, 2026-10-25) — in the same sheet,
+  // the reason kept.
   await refuseOnce(page, "**/api/v1/stores/*/state", 409);
-  await market
-    .getByRole("button", { name: "Так, заблокувати «Ринок»" })
-    .click();
-  await expect(
-    market.getByText(
-      "Стан магазину не змінено: його змінили — перегляньте його й спробуйте ще раз.",
-      { exact: true },
-    ),
-  ).toBeVisible();
-  // While the change is sent, «← Ще» is held: its answer is said here
-  // (navigation task list, P0-4; review, 2026-10-26).
+  await yes.click();
+  await expect(sheet.getByRole("alert")).toHaveText(
+    "Стан магазину не змінено: його змінили — перегляньте його й спробуйте ще раз.",
+  );
+  // The cursor on why, in the sheet: the button it was on was held
+  // (review, 2026-11-07). Felt as an error (spec §4.4).
+  await expect(sheet.getByRole("alert")).toBeFocused();
+  expect(await buzzes()).toContainEqual({
+    type: "notification",
+    notification_type: "error",
+  });
+  await expect(why).toHaveValue("Ревізія каси");
+  // While the change is sent, no way out: Telegram's «Назад» and
+  // «Скасувати» are held, its answer is said here (navigation task list,
+  // P0-4; review, 2026-10-26).
   let letGo: () => void = () => undefined;
   const sending = new Promise<void>((done) => {
     letGo = done;
@@ -252,16 +345,51 @@ test("the owner blocks a store; its seller sees only that, and the owner reads i
     await sending;
     await route.fallback();
   });
-  const back = page.getByRole("button", { name: "Назад до «Ще»" });
-  await expect(back).toBeEnabled();
-  await market
-    .getByRole("button", { name: "Так, заблокувати «Ринок»" })
-    .click();
-  await expect(back).toBeDisabled();
+  await yes.click();
+  await expect(sheet.getByRole("button", { name: "Скасувати" })).toBeDisabled();
+  await pressBack(page);
+  // A frame for a close to be drawn, were it one.
+  await page.evaluate(
+    () => new Promise((drawn) => requestAnimationFrame(drawn)),
+  );
+  await expect(sheet).toBeVisible();
+  await expect(sheet.getByRole("button", { name: "Скасувати" })).toBeDisabled();
+  // Its answer said at once, the list read again meanwhile and never
+  // waited for: the button is never there to be pressed twice (review,
+  // 2026-11-07).
+  let readBack: () => void = () => undefined;
+  const reading = new Promise<void>((done) => {
+    readBack = done;
+  });
+  await page.route("**/api/v1/stores", async (route) => {
+    if (route.request().method() === "GET") await reading;
+    await route.fallback();
+  });
   letGo();
-  await expect(market.getByText("Заблоковано", { exact: true })).toBeVisible();
-  await expect(back).toBeEnabled();
-  await expect(market.getByText("Причина: Ревізія каси")).toBeVisible();
+  // Recorded: the sheet gone, the stub torn off on the store's screen —
+  // what, at what time and why, the cursor on it — and its sticker
+  // changed.
+  await expect(sheet).toHaveCount(0);
+  const stub = market.locator(".stub-recorded");
+  await expect(stub.locator("p").first()).toHaveText("«Ринок»: заблоковано.");
+  await expect(stub.locator(".t-meta")).toHaveText(
+    /^\d{2}:\d{2} · Причина: Ревізія каси$/,
+  );
+  await expect(market.locator(".stores-notices")).toBeFocused();
+  expect(await buzzes()).toContainEqual({
+    type: "notification",
+    notification_type: "success",
+  });
+  readBack();
+  await expect(market.locator(".store-tag-state")).toHaveText(
+    /^Заблоковано з \d{2}\.\d{2}$/,
+  );
+  await expect(
+    market.getByText("Причина: Ревізія каси", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Назад до магазинів" }),
+  ).toBeEnabled();
   // The one refused above, then the same change as a new command.
   expect(changes.bodies).toHaveLength(2);
   expect({
@@ -380,18 +508,19 @@ test("the owner blocks a store; its seller sees only that, and the owner reads i
 
   // Unblocked, Петро works as before.
   await section(page, "Магазини");
-  await card(page, "Ринок")
-    .getByRole("button", { name: "Розблокувати" })
-    .click();
-  await card(page, "Ринок")
-    .getByLabel(/^Причина/)
-    .fill("Ревізію завершено");
-  await card(page, "Ринок")
+  const blocked = await storeScreen(page, "Ринок");
+  await blocked.getByRole("button", { name: "Розблокувати" }).click();
+  const unblock = await stateSheet(page, "Розблокувати «Ринок»?");
+  // Nothing of debts: the store takes its own again.
+  await expect(unblock).not.toContainText("Борги його покупців");
+  await unblock.getByLabel(/^Причина/).fill("Ревізію завершено");
+  await unblock
     .getByRole("button", { name: "Так, магазин працює «Ринок»" })
     .click();
-  await expect(
-    card(page, "Ринок").getByText("Працює", { exact: true }),
-  ).toBeVisible();
+  await expect(blocked.locator(".stub-recorded")).toContainText(
+    "«Ринок»: працює.",
+  );
+  await expect(blocked.locator(".store-tag-state")).toHaveCount(0);
   await expect(page.getByText(/Лише перегляд/)).toHaveCount(0);
   await openAs(page, petro);
   await openStore(page, /^Ринок MARKET/);
@@ -443,7 +572,8 @@ test("a debt of a blocked store is found by the whole phone and paid at a store 
         searches.push(request.url());
     });
     const payments = posts(page, "/payments");
-    await openAs(page, hanna);
+    // «Внесок» the dock's button.
+    await openAs(page, hanna, { outside: true });
     await openStore(page, "Центр CENTRE");
     await section(page, "Покупці");
     // The store's own list: never another's.
@@ -566,8 +696,9 @@ test("a debt of a blocked store is found by the whole phone and paid at a store 
     ).toContainText("Внесок · картка");
 
     // In the blocked store itself the owner reads the debt: no payment is
-    // taken there, and the network's owner may still write it off.
-    await openAs(page, owner);
+    // taken there, and the network's owner may still write it off. Outside
+    // Telegram, so that no «Внесок» means no dock's button either.
+    await openAs(page, owner, { outside: true });
     await openStore(page, /^Ринок MARKET/);
     await section(page, "Покупці");
     // Its whole number: the debt here, and never the closed stores asked
@@ -620,28 +751,84 @@ test("a debt of a blocked store is found by the whole phone and paid at a store 
   }
 });
 
-test("only an empty store is archived, and the refusal says what is left", async ({
+test("a change made meanwhile elsewhere is refused as done already: said in the sheet, felt as an error, and its «Так» dark once the store is read again (stage 2, admin task list, P0-4)", async ({
+  page,
+}) => {
+  await settle(page, fixture.network_market_store_id, "ACTIVE");
+  try {
+    const buzzes = await hearBuzzes(page);
+    await storesSection(page);
+    const market = await storeScreen(page, "Ринок");
+    await market.getByRole("button", { name: "Заблокувати" }).click();
+    const sheet = await stateSheet(page, "Заблокувати «Ринок»?");
+    await sheet.getByLabel(/^Причина/).fill("Перевірка");
+    // Blocked meanwhile from another phone.
+    await settle(page, fixture.network_market_store_id, "BLOCKED");
+    const yes = sheet.getByRole("button", { name: "Так, заблокувати «Ринок»" });
+    await yes.click();
+    await expect(sheet.getByRole("alert")).toHaveText(
+      "Магазин уже в цьому стані. Список оновлено.",
+    );
+    expect(await buzzes()).toContainEqual({
+      type: "notification",
+      notification_type: "error",
+    });
+    // Nothing more to send from this question, the reason typed or not.
+    await expect(yes).toBeDisabled();
+    await expect(sheet.getByLabel(/^Причина/)).toHaveValue("Перевірка");
+    await sheet.getByRole("button", { name: "Скасувати" }).click();
+    await expect(sheet).toHaveCount(0);
+    await expect(market.locator(".store-tag-state")).toHaveText(
+      /^Заблоковано з \d{2}\.\d{2}$/,
+    );
+  } finally {
+    await settle(page, fixture.network_market_store_id, "ACTIVE");
+  }
+});
+
+test("only an empty store is archived: Telegram's «Назад» closes the question while nothing is sent, and the refusal, felt as a warning, says what is left in the same sheet (stage 2, admin task list, P0-4)", async ({
   page,
 }) => {
   await settle(page, fixture.network_market_store_id, "ACTIVE");
   await received(page, fixture.network_market_location_id, 2);
+  const buzzes = await hearBuzzes(page);
   await storesSection(page);
-  const market = card(page, "Ринок");
-  await market.getByRole("button", { name: "Закрити в архів" }).click();
+  const market = await storeScreen(page, "Ринок");
+  const archive = market.getByRole("button", { name: "Закрити в архів" });
+  await archive.click();
+  let sheet = await stateSheet(page, "Закрити «Ринок» в архів?");
   await expect(
-    market.getByText(/Закрити можна лише порожній магазин/),
+    sheet.getByText(/^Закрити можна лише порожній магазин/),
   ).toBeVisible();
-  await market.getByLabel(/^Причина/).fill("Закриваємо ринок");
-  await market
+  await expect(sheet).toContainText(
+    "Борги його покупців приймає будь-який магазин, що працює.",
+  );
+  // Nothing sent: Telegram's «Назад» closes it, the cursor back where it was.
+  await pressBack(page);
+  await expect(sheet).toHaveCount(0);
+  await expect(archive).toBeFocused();
+  await archive.click();
+  sheet = await stateSheet(page, "Закрити «Ринок» в архів?");
+  await sheet.getByLabel(/^Причина/).fill("Закриваємо ринок");
+  await sheet
     .getByRole("button", { name: "Так, закрити в архів «Ринок»" })
     .click();
+  await expect(sheet.getByRole("alert")).toContainText(
+    "Закрити в архів можна лише порожній магазин.",
+  );
+  // What is left a line each, in «шт.».
   await expect(
-    market.getByText(/Закрити в архів можна лише порожній магазин/),
-  ).toBeVisible();
-  await expect(
-    market.getByRole("list", { name: "Що лишилось у магазині" }),
-  ).toContainText(/Власний склад «Склад ринку»: \d+ од\./);
-  await expect(market.getByText("Працює", { exact: true })).toBeVisible();
+    sheet.getByRole("list", { name: "Що лишилось у магазині" }),
+  ).toContainText(/Власний склад «Склад ринку» · \d+ шт\./);
+  await expect(sheet).not.toContainText(/од\./);
+  expect(await buzzes()).toContainEqual({
+    type: "notification",
+    notification_type: "warning",
+  });
+  await sheet.getByRole("button", { name: "Скасувати" }).click();
+  await expect(sheet).toHaveCount(0);
+  // Still trading: no sticker.
+  await expect(market.locator(".store-tag-state")).toHaveCount(0);
 });
 
 test("an archived store opens again, and is archived again once empty", async ({
@@ -649,30 +836,50 @@ test("an archived store opens again, and is archived again once empty", async ({
 }) => {
   await settle(page, fixture.network_old_store_id, "ARCHIVED");
   await storesSection(page);
-  const old = card(page, "Старий");
-  await expect(old.getByText("В архіві", { exact: true })).toBeVisible();
+  // On the list, its sticker says since when (P0-3).
+  await expect(storeTag(page, "Старий")).toHaveAccessibleName(
+    /^Магазин Старий, В архіві з \d{2}\.\d{2}$/,
+  );
+  await expect(storeTag(page, "Старий").locator(".store-tag-state")).toHaveText(
+    /^В архіві з \d{2}\.\d{2}$/,
+  );
+  const old = await storeScreen(page, "Старий");
   // An archived store opens to trade; it is never blocked.
   await expect(old.getByRole("button", { name: "Заблокувати" })).toHaveCount(0);
   await old.getByRole("button", { name: "Відкрити знову" }).click();
-  await old.getByLabel(/^Причина/).fill("Відкриваємось");
-  await old
+  const reopen = await stateSheet(page, "Відкрити «Старий» знову?");
+  await reopen.getByLabel(/^Причина/).fill("Відкриваємось");
+  await reopen
     .getByRole("button", { name: "Так, магазин працює «Старий»" })
     .click();
-  await expect(old.getByText("Працює", { exact: true })).toBeVisible();
+  await expect(old.locator(".stub-recorded")).toContainText(
+    "«Старий»: працює.",
+  );
+  await expect(old.locator(".store-tag-state")).toHaveCount(0);
 
   await old.getByRole("button", { name: "Закрити в архів" }).click();
-  await old.getByLabel(/^Причина/).fill("Знову закрили");
-  await old
+  const close = await stateSheet(page, "Закрити «Старий» в архів?");
+  await close.getByLabel(/^Причина/).fill("Знову закрили");
+  await close
     .getByRole("button", { name: "Так, закрити в архів «Старий»" })
     .click();
-  await expect(old.getByText("В архіві", { exact: true })).toBeVisible();
-  await old.getByText("Історія змін").click();
-  await expect(
-    old.getByRole("list", { name: "Історія: Старий" }),
-  ).toContainText("Працює → В архіві");
-  await expect(
-    old.getByRole("list", { name: "Історія: Старий" }),
-  ).toContainText("В архіві → Працює");
+  await expect(old.locator(".stub-recorded")).toContainText(
+    "«Старий»: в архіві.",
+  );
+  await expect(old.locator(".store-tag-state")).toHaveText(
+    /^В архіві з \d{2}\.\d{2}$/,
+  );
+  // Its history a thread, newest first, never folded; every change a knot.
+  const history = old.getByRole("list", { name: "Історія: Старий" });
+  await expect(history.locator("li").first()).toContainText(
+    "Працює → В архіві",
+  );
+  await expect(history.locator("li").first()).toContainText("Знову закрили");
+  await expect(history.locator("li").nth(1)).toContainText("В архіві → Працює");
+  await expect(history.locator(".timeline-node.knot")).toHaveCount(
+    await history.locator("li").count(),
+  );
+  await expect(page.locator("details")).toHaveCount(0);
 });
 
 test("a change whose answer is lost is resent unchanged, and done once", async ({
@@ -691,19 +898,41 @@ test("a change whose answer is lost is resent unchanged, and done once", async (
   });
   try {
     await storesSection(page);
-    await card(page, "Ринок")
-      .getByRole("button", { name: "Заблокувати" })
-      .click();
-    await card(page, "Ринок")
-      .getByLabel(/^Причина/)
-      .fill("Перевірка");
-    await card(page, "Ринок")
+    const market = await storeScreen(page, "Ринок");
+    await market.getByRole("button", { name: "Заблокувати" }).click();
+    const sheet = await stateSheet(page, "Заблокувати «Ринок»?");
+    await sheet.getByLabel(/^Причина/).fill("Перевірка");
+    await sheet
       .getByRole("button", { name: "Так, заблокувати «Ринок»" })
       .click();
-    await expect(page.getByText("Незавершена зміна стану")).toBeVisible();
+    // Its answer lost: the sheet gone, the stub still attached on the
+    // store's screen — «Ще не підтверджено», since when, the same change
+    // checked by its own button (stage 2, admin task list, P0-4).
+    await expect(sheet).toHaveCount(0);
+    const kept = market.locator(".stub-kept");
+    await expect(
+      kept.getByRole("heading", { name: "Незавершена зміна стану" }),
+    ).toBeVisible();
+    await expect(kept).toContainText("Ще не підтверджено");
+    await expect(kept).toContainText(/Чекає відповіді сервера з \d{2}:\d{2}\./);
+    // No answer says nothing more than the stub: never the error's own
+    // name (review, 2026-11-07). The cursor on it.
+    await expect(market.getByRole("alert")).toHaveCount(0);
+    await expect(kept).not.toContainText("UNREACHABLE");
+    await expect(market.locator(".stores-notices")).toBeFocused();
+    await expect(
+      market.getByRole("button", { name: "Заблокувати" }),
+    ).toBeDisabled();
     await expect(
       page.getByRole("button", { name: "Замовлення", exact: true }),
     ).toBeDisabled();
+    // On the list too: it is the section's.
+    await page.getByRole("button", { name: "Назад до магазинів" }).click();
+    await expect(
+      page.locator(".stub-kept").getByRole("heading", {
+        name: "Незавершена зміна стану",
+      }),
+    ).toBeVisible();
     // Its own section stays open under «Ще», every other is held (P1-6).
     await more(page);
     await expect(
@@ -718,22 +947,379 @@ test("a change whose answer is lost is resent unchanged, and done once", async (
     // Written down before it was sent: a reload still knows what to ask about.
     await page.reload();
     await openStore(page, "Центр CENTRE");
-    await expect(page.getByText("Незавершена зміна стану")).toBeVisible();
+    await expect(
+      page.locator(".stub-kept").getByRole("heading", {
+        name: "Незавершена зміна стану",
+      }),
+    ).toBeVisible();
+    // Checked, and answered with no proof: still kept, said why in the
+    // shared words — never a manager to ask, its reader the owner (review,
+    // 2026-11-07).
+    await refuseOnce(page, "**/api/v1/stores/*/state", 409);
     await page.getByRole("button", { name: "Перевірити результат" }).click();
-    await expect(page.getByText("«Ринок»: заблоковано.")).toBeVisible();
+    await expect(page.locator(".stub-kept")).toContainText(
+      "Зміну стану ще не підтверджено: сервер відповів, що дані змінилися. Перевірте результат ще раз — двічі вона не виконається.",
+    );
+    await expect(page.locator(".stub-kept")).not.toContainText("менеджер");
+    await expect(page.locator(".stores-notices")).toBeFocused();
+    await page.getByRole("button", { name: "Перевірити результат" }).click();
+    // Answered: the stub torn off — what, when and why.
+    const settled = page.locator(".stub-recorded");
+    await expect(settled.locator("p").first()).toHaveText(
+      "«Ринок»: заблоковано.",
+    );
+    await expect(settled.locator(".t-meta")).toHaveText(
+      /^\d{2}:\d{2} · Причина: Перевірка$/,
+    );
+    await expect(page.locator(".stub-kept")).toHaveCount(0);
     await expect(
       page.getByRole("button", { name: "Замовлення", exact: true }),
     ).toBeEnabled();
-    expect(changes.bodies).toHaveLength(2);
+    expect(changes.bodies).toHaveLength(3);
     expect(changes.bodies[1]).toEqual(changes.bodies[0]);
+    expect(changes.bodies[2]).toEqual(changes.bodies[0]);
     expect(changes.keys[1]).toBe(changes.keys[0]);
     const headers = { Authorization: `Bearer ${await tokenOf(page, owner)}` };
     const stores = (await (
       await page.request.get("/api/v1/stores", { headers })
     ).json()) as (StoreRecord & { changes: unknown[] })[];
-    const market = stores.find((s) => s.id === fixture.network_market_store_id);
-    expect(market?.state).toBe("BLOCKED");
+    const record = stores.find((s) => s.id === fixture.network_market_store_id);
+    expect(record?.state).toBe("BLOCKED");
   } finally {
     await settle(page, fixture.network_market_store_id, "ACTIVE");
   }
 });
+
+test("«Магазини» are the door's tags, a store's own screen two taps from «Ще»: Telegram's «Назад» to the list and on to «Ще», a tag's tap felt, its history a thread (stage 2, admin task list, P0-3, В-А3 (а))", async ({
+  page,
+}) => {
+  await settle(page, fixture.network_market_store_id, "BLOCKED");
+  try {
+    const buzzes = await hearBuzzes(page);
+    await openAs(page, owner);
+    await openStore(page, "Центр CENTRE");
+    await more(page);
+    const taps = await countTaps(page);
+    await sections(page)
+      .getByRole("button", { name: "Магазини", exact: true })
+      .click();
+    // No hint over them: its facts are the sheet's now (P0-4).
+    await expect(page.getByText(/нічого не робить: ні продажів/)).toHaveCount(
+      0,
+    );
+    // A tag a store, the order the server's; its code under its name, a
+    // store that does not trade with its state and since when.
+    await expect(storeTag(page, "Старий")).toBeVisible();
+    expect(
+      await page.locator(".stores-list > .store-tag").count(),
+    ).toBeGreaterThanOrEqual(3);
+    await expect(storeTag(page, "Центр")).toHaveAccessibleName("Магазин Центр");
+    await expect(storeTag(page, "Ринок")).toHaveAccessibleName(
+      /^Магазин Ринок, Заблоковано з \d{2}\.\d{2}$/,
+    );
+    await expect(storeTag(page, "Ринок").locator(".store-tag-code")).toHaveText(
+      "MARKET",
+    );
+    // The tag's own buzz, not «Ще»'s before it.
+    const heard = (await buzzes()).length;
+    await storeTag(page, "Ринок").click();
+    const market = card(page, "Ринок");
+    // Its ways at its foot, under the thread (P0-3: «Зона действия внизу»).
+    await expect(
+      market.getByRole("button", { name: "Розблокувати" }),
+    ).toBeVisible();
+    // «Магазини», then the store's tag.
+    expect(await taps()).toBe(2);
+    await expect(
+      market.getByRole("heading", { name: "Ринок", exact: true, level: 1 }),
+    ).toBeFocused();
+    expect((await buzzes()).slice(heard)).toContainEqual({
+      type: "selection_change",
+    });
+    // Why it does not trade, under its sticker; its history a thread, the
+    // newest first, every change recorded, nothing folded.
+    await expect(market.locator(".store-hero-why")).toHaveText(/^Причина: /);
+    const history = market.getByRole("list", { name: "Історія: Ринок" });
+    await expect(history.locator("li").first()).toContainText(
+      "Працює → Заблоковано",
+    );
+    await expect(
+      history.locator("li").first().locator(".timeline-node"),
+    ).toHaveClass(/knot/);
+    await expect(page.locator("details")).toHaveCount(0);
+    // Its buttons ordinary ones, never the action's colour; the archive's
+    // the quiet one. No MainButton on either screen.
+    const accent = await page.evaluate(() => {
+      const probe = document.createElement("i");
+      probe.style.color = "var(--accent)";
+      document.body.append(probe);
+      const colour = getComputedStyle(probe).color;
+      probe.remove();
+      return colour;
+    });
+    for (const name of ["Розблокувати", "Закрити в архів"])
+      await expect(market.getByRole("button", { name })).not.toHaveCSS(
+        "background-color",
+        accent,
+      );
+    await expect(
+      market.getByRole("button", { name: "Закрити в архів" }),
+    ).toHaveClass(/quiet/);
+    // Telegram's «Назад»: the list, its heading taking the cursor; then «Ще».
+    await pressBack(page);
+    await expect(
+      page.getByRole("heading", { name: "Магазини", exact: true }),
+    ).toBeFocused();
+    await pressBack(page);
+    await expect(
+      page.getByRole("heading", { name: "Ще", exact: true }),
+    ).toBeVisible();
+    // And from the keyboard: a tag is a button like any.
+    await sections(page)
+      .getByRole("button", { name: "Магазини", exact: true })
+      .click();
+    await storeTag(page, "Старий").focus();
+    await page.keyboard.press("Enter");
+    await expect(
+      card(page, "Старий").getByRole("heading", { name: "Старий", level: 1 }),
+    ).toBeFocused();
+  } finally {
+    await settle(page, fixture.network_market_store_id, "ACTIVE");
+  }
+});
+
+for (const [name, theme] of [
+  ["light", { bg_color: "#ffffff", text_color: "#000000" }],
+  ["dark", { bg_color: "#17212b", text_color: "#f5f5f5" }],
+] as const)
+  test(`in the ${name} theme at 360 × 640 five stores' tags, a store's screen and its question read at 4.5:1, nothing wider than the phone (stage 2, admin task list, P0-3, P0-4)`, async ({
+    page,
+  }) => {
+    await settle(page, fixture.network_market_store_id, "BLOCKED");
+    try {
+      // Five stores, two of them long-named, as the server would send them.
+      await page.route("**/api/v1/stores", async (route) => {
+        if (route.request().method() !== "GET") {
+          await route.fallback();
+          return;
+        }
+        const response = await route.fetch();
+        const stores = (await response.json()) as object[];
+        const more = (storeName: string, code: string) => ({
+          id: randomUUID(),
+          name: storeName,
+          code,
+          kind: "SECONDARY",
+          state: "ACTIVE",
+          state_since: null,
+          changes: [],
+        });
+        await route.fulfill({
+          response,
+          json: [
+            ...stores,
+            more(
+              "Магазин на Привокзальній площі біля фонтану",
+              "STATION-SQUARE",
+            ),
+            more("Торговий центр «Дафі», третій поверх", "DAFI-3"),
+          ],
+        });
+      });
+      await page.setViewportSize({ width: 360, height: 640 });
+      await openAs(page, owner, { theme });
+      await openStore(page, "Центр CENTRE");
+      // At its top, however far down «Ще» its row was — read before, so
+      // drawn whole at once, never short while it loads.
+      await section(page, "Магазини");
+      await expect(storeTag(page, "Ринок")).toBeVisible();
+      await more(page);
+      await page.evaluate(() => {
+        window.scrollTo(0, document.documentElement.scrollHeight);
+      });
+      expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+      await sections(page)
+        .getByRole("button", { name: "Магазини", exact: true })
+        .click();
+      await expect(
+        page.getByRole("heading", { name: "Магазини", exact: true }),
+      ).toBeVisible();
+      await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+      // The two long names last, under the network's own (five at least).
+      const tags = page.locator(".stores-list > .store-tag");
+      await expect(tags.last()).toHaveAccessibleName(
+        "Магазин Торговий центр «Дафі», третій поверх",
+      );
+      expect(await tags.count()).toBeGreaterThanOrEqual(5);
+      const market = storeTag(page, "Ринок");
+      for (const part of [
+        market.locator(".store-tag-name"),
+        market.locator(".store-tag-code"),
+        market.locator(".store-tag-state"),
+      ])
+        expect(await contrast(part)).toBeGreaterThanOrEqual(4.5);
+      await expect(page.locator("html")).toHaveJSProperty("scrollWidth", 360);
+      await page.screenshot({
+        path: `test-results/stores-${name}.png`,
+        fullPage: true,
+      });
+
+      const screen = await storeScreen(page, "Ринок");
+      for (const part of [
+        screen.locator(".store-tag-name"),
+        screen.locator(".store-tag-code"),
+        screen.locator(".store-tag-state"),
+        screen.locator(".store-hero-why"),
+        screen.locator(".customer-history-title"),
+        screen.locator(".timeline-day").first(),
+        screen.locator(".timeline-what").first(),
+        screen.locator(".timeline-meta").first(),
+        screen.getByRole("button", { name: "Розблокувати" }),
+        screen.getByRole("button", { name: "Закрити в архів" }),
+      ])
+        expect(await contrast(part)).toBeGreaterThanOrEqual(4.5);
+      await expect(page.locator("html")).toHaveJSProperty("scrollWidth", 360);
+      await page.screenshot({
+        path: `test-results/store-${name}.png`,
+        fullPage: true,
+      });
+
+      await screen.getByRole("button", { name: "Розблокувати" }).click();
+      const sheet = await stateSheet(page, "Розблокувати «Ринок»?");
+      // The reason's button in view with its field.
+      await expect(
+        sheet.getByRole("button", { name: "Так, магазин працює «Ринок»" }),
+      ).toBeInViewport();
+      for (const part of [
+        sheet.locator(".sheet-title"),
+        sheet.locator(".sheet-body > p").first(),
+        sheet.locator(".store-why-hint"),
+        sheet.getByRole("button", { name: "Скасувати" }),
+      ])
+        expect(await contrast(part)).toBeGreaterThanOrEqual(4.5);
+      await expect(page.locator("html")).toHaveJSProperty("scrollWidth", 360);
+      await page.screenshot({ path: `test-results/store-sheet-${name}.png` });
+    } finally {
+      await settle(page, fixture.network_market_store_id, "ACTIVE");
+    }
+  });
+
+test("no store to choose: one blank tag, the owner the one to ask, never an administrator (stage 2, admin task list, P2-3)", async ({
+  page,
+}) => {
+  let none = true;
+  await page.route("**/api/v1/me", async (route) => {
+    const response = await route.fetch();
+    const me = (await response.json()) as object;
+    await route.fulfill({
+      response,
+      json: none ? { ...me, stores: [] } : me,
+    });
+  });
+  await openAs(page, hanna);
+  const tag = page.locator(".blank-tag");
+  await expect(
+    tag.getByRole("heading", { name: "Магазинів поки немає", level: 1 }),
+  ).toBeVisible();
+  await expect(
+    tag.getByText("Зверніться до власника.", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText(/адміністратор/)).toHaveCount(0);
+  await expect(
+    page.getByRole("heading", { name: "Де ви сьогодні?" }),
+  ).toHaveCount(0);
+  await expect(menu(page)).toHaveCount(0);
+  // Added to a store meanwhile: read again, and in.
+  none = false;
+  await tag.getByRole("button", { name: "Спробувати ще раз" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Магазинів поки немає" }),
+  ).toHaveCount(0);
+  await expect(menu(page)).toBeVisible();
+});
+
+test("a kept change the phone cannot read says so, and where to look — never to ask the owner, who reads it (stage 2, admin task list, P2-3)", async ({
+  page,
+}) => {
+  await settle(page, fixture.network_market_store_id, "ACTIVE");
+  const headers = { Authorization: `Bearer ${await tokenOf(page, owner)}` };
+  const me = (await (
+    await page.request.get("/api/v1/me", { headers })
+  ).json()) as { organization_id: string; user_id: string };
+  await storesSection(page);
+  const market = await storeScreen(page, "Ринок");
+  // Written on the phone meanwhile, and not as the app writes it.
+  await page.evaluate((key) => {
+    localStorage.setItem(key, JSON.stringify({ body: {} }));
+  }, `birka:store-state-pending:${me.organization_id}:${me.user_id}:${fixture.network_centre_store_id}`);
+  const changes = posts(page, "/state");
+  await market.getByRole("button", { name: "Заблокувати" }).click();
+  const sheet = await stateSheet(page, "Заблокувати «Ринок»?");
+  await sheet.getByLabel(/^Причина/).fill("Перевірка");
+  await sheet.getByRole("button", { name: "Так, заблокувати «Ринок»" }).click();
+  const unreadable =
+    "Збережену зміну стану магазину не прочитати. Перевірте стан магазину в списку.";
+  await expect(market.getByRole("alert")).toHaveText(unreadable);
+  await expect(market.locator(".stores-notices")).toBeFocused();
+  expect(changes.bodies).toEqual([]);
+  await expect(market.locator(".store-tag-state")).toHaveCount(0);
+  // Cut short, not even JSON: the same words, never the parser's (review,
+  // 2026-11-07).
+  await page.evaluate((key) => {
+    localStorage.setItem(key, '{"key":"');
+  }, `birka:store-state-pending:${me.organization_id}:${me.user_id}:${fixture.network_centre_store_id}`);
+  await market.getByRole("button", { name: "Заблокувати" }).click();
+  const again = await stateSheet(page, "Заблокувати «Ринок»?");
+  await again.getByLabel(/^Причина/).fill("Перевірка");
+  await again.getByRole("button", { name: "Так, заблокувати «Ринок»" }).click();
+  await expect(market.getByRole("alert")).toHaveText(unreadable);
+  expect(changes.bodies).toEqual([]);
+  // Found so as the app opens: said on its plate, and nothing to change a
+  // state with (review, 2026-11-07).
+  await page.reload();
+  await openStore(page, "Центр CENTRE");
+  await expect(
+    page.getByText(
+      "Не вдалося прочитати збережену зміну стану магазину. Не очищайте дані застосунку.",
+    ),
+  ).toBeVisible();
+  await more(page);
+  await sections(page)
+    .getByRole("button", { name: "Магазини", exact: true })
+    .click();
+  const held = await storeScreen(page, "Ринок");
+  await expect(
+    held.getByRole("button", { name: "Заблокувати" }),
+  ).toBeDisabled();
+  expect(changes.bodies).toEqual([]);
+});
+
+/** The WCAG contrast of an element's text against what it is drawn on. */
+async function contrast(element: Locator): Promise<number> {
+  return element.evaluate((node) => {
+    const rgb = (value: string): number[] =>
+      (value.match(/[\d.]+/g) ?? []).map(Number);
+    const luminance = ([r, g, b]: number[]): number => {
+      const channel = (c: number): number => {
+        const v = c / 255;
+        return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+      };
+      return (
+        0.2126 * channel(r ?? 0) +
+        0.7152 * channel(g ?? 0) +
+        0.0722 * channel(b ?? 0)
+      );
+    };
+    let ground: Element | null = node;
+    let background = "rgba(0, 0, 0, 0)";
+    while (ground) {
+      background = getComputedStyle(ground).backgroundColor;
+      const alpha = rgb(background)[3];
+      if (alpha === undefined || alpha > 0) break;
+      ground = ground.parentElement;
+    }
+    const fore = luminance(rgb(getComputedStyle(node).color));
+    const back = luminance(rgb(background));
+    return (Math.max(fore, back) + 0.05) / (Math.min(fore, back) + 0.05);
+  });
+}

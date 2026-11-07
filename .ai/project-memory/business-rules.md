@@ -6696,3 +6696,124 @@ the same body; every sum is the server's.
   - «Щось пішло не так»: the status's place is on the screen from the
     start, empty, and the paper's warning comes into it once the server
     goes quiet, so it is heard as it comes. The banner itself has no role.
+
+## Chosen in chat — 2026-11-07 (stage 2 batch 7: the network's screens — «Магазини» as tags with a screen per store, a state's change in a sheet, «Резервні копії» as one verdict; the door with no store; admin P0-3, P0-4, P0-5, P2-3)
+
+Chosen in chat on 2026-11-07 («Network screens»), after #175: the admin
+task list's points that were left. P1-1 was built with the quick wins
+(#170); P2-1 and P2-2 build nothing by their (а). The owner's questions
+stand by their (а): В-А3 (a store opens as a screen of its own), В-А5
+(«Цей розділ бачить лише власник.» stays), В-А6 (no state line under
+«Магазини» in «Ще»), В-А4 (the archive's words as now), В-А7 (the
+reason's hint as now). No right, no server rule, no command and no state
+changes: a store's state goes through the same journal with the same body
+and `command_id`; who may change it, what a blocked or archived store may
+do, the archive's refusal and its counts, the backups' verdicts and the
+watcher's quarter of an hour are as they were.
+
+- **«Магазини» as tags, a screen per store (P0-3, В-А3 (а)):**
+  - The list is the door's: one tag a store, in the server's order, its
+    name and code; a store that does not trade with its sticker
+    («Заблоковано з 12.10», «В архіві з …»). No hint over the list — its
+    facts are the sheet's now. A tag's tap is a light «selection» buzz.
+  - A tag is read «Магазин Ринок, Заблоковано з 12.10» — the sticker's
+    words, never the code (decided here).
+  - A store's own screen: «← Магазини» (read «Назад до магазинів») and
+    Telegram's «Назад» to the list, the list's heading taking the cursor;
+    again to «Ще». The big tag — name, code, sticker, and for a store that
+    does not trade «Причина: …» of its latest change; under it «Історія
+    змін» as a thread, newest first, never folded: the day, «Працює →
+    Заблоковано», «{who} · {reason}», every node a knot. The day only —
+    the time is not shown in the thread (decided here).
+  - Its buttons at its foot, as before by state; ordinary buttons, never
+    the action's colour, «Закрити в архів» the quiet one. Two taps from
+    «Ще» to «Заблокувати».
+  - Each screen of the section begins at its top, the section too — even
+    when «Ще» was scrolled to its row (decided here, found by the 360 ×
+    640 journey).
+- **A state's change in a sheet (P0-4):**
+  - «Заблокувати «Ринок»?», «Закрити «Ринок» в архів?», «Розблокувати
+    «Ринок»?», «Відкрити «Старий» знову?» — what it means as before,
+    «Борги його покупців приймає будь-який магазин, що працює.» for a
+    block or an archive. The field «Причина», the cursor in it, and under
+    it «Її бачите ви й менеджери мережі, не продавці.» (В-А7 (а)). The
+    confirm stays closed while the reason is empty — and also once the
+    change is no longer offered for the store's state (decided here).
+  - While sent: the confirm pressed with the turning eyelet, «Скасувати»,
+    Escape and Telegram's «Назад» held; nothing closes it.
+  - A refusal stays in the sheet, the reason kept: its words as before
+    (the store's own, never the orders'); the archive's «what is left»
+    lines «Відкриті замовлення · N», «Брак «…» · N шт.», «Власний склад
+    «…» · N шт.». Felt as a warning for «not empty», as an error for any
+    other refusal (decided here).
+  - Recorded: the sheet closes, the stub is torn on the store's screen —
+    ««Ринок»: заблоковано.» and «14:05 · Причина: Ревізія каси» — the
+    sticker changes, a «success» buzz. The time is the newest change into
+    that state, the reason the one sent (decided here).
+  - A lost answer: «Незавершена зміна стану» kept on the list and on every
+    store's screen, with since when; checked only by «Перевірити
+    результат» — never by itself, as before (decided here).
+  - A kept change the phone cannot read: the sheet closes, and the alert
+    says «Збережену зміну стану магазину не прочитати. Перевірте стан
+    магазину в списку.» — whoever reads it is the owner, so it leaves the
+    «Некоректн… Зверніться до…» family (P2-3).
+- **«Резервні копії» as one verdict (P0-5, В-А5 (а)):**
+  - The verdict one big tag, first and largest (34 px, over the screen's
+    title of 28): its eyelet a knot for «Копії в порядку», filled in the
+    warning's colour for the other three. Under it, the last good copy
+    and what the verdict rests on: «перевірена відновленням за 0,4 с ·
+    2,4 МБ»; the reasons and «Попередні копії не видалено.»; «Остання
+    спроба: …» and the schedule's hint; the three sentences of
+    NOT_SET_UP. A failed verdict no longer repeats the night's own
+    «{when}:» line (decided here).
+  - What is wrong now, under it with no caption (decided here): each
+    trouble open on the server a row that waits — what, «з …, уже …», why
+    — then «Стан сервера · сторож перевіряв 2 хв тому»; a watcher quiet
+    for 15 minutes, or never, a row that waits, its words its title and
+    «Поки він мовчить…» under it; all well, one line «Стан сервера ·
+    проблем не помічено · сторож перевіряв щойно». The week's past
+    troubles one line, «Минулі проблеми за 7 днів · N», their list in a
+    sheet (decided here).
+  - Telegram: a row that waits only when it refused or failed, with its
+    words as before — read, no longer an alert announced at once (decided
+    here); otherwise one line, «Сповіщення в Telegram · останнє 12.10 о
+    03:20», «… · бот напише, щойно з копіями щось станеться», or «… ·
+    повідомлення надсилається» (with «· Telegram поки недоступний, бот
+    спробує ще» while it retries; decided here).
+  - «Останні ночі» a thread: the day, «Перевірена» / «Не вдалася» (the
+    first letter capital by style), «HH:MM · size» under it, a knot for a
+    checked night, a filled node for a failed one and why.
+  - The explanation one line at the foot, always: «Щоночі сервер робить
+    копію бази, перевіряє її відновленням і шифрує вашим ключем. Цей
+    розділ бачить лише власник.» Loading: the tag's and three rows' shape,
+    «Завантажуємо стан копій…» read but not seen. The screen opens at its
+    top. Nothing to feel: it only reads.
+- **The door with no store (P2-3):** one blank tag, the app's name and
+  mark over it — «Магазинів поки немає», «Зверніться до власника.» — and
+  «Спробувати ще раз», which reads the person's stores again (not in the
+  task list; decided here, as the closed store's tag has it). The old
+  «Доступних магазинів немає. Зверніться до адміністратора.» is gone.
+- **From the batch's independent review (2026-11-07):**
+  - Recorded or refused, the answer is said at once: the list is read
+    again behind it, never waited for, so «Так, …» is never there to be
+    pressed a second time meanwhile.
+  - What is said of a change — its stub, a kept one, the corrupt entry's
+    alert — takes the cursor once the sheet is gone (it stood before the
+    store's tag, where a reader moving on from the name never got); a
+    refusal takes it inside the sheet, the button it was on having been
+    held.
+  - A kept change whose answer is lost says nothing more than its stub —
+    never the error's own name («UNREACHABLE»). Checked and answered with
+    no proof, the stub says why in every kept command's words: «Зміну стану
+    ще не підтверджено: сервер відповів, що дані змінилися. Перевірте
+    результат ще раз — двічі вона не виконається.» — never a manager to
+    ask, its reader being the owner (decided here).
+  - A kept entry cut short, not even JSON, is as unreadable as one of the
+    wrong shape, and says so in the journal's own words — for every
+    journal, not only the stores' (`shared/journal.ts`).
+  - Found unreadable as the app opens: said on the plate as before, and
+    the state's buttons held, as every other journal's are over its own.
+  - Left as built: a check pressed on another store's screen tears its stub
+    there (it names its store); «Спробувати ще раз» on the door with no
+    store says nothing when there is still none, as the closed store's tag
+    (P1-1) does.
