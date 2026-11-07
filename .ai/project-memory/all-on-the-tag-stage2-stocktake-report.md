@@ -172,31 +172,81 @@ against a wrong balance or took a refusal's words away, but it found:
 
 ## Mutants
 
-In progress: 62 mutants (`mutate25.py`, `mutants25.sh`), each applied
-alone and run against the journeys meant to catch it, on a fresh seed each
-time — the real server's journeys leave a stocktake open and its stock
-moved, and could not run twice on one. 44 run so far: 42 caught. Two
-survived, and their journeys are being tightened:
-- `nextskip` — the sheet passing a cell already recorded in it relied on
-  the list being read again before the next count; no journey counted two
-  cells of a model while that read was late.
-- `moved` — counting against the balance the server named in its refusal
-  was never needed, because the list read again already showed it; no
-  journey kept the old balance on the list.
+62 mutants (`mutate25.py`, `mutants25.sh`, logs `go-mutants25-part1.log`
+… `-part3.log`), each applied alone and run against the journeys meant to
+catch it, on a fresh seed each time — the real server's journeys leave a
+stocktake open and its stock moved, and could not run twice on one: all 62
+caught.
+- **The entry (P0-2):** Telegram's «Почати інвентаризацію» never set; the
+  open tag without what is counted, without «розбіжностей немає», or with
+  «з о 10:20»; the history without its time, not capitalised, without
+  «Показати розбіжності», unfolded; the differences unfolded.
+- **The start (P0-2):** the carried press let through; no success buzz; a
+  refusal not said in the sheet; the list not read again after a
+  conflict; the title without «складу».
+- **Counting (P0-3):** the menu not aside (the screen's flag and App's);
+  the phone not kept upright; the heading not taking the cursor; «Почато»
+  without «о»; the store's line in place of the stocktake's; the modes
+  without their counts; the stocktake or its positions not read again
+  after a count.
+- **Tags and cells (P0-3):** a model's sizes not glued, or not in the
+  organization's order; no «selection» buzz; the reserve missing from the
+  cell's spoken name; «?» not drawn.
+- **The count's sheet (P0-3):** the next cell not skipping one recorded,
+  or not going round; no light buzz on a count, no warning on a refusal;
+  the keypad kept after a refusal; the server's balance not counted
+  against; a re-read balance not taken; the size not known counted up;
+  every line a shortage; «3 → 1» without the «3»; «Записати» without its
+  number; closing never asked; the status line not shown, or a toast in
+  its place; the found goods' form left; the sheet left over a lost
+  answer; «Пораховані» without the stocktake's own «before»; the comma's
+  key back.
+- **The end and the result (P0-2):** the shortage in positions, not
+  pieces; the record not read again after a conflict; the result's
+  heading not taking the cursor; the stub kept, not settled; «1 позицій»;
+  the surplus line without its positions; the entry's list not told of
+  the finish.
+- **The review's fixes:** the last toast back; the cursor not moved, or
+  moved to the model before; found goods' cursor to the title; «Показати
+  ще» open while the list is read; a cell counted elsewhere visited;
+  «Далі: L.» missing; a carried tap on «До інвентаризації» taken; pages
+  overlapping shown twice.
+- **Five survived the first run and were caught once their journeys were
+  tightened:** the next cell visited though recorded in the sheet (no
+  journey counted two cells while the list's read was late — the long
+  count now holds it); the server's balance from a refusal (the list read
+  again already showed it — sold-while-counted now keeps the old balance
+  on the list); the toast back after the next sheet (the check was
+  retried until the toast had gone again — it is read once now); pages
+  overlapping (no journey made them — goods now arrive before the next
+  page); the entry not told of the finish (its list read again hid it —
+  the long count now holds that read).
+- **Not mutated:** colours in CSS; the dock's guard outside Telegram (the
+  journey waits it out — a click's timing in Chromium is not the
+  thumb's); «Продовжити» as the start sheet's way back (a refusal while
+  another opens is not staged); «Показати ще» hidden under a failed read.
 
 ## Evidence
 
-So far:
+- **Every journey on a fresh seed:** 960 of 961 passed in 22.1 min
+  (`go-full25.log`), with the journeys tightened after the mutants.
+  `backups.spec.ts:93` fails on the Mac alone as before and passes on CI:
+  the seed is additive, so this database holds more nights than CI's
+  fresh one.
 - **The stocktake journeys:** 9 of 9 on a fresh seed after the review's
-  fixes.
+  fixes and again after the tightening (`go-st6.log`, `go-st8.log`).
 - **The neighbouring journeys that open «Інвентаризація»** (`correct`,
   `model`, `telegram-back`, `people`, `person-limit`, the stocktake ones
-  of `outage`): 33 of 33, before the review's fixes, which touch only the
-  stocktake's own screen.
+  of `outage`): 33 of 33 before the review's fixes, and in the full run
+  after them.
 - **The checks:** `tsc -b`, `eslint src e2e` and Prettier (whole files;
   my own hunks in `App.tsx` and `styles.css`) are clean. No backend
   change.
-- **Every journey on a fresh seed:** next.
+- **Screenshots** (Chromium, 360 px): the cells of a four-size model, the
+  counted rows with the toast in the dark theme, the count's sheet with
+  the keypad (`test-results/stocktake-cells-360.png`,
+  `stocktake-dark-360.png`, `stocktake-mobile.png`).
+- **CI:** GitHub's, on #177.
 
 ## For the owner
 
