@@ -25,7 +25,10 @@ const states = journal<StateBody, StoreRecord>({
       body.state === "ARCHIVED") &&
     typeof body.reason === "string" &&
     body.reason.trim() !== "",
-  corrupt: "Некоректна збережена зміна стану магазину. Зверніться до власника.",
+  // Read only by whoever changes the states — the owner, never sent to the
+  // owner (stage 2, admin task list, P2-3).
+  corrupt:
+    "Збережену зміну стану магазину не прочитати. Перевірте стан магазину в списку.",
   unfinished: "Спершу завершіть збережену зміну стану магазину.",
 });
 

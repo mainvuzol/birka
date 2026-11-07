@@ -833,9 +833,7 @@ nav:not(.tab-bar, .more-list) {
   margin: 12px 0;
 }
 
-/* The owner's backups: one block for the verdict, one for the server's own
-   trouble, one for Telegram, one for the recent nights. A block that needs
-   the owner is the notice colour. */
+/* A block of the screens not yet drawn in the new system. */
 .section-block {
   border: 1px solid var(--line);
   border-radius: 12px;
@@ -844,21 +842,6 @@ nav:not(.tab-bar, .more-list) {
 }
 .section-block h3 {
   margin-top: 0;
-}
-.badge.failed {
-  background: var(--danger-bg);
-  color: var(--danger);
-}
-.badge.failed::before {
-  content: "";
-  display: inline-block;
-  width: 14px;
-  height: 14px;
-  margin-right: 4px;
-  vertical-align: -2px;
-  background: currentColor;
-  -webkit-mask: var(--glyph-danger) center / 14px 14px no-repeat;
-  mask: var(--glyph-danger) center / 14px 14px no-repeat;
 }
 /* Pills by what they mean (returns task list, P2-4): a debt's, a warning's,
    «Брак»'s, or nothing to do. */
@@ -897,14 +880,126 @@ nav:not(.tab-bar, .more-list) {
   padding: 0;
   margin: 0;
 }
-.nights > li,
 .troubles > li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   padding: 8px 0;
   border-top: 1px solid var(--line);
+  overflow-wrap: anywhere;
 }
-.nights > li:first-child,
 .troubles > li:first-child {
   border-top: 0;
+}
+.troubles .t-meta {
+  color: var(--pencil);
+}
+/* «Резервні копії» (stage 2, admin task list, P0-5): the verdict one large
+   tag, its eyelet at the top — a knot when in order, filled in the
+   warning's colour otherwise; under it a row that waits for each thing
+   wrong now, or one line; the nights as a thread; the explanation one line
+   at the foot. */
+section.backups {
+  margin: 12px 0 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+}
+.backups-verdict-in {
+  position: relative;
+  padding: 30px 16px 16px;
+}
+.backups-eyelet {
+  position: absolute;
+  top: 14px;
+  left: calc(50% - 6px);
+  display: flex;
+}
+.backups-verdict .eyelet-filled {
+  background: var(--warning);
+}
+.backups-verdict h2 {
+  margin: 0 0 8px;
+  overflow-wrap: anywhere;
+}
+.backups-verdict p,
+.backups-verdict ul {
+  margin: 4px 0 0;
+}
+.backups-verdict ul {
+  padding-left: 20px;
+}
+.backups-now,
+.backups-server,
+.backups-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.backups-now {
+  margin-top: 12px;
+}
+.backups-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.backups-why {
+  margin: 0;
+  color: var(--pencil);
+  overflow-wrap: anywhere;
+}
+/* What is well, a line: its name in ink, the rest in pencil. */
+.backups-line {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 19px;
+  color: var(--pencil);
+  overflow-wrap: anywhere;
+}
+.backups-line-name {
+  font-weight: 600;
+  color: var(--ink);
+}
+.backups-line-press {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-height: var(--touch);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  text-align: left;
+}
+.backups-line-press > .icon {
+  color: var(--pencil);
+}
+.backups-about {
+  margin: 24px 0 0;
+  color: var(--pencil);
+}
+.backups-wait {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.backups-wait .backups-verdict-in {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+/* A night that failed waits for the owner: its node filled in the
+   warning's colour. «перевірена» read as written, drawn with a capital. */
+.timeline-node.warn {
+  background: var(--warning);
+}
+.nights .timeline-what::first-letter {
+  text-transform: uppercase;
 }
 
 /* A return: one row per sale line (spec §6.8; stage 2, orders task list,
@@ -2937,6 +3032,70 @@ section.credits.customer-card {
 }
 .store-tag:active .store-tag-in {
   background: var(--fold);
+}
+/* «Магазини» (stage 2, admin task list, P0-3): the door's tags, one a
+   store, nothing on them to press but the tag. */
+section.stores {
+  margin: 12px 0 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+}
+.stores-list {
+  margin-top: 4px;
+}
+.store-screen {
+  display: block;
+  margin: 12px 0 18px;
+}
+/* A store's screen: its tag large, its history as a thread, the buttons
+   that change it at the bottom — ordinary ones on the card, never the
+   action's colour (spec §6.5's secondary), the archive's the quiet one. */
+.store-hero .store-tag-in {
+  padding-bottom: 16px;
+}
+.store-hero .store-tag-name {
+  margin: 0;
+  font-size: 28px;
+  line-height: 32px;
+}
+.store-hero .store-tag-code,
+.store-hero .store-tag-state {
+  margin-bottom: 0;
+}
+.store-hero-why {
+  margin: 8px 0 0;
+  overflow-wrap: anywhere;
+}
+.store-ways {
+  margin-top: 24px;
+}
+.store-way {
+  min-height: 52px;
+  border: 1px solid var(--edge);
+  border-radius: var(--r-l);
+  background: var(--card);
+  color: var(--ink);
+}
+/* Who reads the reason, under its field; and in the sheet, what keeps a
+   store from the archive, a line each (P0-4). */
+.store-why-hint {
+  margin: 6px 0 0;
+  color: var(--pencil);
+}
+.store-refusal {
+  margin-top: 12px;
+}
+.store-left {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.store-left li {
+  padding: 6px 0;
+  border-top: 1px solid var(--hairline);
+  overflow-wrap: anywhere;
 }
 /* «Каса» (cash task list, P0-1..P0-3): where the drawer stands in one line,
    the day's one task as a large dark card, the other tasks as rows; the

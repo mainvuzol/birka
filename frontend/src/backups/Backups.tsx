@@ -1,8 +1,14 @@
+import { useEffect, useRef, useState } from "react";
 import type { JSX } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { UseQueryResult } from "@tanstack/react-query";
+import { shortDay, shortTime } from "@/credits/format";
 import { api } from "@/shared/api";
+import { Eyelet } from "@/shared/Eyelet";
+import { Icon } from "@/shared/Icon";
+import { Sheet } from "@/shared/Sheet";
 import { Unread } from "@/shared/Unread";
+import { Waiting } from "@/today/age";
 import type {
   Backups as State,
   Message,
@@ -88,6 +94,11 @@ export function Backups({
   back?: MoreBack | undefined;
 }): JSX.Element {
   const backups = useBackups(token, scopeKey, true);
+  // The verdict in view as the screen opens, whatever «Ще» was scrolled to
+  // (stage 2, admin task list, P0-5).
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
   return (
     <>
       <ScreenHeader
@@ -105,13 +116,28 @@ export function Backups({
           </button>
         }
       />
-      <section>
-        <p className="hint">
-          Щоночі сервер робить копію бази, перевіряє її відновленням і шифрує
-          вашим ключем. Цей розділ бачить лише власник.
-        </p>
+      {/* The one question first and largest — are the data safe — what is
+          wrong now under it, the nights as a thread, the explanation one
+          line at the foot (stage 2, admin task list, P0-5; В-А5 (а)). The
+          screen only reads: nothing to feel. */}
+      <section className="backups">
         {backups.isPending ? (
-          <p role="status">Завантажуємо стан копій…</p>
+          <>
+            <p role="status" className="visually-hidden">
+              Завантажуємо стан копій…
+            </p>
+            <div className="backups-wait" aria-hidden="true">
+              <div className="tag-hero tag-outline">
+                <div className="backups-verdict-in">
+                  <Waiting width="70%" />
+                  <Waiting width="55%" />
+                </div>
+              </div>
+              <Waiting width="80%" />
+              <Waiting width="65%" />
+              <Waiting width="50%" />
+            </div>
+          </>
         ) : backups.error ? (
           <Unread
             error={backups.error}
@@ -122,16 +148,22 @@ export function Backups({
         ) : (
           <>
             <Verdict backups={backups.data} />
-            {backups.data.server && (
-              <Server
-                server={backups.data.server}
-                now={backups.data.checked_at}
-              />
-            )}
-            <Telegram message={backups.data.your_last_message} />
+            <div className="backups-now">
+              {backups.data.server && (
+                <Server
+                  server={backups.data.server}
+                  now={backups.data.checked_at}
+                />
+              )}
+              <Telegram message={backups.data.your_last_message} />
+            </div>
             <Nights nights={backups.data.nights} />
           </>
         )}
+        <p className="t-meta backups-about">
+          Щоночі сервер робить копію бази, перевіряє її відновленням і шифрує
+          вашим ключем. Цей розділ бачить лише власник.
+        </p>
       </section>
     </>
   );
@@ -165,59 +197,70 @@ export function verdictTitle(backups: State): string {
   return "Копії в порядку";
 }
 
+/**
+ * The verdict, one large tag (spec §6.10, P3): its eyelet a knot when the
+ * copies are in order — nothing is left to do — and filled in the warning's
+ * colour in the three other cases, which wait for the owner; its title the
+ * verdict's words, under it at most the last good copy and what the verdict
+ * rests on.
+ */
 function Verdict({ backups }: { backups: State }): JSX.Element {
   const { latest } = backups;
-  if (backups.state === "NOT_SET_UP" || latest === null)
-    return (
-      <div className="section-block notice" data-state="NOT_SET_UP">
-        <h3>{verdictTitle(backups)}</h3>
-        <p>
-          На сервері немає жодної копії бази. Якщо сервер зламається, дані
-          магазину буде втрачено. Налаштування описане в інструкції з резервних
-          копій.
-        </p>
-      </div>
-    );
-  if (backups.state === "OVERDUE")
-    return (
-      <div className="section-block notice" data-state="OVERDUE">
-        <h3>{verdictTitle(backups)}</h3>
-        <p>
-          Остання спроба: {when(latest.finished_at)}. Ймовірно, на сервері
-          зупинився нічний розклад — перевірте його за інструкцією.
-        </p>
-        <LastGood night={backups.last_good} />
-      </div>
-    );
-  if (backups.state === "FAILED")
-    return (
-      <div className="section-block notice" data-state="FAILED">
-        <h3>{verdictTitle(backups)}</h3>
-        <p>{when(latest.finished_at)}:</p>
-        <ul>
-          {latest.reasons.map((reason) => (
-            <li key={reason}>{reason}</li>
-          ))}
-        </ul>
-        <p>Попередні копії не видалено.</p>
-        <LastGood night={backups.last_good} />
-      </div>
-    );
+  const state =
+    backups.state === "NOT_SET_UP" || latest === null
+      ? "NOT_SET_UP"
+      : backups.state;
   return (
-    <div className="section-block" data-state="OK">
-      <h3>{verdictTitle(backups)}</h3>
-      <p>
-        Остання копія: {when(latest.finished_at)}, перевірена відновленням
-        {latest.restore_seconds === null
-          ? ""
-          : ` за ${latest.restore_seconds.toLocaleString("uk-UA", {
-              maximumFractionDigits: 1,
-            })} с`}
-        .
-        {latest.archive_bytes === null
-          ? ""
-          : ` Розмір: ${size(latest.archive_bytes)}.`}
-      </p>
+    <div className="tag-hero tag-outline backups-verdict" data-state={state}>
+      <div className="backups-verdict-in">
+        <span className="backups-eyelet">
+          <Eyelet state={state === "OK" ? "knot" : "filled"} />
+        </span>
+        <h2 className="t-title-xl">{verdictTitle(backups)}</h2>
+        {state === "NOT_SET_UP" || latest === null ? (
+          <p>
+            На сервері немає жодної копії бази. Якщо сервер зламається, дані
+            магазину буде втрачено. Налаштування описане в інструкції з
+            резервних копій.
+          </p>
+        ) : state === "OVERDUE" ? (
+          <>
+            <LastGood night={backups.last_good} />
+            <p>
+              Остання спроба: {when(latest.finished_at)}. Ймовірно, на сервері
+              зупинився нічний розклад — перевірте його за інструкцією.
+            </p>
+          </>
+        ) : state === "FAILED" ? (
+          <>
+            <LastGood night={backups.last_good} />
+            <ul>
+              {latest.reasons.map((reason) => (
+                <li key={reason}>{reason}</li>
+              ))}
+            </ul>
+            <p>Попередні копії не видалено.</p>
+          </>
+        ) : (
+          <>
+            <LastGood night={latest} />
+            <p>
+              {[
+                `перевірена відновленням${
+                  latest.restore_seconds === null
+                    ? ""
+                    : ` за ${latest.restore_seconds.toLocaleString("uk-UA", {
+                        maximumFractionDigits: 1,
+                      })} с`
+                }`,
+                ...(latest.archive_bytes === null
+                  ? []
+                  : [size(latest.archive_bytes)]),
+              ].join(" · ")}
+            </p>
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -247,7 +290,8 @@ export function troubleText(kind: TroubleKind): string {
   return label(troubleNow, kind);
 }
 
-/** The server's block's heading: «Проблема на сервері», «Проблеми …». */
+/** «Сьогодні»'s tag for the server: «Проблема на сервері», «Проблеми …»;
+ * here, the name its rows are read by. */
 export function serverTitle(open: number): string {
   return open === 0
     ? "Стан сервера"
@@ -257,9 +301,40 @@ export function serverTitle(open: number): string {
 }
 
 /**
+ * A tag row that waits for the owner (spec §6.9): its eyelet filled in the
+ * warning's colour, its title, its words under it.
+ */
+function WaitsForYou({
+  title,
+  children,
+  watcher = false,
+}: {
+  title: string;
+  children: JSX.Element | JSX.Element[];
+  /** The watcher's own words, which the tests find it by. */
+  watcher?: boolean;
+}): JSX.Element {
+  return (
+    <div className="today-tag tag-row tag-outline tone-warning">
+      <div className="today-tag-body">
+        <span className="today-tag-eyelet" aria-hidden="true" />
+        <h3
+          className="t-row today-tag-title"
+          data-watcher={watcher ? "" : undefined}
+        >
+          {title}
+        </h3>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/**
  * Trouble on the server, shown here as the backups are (owner decision,
- * 2026-10-03): what is wrong now and since when, what was wrong this week,
- * and whether the watcher that tells the bot is still looking.
+ * 2026-10-03): each trouble open now a row that waits — what, since when,
+ * why — and a watcher gone quiet another; with neither, one line. What was
+ * wrong this week is one line more, its list in a sheet.
  */
 function Server({
   server,
@@ -268,124 +343,180 @@ function Server({
   server: ServerState;
   now: string;
 }): JSX.Element {
+  const [past, setPast] = useState(false);
+  const opener = useRef<HTMLButtonElement>(null);
   const silent =
     server.looked_at === null ||
     Date.parse(now) - Date.parse(server.looked_at) > SILENT_AFTER;
   const state = server.open.length > 0 ? "TROUBLE" : silent ? "SILENT" : "OK";
   return (
-    <div
-      className={state === "OK" ? "section-block" : "section-block notice"}
-      data-server={state}
-    >
-      <h3>{serverTitle(server.open.length)}</h3>
+    <div className="backups-server" data-server={state}>
       {server.open.length > 0 && (
-        <ul className="troubles" data-troubles="open">
+        <ul
+          className="backups-rows"
+          data-troubles="open"
+          aria-label={serverTitle(server.open.length)}
+        >
           {server.open.map((trouble: Trouble) => (
             <li key={`${trouble.kind}:${trouble.started_at}`}>
-              <strong>{label(troubleNow, trouble.kind)}</strong>{" "}
-              <small>
-                з {when(trouble.started_at)}, уже{" "}
-                {span(trouble.started_at, now)}
-              </small>
-              <br />
-              {trouble.reason}
+              <WaitsForYou title={label(troubleNow, trouble.kind)}>
+                <p className="t-meta today-tag-meta">
+                  з {when(trouble.started_at)}, уже{" "}
+                  {span(trouble.started_at, now)}
+                </p>
+                <p className="t-meta backups-why">{trouble.reason}</p>
+              </WaitsForYou>
             </li>
           ))}
         </ul>
       )}
-      <p data-watcher="">
-        {server.looked_at === null
-          ? "Сторож ще не перевіряв сервер."
-          : `Сторож перевіряв ${ago(server.looked_at, now)}.`}
-        {silent
-          ? " Поки він мовчить, бот нічого не напише — ні про копії, ні про сервер. Перевірте його за інструкцією сервера."
-          : server.open.length === 0
-            ? " Проблем не помічено."
-            : ""}
-      </p>
+      {silent ? (
+        <WaitsForYou
+          watcher
+          title={
+            server.looked_at === null
+              ? "Сторож ще не перевіряв сервер."
+              : `Сторож перевіряв ${ago(server.looked_at, now)}.`
+          }
+        >
+          <p className="t-meta backups-why">
+            Поки він мовчить, бот нічого не напише — ні про копії, ні про
+            сервер. Перевірте його за інструкцією сервера.
+          </p>
+        </WaitsForYou>
+      ) : (
+        <p className="backups-line" data-watcher="">
+          <span className="backups-line-name">Стан сервера</span>
+          {server.open.length === 0 && " · проблем не помічено"}
+          {server.looked_at !== null &&
+            ` · сторож перевіряв ${ago(server.looked_at, now)}`}
+        </p>
+      )}
       {server.recent.length > 0 && (
-        <>
-          <p>Минулі проблеми за 7 днів:</p>
+        <button
+          ref={opener}
+          type="button"
+          className="backups-line backups-line-press"
+          aria-haspopup="dialog"
+          onClick={() => {
+            setPast(true);
+          }}
+        >
+          <span>
+            <span className="backups-line-name">Минулі проблеми за 7 днів</span>{" "}
+            · {server.recent.length}
+          </span>
+          <Icon name="chevron-right" size={16} />
+        </button>
+      )}
+      {past && (
+        <Sheet
+          title="Минулі проблеми за 7 днів"
+          fallback={opener}
+          close={() => {
+            setPast(false);
+          }}
+        >
           <ul className="troubles" data-troubles="recent">
             {server.recent.map((trouble: PastTrouble) => (
               <li key={`${trouble.kind}:${trouble.started_at}`}>
-                <span>{label(troubleThen, trouble.kind)}</span>{" "}
-                <small>
+                <span className="t-row">
+                  {label(troubleThen, trouble.kind)}
+                </span>
+                <span className="t-meta">
                   {when(trouble.started_at)}, тривало{" "}
                   {span(trouble.started_at, trouble.ended_at)}
-                </small>
-                <br />
-                <small>{trouble.reason}</small>
+                </span>
+                <span className="t-meta">{trouble.reason}</span>
               </li>
             ))}
           </ul>
-        </>
+        </Sheet>
       )}
     </div>
   );
 }
 
+/**
+ * Whether the bot can tell the owner: a row that waits only when Telegram
+ * refused or failed it, its words as before; otherwise one line.
+ */
 function Telegram({ message }: { message: Message | null }): JSX.Element {
-  return (
-    <div className="section-block">
-      <h3>Сповіщення в Telegram</h3>
-      {message === null ? (
-        <p>
-          Повідомлень ще не було. Бот напише вам, щойно з копіями щось
-          станеться.
-        </p>
-      ) : message.status === "SENT" ? (
-        <p>
-          Останнє повідомлення надіслано{" "}
-          {when(message.sent_at ?? message.created_at)}.
-        </p>
-      ) : message.status === "PENDING" ? (
-        <p role="status">
-          Повідомлення надсилається.
-          {message.error ? " Telegram поки недоступний, бот спробує ще." : ""}
-        </p>
-      ) : message.status === "REFUSED" ? (
-        <p role="alert">
+  if (message?.status === "REFUSED")
+    return (
+      <WaitsForYou title="Сповіщення в Telegram">
+        <p className="t-meta backups-why" data-telegram="REFUSED">
           Telegram не доставив повідомлення: бот не може вам написати. Відкрийте
           чат із ботом магазину й натисніть «Start» (або розблокуйте бота).
         </p>
-      ) : (
-        <p role="alert">
+      </WaitsForYou>
+    );
+  if (message?.status === "FAILED")
+    return (
+      <WaitsForYou title="Сповіщення в Telegram">
+        <p className="t-meta backups-why" data-telegram="FAILED">
           Не вдалося надіслати повідомлення в Telegram після кількох спроб.
-          {message.error && <small> {message.error}</small>}
+          {message.error && ` ${message.error}`}
         </p>
-      )}
-    </div>
+      </WaitsForYou>
+    );
+  return (
+    <p
+      className="backups-line"
+      data-telegram={message?.status ?? "NONE"}
+      role={message?.status === "PENDING" ? "status" : undefined}
+    >
+      <span className="backups-line-name">Сповіщення в Telegram</span>
+      {message === null
+        ? " · бот напише, щойно з копіями щось станеться"
+        : message.status === "SENT"
+          ? ` · останнє ${shortDay(message.sent_at ?? message.created_at)} о ${shortTime(message.sent_at ?? message.created_at)}`
+          : ` · повідомлення надсилається${
+              message.error
+                ? " · Telegram поки недоступний, бот спробує ще"
+                : ""
+            }`}
+    </p>
   );
 }
 
+/**
+ * «Останні ночі» as a thread (spec §6.21): the day on the left, a knot for
+ * a copy checked, a node filled in the warning's colour for one that
+ * failed, and why.
+ */
 function Nights({ nights }: { nights: Night[] }): JSX.Element | null {
   if (nights.length === 0) return null;
   return (
-    <div className="section-block">
-      <h3>Останні ночі</h3>
-      <ul className="nights">
+    <>
+      <h2 className="t-label customer-history-title">Останні ночі</h2>
+      <ul className="timeline nights" aria-label="Останні ночі">
         {nights.map((night) => (
-          <li key={night.finished_at}>
-            <span>{when(night.finished_at)}</span>{" "}
-            {night.ok ? (
-              <span className="badge">перевірена</span>
-            ) : (
-              <span className="badge failed">не вдалася</span>
-            )}{" "}
-            <small>{size(night.archive_bytes)}</small>
-            {!night.ok && (
-              <ul>
-                {night.reasons.map((reason) => (
-                  <li key={reason}>
-                    <small>{reason}</small>
-                  </li>
+          <li className="timeline-row" key={night.finished_at}>
+            <span className="timeline-day">{shortDay(night.finished_at)}</span>
+            <span
+              className={`timeline-node ${night.ok ? "knot" : "warn"}`}
+              aria-hidden="true"
+            />
+            <span className="timeline-main">
+              <span className="timeline-what">
+                {night.ok ? "перевірена" : "не вдалася"}
+              </span>
+              <span className="timeline-meta">
+                {[shortTime(night.finished_at), size(night.archive_bytes)]
+                  .filter((part) => part !== "")
+                  .join(" · ")}
+              </span>
+              {!night.ok &&
+                night.reasons.map((reason) => (
+                  <span className="timeline-meta" key={reason}>
+                    {reason}
+                  </span>
                 ))}
-              </ul>
-            )}
+            </span>
           </li>
         ))}
       </ul>
-    </div>
+    </>
   );
 }

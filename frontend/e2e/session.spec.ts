@@ -135,13 +135,20 @@ test("the owner changes a store's state over an hour after opening the app, and 
     await openStore(page, "Центр CENTRE");
     const signIns = await launchDataExpired(page);
     await section(page, "Магазини");
+    // Its own screen, the question a sheet (stage 2, admin task list, P0-3,
+    // P0-4).
+    await page.getByRole("button", { name: /^Магазин Ринок(, |$)/ }).click();
     const card = page.getByRole("article", { name: "Магазин Ринок" });
     await card.getByRole("button", { name: "Заблокувати" }).click();
-    await card.getByLabel(/^Причина/).fill("Ревізія каси");
-    await card
+    const sheet = page.getByRole("dialog", { name: "Заблокувати «Ринок»?" });
+    await expect(sheet).toHaveAttribute("data-ready", "");
+    await sheet.getByLabel(/^Причина/).fill("Ревізія каси");
+    await sheet
       .getByRole("button", { name: "Так, заблокувати «Ринок»" })
       .click();
-    await expect(card.getByText("Заблоковано", { exact: true })).toBeVisible();
+    await expect(card.locator(".store-tag-state")).toHaveText(
+      /^Заблоковано з /,
+    );
 
     // What the app knows of the stores is read again, with the token: the
     // door's question again (spec S06; «Усе на бірці» task list, P1-4).
