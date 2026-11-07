@@ -3,6 +3,7 @@ import {
   expect,
   fromPaper,
   expectSeries,
+  menu,
   namedFromPaper,
   paperSheet,
   openStore,
@@ -377,6 +378,10 @@ test("the switch is one for the store: ticked on «Повернення», the t
   // The paper said once for the series; nobody named for the return.
   await expectSeries(page, "Сервер не відповідав", "Хто прийняв: не вказано");
   await expect(page.getByRole("dialog", { name: "З паперу" })).toHaveCount(0);
+  // The return's form a task's screen (stage 2, orders task list, P0-6):
+  // left by «До списку» before the menu.
+  await page.getByRole("button", { name: "До списку", exact: true }).click();
+  await expect(menu(page)).toBeVisible();
 
   // A debt's «Внесок»: the same; back on the card, the menu again.
   await payOnCard(page, name);

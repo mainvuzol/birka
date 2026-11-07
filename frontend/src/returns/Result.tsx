@@ -336,8 +336,10 @@ export function Result({
       )}
     </div>
   );
+  // Inside the stub, under the way's sticker and over the sum: whose money
+  // it is belongs with the money (stage 2, orders task list, P2-1).
   const elsewhereLine = elsewhere && (
-    <p>
+    <p className="stub-line elsewhere-line">
       {paper
         ? "Товар куплено в іншому магазині мережі — гроші віддавав ваш магазин."
         : "Товар куплено в іншому магазині мережі — гроші віддаєте ви."}
@@ -349,13 +351,13 @@ export function Result({
       <div className="return-result kept">
         <h3>Повернення записано один раз</h3>
         {paper && <p className="badge warn">{paperText("return", paper)}</p>}
-        {elsewhereLine}
         <div className="hand-back">
           {way && !paper && !nothingBack && (
             <p className="stub-head">
               <WaySticker way={way} hidden />
             </p>
           )}
+          {elsewhereLine}
           {handed}
         </div>
         {debt}
@@ -375,9 +377,9 @@ export function Result({
           </>
         }
       />
-      {elsewhereLine}
       <Stub state="recorded">
         {stickers}
+        {elsewhereLine}
         <div className="hand-back">{handed}</div>
         {debt}
         <Perforation />

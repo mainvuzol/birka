@@ -178,7 +178,7 @@ function refunds(page: Page): { bodies: unknown[]; keys: string[] } {
   return seen;
 }
 
-test("goods bought at another store come back here, and this store hands the money back", async ({
+test("goods bought at another store come back here, and this store hands the money back; whose money it is said inside the stub, which fits a 360 × 640 screen (stage 2, orders task list, P2-1)", async ({
   page,
 }) => {
   const { model, variant } = await soldAtTheOtherStore(
@@ -193,6 +193,7 @@ test("goods bought at another store come back here, and this store hands the mon
     if (request.url().includes("elsewhere=true")) searches.push(request.url());
   });
 
+  await page.setViewportSize({ width: 360, height: 640 });
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
   await section(page, "Повернення");
@@ -207,9 +208,13 @@ test("goods bought at another store come back here, and this store hands the mon
   await expect(page.getByText(/^За «.*» продажів не знайдено\./)).toBeVisible();
   expect(searches).toEqual([]);
   await page.getByRole("button", { name: "Шукати там" }).click();
-  await expect(
-    page.getByRole("heading", { name: "В інших магазинах мережі" }),
-  ).toBeVisible();
+  const caption = page.getByRole("heading", {
+    name: "В інших магазинах мережі",
+  });
+  await expect(caption).toBeVisible();
+  // The section's caption, in capitals (stage 2, orders task list, P0-6).
+  await expect(caption).toHaveCSS("text-transform", "uppercase");
+  await expect(caption).toHaveCSS("font-size", "13px");
   await expect.poll(() => searches.length).toBeGreaterThan(0);
   expect(
     searches.every((url) => url.includes(`q=${encodeURIComponent(model)}`)),
@@ -240,16 +245,29 @@ test("goods bought at another store come back here, and this store hands the mon
     })
     .click();
 
-  await expect(
-    page.getByText(
-      "Товар куплено в іншому магазині мережі — гроші віддаєте ви.",
-    ),
-  ).toBeVisible();
+  const whose = page.getByText(
+    "Товар куплено в іншому магазині мережі — гроші віддаєте ви.",
+  );
+  await expect(whose).toBeVisible();
   await expectStub(page, {
     way: "Картка",
     say: "Поверніть на картку через термінал",
     sum: "6 000,00 грн",
   });
+  // Inside the stub, under the way's sticker and over the sum (P2-1); the
+  // stub of one line no taller than the screen.
+  const stub = page.locator(".stub");
+  await expect(stub.locator(".elsewhere-line")).toHaveText(
+    "Товар куплено в іншому магазині мережі — гроші віддаєте ви.",
+  );
+  const sticker = await stub.locator(".way-pill").boundingBox();
+  const line = await whose.boundingBox();
+  const sum = await stub.locator(".stub-sum").boundingBox();
+  const slip = await stub.boundingBox();
+  if (!sticker || !line || !sum || !slip) throw new Error("not laid out");
+  expect(line.y).toBeGreaterThanOrEqual(sticker.y + sticker.height);
+  expect(sum.y).toBeGreaterThanOrEqual(line.y + line.height);
+  expect(slip.height).toBeLessThanOrEqual(640);
   await expect(
     page.getByText("Поверніть 6 000,00 грн на картку покупця через термінал.", {
       exact: true,
@@ -279,6 +297,52 @@ test("goods bought at another store come back here, and this store hands the mon
   await expect(
     page.getByRole("article").filter({ hasText: model }),
   ).toHaveCount(1);
+});
+
+test("paid in parts at another store and nothing back: whose money it is the stub's first line, clear of its eyelet (review, 2026-11-06)", async ({
+  page,
+}) => {
+  const { model } = await soldAtTheOtherStore(
+    page,
+    fixture.returns_location_id,
+  );
+  // The server's answer for a sale in parts whose goods only lower the
+  // debt: no money back, so no way's sticker over the line.
+  await page.route("**/api/v1/sales/*/refunds", async (route) => {
+    const response = await route.fetch();
+    const json = (await response.json()) as { total_amount: string };
+    await route.fulfill({
+      response,
+      json: {
+        ...json,
+        credit: {
+          debt_reduced: json.total_amount,
+          cash_back: "0.00",
+          owed_after: "0.00",
+        },
+      },
+    });
+  });
+  await page.setViewportSize({ width: 360, height: 640 });
+  await findElsewhere(page, model);
+  await page.getByRole("button", { name: "Оформити повернення" }).click();
+  await returnUnits(page, { intact: 1 });
+  await page
+    .getByRole("button", { name: "Повернути покупцю 3 000,00 грн готівкою" })
+    .click();
+  const stub = page.locator(".stub");
+  const line = stub.locator(".elsewhere-line");
+  await expect(line).toHaveText(
+    "Товар куплено в іншому магазині мережі — гроші віддаєте ви.",
+  );
+  await expect(stub.locator(".way-pill")).toHaveCount(0);
+  await expect(
+    page.getByText("Покупець більше нічого не винен."),
+  ).toBeVisible();
+  const said = await line.boundingBox();
+  const eyelet = await stub.locator(":scope > .eyelet").boundingBox();
+  if (!said || !eyelet) throw new Error("not laid out");
+  expect(said.x + said.width).toBeLessThanOrEqual(eyelet.x);
 });
 
 test("goods sold from the other store's own warehouse go to one of this store's, chosen", async ({
@@ -418,6 +482,10 @@ test("a return taken elsewhere whose answer is lost is resent unchanged, and say
     page.getByText(
       "Товар куплено в іншому магазині мережі — гроші віддаєте ви.",
     ),
+  ).toBeVisible();
+  // Confirmed later, the same: with the money, under its way (P2-1).
+  await expect(
+    page.locator(".return-result.kept .hand-back .elsewhere-line"),
   ).toBeVisible();
   expect(sent.bodies).toHaveLength(2);
   expect(sent.bodies[1]).toEqual(sent.bodies[0]);

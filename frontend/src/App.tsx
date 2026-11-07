@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { ComponentProps, JSX, ReactNode } from "react";
+import type { ComponentProps, JSX } from "react";
 import { flushSync } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { QueryObserverResult } from "@tanstack/react-query";
@@ -54,6 +54,7 @@ import { NewOrder } from "@/orders/NewOrder";
 import { Orders, freshOrdersView } from "@/orders/Orders";
 import { Unread } from "@/shared/Unread";
 import { ModeSwitch } from "@/shared/ModeSwitch";
+import { BlankTag } from "@/shared/BlankTag";
 import type { OrdersView } from "@/orders/Orders";
 import { asShown, money, stateText } from "@/orders/types";
 import type { Me, Store, Order } from "@/orders/types";
@@ -290,22 +291,6 @@ function initialsOf(name: string): string {
     .map((word) => Array.from(word)[0] ?? "")
     .join("")
     .toLocaleUpperCase("uk-UA");
-}
-
-/**
- * The blank tag (spec S03; «Усе на бірці» task list, P1-4): the hero tag's
- * cut top, no thread, its eyelet dashed — nothing hangs on it yet. The
- * screens before a store: no access yet, a sign-in that failed.
- */
-function BlankTag({ children }: { children: ReactNode }): JSX.Element {
-  return (
-    <div className="tag-hero tag-outline blank">
-      <div className="blank-tag">
-        <span className="blank-eyelet" aria-hidden="true" />
-        {children}
-      </div>
-    </div>
-  );
 }
 
 /** «Магазин заблоковано власником з 01.10.2026», «Магазин закрито, в архіві
@@ -1107,11 +1092,14 @@ function Workspace({
   // And while goods are returned to a supplier (stage 2, money task list,
   // P0-4).
   const [supplierTask, setSupplierTask] = useState(false);
+  // And while a sale's return is made (stage 2, orders task list, P0-6).
+  const [returnTask, setReturnTask] = useState(false);
   const taskScreen =
     ((tab === "deposit" || tab === "credits") && depositTask) ||
     (tab === "cash" && cashTask) ||
     (tab === "invoices" && invoiceTask) ||
     (tab === "suppliers" && supplierTask) ||
+    (tab === "returns" && returnTask) ||
     // And while a new order is made (stage 2, orders task list, P0-5).
     tab === "new";
   const creditKey = `birka:credit-pending:${me.organization_id}:${me.user_id}:${store.id}`;
@@ -3447,6 +3435,7 @@ function Workspace({
           <Returns
             key={returnsEpoch}
             mode={tillModes("returns")}
+            task={setReturnTask}
             store={store}
             token={token}
             journalKey={returnKey}

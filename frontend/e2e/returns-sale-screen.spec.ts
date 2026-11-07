@@ -2,8 +2,11 @@ import {
   test,
   expect,
   countTaps,
+  expectGlyphBeside,
+  expectPlate,
   expectStub,
   fromPaper,
+  menu,
   openStore,
   section,
   returnUnits,
@@ -86,12 +89,15 @@ async function oneSale(
   {
     way = "CASH",
     parts = false,
+    firstDays,
     answer,
   }: {
     /** «NONE»: the sale suggests no way (G5). */
     way?: "CASH" | "CARD" | "TRANSFER" | "NONE" | "REFUSED";
     /** Paid in parts. */
     parts?: boolean;
+    /** Typed from paper: the first days' (true) or an outage's (false). */
+    firstDays?: boolean;
     answer?: (body: {
       lines: { sale_item_id: string; quantity: number; condition: string }[];
       payment_method?: string;
@@ -112,7 +118,15 @@ async function oneSale(
             currency_code: "UAH",
             total: "6000.00",
             paid_in_parts: parts,
-            outage: null,
+            outage:
+              firstDays === undefined
+                ? null
+                : {
+                    sold_by_user_id: null,
+                    sold_by: null,
+                    sold_at: null,
+                    first_days: firstDays,
+                  },
             items: lines.map((each) => ({
               ...each,
               source_location_id: fixture.till_location_id,
@@ -288,6 +302,187 @@ async function contrast(element: Locator): Promise<number> {
 const panelOf = (page: Page): Locator =>
   page.getByRole("group", { name: "Повернення: сума і спосіб" });
 
+/** One line whole on the screen and above the panel, never under it: the
+ * panel stands over the page's foot (review, 2026-11-06). */
+async function expectLineOverPanel(page: Page): Promise<void> {
+  const row = page.locator(".line-return");
+  await expect(row).toBeInViewport({ ratio: 1 });
+  await expect(panelOf(page)).toBeInViewport({ ratio: 1 });
+  await expect
+    .poll(async () => {
+      const line = await row.boundingBox();
+      const under = await panelOf(page).boundingBox();
+      return line && under ? line.y + line.height - under.y : Infinity;
+    })
+    .toBeLessThanOrEqual(1);
+}
+
+/** Telegram's «Назад» pressed. */
+async function pressBack(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        data: JSON.stringify({ eventType: "back_button_pressed" }),
+        source: window.parent,
+      }),
+    );
+  });
+}
+
+/** What the app tells Telegram: its buzzes, and its «Назад» shown or not. */
+async function hearTelegram(
+  page: Page,
+): Promise<() => Promise<{ buzzes: unknown[]; backs: boolean[] }>> {
+  await page.addInitScript(() => {
+    const host = window as unknown as {
+      TelegramWebviewProxy: {
+        postEvent: (event: string, data: string) => void;
+      };
+      buzzes: string[];
+      backs: boolean[];
+    };
+    host.buzzes = [];
+    host.backs = [];
+    host.TelegramWebviewProxy = {
+      postEvent: (event, data) => {
+        if (event === "web_app_trigger_haptic_feedback") host.buzzes.push(data);
+        if (event === "web_app_setup_back_button")
+          host.backs.push(
+            (JSON.parse(data) as { is_visible: boolean }).is_visible,
+          );
+      },
+    };
+  });
+  return () =>
+    page.evaluate(() => {
+      const host = window as unknown as { buzzes: string[]; backs: boolean[] };
+      return {
+        buzzes: host.buzzes.map((data) => JSON.parse(data) as unknown),
+        backs: host.backs,
+      };
+    });
+}
+
+test("a sale's return is a task's screen: the menu aside, Telegram's «Назад» its «До списку»; its stickers with their glyphs, the two counts in one row felt as a light tap, the way's switch felt as a choice (stage 2, orders task list, P0-6, В-ЗП6 (а))", async ({
+  page,
+}) => {
+  const heard = await hearTelegram(page);
+  await oneSale(page, [line("Лоран шоколад", 1)], {
+    parts: true,
+    firstDays: false,
+  });
+  await opened(page, undefined, "8.0");
+  await expect(page.getByRole("heading", { name: "Повернення" })).toBeVisible();
+  // The menu steps aside, as on «Внесок» and the cash's count; Telegram's
+  // «Назад» stands for «До списку».
+  await expect(menu(page)).toBeHidden();
+  await expect.poll(async () => (await heard()).backs.at(-1)).toBe(true);
+  // Each sticker its glyph beside its words: never a colour alone.
+  const marks = page.locator(".sale-marks");
+  await expect(marks.locator(".badge.debt")).toHaveText("Оплата частинами");
+  await expectGlyphBeside(marks.locator(".badge.debt"));
+  await expect(marks.locator(".badge.warn")).toHaveText("Продано під час збою");
+  await expectGlyphBeside(marks.locator(".badge.warn"));
+  // «Цілі» and «Пошкоджені» side by side, «Пошкоджені» with «Брак»'s torn
+  // tag, each «−» and «+» at least 44 square.
+  const intact = page.locator(".return-step").first();
+  const damaged = page.locator(".return-step.damaged");
+  const left = await intact.boundingBox();
+  const right = await damaged.boundingBox();
+  if (!left || !right) throw new Error("not laid out");
+  expect(Math.round(right.y)).toBe(Math.round(left.y));
+  expect(right.x).toBeGreaterThanOrEqual(left.x + left.width);
+  await expect(damaged.locator(".return-step-name svg.icon")).toHaveCount(1);
+  await expect(intact.locator("svg.icon")).toHaveCount(0);
+  for (const button of await page
+    .locator(".return-step .stepper button")
+    .all()) {
+    const box = await button.boundingBox();
+    expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
+    expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
+  }
+  // A count felt as the basket's: a light tap each.
+  const before = (await heard()).buzzes.length;
+  await page.getByRole("button", { name: "Цілі: більше" }).click();
+  await page.getByRole("button", { name: "Цілі: менше" }).click();
+  await page.getByRole("button", { name: "Пошкоджені: більше" }).click();
+  await expect(page.locator(".return-step.damaged .return-count")).toHaveText(
+    "1",
+  );
+  const light = { type: "impact", impact_style: "light" };
+  expect((await heard()).buzzes.slice(before)).toEqual([light, light, light]);
+  // The way's switch, a choice felt as one.
+  await panelOf(page).getByRole("radio", { name: "На картку" }).check();
+  expect((await heard()).buzzes.slice(before + 3)).toEqual([
+    { type: "selection_change" },
+  ]);
+  // Telegram's «Назад»: the list, and the menu again.
+  await pressBack(page);
+  await expect(
+    page.getByRole("searchbox", { name: "Що повертають?" }),
+  ).toBeVisible();
+  await expect(menu(page)).toBeVisible();
+});
+
+for (const [name, theme] of [
+  ["light", LIGHT],
+  ["dark", DARK],
+] as const)
+  test(`in the ${name} theme at 360 × 640 a return's stickers, its counts and a refusal's plate read at 4.5:1, its one line and the panel in view without a scroll (stage 2, orders task list, P0-6)`, async ({
+    page,
+  }) => {
+    const { sent } = await oneSale(page, [line("Лоран шоколад", 1)], {
+      parts: true,
+      firstDays: true,
+      answer: () => ({
+        status: 409,
+        json: {
+          code: "DAMAGED_RETURNS_UNAVAILABLE",
+          message: "The store has no «Брак» warehouse to take damaged goods",
+          details: { reason: "NOT_SET_UP" },
+        },
+      }),
+    });
+    await opened(page, theme);
+    expect(
+      await page.evaluate(() => document.documentElement.dataset.theme),
+    ).toBe(name);
+    await expect(page.locator(".sale-marks .badge.warn")).toHaveText(
+      "Продано з паперу",
+    );
+    await page.getByRole("button", { name: "Пошкоджені: більше" }).click();
+    for (const part of [
+      page.locator(".sale-marks .badge.debt"),
+      page.locator(".sale-marks .badge.warn"),
+      page.locator(".line-return h3"),
+      page.locator(".line-return-meta"),
+      page.locator(".return-step").first().locator(".return-step-name"),
+      page.locator(".return-step.damaged .return-step-name"),
+      page.locator(".return-step.damaged .return-count"),
+      // The way chosen, and one not.
+      panelOf(page).locator(".way-switch span").nth(0),
+      panelOf(page).locator(".way-switch span").nth(1),
+    ])
+      expect(await contrast(part)).toBeGreaterThanOrEqual(4.5);
+    // One line: its row over the panel, both whole on the screen, the
+    // person scrolling nothing — paid in parts, from paper, the app brings
+    // the row above the panel itself.
+    await expectLineOverPanel(page);
+    await noSideScroll(page);
+    await page.screenshot({ path: `test-results/returns-task-${name}.png` });
+    await panelOf(page)
+      .getByRole("button", { name: "Повернути товар на 3 000,00 грн" })
+      .click();
+    // Refused: the error's plate, never a debt's colour, the counts kept.
+    const plate = page.getByRole("alert");
+    await expect(plate).toContainText("Нічого не повернено.");
+    await expectPlate(plate, "refused", name);
+    await expect(page.locator(".return-step.damaged .return-count")).toHaveText(
+      "1",
+    );
+    expect(sent).toHaveLength(1);
+  });
+
 test("a return in four taps from the till: «Повернути» — its field where the till's stood — the sale's row, «Цілі: більше», and the button that hands the money back, its way the sale's («Усе на бірці» task list, P1-3)", async ({
   page,
 }) => {
@@ -336,6 +531,10 @@ test("a return in four taps from the till: «Повернути» — its field 
     .getByRole("button", { name: /^Оформити повернення: Лоран шоколад · M, / })
     .click();
   await page.getByRole("button", { name: "Цілі: більше" }).click();
+  // One line at 360 × 640: its row over the panel, both whole on the
+  // screen, the person scrolling nothing — the app brings the row above the
+  // panel itself (stage 2, orders task list, P0-6).
+  await expectLineOverPanel(page);
   await panelOf(page)
     .getByRole("button", {
       name: "Повернути покупцю 3 000,00 грн готівкою",
@@ -367,7 +566,7 @@ test("before a tap: nine things to see, nothing to type and nothing to press; a 
   await expect(
     page.getByRole("heading", { name: "Лоран шоколад · M", exact: true }),
   ).toBeVisible();
-  await expect(page.locator(".line-return .hint")).toHaveText(
+  await expect(page.locator(".line-return-meta")).toHaveText(
     "3 000,00 грн за 1 шт. · можна повернути 2 шт.",
   );
   expect(await shown(page)).toBeLessThanOrEqual(9);
@@ -506,7 +705,7 @@ test("two lines: each tag counts its own, and the panel says how many in all", a
   await expect(
     page
       .getByRole("group", { name: "Альпака сіра · M", exact: true })
-      .locator(".hint"),
+      .locator(".line-return-meta"),
   ).toHaveText(
     "3 000,00 грн за 1 шт. · можна повернути 1 шт. · уже повернено 1 шт.",
   );
@@ -628,7 +827,7 @@ for (const [name, theme, scheme] of [
       page.locator(".return-step").first().locator(".return-step-name"),
       page.locator(".return-step.damaged .return-step-name"),
       page.locator(".return-step.damaged .return-count"),
-      page.locator(".line-return .hint"),
+      page.locator(".line-return-meta"),
       panelOf(page).locator(".pay-total"),
       panelOf(page).locator(".pay-what"),
       panelOf(page).locator("label:has(input:checked)"),
@@ -636,7 +835,7 @@ for (const [name, theme, scheme] of [
       expect(await contrast(part)).toBeGreaterThanOrEqual(4.5);
     await page.screenshot({ path: `test-results/returns-form-${name}.png` });
     const metaSize = await page
-      .locator(".line-return .hint")
+      .locator(".line-return-meta")
       .evaluate((node) => getComputedStyle(node).fontSize);
     // «Пошкоджені» keeps the colour of «Брак» on the result (P2-4).
     const damagedColour = await page
@@ -774,7 +973,7 @@ test("from paper, the panel's large line says so too, and never what to hand bac
   ).toBeVisible();
 });
 
-test("a warehouse to choose, for goods from another store's own, is brought above the panel with its tag", async ({
+test("a warehouse to choose, for goods from another store's own, is brought above the panel with its tag; its chips deciding ones of 44, the one chosen in the chosen colours (stage 2, orders task list, P0-6)", async ({
   page,
 }) => {
   const coat = { ...line("Лоран шоколад"), back_to_sold_from: false };
@@ -816,6 +1015,25 @@ test("a warehouse to choose, for goods from another store's own, is brought abov
       name: "Оберіть склад для цілого товару",
     }),
   ).toBeDisabled();
+  // Deciding chips 44, nothing chosen beforehand; the one tapped in the
+  // chosen colours (spec §6.13), as «Куди» (P0-6).
+  const chip = place.getByRole("button", { name: "Склад повернень" });
+  await expect(place.locator('[aria-pressed="true"]')).toHaveCount(0);
+  expect((await chip.boundingBox())?.height).toBe(44);
+  await chip.click();
+  await expect(chip).toHaveAttribute("aria-pressed", "true");
+  const colours = await page.evaluate(() => {
+    const probe = document.createElement("i");
+    document.body.append(probe);
+    probe.style.color = "var(--chosen)";
+    const back = getComputedStyle(probe).color;
+    probe.style.color = "var(--on-chosen)";
+    const fore = getComputedStyle(probe).color;
+    probe.remove();
+    return { back, fore };
+  });
+  await expect(chip).toHaveCSS("background-color", colours.back);
+  await expect(chip).toHaveCSS("color", colours.fore);
 });
 
 test("Telegram buzzes once the server answers a return: an error refused, a success recorded; a kept one a warning, confirmed later nothing — and its banner and notice name it", async ({

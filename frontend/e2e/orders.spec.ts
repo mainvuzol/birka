@@ -184,7 +184,7 @@ test("reserve, dispatch, arrive, collect through real API", async ({
   await expect(page.locator(".order-collected .way-pill")).toHaveText(
     "Готівка",
   );
-  await expect(page.locator(".order-collected .hand-back-sum")).toHaveText(
+  await expect(page.locator(".order-collected .stub-sum")).toHaveText(
     "1 200,15 грн",
   );
   expect(sent).toEqual([
@@ -216,7 +216,11 @@ test("reserve, dispatch, arrive, collect through real API", async ({
     page.getByRole("button", { name: "До списку", exact: true }),
   ).toBeVisible();
   await expect(page.getByText(/ · 1\s200,15\sгрн$/)).toBeVisible();
-  // «Замовлення» pressed again: the store's list.
+  // A task's screen, the menu aside (stage 2, orders task list, P0-6): «До
+  // списку», then «Замовлення» pressed again — the store's list.
+  await expect(menu(page)).toBeHidden();
+  await page.getByRole("button", { name: "До списку", exact: true }).click();
+  await expect(menu(page)).toBeVisible();
   await section(page, "Замовлення");
   await expect(
     page.getByRole("heading", { name: "Замовлення", exact: true }),

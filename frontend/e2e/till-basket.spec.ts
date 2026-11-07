@@ -6,6 +6,7 @@ import {
   changeStore,
   fillLine,
   fromPaper,
+  menu,
   openStore,
   toTill,
   section,
@@ -400,6 +401,13 @@ async function aReturnsScreen(page: Page): Promise<void> {
   await page.getByRole("button", { name: /^Оформити повернення: / }).click();
 }
 
+/** Out of a sale's return, a task's screen, by «← До списку»: the menu
+ * back (stage 2, orders task list, P0-6, В-ЗП6 (а)). */
+async function toTheList(page: Page): Promise<void> {
+  await page.getByRole("button", { name: "До списку", exact: true }).click();
+  await expect(menu(page)).toBeVisible();
+}
+
 test("a basket built from paper is gone once the paper is unticked on another screen — and unticked and ticked again — never sent unmarked, nor in another series (navigation task list, P0-5)", async ({
   page,
 }) => {
@@ -413,6 +421,7 @@ test("a basket built from paper is gone once the paper is unticked on another sc
   const returnsPaper = page.getByLabel("Вношу повернення з паперу");
   await expect(returnsPaper).toBeChecked();
   await returnsPaper.uncheck();
+  await toTheList(page);
   await row(page, "Продаж").click();
   await empty(page);
   await expect(page.getByLabel("Вношу продаж з паперу")).not.toBeChecked();
@@ -424,6 +433,7 @@ test("a basket built from paper is gone once the paper is unticked on another sc
   await aReturnsScreen(page);
   await returnsPaper.uncheck();
   await fromPaper(page, "Вношу повернення з паперу");
+  await toTheList(page);
   await row(page, "Продаж").click();
   await empty(page);
 });
@@ -450,6 +460,7 @@ test("an unmarked basket keeps its lines when the paper is ticked on another scr
   // Ticked on a return's screen: the lines, no question.
   await aReturnsScreen(page);
   await fromPaper(page, "Вношу повернення з паперу");
+  await toTheList(page);
   await row(page, "Продаж").click();
   await asItWas(page);
   await expect(page.getByLabel("Вношу продаж з паперу")).toBeChecked();
@@ -475,6 +486,7 @@ test("an answer about the shelf already given is never sent with the paper's mar
   // Ticked on a return's screen: sent marked, the lines and no answer.
   await aReturnsScreen(page);
   await fromPaper(page, "Вношу повернення з паперу");
+  await toTheList(page);
   await row(page, "Продаж").click();
   await asItWas(page);
   await pay(page, "З паперу · Готівка").click();

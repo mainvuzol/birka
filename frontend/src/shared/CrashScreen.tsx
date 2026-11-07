@@ -1,6 +1,9 @@
 import { Component, useEffect, useState } from "react";
 import type { JSX, ReactNode } from "react";
 import { UNREACHABLE } from "@/shared/api";
+import { Banner } from "@/shared/Banner";
+import { BlankTag } from "@/shared/BlankTag";
+import { Icon } from "@/shared/Icon";
 import { useReach } from "@/shared/reach";
 import { release, reportError } from "@/shared/report";
 import { connectTelegram } from "@/shared/telegram";
@@ -46,6 +49,10 @@ function unansweredCommandKept(): boolean {
  * While the server does not answer it says so in the owner's words, and that
  * the app may not open again after «Перезапустити»: without the server there
  * is no app at all (owner decision, 2026-10-04; ADR-0013 §3, G26).
+ *
+ * Drawn as the door is, a blank tag under the app's name: a fault, never
+ * a page of red (stage 2, orders task list, P1-5). The owner's words are
+ * the paper's banner, a warning.
  */
 function Crashed(): JSX.Element {
   const [kept, setKept] = useState(unansweredCommandKept);
@@ -77,40 +84,50 @@ function Crashed(): JSX.Element {
     }
   }, []);
   return (
-    <main data-crashed="">
-      <h1>Бірка</h1>
-      <h2>Щось пішло не так</h2>
-      {kept ? (
-        <p>
-          Операцію, на яку сервер ще не відповів, збережено: після перезапуску
-          застосунок покаже її для перевірки. Не очищайте дані застосунку.
-        </p>
-      ) : (
-        <p>
-          Якщо ви щойно провели операцію, перевірте, чи її записано, перш ніж
-          повторювати. Кошик, який ви ще не надіслали, доведеться скласти
-          заново.
-        </p>
-      )}
-      {down && (
-        <>
-          <p role="alert">{UNREACHABLE}</p>
-          <p>
-            Якщо сервер не відповідає, після перезапуску застосунок може не
-            відкритися — продавайте на папері.
-          </p>
-        </>
-      )}
-      <button
-        onClick={() => {
-          window.location.reload();
-        }}
-      >
-        Перезапустити
-      </button>
-      <p>
-        <small>Версія {release}</small>
+    <main className="before-store crashed" data-crashed="">
+      <p className="opened-as app-name">
+        <span className="avatar" aria-hidden="true">
+          <Icon name="mark" />
+        </span>
+        <span>Бірка</span>
       </p>
+      <BlankTag>
+        <h1 className="t-title-l">Щось пішло не так</h1>
+        {kept ? (
+          <p className="blank-body">
+            Операцію, на яку сервер ще не відповів, збережено: після перезапуску
+            застосунок покаже її для перевірки. Не очищайте дані застосунку.
+          </p>
+        ) : (
+          <p className="blank-body">
+            Якщо ви щойно провели операцію, перевірте, чи її записано, перш ніж
+            повторювати. Кошик, який ви ще не надіслали, доведеться скласти
+            заново.
+          </p>
+        )}
+        {/* Its place said from the start, so the words are heard as they
+            come once the server goes quiet (review, 2026-11-06). */}
+        <div role="status">
+          {down && (
+            <Banner kind="paper" label="Сервер не відповідає">
+              <p>{UNREACHABLE}</p>
+              <p>
+                Якщо сервер не відповідає, після перезапуску застосунок може не
+                відкритися — продавайте на папері.
+              </p>
+            </Banner>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            window.location.reload();
+          }}
+        >
+          Перезапустити
+        </button>
+        <p className="t-meta blank-after">Версія {release}</p>
+      </BlankTag>
     </main>
   );
 }
