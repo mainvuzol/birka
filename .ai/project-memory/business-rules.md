@@ -6817,3 +6817,155 @@ watcher's quarter of an hour are as they were.
     there (it names its store); «Спробувати ще раз» on the door with no
     store says nothing when there is still none, as the closed store's tag
     (P1-1) does.
+
+## Chosen in chat — 2026-11-07 (stage 2 batch 8: «Інвентаризація» — its entry, start and end; counting by the model's tag; goods P0-2, P0-3)
+
+Chosen in chat on 2026-11-07 («Goods: «Інвентаризація»»), after #176: the
+goods task list's P0-2 and P0-3 in one batch. The owner's questions stand
+by their (а): В-Г3 (no «Збігається · 3 шт.» in one tap — the number is
+always typed), В-Г5 (no server change: the phone glues a model's sizes
+into one tag; the models' order as the server gives it). No right, no
+server rule, no command and no field changes: a stocktake starts, counts
+and finishes through the same reads and commands; one open per warehouse,
+the warehouse keeps selling, what nobody counts stays as it is, a count is
+one command applied at once, a recount keeps the last, a count equal to the
+balance is recorded as checked, the reserve's and the unknown size's
+refusals are the server's as before, and the bot tells the network's owner
+as before.
+
+- **The entry (P0-2):**
+  - «Інвентаризація» and its line, the warehouses as chips — or the only
+    one said — as before.
+  - The open stocktake a row tag: its eyelet filled in the live data's
+    colour (`paid`; the task list names it `live`, which the tag's eyelets
+    of §6.9 do not have — decided here), the stocktake's glyph, «Триває з
+    10:20 · Тетяна» («Триває з 06.11, 10:20 · …» once it began another
+    day; decided here), «Пораховано 34 · нестача 2 шт. · надлишок 1 шт.»
+    (or «· розбіжностей немає»; decided here) and «Продовжити», felt
+    lightly.
+  - None open: Telegram's MainButton «Почати інвентаризацію», set on entry
+    and gone as the person leaves or once one is open; outside Telegram the
+    dock's own button.
+  - «Попередні»: the finished ones as a thread, newest first — the day, a
+    knot, «Нестача 2 шт. · надлишок 1 шт. · не перевірено 140» (a part
+    that is nought left out; «Розбіжностей немає» with none; decided
+    here) and «{who finished} · 18:40» (the time added; decided here); the
+    last three and «Ще N». «Показати розбіжності» stays on a row that has
+    any — the task list does not name it, and nothing that worked is taken
+    away (decided here).
+- **The start (P0-2):** a sheet «Почати інвентаризацію складу «Основний»?»
+  — the task list's «…«Основного»?» declines the warehouse's name, which
+  the app cannot do for any name, so «складу» and the name as written
+  (decided here). Its text as before, unchanged. Telegram's MainButton
+  «Почати» (a press sooner than 0.7 s after the sheet opened was meant for
+  «Почати інвентаризацію» and is let go, as «Так, закрити»'s is); the
+  app's «Скасувати»; Telegram's «Назад», Escape and the scrim close it.
+  Started: a «success» buzz and straight to counting — two taps. Refused:
+  in the sheet, its words as before, an «error» buzz.
+- **Counting, a task's screen (P0-3):**
+  - The menu steps aside; the phone is kept upright while it counts (not on
+    the result — decided here). «← Інвентаризація» (read «Назад до
+    інвентаризації») and Telegram's «Назад» go back to the entry.
+  - Its title «Інвентаризація · «Основний»», its line «Почато о 10:20 ·
+    Тетяна» («Почато 06.11 о 10:20 · …» another day) in place of the
+    store and the person, «Змінити магазин» held as on every task's
+    screen. «Завершити» quiet at the title's right — under it when the two
+    do not fit — never the MainButton.
+  - «Не пораховані N · Пораховані N»: the counts are the stocktake's own
+    sums (`unchecked_positions`, `counted_positions`), read again after
+    each count.
+  - «Не пораховані»: a tag a model (§6.12), its name and a cell a size —
+    the letter, «в обліку 3» under it, the pin badge with what orders hold,
+    «?» and «? — розмір невідомий» for a size not known; read «M, в обліку
+    3, у резерві 1». A model's positions from every page read so far are
+    one tag (the server lists them by model). The sizes in the
+    organization's order for whoever may read it (`inventory:receive`), a
+    size outside it — the unknown one — last; for anyone else as the server
+    gave them. While the order is read, the list keeps its place (decided
+    here). «Показати ще» reads the next fifty; after each count the list is
+    read again whole from its top, so nothing is skipped as positions leave
+    it (decided here). A cell's tap is a «selection» buzz.
+  - «Знайшли товар, якого немає в списку» under the list, as before: the
+    catalogue and the size as before, then the position's own cell,
+    «L / в обліку 0», whose tap opens the same sheet counted against
+    nought — a held one refused with how many, and counted against that.
+    The form goes once it is counted.
+  - «Пораховані»: rows, newest first — «Марсель молочний · M — 3 → 1 (−2)»
+    or «… — 3, збігається», «{who}, 11:40» («06.11, 11:40» another day) —
+    each with «Перерахувати» (read «Перерахувати: Марсель молочний · M»),
+    the same sheet. The number before the arrow is the count less what
+    this stocktake changed there (`counted_quantity − net_delta`; the
+    server sends no «before»): a position counted again after a sale moved
+    it shows the stocktake's own change from there, never the sale's
+    (decided here).
+- **The count's sheet (P0-3):**
+  - «Марсель молочний · M» — the model's one name as the catalogue spells
+    it, then the size («розмір невідомий» for «?»); the task list's
+    «Марсель · молочний · M» splits a name the app holds whole (decided
+    here). «В обліку 3 · склад «Основний»», and the reserve's hint as
+    before.
+  - The app's keypad for pieces: «Фактично, шт.», no comma (its key's
+    place empty), five figures at most, the phone's keyboard never open.
+    As it is typed: «3 → 1 · −2», a shortage in the warning's colour and
+    nobody's fault; «Збігається з обліком.» for the same number, as before;
+    «Не більше 10000 шт. однієї позиції.» and «Облік товару з невідомим
+    розміром можна лише зменшити.» as before.
+  - Telegram's MainButton «Записати», held until a number is typed, then
+    «Записати · 1 шт.»; outside Telegram the sheet's own. Telegram asks
+    before Бірка closes only while a number is typed.
+  - Recorded: a «light» buzz; the sheet goes on to the model's next cell
+    not yet counted — in this sheet, or by anyone as the list was last
+    read — round from the one counted (the task list says «the next one»;
+    round, so a tap on M of S·M·L·XL still counts S — decided here), and
+    closes after the last. A recount and goods found
+    are one cell: it closes after them. Five taps and four numbers for a
+    model of four sizes.
+  - Refused: a «warning» buzz; it stays, the keypad empty (a person past
+    their requests keeps the number, as before), saying why in the words
+    of before.
+  - Its answer lost: the sheet goes, and the kept count's stub is App's,
+    as before.
+  - A balance read again while it is open is the one counted against: the
+    sheet follows the list as it is read.
+- **«Записано» (P0-3):** while the sheet goes on to the next cell, its line
+  stands in the sheet itself — a toast at the foot would cover the keypad's
+  last row (decided here); once the sheet closes by itself after the last,
+  a toast for 4 s: «Записано: Марсель молочний · XL — облік 2 → 1 (−1)» or
+  «… — збігається з обліком (2)». A sheet closed by hand shows none.
+- **The end (P0-2):** «Завершити» opens «Завершити інвентаризацію складу
+  «Основний»?» (the name as written, as the start's), its sums read again
+  as it opens (as before): «Нестача» and «Надлишок» large in pieces, the
+  shortage in the warning's colour; «Розбіжностей немає» large when there
+  are none (decided here); «Не перевірено позицій: 140 — їхні залишки не
+  зміняться.» when any; the text about counting after and the bot as
+  before. Telegram's MainButton «Так, завершити» (the same 0.7 s let go),
+  the app's «Ще ні». Finished: a «success» buzz; refused: in the sheet, an
+  «error» buzz. Two taps.
+- **The result (P0-2):** its title with the check, «Інвентаризацію
+  завершено», its line «Склад «Основний» · {who finished}» (decided here);
+  the stub knotted (settled): «Пораховано позицій: 2», «Нестача 2 шт. · 1
+  позиція», «Надлишок 1 шт. · 1 позиція» (or «Розбіжностей немає»), «Не
+  перевірено позицій: N — їхні залишки не змінювались.», and the
+  differences in the words of before, five and «Ще N», then «Показати
+  ще». Telegram's MainButton «До інвентаризації» (the dock's own outside
+  Telegram) back to the entry.
+- **No «од.» anywhere in it:** pieces are «шт.»; «нестача 2 шт. · 2
+  позиції».
+- **From the review (2026-11-07), decided here:**
+  - A toast of the last sheet is gone once another sheet opens: never back
+    after it.
+  - After a model's last cell its tag goes as the list is read again, and
+    the cursor to the next model's first cell — the title when none is
+    left; after goods found, to «Знайшли товар, якого немає в списку»,
+    never the title far above.
+  - «Показати ще» waits while the list is read again (asked meanwhile, it
+    would be read past a position that moved up), and is not shown under a
+    read that failed.
+  - The sheet's status line stands from the start, empty, so its words are
+    read; a reader hears «Далі: L.» after them, the title moving without a
+    word.
+  - «До інвентаризації» lets go a tap sooner than 0.7 s after the result
+    came, as «Почати» and «Так, завершити» let theirs.
+  - The start's sheet, refused as one is open, gives the cursor back to
+    «Продовжити» on the tag that stands in place of «Почати
+    інвентаризацію».
