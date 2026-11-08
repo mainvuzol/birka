@@ -581,9 +581,15 @@ test("the «Брак» takes no deliveries, and is named in the stock", async ({
     chips.getByRole("button", { name: "Брак", exact: true }),
   ).toHaveCount(0);
   await section(page, "Залишки");
+  // A chip a warehouse there, «Брак» among them: chosen, it says it is not
+  // for sale (stage 2, goods task list, P2-5).
+  await chips.getByRole("button", { name: "Брак", exact: true }).click();
   await expect(
-    page.locator(`option[value="${fixture.bin_location_id}"]`),
-  ).toContainText("брак, не продається");
+    page.getByText(
+      "Це склад «Брак»: тут лежить пошкоджений товар із повернень, він не продається. Змінюється лише через розділ «Брак».",
+      { exact: true },
+    ),
+  ).toBeVisible();
 });
 
 test("a return sent: its button turns its ring and nothing kept is shown until an answer is lost; answered, its stub torn off («Усе на бірці» task list, P0-2)", async ({

@@ -7211,3 +7211,116 @@ label.way-option {
 .openings .opening-place {
   margin: 12px 0 0;
 }
+/* «Моделі» (stage 2, goods task list, P1-2): the search's rows; the model
+   a big tag with ⋯; its new name in a sheet; the merge a screen of two
+   tags with their stock. */
+.models-search {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 12px 0 0;
+}
+.models-search .catalog-rows {
+  margin: 4px 0 0;
+}
+.model-state {
+  margin: 8px 0 4px;
+}
+.model-rename fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.model-rename p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.models-merge {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 12px 0 0;
+}
+.models-merge > p {
+  margin: 0;
+}
+.merge-tag-in {
+  position: relative;
+  padding: 12px 16px 12px 30px;
+}
+.merge-tag-in::before {
+  content: "";
+  position: absolute;
+  top: 18px;
+  left: 10px;
+  box-sizing: border-box;
+  width: var(--eyelet);
+  height: var(--eyelet);
+  border: 1.5px solid var(--edge);
+  border-radius: var(--r-round);
+}
+.merge-tag-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 6px;
+}
+.merge-name {
+  margin: 0;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.merge-place {
+  margin: 10px 0 0;
+}
+.merge-place > p {
+  margin: 0;
+}
+.merge-cells,
+.stock-tag .cells {
+  margin: 0;
+  padding-left: 0;
+  list-style: none;
+}
+.merge-blockers h3 {
+  margin: 0 0 6px;
+}
+.merge-blockers ul {
+  margin: 0;
+  padding-left: 18px;
+}
+.merge-ask > p {
+  margin: 0 0 12px;
+}
+/* «Залишки» for whoever has no till (P2-5): a warehouse's chips, then a
+   tag a model as the till draws it; a tap anywhere opens its detail. */
+.stock-screen .stock-places,
+.stock-screen .stock-place {
+  margin: 12px 0;
+}
+.stock-tag {
+  cursor: pointer;
+}
+.stock-free {
+  margin: 8px 0 0;
+}
+/* The supplier's lists are tags, not bullets. */
+.order-tags {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+/* A long name breaks where it must — a sheet named by a model, the
+   merge's question, «← {модель}» — never across the screen (review,
+   2026-11-08). */
+.sheet-title,
+.screen-header .back {
+  overflow-wrap: anywhere;
+}
+/* A kept change's stub takes the cursor as it comes: no ring around it. */
+.models-kept:focus {
+  outline: none;
+}

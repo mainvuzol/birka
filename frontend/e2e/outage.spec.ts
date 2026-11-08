@@ -3686,7 +3686,11 @@ test.describe("10. a kept operation the phone settles says what became of it", (
         page.getByRole("heading", { name: "Коригування ще не підтверджено" }),
       ).toBeVisible();
       await expect(page.locator(".check-line .eyelet-spin")).toHaveCount(1);
-      await page.getByLabel("Склад для перегляду").selectOption(ids.shared);
+      // The only warehouse: said and taken, its stock read at once (stage
+      // 2, goods task list, P2-5).
+      await expect(
+        page.getByText("Склад «Спільний»", { exact: true }),
+      ).toBeVisible();
       await expect.poll(() => reads).toBe(1);
       answer();
       // Refused: settled, and said.

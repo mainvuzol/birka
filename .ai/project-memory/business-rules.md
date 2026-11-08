@@ -7379,3 +7379,151 @@ warehouse waits while a list does; the limits of 5 000 stand.
     the split as the line shows it stays an option in «Розмір», not in
     «Звідки кількість»; «Прибрати» stays on the extra size rows only, the
     first row being the answer itself.
+
+## Chosen in chat — 2026-11-08 (stage 2 batch 12: «Моделі» — the live search, the model's big tag with ⋯, the rename sheet, the merge's own screen asked by Telegram's popup; «Залишки» for those without the till — a chip a warehouse, a tag a model, a tap to its detail; goods P1-2, P2-5)
+
+Chosen in chat on 2026-11-08 («merged, go next»), after #180: the goods
+task list's P1-2 and P2-5 in one batch — the last two of that list. No
+right, no server rule, no command and no field changes: a correction is
+`POST /catalog/models/{id}/rename`, `/merge`, `/retire` and `/restore` with
+the same bodies, through the same journal; «Залишки» reads
+`/stock-locations` and `/catalog/stock-options` as before. A merge still
+cannot be undone, still shows both models and their stock first, and is
+still the right of whoever may merge in every store (the card's
+`may_merge`); what stops it is the server's to say.
+
+- **The search (P1-2).** Asked as it is typed, from two letters, once
+  typing pauses — no «Знайти», as the catalogue's search (P0-1). Each model
+  a row; a retired one says «Прибрана» on its row, and its name read aloud
+  ends «— Прибрана». Words no model has: «Нічого не знайшли за «…».». The
+  same search finds the model that stays in a merge, the duplicate itself
+  never offered.
+- **The model's card.** A big tag: its name, «Джерело: …», the sticker
+  «Прибрана» or «Об’єднана» where it is not «Діє», «Веде до моделі «…».»
+  for a merged one, and — retired — «Прибрану модель не пропонують у
+  «Прийшов товар» і пошуку; її залишок продають, повертають і списують.»
+  («у «Прийманні»» before). «← Моделі» back to the search, the cursor on
+  the row it was opened from.
+  - **⋯** opens a sheet named by the model: «Перейменувати», «Об’єднати з
+    іншою» (only where the card says it may be merged), «Прибрати модель» or
+    «Повернути модель». None for a merged model. The four buttons under the
+    card are gone.
+  - **Retiring and bringing back** ask nothing (decided here, as the TZ's
+    acceptance says): both are undone by the other, and what each does is
+    said once it is done.
+- **The rename sheet.** «Перейменувати модель»: «Змінюється лише ця модель.
+  Старі продажі зберігають назву, під якою продали.» («Старі чеки…»
+  before; «чек» is not the app's word), «Назва моделі» and «Колір», then
+  «Ще ознаки» folding «Джерело», «Матеріал», «Фактура», «Хутро», «Комір»,
+  «Довжина, см», «Категорія» and «Тип виробу». «Зберегти назву» is
+  Telegram's MainButton, held while its answer is on its way; outside
+  Telegram, the sheet's own button at its foot. The sheet stands while the
+  answer is waited for.
+  - A similar word, a name another model has, and a name several models
+    have are asked in the sheet as before («Взяти «…»», «Це інша назва —
+    зберегти як є», «Об’єднати з тією моделлю», the families to choose).
+  - **Refused for another reason,** «Ще ознаки» unfolds by itself (decided
+    here): the refusal may be of a word folded there.
+- **The merge's screen.** «Об’єднати з іншою» opens a screen of its own,
+  «Об’єднати моделі» under «← {модель}»: the search «Модель, що лишиться»,
+  the cursor in it; then the two models as tags — «Зникне» and
+  «Лишається», «Прибрана» beside where it is, the price — with their stock
+  as cells, a row a warehouse, a cell a size, its count under its letter,
+  «є» where this person may not read that warehouse's count (said aloud
+  «M — є залишок, кількість не видно»). What stops it is rows under «Поки
+  що не можна об’єднати». «Поміняти місцями» and «Обрати іншу модель»
+  stay.
+  - **«Об’єднати»** is Telegram's MainButton, shown once the model that
+    stays is chosen, active while nothing stops it. The box to tick
+    («Розумію: об’єднання не можна скасувати.») is gone: what cannot be
+    undone is asked.
+  - **The question.** Inside a Telegram that has its popup (6.2 and
+    later): «Об’єднати «А» з «Б»? Скасувати не можна.», with «Ні» and the
+    destructive «Об’єднати». The popup has no title, the whole question
+    its message (decided here: Telegram's title holds 64 characters, the
+    names do not fit it; an empty title is left out of the call, as
+    Telegram's own library leaves it — no blank band over the message).
+    The message holds 256: longer
+    names are shortened alike with «…», the question whole. Outside
+    Telegram, or in an older one, a sheet of the same words: its title the
+    question, «Скасувати не можна.» under it, «Об’єднати» and «Ні». «Ні»,
+    or the popup closed without a button, sends nothing.
+  - From the model's card to a merge recorded: six taps — the duplicate's
+    row, ⋯, «Об’єднати з іншою», the model that stays, «Об’єднати», and the
+    popup's «Об’єднати».
+  - Refused because something opened since the preview: the preview read
+    again, its rows say what.
+- **A kept correction (ADR-0013).** Its answer lost: the sheet goes, and
+  «Зміну каталогу ще не підтверджено» stands over the screen («Незавершена
+  зміна каталогу» before), «Невідомо, чи записано зміну. Перевірте
+  результат — та сама зміна не запишеться двічі.» and «Чекає відповіді
+  сервера з HH:MM. Телефон перевірить сам. Нічого не повторюйте, поки він
+  не скаже «не записано».» — the words every kept operation now has, no
+  paper line: a catalogue correction is not done on paper (decided here).
+  - **Checked by itself** (decided here, as every kept operation): resent
+    once as the server is seen back, and once as the app opens with it
+    kept; «Перевірити результат зміни» stays. Until it is settled the card's
+    ways, the merge's ways and every other section are held.
+  - **Felt:** a first answer buzzes — success, or an error for a refusal;
+    a kept one's later checks buzz nothing (decided here).
+- **«Залишки» (P2-5)** — for whoever reads the stock with no till in the
+  store; anyone else reads it on the till's search and a model's detail.
+  - **The warehouse** is a chip, none taken for the person while there are
+    several; the only one is said — «Склад «…»» — and taken (decided here,
+    as at a delivery and a stocktake). A paused one says «Склад на паузі.
+    Залишки доступні для перегляду.»; «Брак» says «Це склад «Брак»: тут
+    лежить пошкоджений товар із повернень, він не продається. Змінюється
+    лише через розділ «Брак».» (the select's «— брак, не продається» before).
+    «Оновити» reads again («Оновити залишки» before).
+  - **A tag a model,** its rows glued across the pages read (a row read
+    twice counts once): its name, its price (none in «Брак»), a cell a
+    size. Where the store sells from the warehouse, a cell says what is
+    free under its letter — «у резерві», dashed, where every unit is held —
+    and what orders hold is its pin, read aloud «M, вільно 2, у резерві
+    1»; the tag ends «Можна продати N шт.» where anything is free. Where it
+    does not sell from it (paused, not for sale, «Брак»), a cell says what
+    lies there: «M, 3 шт.». The words «Розмір:», «На складі:», «У резерві:»
+    and «Доступно:» are gone.
+  - **A tap** on the tag — its name or anywhere on it — opens the model's
+    detail (S23) with «← Залишки», «Ще» marked; back, the same warehouse
+    and its tags. The detail reads the whole list for the model, with no
+    search: a name is not a search's words.
+  - **«Виправити залишок» and the price** are no longer on «Залишки»: they
+    are the detail's (P1-3, P1-4), one tap away. A stock correction kept
+    with no answer still stands and is settled on «Залишки» too, as on the
+    detail and «Інвентаризація»: «Залишки» reads its balances again, and a
+    kept one read from the phone opens there (as before).
+- **The order's tags** in «Позичене» and «Накладні» drew list bullets:
+  gone.
+
+### Settled in the review (2026-11-08)
+
+An independent review read the batch; what it found was settled so, none
+of it a rule of the owner's:
+- **The search's words stay** across the card and the merge's screen:
+  «← Моделі» comes back to them, the cursor on the row it left.
+- **A kept correction is checked once «Моделі» opens again** with it kept,
+  as when the app opens with it — not only as the server comes back.
+- **Settled by itself while the person is on the search,** it is said
+  there — «Назву змінено: …», «Моделі об’єднано: …» — their words and
+  cursor left alone; settled on the card or the merge, the model is shown.
+- **Its answer lost with nothing kept** (the phone's memory unwritable):
+  the sheet stands with its words; kept, the sheet goes and the cursor is
+  on the stub.
+- **Focus:** on the merge's heading once both models are known; on the
+  model's name after a retirement refused; on the stub as it comes.
+- **Enter** in a field of the rename sheet saves, as its button does; a
+  similar word taken for a folded field unfolds «Ще ознаки».
+- **The merge's question** is cut between whole characters: an emoji is
+  never halved.
+- **The live search** keeps the rows it shows while the next words are
+  asked; «Нічого не знайшли…» only for the words asked, read aloud.
+- **«Залишки»:** a model whose rows may run on to the next page is held
+  back until that page is read, its count never cut; «Показати ще» puts the
+  cursor on the first tag it brings; a refresh refused hides the tags it
+  had, a next page refused keeps them under its own retry; the warehouse
+  chosen is forgotten once «Залишки» is left for anything but the model it
+  opened.
+- **A long name** in a sheet's title or a «←» wraps rather than overflows.
+- **Not changed:** the detail opened from «Залишки» still reads the whole
+  list until the model (a recorded cost, «Not covered» in the report).

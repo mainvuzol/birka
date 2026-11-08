@@ -632,8 +632,10 @@ export function askPopup(
       answer(button_id ?? null);
     });
     try {
-      postEvent("web_app_open_popup", {
-        title,
+      // An empty title is left out, as Telegram's own library leaves it:
+      // no blank band over the message (review, 2026-11-08).
+      postNew("web_app_open_popup", {
+        ...(title ? { title } : {}),
         message,
         buttons: choices.map((choice) =>
           choice.destructive

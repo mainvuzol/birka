@@ -1334,6 +1334,10 @@ test("a list ready to approve is three taps from «Сьогодні», with no s
     sent.push(route.request().postDataJSON());
     await route.fulfill({ json: {} });
   });
+  const urls = asked(page);
+  const settled = answered(page);
+  const places = (): number =>
+    urls.filter((url) => url.startsWith("/api/v1/stock-locations")).length;
   await onToday(page);
   const verb = waiting(page).getByRole("button", {
     name: "Переглянути й затвердити",
@@ -1350,9 +1354,16 @@ test("a list ready to approve is three taps from «Сьогодні», with no s
   await expect(sheet).toContainText("Скасувати це потім не можна.");
   const yes = sheet.getByRole("button", { name: "Так, затвердити" });
   await expect(yes).toBeInViewport();
+  const before = places();
   await yes.click();
   await expect.poll(() => sent).toEqual([{ expected_review_revision: 1 }]);
   await expect(sheet).toHaveCount(0);
+  // Ended once every read asked is answered: approved, the warehouses are
+  // read again through a route that asks the real server, and one still on
+  // its way as the page lets go of its routes holds the teardown (CI, #181;
+  // as #176, #177).
+  await expect.poll(places).toBeGreaterThan(before);
+  await expect.poll(() => unanswered(urls, settled)).toEqual([]);
 });
 
 test("two lists ready to approve: the tag's verb opens the lists (stage 2, goods task list, P0-6)", async ({

@@ -819,7 +819,7 @@ test("the «Брак» section needs its own permission", async ({ page }) => {
   await expect(page.getByRole("button", { name: /^Брак/ })).toHaveCount(0);
 });
 
-test("the stock screen shows «Брак» and offers no correction or price there", async ({
+test("the stock screen shows «Брак»: what lies there, no price and nothing to sell (stage 2, goods task list, P2-5)", async ({
   page,
 }) => {
   await damaged(page, 1);
@@ -834,24 +834,35 @@ test("the stock screen shows «Брак» and offers no correction or price ther
       store.permissions = store.permissions.filter((p) => p !== "sale:create");
     await route.fulfill({ response, json: body });
   });
+  // Every model priced, so that «no price» is the screen's and not the
+  // seed's: the damaged one has none of its own.
+  await page.route("**/api/v1/catalog/stock-options?**", async (route) => {
+    const response = await route.fetch();
+    const body = (await response.json()) as {
+      items: { suggested_price: string | null }[];
+    };
+    for (const item of body.items) item.suggested_price = "1500.00";
+    await route.fulfill({ response, json: body });
+  });
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
   await section(page, "Залишки");
   await page
-    .getByLabel("Склад для перегляду")
-    .selectOption(fixture.bin_location_id);
+    .getByRole("group", { name: "Склад", exact: true })
+    .getByRole("button", { name: "Брак", exact: true })
+    .click();
   await expect(
-    page.getByText("Він змінюється лише через розділ «Брак».", {
+    page.getByText("Змінюється лише через розділ «Брак».", {
       exact: false,
     }),
   ).toBeVisible();
-  await expect(page.getByRole("article").first()).toBeVisible();
+  // Its models as tags (stage 2, goods task list, P2-5): what lies there,
+  // in pieces, nothing to sell.
+  await expect(page.locator(".stock-tag").first()).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Виправити залишок" }),
-  ).toHaveCount(0);
-  // Nothing in «Брак» is for sale, so it suggests no price to change.
-  await expect(page.getByText("Ціна продажу:")).toHaveCount(0);
-  await expect(
-    page.getByRole("button", { name: "Змінити ціну продажу" }),
-  ).toHaveCount(0);
+    page.locator(".stock-tag .size-cell .visually-hidden").first(),
+  ).toHaveText(/, \d+ шт\./);
+  await expect(page.locator(".stock-free")).toHaveCount(0);
+  // Nothing in «Брак» is for sale, so it shows no price.
+  await expect(page.locator(".stock-tag .model-price")).toHaveCount(0);
 });
