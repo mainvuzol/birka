@@ -1,4 +1,13 @@
-import { test, expect, openStore, receiveModel, section } from "./fixtures";
+import {
+  test,
+  expect,
+  addModel,
+  openStore,
+  propose,
+  receiveModel,
+  section,
+  typeSize,
+} from "./fixtures";
 import type { Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -35,24 +44,21 @@ async function open(page: Page, name: string): Promise<void> {
   await section(page, name);
 }
 
-/** Creates a model from a description with the size as typed. */
+/** Creates a model from a description with the size as typed: in «Нова
+ * модель», by «Іншого розміру немає — впишіть» (stage 2, goods task list,
+ * P0-1). */
 async function createWithSize(
   page: Page,
   name: string,
-  system: string,
+  system: "ALPHA" | "NUMERIC_EU" | "UNSPECIFIED",
   size: string,
 ): Promise<void> {
   await open(page, "Перевірка каталогу");
-  await page.getByRole("button", { name: "+ Нова пропозиція" }).click();
-  await page.getByLabel("Початковий опис товару").fill(`${name} опис`);
-  await page.getByRole("button", { name: "Зберегти пропозицію" }).click();
-  await page.getByRole("button", { name: "Створити товар з опису" }).click();
-  await page.getByLabel("Назва моделі", { exact: true }).fill(name);
-  await page.getByLabel("Система розмірів").selectOption(system);
-  await page.getByLabel("Розмір", { exact: true }).fill(size);
-  await page
-    .getByRole("button", { name: "Створити та пов’язати товар" })
-    .click();
+  const sheet = await propose(page, `${name} опис`);
+  await sheet.getByRole("button", { name: "Ні, це нова модель" }).click();
+  await sheet.getByLabel("Назва моделі", { exact: true }).fill(name);
+  await typeSize(sheet, size, system);
+  await addModel(sheet).click();
   await expect(page.getByText(`Збережений товар: ${name}.`)).toBeVisible();
 }
 

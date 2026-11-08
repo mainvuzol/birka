@@ -797,15 +797,203 @@ nav:not(.tab-bar, .more-list) {
 .catalog-card {
   overflow-wrap: anywhere;
 }
-.catalog-candidate {
-  border: 1px solid var(--line);
-  padding: 14px;
-  border-radius: 10px;
+/* The catalogue's search as it is typed (stage 2, goods task list, P0-1):
+   what it found as rows, each a touch high, the one chosen filled; found
+   nothing, it says so, and — where a model may be added — offers it. */
+.catalog-found {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 8px 0;
+}
+.catalog-row {
+  justify-content: flex-start;
+  min-height: var(--touch);
+  padding: 0 14px;
+  border: 1px solid var(--edge);
+  border-radius: var(--r-m);
+  background: var(--card);
+  color: var(--ink);
+  font-weight: 600;
+  text-align: left;
   overflow-wrap: anywhere;
 }
-.catalog-candidate .check {
+.catalog-row[aria-checked="true"] {
+  border-color: var(--chosen);
+  background: var(--chosen);
+  color: var(--on-chosen);
+}
+.catalog-none {
   display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+}
+.catalog-none p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+/* «Нова модель»: one column, the fields a touch high; the candidates rows
+   with «Це вона» on their right; the sizes as the cells. */
+.new-model {
+  display: flex;
+  flex-direction: column;
   gap: 12px;
+}
+.new-model > p,
+.new-model-ask {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.new-model-raw textarea {
+  min-height: 72px;
+}
+.new-model-candidates {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.new-model-candidates li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: var(--touch);
+  padding: 8px 12px;
+  border: 1px solid var(--edge);
+  border-radius: var(--r-m);
+  background: var(--card);
+}
+.new-model-name {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.new-model-candidates button {
+  flex-shrink: 0;
+  min-height: var(--touch);
+}
+.new-model-candidates button[aria-pressed="true"] {
+  border-color: var(--chosen);
+  background: var(--chosen);
+  color: var(--on-chosen);
+}
+.new-model-kind {
+  grid-auto-columns: auto;
+}
+.new-model-kind button {
+  font-size: 15px;
+}
+.new-model-family,
+.new-model-typed {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+}
+.new-model-family p {
+  flex: 1;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.new-model-typed label {
+  flex: 1;
+  min-width: 0;
+}
+.new-model-sizes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.new-model-more {
+  align-self: flex-start;
+  min-height: var(--touch);
+}
+.new-model-extra {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+/* «Перевірка каталогу» (P1-1): «Оновити» and «Нова пропозиція» in the
+   header; the queue's rows on the paper, its words in quotes and its
+   sticker; a proposal's words large. */
+.catalog-ways {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.catalog-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 12px 0;
+  padding: 0;
+  list-style: none;
+}
+.catalog-proposal {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  width: 100%;
+  min-height: var(--touch);
+  padding: 12px 14px;
+  border: 1px solid var(--edge);
+  border-radius: var(--r-m);
+  background: var(--card);
+  color: var(--ink);
+  text-align: left;
+}
+.catalog-proposal .catalog-raw {
+  font-size: 17px;
+  font-weight: 600;
+}
+.catalog-raw-large {
+  margin: 8px 0;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+.catalog-proposal-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.catalog-proposal-screen > p {
+  margin: 0;
+}
+.catalog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.catalog-actions button,
+.catalog-name > button {
+  min-height: var(--touch);
+}
+.catalog-name {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+.catalog-name-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  overflow-wrap: anywhere;
+}
+.catalog-name-row span {
+  flex: 1;
+  min-width: 0;
 }
 
 /* A search box and its button: the input takes the row, the button keeps its

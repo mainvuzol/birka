@@ -1,8 +1,11 @@
 import {
   test,
   expect,
+  addModel,
   countTaps,
+  leaveNewModel,
   more,
+  newModelSheet,
   openStore,
   receiveInto,
   receiveSize,
@@ -12,6 +15,7 @@ import {
   recordReceipt,
   refuseOnce,
   section,
+  sizeCell,
 } from "./fixtures";
 import type { Page, Request } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
@@ -79,7 +83,6 @@ async function enter(page: Page): Promise<void> {
 async function find(page: Page, query: string): Promise<void> {
   await page.getByLabel("Пошук у каталозі").click();
   await page.getByLabel("Пошук у каталозі").fill(query);
-  await page.getByRole("button", { name: "Знайти" }).click();
 }
 
 /** A size's stepper, «+» tapped `times`. */
@@ -632,7 +635,7 @@ async function twoWarehouses(page: Page): Promise<void> {
   });
 }
 
-test("a model in two sizes in 8 taps: «M 2, L 1» as the notebook has it, one delivery with every line («Усе на бірці» sections task list, P1-4)", async ({
+test("a model in two sizes in 7 taps: «M 2, L 1» as the notebook has it, one delivery with every line («Усе на бірці» sections task list, P1-4; the search live, stage 2, goods task list, P0-1)", async ({
   page,
 }) => {
   await twoWarehouses(page);
@@ -655,7 +658,8 @@ test("a model in two sizes in 8 taps: «M 2, L 1» as the notebook has it, one d
       name: "Прийшло 3 шт. · склад «Каса-склад» · Закупівля",
     }),
   ).toBeVisible();
-  expect(await taps()).toBe(8);
+  // Eight before the search was live: «Знайти» is no tap now.
+  expect(await taps()).toBe(7);
   // One delivery, its lines a size each.
   expect(sent).toHaveLength(1);
   expect(
@@ -942,4 +946,455 @@ test("inside Telegram the MainButton records it: held at nothing counted, put aw
   await expect
     .poll(async () => (await told("web_app_setup_closing_behavior")).at(-1))
     .toEqual({ need_confirmation: false });
+});
+
+/** A bearer for the API, as the journeys that make their own models. */
+async function bearer(page: Page): Promise<string> {
+  const auth = await page.request.post("/api/v1/auth/telegram", {
+    data: { init_data: initData() },
+  });
+  return ((await auth.json()) as { access_token: string }).access_token;
+}
+
+/** The delivery's first model, counted: «Лоран шоколад» M × 2 and L × 1,
+ * then «Додати ще модель» — two lines the sheet must leave where they are. */
+async function firstLine(page: Page): Promise<void> {
+  await receiveInto(page, "Каса-склад");
+  await find(page, "лоран шоколад");
+  await page.getByRole("radio", { name: /Лоран шоколад/ }).click();
+  await plus(page, "M", 2);
+  await plus(page, "L", 1);
+  await page.getByRole("button", { name: "Додати ще модель" }).click();
+  await twoLines(page);
+}
+/** The first model's two lines, where they were. */
+async function twoLines(page: Page): Promise<void> {
+  await expect(page.getByText("2 шт. · Закупівля")).toBeVisible();
+  await expect(page.getByText("1 шт. · Закупівля")).toBeVisible();
+}
+
+test("a coat the catalogue has not is added from the empty search, in the sheet «Нова модель» over the delivery: the line counted stays, the model is chosen and said, and its words are the proposal «Перевірка каталогу» confirmed (stage 2, goods task list, P0-1; В-Г1 (а))", async ({
+  page,
+}) => {
+  const sent = receipts(page);
+  await enter(page);
+  await firstLine(page);
+  const name = `Новинка ${randomUUID().slice(0, 8)}`;
+  await find(page, name);
+  // Nothing found is said, and the model added from there.
+  await expect(page.getByText(`Нічого не знайшли за «${name}»`)).toBeVisible();
+  await page
+    .getByRole("button", { name: `Додати нову модель «${name}»` })
+    .click();
+  const sheet = await newModelSheet(page);
+  // Its words as searched, sent as they stand by «Далі».
+  await expect(sheet.getByLabel("Як записано")).toHaveValue(name);
+  await sheet.getByRole("button", { name: "Далі", exact: true }).click();
+  // The catalogue's models offered, none chosen for the person: no
+  // confirmation until one is. The cursor on the step's words, not lost.
+  await expect(sheet.getByText("Може, це модель, що вже є?")).toBeVisible();
+  await expect(sheet.getByText(`«${name}»`)).toBeFocused();
+  await expect(
+    sheet.getByRole("button", { name: /^Це вона: / }).first(),
+  ).toBeVisible();
+  await expect(sheet.getByRole("button", { pressed: true })).toHaveCount(0);
+  await expect(sheet.getByRole("button", { name: /^Підтвердити/ })).toHaveCount(
+    0,
+  );
+  await expect(
+    sheet.getByRole("button", { name: "Оберіть модель" }),
+  ).toBeDisabled();
+  await sheet.getByRole("button", { name: "Ні, це нова модель" }).click();
+  await expect(sheet.getByText(`«${name}»`)).toBeFocused();
+  await sheet.getByLabel("Назва моделі", { exact: true }).fill(name);
+  await sheet.getByLabel("Колір", { exact: true }).fill("графіт");
+  // A size typed by hand asks its system, none chosen, and again once its
+  // letters change; the same letters typed twice are one size, whichever
+  // system (ADR-0009; review).
+  const typed = sheet.getByLabel("Іншого розміру немає — впишіть");
+  const systems = sheet.getByRole("group", { name: "Система розміру" });
+  const addSize = sheet.getByRole("button", { name: "Додати розмір" });
+  await typed.fill("R52");
+  await expect(systems.getByRole("button", { pressed: true })).toHaveCount(0);
+  await expect(addSize).toBeDisabled();
+  await systems.getByRole("button", { name: "Числова EU" }).click();
+  await typed.fill("R54");
+  await expect(systems.getByRole("button", { pressed: true })).toHaveCount(0);
+  await expect(addSize).toBeDisabled();
+  await systems.getByRole("button", { name: "Числова EU" }).click();
+  await addSize.click();
+  await expect(sizeCell(sheet, "R54")).toHaveAttribute("aria-pressed", "true");
+  await typed.fill("r54");
+  await expect(systems).toHaveCount(0);
+  await addSize.click();
+  await expect(sizeCell(sheet, "R54")).toHaveCount(1);
+  await expect(addModel(sheet)).toHaveText("Додати модель · 1 розмір");
+  // Taken off again: only the sizes chosen go.
+  await sizeCell(sheet, "R54").click();
+  await expect(sizeCell(sheet, "R54")).toHaveCount(0);
+  // Every size at once; the stock is not added here.
+  await sizeCell(sheet, "M").click();
+  await sizeCell(sheet, "L").click();
+  await expect(
+    sheet.getByText("Залишок не додається — кількість впишете тут."),
+  ).toBeVisible();
+  await expect(addModel(sheet)).toHaveText("Додати модель · 2 розміри");
+  const response = page.waitForResponse(
+    (r) => r.url().endsWith("/create-product") && r.status() === 200,
+  );
+  await addModel(sheet).click();
+  const decision = (await (await response).json()) as {
+    status: string;
+    preview: { raw_text: string };
+    creation: { sizes: { code: string }[] };
+  };
+  // Chosen where its count is typed, and said so; the first lines where
+  // they were.
+  await expect(sheet).toHaveCount(0);
+  await expect(
+    page.getByRole("status").filter({ hasText: /^Модель додано/ }),
+  ).toHaveText(`Модель додано: ${name} графіт. Кількість впишіть тут.`);
+  const change = page.getByRole("button", {
+    name: new RegExp(`^Змінити модель ${name} графіт`),
+  });
+  await expect(change).toBeVisible();
+  await twoLines(page);
+  // Searched for again, it is found at once — never the empty answer
+  // remembered from before it was added, while the server's is awaited
+  // (review).
+  await change.click();
+  let release: () => void = () => undefined;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/api/v1/catalog/receivable-variants**", async (route) => {
+    await held;
+    await route.continue();
+  });
+  await page.getByLabel("Пошук у каталозі").fill(name);
+  const found = page.getByRole("radio", { name: `${name} графіт` });
+  await expect(found).toBeVisible();
+  await expect(page.getByText(/^Нічого не знайшли/)).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: /^Додати нову модель/ }),
+  ).toHaveCount(0);
+  release();
+  await found.click();
+  await plus(page, "L", 1);
+  await recordReceipt(page, 4).click();
+  await expect(
+    page.getByRole("heading", { name: /^Прийшло 4 шт\./ }),
+  ).toBeVisible();
+  expect(sent).toHaveLength(1);
+  expect(sent[0]?.lines.map((line) => line.quantity)).toEqual([2, 1, 1]);
+  // The proposal «Перевірка каталогу» holds: the words as typed, confirmed
+  // by the model made in both sizes.
+  expect(decision.status).toBe("APPLIED");
+  expect(decision.preview.raw_text).toBe(name);
+  expect(decision.creation.sizes.map((size) => size.code).sort()).toEqual([
+    "L",
+    "M",
+  ]);
+});
+
+test("without the right to create or to confirm in the catalogue, an empty search only says so: no model is offered to add (stage 2, goods task list, P0-1)", async ({
+  page,
+}) => {
+  let without = "catalog:create";
+  await page.route("**/api/v1/me", async (route) => {
+    const response = await route.fetch();
+    const body = (await response.json()) as {
+      stores: { permissions: string[] }[];
+    };
+    for (const store of body.stores)
+      store.permissions = store.permissions.filter((p) => p !== without);
+    await route.fulfill({ response, json: body });
+  });
+  for (const right of ["catalog:create", "catalog:confirm"]) {
+    without = right;
+    // A page loaded afresh: its rights read again, not the last pass's.
+    await page.goto("about:blank");
+    await enter(page);
+    await receiveInto(page, "Каса-склад");
+    const missing = `Немає такої ${randomUUID().slice(0, 8)}`;
+    await find(page, missing);
+    await expect(
+      page.getByText(`Нічого не знайшли за «${missing}»`),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: /^Додати нову модель/ }),
+    ).toHaveCount(0);
+  }
+});
+
+test("the catalogue is searched as it is typed, from two letters, once typing pauses: no «Знайти» (stage 2, goods task list, P0-1)", async ({
+  page,
+}) => {
+  await enter(page);
+  await receiveInto(page, "Каса-склад");
+  const asked: string[] = [];
+  page.on("request", (request) => {
+    if (request.url().includes("/api/v1/catalog/receivable-variants"))
+      asked.push(new URL(request.url()).searchParams.get("query") ?? "");
+  });
+  await expect(
+    page.getByRole("button", { name: "Знайти", exact: true }),
+  ).toHaveCount(0);
+  const field = page.getByLabel("Пошук у каталозі");
+  await field.click();
+  await field.pressSequentially("л");
+  // One letter is not asked, however long it stands; two are.
+  await page.waitForTimeout(700);
+  expect(asked).toEqual([]);
+  await field.pressSequentially("о");
+  await expect.poll(() => asked).toEqual(["ло"]);
+  await field.pressSequentially("ран шоколад", { delay: 40 });
+  // Asked once more, for what stood as typing paused: not a letter at a
+  // time.
+  await expect.poll(() => asked).toEqual(["ло", "лоран шоколад"]);
+  await expect(
+    page.getByRole("radio", { name: /Лоран шоколад/ }),
+  ).toBeVisible();
+});
+
+test("inside Telegram the sheet's one button is its MainButton — «Далі», held «Оберіть модель», «Додати модель · 2 розміри» — never the delivery's from under it, and «Назад» hidden while it waits; at 360 px the sheet keeps to the screen in both themes (stage 2, goods task list, P0-1)", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const host = window as unknown as {
+      TelegramWebviewProxy: {
+        postEvent: (event: string, data: string) => void;
+      };
+      main: unknown;
+      back: unknown;
+    };
+    host.TelegramWebviewProxy = {
+      postEvent: (event, data) => {
+        if (event === "web_app_setup_main_button")
+          host.main = JSON.parse(data) as unknown;
+        if (event === "web_app_setup_back_button")
+          host.back = JSON.parse(data) as unknown;
+      },
+    };
+  });
+  const main = (): Promise<unknown> =>
+    page.evaluate(() => (window as unknown as { main: unknown }).main);
+  const back = (): Promise<unknown> =>
+    page.evaluate(() => (window as unknown as { back: unknown }).back);
+  const sent = receipts(page);
+  const press = (): Promise<void> =>
+    page.evaluate(() => {
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          data: JSON.stringify({ eventType: "main_button_pressed" }),
+          source: window.parent,
+        }),
+      );
+    });
+  await page.setViewportSize({ width: 360, height: 640 });
+  await page.goto(launch("8.0"));
+  await openStore(page, "Основний MAIN");
+  await section(page, "Приймання");
+  // A delivery with its lines counted: «Записати прихід · 3 шт.» free
+  // under the sheet.
+  await firstLine(page);
+  const name = `Телеграм ${randomUUID().slice(0, 8)}`;
+  await find(page, name);
+  await page
+    .getByRole("button", { name: `Додати нову модель «${name}»` })
+    .click();
+  const sheet = await newModelSheet(page);
+  // No button of its own: Telegram's says «Далі».
+  await expect(sheet.locator(".sheet-done")).toHaveCount(0);
+  await expect.poll(main).toMatchObject({
+    is_visible: true,
+    is_active: true,
+    text: "Далі",
+  });
+  await press();
+  await expect(sheet.getByText("Може, це модель, що вже є?")).toBeVisible();
+  // Nothing chosen: the sheet's, held — never «Записати прихід» under it,
+  // and pressed, nothing is sent.
+  await expect.poll(main).toMatchObject({
+    is_visible: true,
+    is_active: false,
+    text: "Оберіть модель",
+  });
+  await press();
+  await expect(sheet.getByText("Може, це модель, що вже є?")).toBeVisible();
+  expect(sent).toHaveLength(0);
+  for (const scheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    await page.screenshot({
+      path: `test-results/new-model-similar-360-${scheme}.png`,
+    });
+  }
+  await page.emulateMedia({ colorScheme: "light" });
+  await sheet.getByRole("button", { name: "Ні, це нова модель" }).click();
+  await sheet.getByLabel("Назва моделі", { exact: true }).fill(name);
+  await sizeCell(sheet, "M").click();
+  await sizeCell(sheet, "L").click();
+  await expect.poll(main).toMatchObject({
+    is_visible: true,
+    is_active: true,
+    text: "Додати модель · 2 розміри",
+  });
+  // «Назад» closes the sheet while it is free.
+  await expect.poll(back).toEqual({ is_visible: true });
+  for (const scheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    // At most 92 % of the screen, nothing past its width.
+    const box = await sheet.boundingBox();
+    expect(box).not.toBeNull();
+    if (!box) return;
+    expect(box.height).toBeLessThanOrEqual(640 * 0.92 + 1);
+    expect(box.x + box.width).toBeLessThanOrEqual(360);
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth > innerWidth,
+      ),
+    ).toBe(false);
+    await page.screenshot({
+      path: `test-results/new-model-360-${scheme}.png`,
+    });
+  }
+  // While the model is on its way, no way out: «Назад» hidden (review).
+  let answer: () => void = () => undefined;
+  const answered = new Promise<void>((resolve) => {
+    answer = resolve;
+  });
+  await page.route(
+    "**/api/v1/catalog/match-decisions/*/create-product",
+    async (route) => {
+      await answered;
+      await route.continue();
+    },
+  );
+  await press();
+  await expect.poll(back).toEqual({ is_visible: false });
+  await expect(sheet).toBeVisible();
+  answer();
+  await expect(sheet).toHaveCount(0);
+  await expect(
+    page.getByRole("status").filter({ hasText: /^Модель додано/ }),
+  ).toHaveText(`Модель додано: ${name}. Кількість впишіть тут.`);
+  // The delivery's own again, its lines as they were.
+  await expect.poll(main).toMatchObject({
+    text: "Записати прихід · 3 шт.",
+  });
+  await expect.poll(back).toEqual({ is_visible: true });
+  expect(sent).toHaveLength(0);
+});
+
+test("a proposal kept on the phone and then refused is said in its own sheet, never in the next one opened (stage 2, goods task list, P0-1; review)", async ({
+  page,
+}) => {
+  // Lost on the way; resent, the server proves it never recorded it.
+  const never = {
+    status: 409,
+    json: {
+      code: "CONFLICT",
+      message: "Conflict",
+      details: { recorded: false },
+    },
+  };
+  let calls = 0;
+  await page.route("**/api/v1/catalog/match-decisions", async (route) => {
+    if (route.request().method() !== "POST") return route.continue();
+    calls += 1;
+    if (calls === 1) return route.abort("failed");
+    await route.fulfill(never);
+  });
+  await page.route("**/api/v1/catalog/match-decisions/*", async (route) => {
+    if (route.request().method() !== "GET" || calls === 0)
+      return route.continue();
+    await route.fulfill(never);
+  });
+  await enter(page);
+  await receiveInto(page, "Каса-склад");
+  const first = `Загублена ${randomUUID().slice(0, 8)}`;
+  await find(page, first);
+  await page
+    .getByRole("button", { name: `Додати нову модель «${first}»` })
+    .click();
+  const sheet = await newModelSheet(page);
+  await sheet.getByRole("button", { name: "Далі", exact: true }).click();
+  await expect(sheet.getByText("Незавершена операція каталогу")).toBeVisible();
+  // Resent by its button, or by the phone itself as the server answers.
+  const again = sheet.getByRole("button", {
+    name: "Повторити ту саму операцію",
+  });
+  await expect(async () => {
+    if (await again.isVisible()) await again.click({ timeout: 1000 });
+    await expect(sheet.getByRole("alert")).toContainText(
+      "Операцію каталогу не записано",
+      { timeout: 1000 },
+    );
+  }).toPass();
+  await leaveNewModel(sheet);
+  // Another empty search, another sheet: nothing of the last one said.
+  const second = `Наступна ${randomUUID().slice(0, 8)}`;
+  await find(page, second);
+  await page
+    .getByRole("button", { name: `Додати нову модель «${second}»` })
+    .click();
+  const next = await newModelSheet(page);
+  await expect(next.getByLabel("Як записано")).toHaveValue(second);
+  await expect(next.getByRole("alert")).toHaveCount(0);
+  await leaveNewModel(next);
+});
+
+test("a name spelt like one the catalogue uses is offered its spelling, never given it; left, the sheet leaves the delivery as it was (stage 2, goods task list, P0-1; owner decision, 2026-10-03)", async ({
+  page,
+}) => {
+  // A model the catalogue has; the sheet's name the same but for a Latin
+  // «a».
+  const tag = randomUUID().replace(/\D/g, "").slice(0, 8);
+  const right = `Пальто ${tag}`;
+  const typo = `Пaльто ${tag}`;
+  const created = await page.request.post("/api/v1/catalog/products", {
+    headers: {
+      Authorization: `Bearer ${await bearer(page)}`,
+      "Idempotency-Key": randomUUID(),
+    },
+    data: {
+      store_id: fixture.store_id,
+      concept: right,
+      variant: { color: "пісок" },
+      sizes: [{ system: "ALPHA", code: "M" }],
+    },
+  });
+  expect(created.status()).toBe(201);
+  await enter(page);
+  await firstLine(page);
+  const missing = `Схоже ${tag}`;
+  await find(page, missing);
+  await page
+    .getByRole("button", { name: `Додати нову модель «${missing}»` })
+    .click();
+  const sheet = await newModelSheet(page);
+  await sheet.getByRole("button", { name: "Далі", exact: true }).click();
+  await sheet.getByRole("button", { name: "Ні, це нова модель" }).click();
+  await sheet.getByLabel("Назва моделі", { exact: true }).fill(typo);
+  await sizeCell(sheet, "M").click();
+  await addModel(sheet).click();
+  // Offered, not put in its place.
+  await expect(sheet.getByText("Схожа назва вже є")).toBeVisible();
+  await expect(sheet.getByLabel("Назва моделі", { exact: true })).toHaveValue(
+    typo,
+  );
+  await expect(
+    sheet.getByRole("button", { name: "Це інша назва — створити як є" }),
+  ).toBeVisible();
+  await sheet.getByRole("button", { name: `Взяти «${right}»` }).click();
+  await expect(sheet.getByLabel("Назва моделі", { exact: true })).toHaveValue(
+    right,
+  );
+  // Left by «Назад»: nothing chosen, the delivery's line where it was.
+  await leaveNewModel(sheet);
+  await twoLines(page);
+  await expect(
+    page.getByRole("button", { name: /^Змінити модель/ }),
+  ).toHaveCount(0);
+  await expect(page.getByLabel("Пошук у каталозі")).toHaveValue(missing);
 });

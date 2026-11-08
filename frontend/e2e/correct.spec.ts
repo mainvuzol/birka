@@ -1,18 +1,22 @@
 import {
   test,
   expect,
+  addModel,
   countTaps,
   gridCell,
   more,
+  newModelSheet,
   openModel,
   openStore,
   refuseOnce,
   section,
+  sizeCell,
+  typeSize,
   units,
   waitsFor,
 } from "./fixtures";
 import type { Locator, Page, Request } from "@playwright/test";
-import { createHmac } from "node:crypto";
+import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 
 interface Fixture {
@@ -436,7 +440,6 @@ test("goods the system holds none of are found in the catalogue and counted from
     .getByRole("button", { name: "Знайшли товар, якого немає в списку" })
     .click();
   await page.getByLabel("Пошук у каталозі").fill("лоран");
-  await page.getByRole("button", { name: "Знайти" }).click();
   await page.getByRole("radio", { name: /Лоран шоколад/ }).click();
   await page
     .getByRole("combobox", { name: "Розмір" })
@@ -472,6 +475,50 @@ test("goods the system holds none of are found in the catalogue and counted from
   ).toHaveText("2");
 });
 
+test("goods the catalogue has not are added from the empty search of «Знайшли товар…»: the sheet «Нова модель» over the form, the model chosen there and said, its size typed by hand there to count, counted from nought (stage 2, goods task list, P0-1)", async ({
+  page,
+}) => {
+  await login(page);
+  await section(page, "Інвентаризація");
+  await stocktaking(page);
+  await page
+    .getByRole("button", { name: "Знайшли товар, якого немає в списку" })
+    .click();
+  const missing = `Знайдена ${randomUUID().slice(0, 8)}`;
+  // Named otherwise than it was searched for: the search still finds
+  // nothing by those words.
+  const name = `Пальто ${randomUUID().slice(0, 8)}`;
+  await page.getByLabel("Пошук у каталозі").fill(missing);
+  await page
+    .getByRole("button", { name: `Додати нову модель «${missing}»` })
+    .click();
+  const sheet = await newModelSheet(page);
+  await expect(sheet.getByLabel("Як записано")).toHaveValue(missing);
+  await sheet.getByRole("button", { name: "Далі", exact: true }).click();
+  await sheet.getByRole("button", { name: "Ні, це нова модель" }).click();
+  await sheet.getByLabel("Назва моделі", { exact: true }).fill(name);
+  await sizeCell(sheet, "L").click();
+  // A size the organisation had not, typed by hand.
+  await typeSize(sheet, "62", "NUMERIC_EU");
+  await addModel(sheet).click();
+  await expect(sheet).toHaveCount(0);
+  await expect(
+    page.getByRole("status").filter({ hasText: /^Модель додано/ }),
+  ).toHaveText(`Модель додано: ${name}. Кількість впишіть тут.`);
+  // The empty answer goes with the model added, and its button: no second
+  // proposal of the same words (review).
+  await expect(page.getByText(`Обрано: ${name}`)).toBeVisible();
+  await expect(page.getByText(/^Нічого не знайшли/)).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: /^Додати нову модель/ }),
+  ).toHaveCount(0);
+  // Its size typed there is one to count here (review).
+  await page
+    .getByRole("combobox", { name: "Розмір" })
+    .selectOption({ label: "62" });
+  await expect(live(page)).toHaveText("В обліку 0");
+});
+
 test("found goods that turn out to be held are counted against what is held", async ({
   page,
 }) => {
@@ -491,7 +538,6 @@ test("found goods that turn out to be held are counted against what is held", as
     .getByRole("button", { name: "Знайшли товар, якого немає в списку" })
     .click();
   await page.getByLabel("Пошук у каталозі").fill("лоран");
-  await page.getByRole("button", { name: "Знайти" }).click();
   await page.getByRole("radio", { name: /Лоран шоколад/ }).click();
   await page
     .getByRole("combobox", { name: "Розмір" })

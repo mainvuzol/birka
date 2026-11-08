@@ -1,4 +1,12 @@
-import { test, expect, openStore, toTill, section, tillWays } from "./fixtures";
+import {
+  test,
+  expect,
+  newModelSheet,
+  openStore,
+  toTill,
+  section,
+  tillWays,
+} from "./fixtures";
 import type { Locator, Page, Route } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -358,7 +366,7 @@ test("a payment kept on the phone holds S21's «←», and Telegram's «Наза
   expect(await backs(page)).toEqual([true, false]);
 });
 
-test("two ways back on one screen: Telegram's «Назад» is the inner one, «← До черги перевірки», then «← Ще»", async ({
+test("three ways back on one screen: Telegram's «Назад» is the inner one — the sheet «Нова модель», «← До черги перевірки», then «← Ще»", async ({
   page,
 }) => {
   await hearBack(page);
@@ -367,23 +375,44 @@ test("two ways back on one screen: Telegram's «Назад» is the inner one, �
   await toTill(page);
   await section(page, "Перевірка каталогу");
   await expect.poll(() => backs(page)).toEqual([true]);
-  await page.getByRole("button", { name: "+ Нова пропозиція" }).click();
+  // «Нова пропозиція» is the sheet (stage 2, goods task list, P1-1), its
+  // «Далі» Telegram's MainButton.
+  await page
+    .getByRole("button", { name: "Нова пропозиція", exact: true })
+    .click();
+  const sheet = await newModelSheet(page);
+  await sheet.getByLabel("Як записано").fill("Пропозиція, з якої виходять");
+  await page.evaluate(() => {
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        data: JSON.stringify({ eventType: "main_button_pressed" }),
+        source: window.parent,
+      }),
+    );
+  });
+  await expect(sheet.getByText("Може, це модель, що вже є?")).toBeVisible();
+  // While its proposal was on its way there was no way out: hidden, then
+  // shown again (review).
+  await expect.poll(() => backs(page)).toEqual([true, false, true]);
+  // The sheet first: closed, its proposal is the screen.
+  await pressBack(page);
+  await expect(sheet).toHaveCount(0);
   const inner = page.getByRole("button", { name: "← До черги перевірки" });
   await expect(inner).toBeVisible();
 
   await pressBack(page);
   await expect(inner).toHaveCount(0);
   await expect(
-    page.getByRole("button", { name: "+ Нова пропозиція" }),
+    page.getByRole("button", { name: "Нова пропозиція", exact: true }),
   ).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "Перевірка каталогу", level: 1 }),
   ).toBeVisible();
-  expect(await backs(page)).toEqual([true]);
+  expect(await backs(page)).toEqual([true, false, true]);
 
   await pressBack(page);
   await expect(page.getByRole("heading", { name: "Ще", level: 1 })).toBeVisible();
-  await expect.poll(() => backs(page)).toEqual([true, false]);
+  await expect.poll(() => backs(page)).toEqual([true, false, true, false]);
 });
 
 test("a Telegram before 6.1 is told nothing of «Назад», on an order's card or on the list", async ({

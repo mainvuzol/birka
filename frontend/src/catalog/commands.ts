@@ -1,5 +1,11 @@
 import { create } from "zustand";
-import { api, ApiError, recordedNothing, refusedOutright } from "@/shared/api";
+import {
+  api,
+  ApiError,
+  errorText,
+  recordedNothing,
+  refusedOutright,
+} from "@/shared/api";
 import { isSince, sinceOf } from "@/shared/reach";
 import { buzz } from "@/shared/telegram";
 import type { Decision } from "./types";
@@ -39,6 +45,35 @@ export const useCatalogCommand = create<State>(() => ({
   kept: false,
   refused: null,
 }));
+/**
+ * The catalogue's journal on this phone, for the store open now — its key,
+ * and whoever the phone belongs to, named on a kept operation's paper line.
+ * Set where the app reads the journal; a sheet opened from any screen sends
+ * through it (stage 2, goods task list, P0-1). No key: the journal could not
+ * be read, and nothing is sent.
+ */
+export const useCatalogJournal = create<{
+  key: string | null;
+  person: string;
+}>(() => ({ key: null, person: "" }));
+/** Why the catalogue refused, in the shop's words. */
+export function catalogMessage(error: unknown): string {
+  // Correcting the catalogue (owner decision, 2026-10-03) says its own.
+  if (
+    error instanceof ApiError &&
+    ["CATALOG_SIMILAR", "MODEL_RETIRED", "MODEL_MERGED"].includes(error.code)
+  )
+    return errorText(error);
+  if (error instanceof ApiError && error.code === "IDEMPOTENCY_CONFLICT")
+    return "Для цієї операції або назви вже збережено інше рішення. Оновіть перегляд; зберігати відповідь ще раз не потрібно.";
+  if (error instanceof ApiError && error.code === "CATALOG_AMBIGUOUS")
+    return "Модель неоднозначна або стан каталогу змінився. Перевірте обрану модель. Для окремої моделі зі схожою назвою вкажіть її відмінність; за тимчасового конфлікту повторіть спробу.";
+  if (error instanceof ApiError && error.status === 409)
+    return "Каталог або рішення змінилися. Оновіть перегляд. Для застарілої підказки створіть нову пропозицію та перевірте товар заново.";
+  if (error instanceof ApiError && error.status === 422)
+    return "Перевірте введені дані та стан пропозиції.";
+  return errorText(error);
+}
 /**
  * The form a refusal answered is left. A first attempt refused kept nothing,
  * so its refusal goes with that form: never over the queue, or over another

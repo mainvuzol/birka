@@ -480,8 +480,75 @@ export async function receiveModel(
 ): Promise<void> {
   await page.getByLabel("Пошук у каталозі").click();
   await page.getByLabel("Пошук у каталозі").fill(query);
-  await page.getByRole("button", { name: "Знайти" }).click();
   await page.getByRole("radio", { name: model }).click();
+}
+
+/** «Нова модель» (stage 2, goods task list, P0-1): the sheet over the
+ * screen where the coat is in hand, once it takes taps. */
+export async function newModelSheet(page: Page): Promise<Locator> {
+  const sheet = page.getByRole("dialog", { name: "Нова модель" });
+  await expect(sheet).toHaveAttribute("data-ready", "");
+  return sheet;
+}
+
+/** «Нова пропозиція» in «Перевірка каталогу» (P1-1): the words as typed,
+ * saved by «Далі», the catalogue's models offered, none chosen. */
+export async function propose(page: Page, raw: string): Promise<Locator> {
+  await page
+    .getByRole("button", { name: "Нова пропозиція", exact: true })
+    .click();
+  const sheet = await newModelSheet(page);
+  await sheet.getByLabel("Як записано").fill(raw);
+  await sheet.getByRole("button", { name: "Далі", exact: true }).click();
+  await expect(sheet.getByText("Може, це модель, що вже є?")).toBeVisible();
+  return sheet;
+}
+
+/** «Нова модель»'s cell of a size the organisation has. */
+export function sizeCell(sheet: Locator, code: string): Locator {
+  return sheet
+    .getByRole("group", { name: "Розміри" })
+    .getByRole("button", { name: code, exact: true });
+}
+
+const systemWords = {
+  ALPHA: "Літерна",
+  NUMERIC_EU: "Числова EU",
+  UNSPECIFIED: "Інша",
+} as const;
+
+/** «Іншого розміру немає — впишіть»: a size typed by hand, its system the
+ * person's — unless the organisation has that size, which needs none
+ * (ADR-0009 §2). */
+export async function typeSize(
+  sheet: Locator,
+  code: string,
+  system: keyof typeof systemWords,
+): Promise<void> {
+  await sheet.getByLabel("Іншого розміру немає — впишіть").fill(code);
+  const systems = sheet.getByRole("group", { name: "Система розміру" });
+  const add = sheet.getByRole("button", { name: "Додати розмір" });
+  // The sizes read afresh may find it known as it is typed: the system is
+  // asked until then.
+  await expect(async () => {
+    if (await systems.isVisible())
+      await systems
+        .getByRole("button", { name: systemWords[system], exact: true })
+        .click({ timeout: 1000 });
+    await expect(add).toBeEnabled({ timeout: 1000 });
+  }).toPass();
+  await add.click();
+}
+
+/** «Додати модель · N розмір(и/ів)»: the sheet's one button. */
+export function addModel(sheet: Locator): Locator {
+  return sheet.getByRole("button", { name: /^Додати модель/ });
+}
+
+/** «Нова модель» left by «Назад» (Escape here). */
+export async function leaveNewModel(sheet: Locator): Promise<void> {
+  await sheet.press("Escape");
+  await expect(sheet).toHaveCount(0);
 }
 
 /** «Прийшов товар»: a size's stepper, «S − 2 +». */

@@ -1,8 +1,11 @@
 import {
   test,
   expect,
+  addModel,
   fillLine,
+  leaveNewModel,
   more,
+  newModelSheet,
   openStore,
   readsOf,
   receiveInto,
@@ -15,8 +18,10 @@ import {
   tapSize,
   waitsFor,
   sellsFrom,
+  propose,
+  typeSize,
 } from "./fixtures";
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 
@@ -240,17 +245,30 @@ async function queue(page: Page, bearer: string, ids: string[]): Promise<void> {
   );
 }
 
-/** «Створити товар з опису», filled with a name, a colour and the size S. */
+/** «Нова модель» (stage 2, goods task list, P0-1), filled with a name, a
+ * colour and the size S. */
 async function fillProduct(
-  page: Page,
+  sheet: Locator,
   name: string,
   colour: string,
 ): Promise<void> {
-  await page.getByRole("button", { name: "Створити товар з опису" }).click();
-  await page.getByLabel("Назва моделі", { exact: true }).fill(name);
-  await page.getByLabel("Колір", { exact: true }).fill(colour);
-  await page.getByLabel("Система розмірів").selectOption("ALPHA");
-  await page.getByLabel("Розмір", { exact: true }).fill("S");
+  await sheet.getByLabel("Назва моделі", { exact: true }).fill(name);
+  await sheet.getByLabel("Колір", { exact: true }).fill(colour);
+  await typeSize(sheet, "S", "ALPHA");
+}
+
+/** «Нова пропозиція», its words saved, then «Ні, це нова модель». */
+async function proposeNew(page: Page, raw: string): Promise<Locator> {
+  const sheet = await propose(page, raw);
+  await sheet.getByRole("button", { name: "Ні, це нова модель" }).click();
+  return sheet;
+}
+
+/** A proposal of the queue's, opened, then «Створити нову» (P1-1). */
+async function createFrom(page: Page, raw: string): Promise<Locator> {
+  await page.getByRole("button", { name: new RegExp(raw) }).click();
+  await page.getByRole("button", { name: "Створити нову" }).click();
+  return newModelSheet(page);
 }
 
 test("a duplicate is merged after a preview, its stock moving to the model that stays", async ({
@@ -588,27 +606,17 @@ test("creating a product with a Latin letter in a known word is warned once", as
     0,
   );
   await enter(page, "Перевірка каталогу");
-  await page.getByRole("button", { name: "+ Нова пропозиція" }).click();
-  await page.getByLabel("Початковий опис товару").fill(`${name} опис`);
-  await page.getByRole("button", { name: "Зберегти пропозицію" }).click();
-  await page.getByRole("button", { name: "Створити товар з опису" }).click();
-  await page.getByLabel("Назва моделі", { exact: true }).fill(name);
-  await page.getByLabel("Колір", { exact: true }).fill(colour.typo);
-  await page.getByLabel("Система розмірів").selectOption("ALPHA");
-  await page.getByLabel("Розмір", { exact: true }).fill("S");
-  await page
-    .getByRole("button", { name: "Створити та пов’язати товар" })
-    .click();
-  await expect(page.getByText("Схожа назва вже є")).toBeVisible();
-  await page.getByRole("button", { name: `Взяти «${colour.right}»` }).click();
-  await expect(page.getByLabel("Колір", { exact: true })).toHaveValue(
+  const sheet = await proposeNew(page, `${name} опис`);
+  await fillProduct(sheet, name, colour.typo);
+  await addModel(sheet).click();
+  await expect(sheet.getByText("Схожа назва вже є")).toBeVisible();
+  await sheet.getByRole("button", { name: `Взяти «${colour.right}»` }).click();
+  await expect(sheet.getByLabel("Колір", { exact: true })).toHaveValue(
     colour.right,
   );
-  await expect(page.getByText("Схожа назва вже є")).toHaveCount(0);
-  await expect(page.getByText("У каталозі вже є схожа назва")).toHaveCount(0);
-  await page
-    .getByRole("button", { name: "Створити та пов’язати товар" })
-    .click();
+  await expect(sheet.getByText("Схожа назва вже є")).toHaveCount(0);
+  await expect(sheet.getByText("У каталозі вже є схожа назва")).toHaveCount(0);
+  await addModel(sheet).click();
   await expect(
     page.getByText(
       `Збережений товар: ${name} ${colour.right}. Розміри: S (ALPHA)`,
@@ -741,19 +749,11 @@ test("creating a product keeps a similar word once the person says it is another
     0,
   );
   await enter(page, "Перевірка каталогу");
-  await page.getByRole("button", { name: "+ Нова пропозиція" }).click();
-  await page.getByLabel("Початковий опис товару").fill(`${name} опис`);
-  await page.getByRole("button", { name: "Зберегти пропозицію" }).click();
-  await page.getByRole("button", { name: "Створити товар з опису" }).click();
-  await page.getByLabel("Назва моделі", { exact: true }).fill(name);
-  await page.getByLabel("Колір", { exact: true }).fill(colour.typo);
-  await page.getByLabel("Система розмірів").selectOption("ALPHA");
-  await page.getByLabel("Розмір", { exact: true }).fill("S");
-  await page
-    .getByRole("button", { name: "Створити та пов’язати товар" })
-    .click();
-  await expect(page.getByText("Схожа назва вже є")).toBeVisible();
-  await page
+  const sheet = await proposeNew(page, `${name} опис`);
+  await fillProduct(sheet, name, colour.typo);
+  await addModel(sheet).click();
+  await expect(sheet.getByText("Схожа назва вже є")).toBeVisible();
+  await sheet
     .getByRole("button", { name: "Це інша назва — створити як є" })
     .click();
   await expect(
@@ -779,11 +779,9 @@ test("a similar name refused is not left over the queue after another tab", asyn
   const raw = `${name} опис`;
   await queue(page, bearer, [await proposal(page, bearer, raw)]);
   await enter(page, "Перевірка каталогу");
-  await page.getByRole("button", { name: new RegExp(raw) }).click();
-  await fillProduct(page, name, colour.typo);
-  await page
-    .getByRole("button", { name: "Створити та пов’язати товар" })
-    .click();
+  let sheet = await createFrom(page, raw);
+  await fillProduct(sheet, name, colour.typo);
+  await addModel(sheet).click();
   const refused = page.getByText(
     "У каталозі вже є схожа назва. Візьміть її або підтвердьте, що це інша.",
     { exact: true },
@@ -792,6 +790,9 @@ test("a similar name refused is not left over the queue after another tab", asyn
   await expect(page.getByText("Схожа назва вже є")).toBeVisible();
   // A first attempt refused kept nothing: the refusal answered that form,
   // and goes with it.
+  await leaveNewModel(sheet);
+  await expect(refused).toHaveCount(0);
+  await page.getByRole("button", { name: "← До черги перевірки" }).click();
   await page.getByRole("button", { name: "Продаж", exact: true }).click();
   await section(page, "Перевірка каталогу");
   await expect(
@@ -799,9 +800,8 @@ test("a similar name refused is not left over the queue after another tab", asyn
   ).toBeVisible();
   await expect(refused).toHaveCount(0);
   // Opened again, its empty form is not answered by it either.
-  await page.getByRole("button", { name: new RegExp(raw) }).click();
-  await page.getByRole("button", { name: "Створити товар з опису" }).click();
-  await expect(page.getByLabel("Назва моделі", { exact: true })).toHaveValue(
+  sheet = await createFrom(page, raw);
+  await expect(sheet.getByLabel("Назва моделі", { exact: true })).toHaveValue(
     "",
   );
   await expect(page.getByText("Схожа назва вже є")).toHaveCount(0);
@@ -829,16 +829,14 @@ test("a similar name refused on one proposal is not answered on another", async 
     await proposal(page, bearer, second),
   ]);
   await enter(page, "Перевірка каталогу");
-  await page.getByRole("button", { name: new RegExp(first) }).click();
-  await fillProduct(page, name, colour.typo);
-  await page
-    .getByRole("button", { name: "Створити та пов’язати товар" })
-    .click();
-  await expect(page.getByText("Схожа назва вже є")).toBeVisible();
+  let sheet = await createFrom(page, first);
+  await fillProduct(sheet, name, colour.typo);
+  await addModel(sheet).click();
+  await expect(sheet.getByText("Схожа назва вже є")).toBeVisible();
+  await leaveNewModel(sheet);
   await page.getByRole("button", { name: "← До черги перевірки" }).click();
-  await page.getByRole("button", { name: new RegExp(second) }).click();
-  await page.getByRole("button", { name: "Створити товар з опису" }).click();
-  await expect(page.getByLabel("Назва моделі", { exact: true })).toBeVisible();
+  sheet = await createFrom(page, second);
+  await expect(sheet.getByLabel("Назва моделі", { exact: true })).toBeVisible();
   // Nothing of this proposal was sent: nothing here says its words are like
   // another's, and nothing confirms them as another past the check.
   await expect(page.getByText("Схожа назва вже є")).toHaveCount(0);
@@ -873,14 +871,10 @@ test("words changed after a similar-name warning are checked, not confirmed", as
       sent.push(request.postDataJSON() as Record<string, unknown>);
   });
   await enter(page, "Перевірка каталогу");
-  await page.getByRole("button", { name: "+ Нова пропозиція" }).click();
-  await page.getByLabel("Початковий опис товару").fill(`${name} опис`);
-  await page.getByRole("button", { name: "Зберегти пропозицію" }).click();
-  await fillProduct(page, name, first.typo);
-  const create = page.getByRole("button", {
-    name: "Створити та пов’язати товар",
-  });
-  const another = page.getByRole("button", {
+  const sheet = await proposeNew(page, `${name} опис`);
+  await fillProduct(sheet, name, first.typo);
+  const create = addModel(sheet);
+  const another = sheet.getByRole("button", {
     name: "Це інша назва — створити як є",
   });
   const advice = page.getByText(
@@ -897,7 +891,7 @@ test("words changed after a similar-name warning are checked, not confirmed", as
   await expect(advice).toBeVisible();
   // Another word typed since: «another» would confirm words never checked,
   // and nothing is left saying to take a spelling or confirm.
-  await page.getByLabel("Колір", { exact: true }).fill(second.typo);
+  await sheet.getByLabel("Колір", { exact: true }).fill(second.typo);
   await expect(another).toHaveCount(0);
   await expect(page.getByText("Схожа назва вже є")).toHaveCount(0);
   await expect(advice).toHaveCount(0);
@@ -1140,17 +1134,9 @@ test("a product whose creation answer was lost settles when it was refused", asy
     },
   );
   await enter(page, "Перевірка каталогу");
-  await page.getByRole("button", { name: "+ Нова пропозиція" }).click();
-  await page.getByLabel("Початковий опис товару").fill(`${name} опис`);
-  await page.getByRole("button", { name: "Зберегти пропозицію" }).click();
-  await page.getByRole("button", { name: "Створити товар з опису" }).click();
-  await page.getByLabel("Назва моделі", { exact: true }).fill(name);
-  await page.getByLabel("Колір", { exact: true }).fill(colour.typo);
-  await page.getByLabel("Система розмірів").selectOption("ALPHA");
-  await page.getByLabel("Розмір", { exact: true }).fill("S");
-  await page
-    .getByRole("button", { name: "Створити та пов’язати товар" })
-    .click();
+  const sheet = await proposeNew(page, `${name} опис`);
+  await fillProduct(sheet, name, colour.typo);
+  await addModel(sheet).click();
   await expect(page.getByText("Незавершена операція каталогу")).toBeVisible();
   // Pressed — unless the phone, answered meanwhile by another read, resends
   // it by itself first (ADR-0013 §4.3): either way, the same operation.
@@ -1198,11 +1184,9 @@ test("a kept creation refused stays across tabs, answered on its own proposal al
     },
   );
   await enter(page, "Перевірка каталогу");
-  await page.getByRole("button", { name: new RegExp(first) }).click();
-  await fillProduct(page, name, colour.typo);
-  await page
-    .getByRole("button", { name: "Створити та пов’язати товар" })
-    .click();
+  let sheet = await createFrom(page, first);
+  await fillProduct(sheet, name, colour.typo);
+  await addModel(sheet).click();
   await expect(page.getByText("Незавершена операція каталогу")).toBeVisible();
   // Pressed — unless the phone, answered meanwhile by another read, resends
   // it by itself first (ADR-0013 §4.3): either way, the same operation.
@@ -1219,6 +1203,8 @@ test("a kept creation refused stays across tabs, answered on its own proposal al
   expect(attempts).toBe(2);
   // A kept operation's refusal says what was not recorded until the next
   // attempt: not left behind with the form, nor with the tab.
+  await leaveNewModel(sheet);
+  await expect(kept).toBeVisible();
   await page.getByRole("button", { name: "← До черги перевірки" }).click();
   await expect(kept).toBeVisible();
   await page.getByRole("button", { name: "Продаж", exact: true }).click();
@@ -1229,16 +1215,17 @@ test("a kept creation refused stays across tabs, answered on its own proposal al
   await expect(kept).toBeVisible();
   // Another proposal, the same words: they were not sent for it, so nothing
   // there says they are like another's, or confirms them past the check.
-  await page.getByRole("button", { name: new RegExp(second) }).click();
-  await fillProduct(page, name, colour.typo);
+  sheet = await createFrom(page, second);
+  await fillProduct(sheet, name, colour.typo);
   await expect(page.getByText("Схожа назва вже є")).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "Це інша назва — створити як є" }),
   ).toHaveCount(0);
   // Its own proposal, the words it sent: answered there.
+  await leaveNewModel(sheet);
   await page.getByRole("button", { name: "← До черги перевірки" }).click();
-  await page.getByRole("button", { name: new RegExp(first) }).click();
-  await fillProduct(page, name, colour.typo);
+  sheet = await createFrom(page, first);
+  await fillProduct(sheet, name, colour.typo);
   await expect(page.getByText("Схожа назва вже є")).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Це інша назва — створити як є" }),

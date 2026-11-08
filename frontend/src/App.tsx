@@ -78,7 +78,11 @@ import {
 import type { IconName } from "@/shared/icons";
 import type { MoreBack, MoreGroup, MoreRow } from "@/shared/More";
 import { Catalog } from "@/catalog/Catalog";
-import { loadCatalogCommand, useCatalogCommand } from "@/catalog/commands";
+import {
+  loadCatalogCommand,
+  useCatalogCommand,
+  useCatalogJournal,
+} from "@/catalog/commands";
 import { Sale } from "@/sales/Sale";
 import {
   attemptSum,
@@ -1271,10 +1275,17 @@ function Workspace({
       const saved = loadCatalogCommand(catalogKey);
       useCatalogCommand.setState({ pending: saved, error: null });
       if (saved) setTab("catalog");
+      // Read: a sheet over any screen may send through it now (stage 2,
+      // goods task list, P0-1).
+      useCatalogJournal.setState({ key: catalogKey });
     } catch {
+      useCatalogJournal.setState({ key: null });
       setCatalogStorageError(true);
     }
   }, [catalogKey]);
+  useEffect(() => {
+    useCatalogJournal.setState({ person: me.display_name });
+  }, [me.display_name]);
   const { pending, busy, error, misses: orderMisses } = useCommand();
   useEffect(() => {
     try {

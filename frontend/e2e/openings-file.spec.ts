@@ -284,9 +284,11 @@ async function answer(page: Page, line: number): Promise<Locator> {
   return page.getByRole("form", { name: `Розбір рядка ${String(line)}` });
 }
 
-/** The model is the person's choice: searched for, then picked. */
+/** The model is the person's choice: searched for, then picked. The search
+ * is asked as it is typed, from two letters (stage 2, goods task list,
+ * P0-1). */
 async function pickModel(editor: Locator, name: string): Promise<void> {
-  await editor.getByRole("button", { name: "Знайти" }).click();
+  await editor.getByLabel("Пошук у каталозі").fill(name);
   await editor.getByRole("radio", { name: `${name} сірий` }).click();
 }
 

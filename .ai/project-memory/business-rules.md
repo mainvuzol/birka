@@ -7117,3 +7117,142 @@ store's own, `expected_price` and «1 850,00 грн» stand as before.
     its own «Записати прихід» (decided here). There it is a group named
     «Змінити ціну продажу», as its fieldset was, and «Скасувати» is held
     while it is saved (from the review).
+
+## Chosen in chat — 2026-11-08 (stage 2 batch 10: a new model where the coat is in hand — the live search, its empty answer and the sheet «Нова модель»; «Перевірка каталогу» as a queue and a proposal's screen; «Джерело» one word; goods P0-1, P1-1, P2-4)
+
+Chosen in chat on 2026-11-08 («go next do»), after #178: the goods task
+list's P0-1, P1-1 and P2-4 in one batch. The owner's questions stand by
+their (а): В-Г1 (a new model is added from an empty search in «Прийшов
+товар», in both forms of «Знайшли товар…» and on a line of «Початкові
+залишки», by the same proposal as in «Перевірка каталогу»; no new right),
+В-Г2 (the till has no such button; its search is live too, the component
+being one), В-Г6 («Джерело» is one neutral word). No right, no server rule,
+no command and no field changes: the proposal is `POST
+/catalog/match-decisions` with the words as typed, then `/{id}/confirm`,
+`/{id}/create-product`, `/{id}/reject` and `/{id}/alias-feedback`, with the
+same bodies; a model is made only by an explicit «Ні, це нова модель» or
+«Створити нову», a candidate is never chosen for the person, nothing is
+merged and no name is confirmed by itself; making a model adds no stock;
+the similar-spelling check stands where it was.
+
+- **The catalogue's search (P0-1):** it is asked as it is typed, from two
+  letters, 300 ms after the last; «Знайти» is gone. An empty field asks
+  nothing (decided here: «Знайти» on an empty field listed the catalogue a
+  page at a time; a line of «Початкові залишки» still starts from what the
+  line reads). Rows «Назва моделі або колір» found, a tap puts the keyboard
+  away and chooses; «Попередні · Ще товари» only when there is another
+  page. Read and refused: the refusal and «Спробувати ще раз».
+- **Found nothing:** «Нічого не знайшли за «…»», and a quiet «Додати нову
+  модель «…»» — only where the screen lets one be added (never the till)
+  and only with `catalog:create` and `catalog:confirm` in this store;
+  held while a catalogue operation is kept on the phone.
+- **The sheet «Нова модель»** over the screen: its lines stay — a
+  delivery's, a found item's form, a list line's answer and where its count
+  came from.
+  - **«Як записано»:** what was searched, as typed, which may be added to;
+    «Далі» saves the proposal. Left after it, the proposal waits in
+    «Перевірка каталогу» › «Чекають», nothing is chosen, and the screen is
+    as it was.
+  - **«Схожі»:** the server's candidates (ten at most), rows with «Це вона»,
+    none chosen; «Список кандидатів обмежено…» where the list is cut;
+    «Підтвердити: {модель}» once one is chosen, «Оберіть модель» held
+    until then; «Ні, це нова модель» under them. No candidate at all: the
+    third step at once.
+  - **The new model:** «Нова модель · Інший колір нашої моделі», explicit;
+    «Назва моделі», or the model chosen from the candidates' models or
+    found by «Пошук моделі в каталозі»; «Колір»; the sizes.
+  - **The sizes (decided here, from ADR-0009):** every size the
+    organisation has, as cells in the order a seller reads them, any number
+    at once. The task list's chips of a size system over the cells are not
+    drawn: a size system does not separate sizes — M is one size whichever
+    system it was typed under (ADR-0009 §2, §3). A size typed by hand under
+    «Іншого розміру немає — впишіть» asks its system, «Літерна · Числова EU
+    · Інша», none chosen for the person, as the old form's choice had no
+    default; one the organisation has, in the same letters whatever their
+    case, is that size and asks none. The server still answers «Набрано «м»
+    — це розмір «M»» where a spelling differs.
+  - **«Ще ознаки», folded:** «Джерело», «Категорія», «Тип виробу» (a new
+    model only), «Матеріал», «Фактура», «Хутро», «Комір», «Довжина, см»,
+    «Окрема модель зі схожою назвою» and «Чим відрізняється модель». Refused
+    because the catalogue has a model of that name (`CATALOG_AMBIGUOUS`),
+    it opens by itself, so the way to say this is another model is in sight
+    (decided here).
+  - A similar spelling: the block «Схожа назва вже є» with «Взяти «…»» and
+    «Це інша назва — створити як є», and the refusal's own words over it,
+    as before: offered, never put in the field.
+  - «Залишок не додається — кількість впишете тут.» Its one button
+    «Додати модель · 3 розміри» (`розмір · розміри · розмірів`), every size
+    in one creation.
+- **Recorded:** the sheet closes; the model is the screen's choice — the
+  proposal's resolved model — with the stub «Модель додано: {модель}.
+  Кількість впишіть тут.» («Модель обрано: …» for a candidate confirmed)
+  and a success buzz. {модель} is the catalogue's one name for it,
+  «Новинка графіт» (decided here, as in batch 9: «Марсель · молочний»
+  splits a name the app holds whole).
+- **Kept, cancelled:** while a command is on its way or kept, the sheet
+  stands — it is that operation's place, «Незавершена операція каталогу»
+  with «Повторити ту саму операцію» and, for a creation, «Скасувати
+  незавершене створення». A cancellation that finds the model saved
+  already shows it as added, the model chosen (decided here: «Якщо товар
+  уже збережено, покажемо результат»). Felt once, a warning, as it is kept;
+  its later checks, answered or refused, felt nothing (spec §4.4) — in
+  «Перевірка каталогу» too, which now buzzes a first answer's success or
+  refusal (decided here: it buzzed nothing).
+- **Telegram's MainButton** is the sheet's for as long as it is open: «Далі»,
+  «Оберіть модель» held, «Підтвердити: …», «Додати модель · …»; held while
+  an operation is kept. Never the screen's under it (decided here, from the
+  review: hidden, it let «Записати прихід · …» show through and be pressed
+  under the sheet).
+- **«Перевірка каталогу» (P1-1):**
+  - The queue: one switch «Стан пропозицій» — «Чекають» (waiting and to be
+    checked) · «Підтверджені» · «Відхилені» — over rows: the words in
+    quotes and the status's sticker, oldest first as the server gives.
+    The task list's «Тетяна, 11:40» is not drawn: a proposal carries neither
+    who made it nor when (decided here; the server's answer has neither).
+    «Оновити» and «Нова пропозиція» quiet in the header; «Нова пропозиція»
+    opens «Нова модель» at its first step. «Попередні пропозиції ·
+    Наступні пропозиції» only when there is another page.
+  - A proposal made there and left in its sheet opens its own screen
+    (decided here: the queue is oldest first, it would be on its last page).
+  - The proposal, its own screen «Пропозиція» with «← До черги перевірки»:
+    the words large, the sticker, the reasons in one line, a rejection's
+    reason, «Список кандидатів обмежено…»; the candidates' rows with «Це
+    вона», none chosen; «Підтвердити: {модель}» once one is — Telegram's
+    MainButton, or its own docked over the menu; «Створити нову» — the sheet
+    «Нова модель» at its third step; «Відхилити» — the sheet «Відхилити
+    пропозицію» with «Причина відхилення» and «Відхилити».
+  - Decided, the name's answer folded under «Цей опис — назва товару?»:
+    «Обраний товар: …» with «Так, це його назва», each other candidate with
+    «Ні, не про нього»; «Збережено: «{опис}» — назва {модель}.» as before.
+    The checkbox «Зберегти підтвердження назви» is gone: unfolding is the
+    choice to answer (decided here). The commands are the same; nothing is
+    sent unasked and no name is confirmed by itself
+    (`.ai/ADAPTIVE_CATALOG_LEARNING.md`).
+- **«Джерело» (P2-4):** the one word wherever `source` is named — the new
+  model's fields and the similar-name warning («Фабрика або бренд» before),
+  with no hint of what it is: a factory, a brand or a supplier is not known
+  (`.ai/CATALOG_ARCHITECTURE.md`).
+- `CreateProduct.tsx` is gone: «Нова модель» is the one form that makes a
+  model from a proposal.
+- **From the independent review (decided here):**
+  - A model added: the organisation's sizes and the catalogue's search are
+    read again, so a size typed by hand is there to be counted on the
+    screen under the sheet, and the empty answer under it is not the old
+    one. The empty answer «Нічого не знайшли за «…»» and its «Додати нову
+    модель «…»» go for the words the model was added for; other words
+    typed say it again.
+  - The same letters typed by hand twice, under two systems, are one size
+    (ADR-0009): the second asks no system and adds nothing. Its system is
+    asked again whenever its letters change.
+  - A sheet's refusal is said only in the sheet that sent it: a kept
+    operation's refusal stays the screen's «Перевірка каталогу», never
+    over a fresh sheet opened elsewhere.
+  - The sheet's Telegram «Назад» is hidden while its command is on its way
+    or kept, as a screen's held «←» is.
+  - A person without `inventory:receive` is not asked the organisation's
+    sizes in «Перевірка каталогу»'s sheet: the server would refuse; they
+    type the sizes, as the old form had them.
+  - On a line of «Початкові залишки», «Модель додано: …» stands under the
+    model it says, not under every part.
+  - After «Далі» and «Ні, це нова модель» the cursor stands on the words in
+    quotes at the step's top, not lost.

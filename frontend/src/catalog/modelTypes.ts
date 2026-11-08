@@ -94,7 +94,9 @@ export const statusText: Record<ModelStatus, string> = {
 /** The words of a model's name, as the forms and the warnings call them. */
 export const wordLabels: Record<string, string> = {
   concept: "Назва моделі",
-  source: "Фабрика або бренд",
+  // One neutral word (stage 2, goods task list, P2-4; В-Г6 (а)): what
+  // «Belardi» or «Ponte» is to the shop is not known yet.
+  source: "Джерело",
   color: "Колір",
   material: "Матеріал",
   texture: "Фактура",

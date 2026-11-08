@@ -1,14 +1,17 @@
 import {
   test,
   expect,
+  addModel,
   menu,
   more,
+  newModelSheet,
   openStore,
   receiveInto,
   receiveModel,
   receiveUnits,
   recordReceipt,
   section,
+  sizeCell,
 } from "./fixtures";
 import type { Page } from "@playwright/test";
 import { createHmac, randomBytes, randomUUID } from "node:crypto";
@@ -136,7 +139,6 @@ async function typeList(
 async function pick(page: Page, form: string, name: string): Promise<void> {
   const editor = page.getByRole("form", { name: form });
   await editor.getByLabel("Пошук у каталозі").fill(name);
-  await editor.getByRole("button", { name: "Знайти" }).click();
   await editor.getByRole("radio", { name: `${name} сірий` }).click();
 }
 
@@ -604,6 +606,64 @@ test("a split the list does not state asks who counted, and a warehouse with his
     page.getByText(
       "Відхилено: склад уже працює. Залишків цей список не змінив.",
     ),
+  ).toBeVisible();
+});
+
+test("a line's model the catalogue has not is added from its empty search, in the sheet «Нова модель» over the list: the line keeps what it was answered, its model chosen and said (stage 2, goods task list, P0-1)", async ({
+  page,
+}) => {
+  // A coat no catalogue holds yet.
+  const coat = `Ліст ${word()}`;
+  await noListWaits(page, fixture.location_id);
+  await openings(page);
+  await typeList(page, fixture.location_id, "Зошит нової моделі", [
+    `${coat} сірий L 2 шт`,
+  ]);
+  await page.getByRole("button", { name: "Зберегти список" }).click();
+  await page.getByRole("button", { name: "Усі", exact: true }).click();
+  await page
+    .getByRole("article", { name: "Рядок 1" })
+    .getByRole("button", { name: "Розібрати рядок" })
+    .click();
+  const editor = page.getByRole("form", { name: "Розбір рядка 1" });
+  await expect(editor.getByLabel("Як у списку: 2 шт.")).toBeChecked();
+  await editor.getByLabel("Пошук у каталозі").fill(coat);
+  await expect(
+    editor.getByText(`Нічого не знайшли за «${coat}»`),
+  ).toBeVisible();
+  await editor
+    .getByRole("button", { name: `Додати нову модель «${coat}»` })
+    .click();
+  const sheet = await newModelSheet(page);
+  await expect(sheet.getByLabel("Як записано")).toHaveValue(coat);
+  await sheet.getByRole("button", { name: "Далі", exact: true }).click();
+  await sheet.getByRole("button", { name: "Ні, це нова модель" }).click();
+  await sheet.getByLabel("Назва моделі", { exact: true }).fill(coat);
+  await sheet.getByLabel("Колір", { exact: true }).fill("сірий");
+  await sizeCell(sheet, "M").click();
+  await sizeCell(sheet, "L").click();
+  await addModel(sheet).click();
+  await expect(sheet).toHaveCount(0);
+  // The line as it was answered, its model the one made, and said so.
+  await expect(
+    editor.getByRole("status").filter({ hasText: /^Модель додано/ }),
+  ).toHaveText(`Модель додано: ${coat} сірий. Кількість впишіть тут.`);
+  await expect(
+    editor.getByText(`${coat} сірий`, { exact: true }),
+  ).toBeVisible();
+  await expect(editor.getByLabel("Як у списку: 2 шт.")).toBeChecked();
+  await editor.getByLabel("Розмір").selectOption({ label: "L" });
+  await editor.getByRole("button", { name: "Зберегти відповідь" }).click();
+  await expect(
+    page.getByRole("article", { name: "Рядок 1" }).getByText("Розібрано"),
+  ).toBeVisible();
+  // The list goes: nothing waits at the warehouse the receipts use.
+  const approval = page.getByLabel("Затвердження списку");
+  await approval.getByRole("button", { name: "Відхилити список" }).click();
+  await approval.getByLabel("Чому відхиляємо").fill("перевірка нової моделі");
+  await approval.getByRole("button", { name: "Так, відхилити" }).click();
+  await expect(
+    page.getByText(/^Відхилено: перевірка нової моделі\./),
   ).toBeVisible();
 });
 

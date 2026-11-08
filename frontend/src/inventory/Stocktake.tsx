@@ -39,7 +39,7 @@ import { visible } from "@/shared/visible";
 import { keptUnconfirmed, twiceOf } from "@/cash/errors";
 import { shortDay, shortTime } from "@/credits/format";
 import type { Location, Store } from "@/orders/types";
-import { CatalogPicker } from "./CatalogPicker";
+import { AddedStub, CatalogPicker } from "./CatalogPicker";
 import { submitCount, useCountCommand } from "./stocktakeCommands";
 import type {
   CountResult,
@@ -1803,6 +1803,7 @@ function FoundGoods({
   onCancel: () => void;
 }): JSX.Element {
   const [variant, setVariant] = useState<ReceivableVariant | null>(null);
+  const [added, setAdded] = useState<string | null>(null);
   const [sizeId, setSizeId] = useState("");
   const sizes = useQuery({
     queryKey: ["receive-sizes", scopeKey, store.id],
@@ -1839,8 +1840,13 @@ function FoundGoods({
         token={token}
         scopeKey={scopeKey}
         variant={variant}
-        onVariant={setVariant}
+        onVariant={(picked, said) => {
+          setVariant(picked);
+          setAdded(said ?? null);
+        }}
+        adds
       />
+      <AddedStub said={added} />
       <label>
         Розмір
         <select
