@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import type { JSX, PointerEvent, ReactNode, RefObject } from "react";
 import { createPortal } from "react-dom";
 import { CARRIED_TAP } from "./panel";
-import { addBackWay } from "./telegram";
+import { addBackWay, showBack } from "./telegram";
 import type { BackWay } from "./telegram";
 
 /** How far down the handle is pulled before the sheet closes. */
@@ -17,7 +17,8 @@ const PULLED = 80;
  * The screen behind is out of reach while it is open. The cursor goes into
  * it, and back where it was once it closes — or to `fallback` when that is
  * gone. `foot` stands under its scrolling inside, always in view; `said`,
- * the id of what it is about, is read with its title.
+ * the id of what it is about, is read with its title. `held` while its send
+ * is on its way or kept: Telegram's «Назад» is hidden, as a held «←»'s is.
  */
 export function Sheet({
   title,
@@ -25,6 +26,7 @@ export function Sheet({
   fallback,
   foot,
   said,
+  held = false,
   children,
 }: {
   /** Its name; the confirmation's carries its sum large («Закрити касу: у
@@ -34,25 +36,34 @@ export function Sheet({
   fallback?: RefObject<HTMLElement>;
   foot?: ReactNode;
   said?: string;
+  /** A send on its way, or an operation kept: no way out. */
+  held?: boolean;
   children: ReactNode;
 }): JSX.Element {
   const titleId = useId();
   const sheet = useRef<HTMLDivElement>(null);
   const shut = useRef(close);
   shut.current = close;
+  const holds = useRef(held);
+  holds.current = held;
   // Telegram's «Назад» closes it while it is open: over the screen's way,
-  // whenever that came.
+  // whenever that came. Held, it is hidden (review).
   useEffect(() => {
     const way: BackWay = {
       go: () => {
         shut.current();
       },
-      held: false,
+      get held() {
+        return holds.current;
+      },
       drawn: () => true,
       over: true,
     };
     return addBackWay(way);
   }, []);
+  useEffect(() => {
+    showBack();
+  }, [held]);
   // No tab, tap or reader gets behind it. Before the cursor's way back
   // below: the screen takes the cursor again only once it is in reach.
   useEffect(() => {

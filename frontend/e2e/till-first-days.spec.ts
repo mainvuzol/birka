@@ -342,7 +342,6 @@ test("an empty warehouse names itself, and a coat in hand is found in the catalo
     "На складі «Спільний» його немає в обліку.",
   );
   await panel.getByLabel("Пошук у каталозі").fill("лоран");
-  await panel.getByRole("button", { name: "Знайти" }).click();
   await panel.getByRole("radio", { name: "Лоран беж" }).click();
   await panel
     .getByRole("group", { name: "Розмір: Лоран беж" })
@@ -689,8 +688,17 @@ test("against the real API: a coat the books hold none of, found in the catalogu
   await page.getByRole("searchbox", { name: "Знайти модель" }).fill(name);
   await page.getByRole("button", { name: "Знайти в каталозі" }).click();
   const panel = page.getByRole("region", { name: "Товар з каталогу" });
+  // The till adds no model: an empty search says so, and only so (stage 2,
+  // goods task list, P0-1; В-Г2 (а)).
+  const missing = `Немає ${randomUUID().slice(0, 8)}`;
+  await panel.getByLabel("Пошук у каталозі").fill(missing);
+  await expect(
+    panel.getByText(`Нічого не знайшли за «${missing}»`),
+  ).toBeVisible();
+  await expect(
+    panel.getByRole("button", { name: /^Додати нову модель/ }),
+  ).toHaveCount(0);
   await panel.getByLabel("Пошук у каталозі").fill(name);
-  await panel.getByRole("button", { name: "Знайти" }).click();
   await panel.getByRole("radio", { name: new RegExp(name) }).click();
   await panel.getByRole("button", { name: "M", exact: true }).click();
   await fillLine(page, { price: "1500" });

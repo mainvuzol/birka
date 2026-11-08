@@ -2,8 +2,10 @@ import {
   test,
   expect,
   gridCell,
+  leaveNewModel,
   menu,
   more,
+  newModelSheet,
   openModel,
   openStore,
   readsOf,
@@ -314,8 +316,19 @@ test("a warehouse is counted cell by cell, each difference applied at once, and 
   await counting(page)
     .getByRole("button", { name: "Знайшли товар, якого немає в списку" })
     .click();
+  // One the catalogue has not is added from here, in the sheet «Нова
+  // модель» over the form; left, the form is as it was (stage 2, goods task
+  // list, P0-1).
+  const missing = `Немає в каталозі ${randomUUID().slice(0, 8)}`;
+  await page.getByLabel("Пошук у каталозі").fill(missing);
+  await page
+    .getByRole("button", { name: `Додати нову модель «${missing}»` })
+    .click();
+  const adding = await newModelSheet(page);
+  await expect(adding.getByLabel("Як записано")).toHaveValue(missing);
+  await leaveNewModel(adding);
+  await expect(page.getByLabel("Пошук у каталозі")).toHaveValue(missing);
   await page.getByLabel("Пошук у каталозі").fill("лоран");
-  await page.getByRole("button", { name: "Знайти" }).click();
   await page.getByRole("radio", { name: /Лоран шоколад/ }).click();
   await page
     .getByRole("combobox", { name: "Розмір" })
@@ -386,7 +399,6 @@ test("a warehouse is counted cell by cell, each difference applied at once, and 
     .getByRole("button", { name: "Знайшли товар, якого немає в списку" })
     .click();
   await page.getByLabel("Пошук у каталозі").fill("лоран");
-  await page.getByRole("button", { name: "Знайти" }).click();
   await page.getByRole("radio", { name: /Лоран шоколад/ }).click();
   await page
     .getByRole("combobox", { name: "Розмір" })

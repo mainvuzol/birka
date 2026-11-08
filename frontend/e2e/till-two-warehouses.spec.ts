@@ -349,7 +349,6 @@ test("a coat in hand from the catalogue is asked its warehouse, and leaves from 
     "На складі «Спільний» його немає в обліку.",
   );
   await panel.getByLabel("Пошук у каталозі").fill("лоран");
-  await panel.getByRole("button", { name: "Знайти" }).click();
   await panel.getByRole("radio", { name: "Лоран беж" }).click();
   await panel
     .getByRole("group", { name: "Розмір: Лоран беж" })

@@ -11,7 +11,7 @@ import {
 } from "@/shared/api";
 import { Unread } from "@/shared/Unread";
 import type { Location, Store } from "@/orders/types";
-import { CatalogPicker } from "@/inventory/CatalogPicker";
+import { AddedStub, CatalogPicker } from "@/inventory/CatalogPicker";
 import type { ReceivableVariant, SizeOption } from "@/inventory/receiptTypes";
 import { visible } from "@/shared/visible";
 import { FileChooser } from "./FileChooser";
@@ -1422,6 +1422,16 @@ function LineEditor({
   // first, and the split is offered as it is only once each such record is
   // read as a size with its count (owner decision, 2026-10-09).
   const [readings, setReadings] = useState<Record<number, SplitReading>>({});
+  // A model added from an empty search: its stub, under that model only
+  // (stage 2, goods task list, P0-1; review).
+  const [added, setAdded] = useState<Readonly<Record<string, string>>>({});
+  const addedSaid = (
+    variant: ReceivableVariant | null,
+    said?: string,
+  ): void => {
+    if (variant === null || said === undefined) return;
+    setAdded((was) => ({ ...was, [variant.product_variant_id]: said }));
+  };
   const ambiguous = split.flatMap((size, index) =>
     size.may_be_range ? [index] : [],
   );
@@ -1717,23 +1727,28 @@ function LineEditor({
                 initialSearch={
                   line.reading?.model ?? line.candidates.concept?.[0] ?? ""
                 }
-                onVariant={(variant) => {
+                onVariant={(variant, said) => {
                   update(0, { variant, picking: variant === null });
+                  addedSaid(variant, said);
                 }}
+                adds
               />
             ) : (
-              <div className="fields">
-                <span>{visible(model.display_name)}</span>
-                <button
-                  type="button"
-                  className="quiet"
-                  onClick={() => {
-                    update(0, { picking: true });
-                  }}
-                >
-                  Інший товар
-                </button>
-              </div>
+              <>
+                <div className="fields">
+                  <span>{visible(model.display_name)}</span>
+                  <button
+                    type="button"
+                    className="quiet"
+                    onClick={() => {
+                      update(0, { picking: true });
+                    }}
+                  >
+                    Інший товар
+                  </button>
+                </div>
+                <AddedStub said={added[model.product_variant_id] ?? null} />
+              </>
             )}
             <ul aria-label="Розміри й кількість, як у рядку">
               {split.map((size) => (
@@ -1767,23 +1782,30 @@ function LineEditor({
                   initialSearch={
                     line.reading?.model ?? line.candidates.concept?.[0] ?? ""
                   }
-                  onVariant={(variant) => {
+                  onVariant={(variant, said) => {
                     update(index, { variant, picking: variant === null });
+                    addedSaid(variant, said);
                   }}
+                  adds
                 />
               ) : (
-                <div className="fields">
-                  <span>{visible(part.variant.display_name)}</span>
-                  <button
-                    type="button"
-                    className="quiet"
-                    onClick={() => {
-                      update(index, { picking: true });
-                    }}
-                  >
-                    Інший товар
-                  </button>
-                </div>
+                <>
+                  <div className="fields">
+                    <span>{visible(part.variant.display_name)}</span>
+                    <button
+                      type="button"
+                      className="quiet"
+                      onClick={() => {
+                        update(index, { picking: true });
+                      }}
+                    >
+                      Інший товар
+                    </button>
+                  </div>
+                  <AddedStub
+                    said={added[part.variant.product_variant_id] ?? null}
+                  />
+                </>
               )}
               {/* The size's own room: «Оберіть розмір» whole, even at 375 px. */}
               <div className="fields size-count">

@@ -20,7 +20,7 @@ import {
   noSupplierDraft,
   useSuppliers,
 } from "@/suppliers/Picker";
-import { CatalogPicker } from "./CatalogPicker";
+import { AddedStub, CatalogPicker } from "./CatalogPicker";
 import { submitReceipt, useReceiptCommand } from "./receiptCommands";
 import { acquisitionLabels, paidWhenSold } from "./receiptTypes";
 import type {
@@ -111,6 +111,8 @@ export function Receive({
 }): JSX.Element {
   const [locationId, setLocationId] = useState("");
   const [variant, setVariant] = useState<ReceivableVariant | null>(model);
+  // A model added from an empty search: its stub, till another is chosen.
+  const [added, setAdded] = useState<string | null>(null);
   // The chosen model's units of each size, by the size's id.
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [cost, setCost] = useState("");
@@ -202,9 +204,10 @@ export function Receive({
     setValidation("");
   }
 
-  function chooseModel(next: ReceivableVariant | null): void {
+  function chooseModel(next: ReceivableVariant | null, said?: string): void {
     focusNext.current = next ? "model" : "search";
     setVariant(next);
+    setAdded(said ?? null);
     setCounts({});
     // A new model starts without the previous one's price.
     setCost("");
@@ -512,21 +515,24 @@ export function Receive({
             </div>
           )}
           {variant ? (
-            <div className="receive-model">
-              <p className="t-row" ref={modelName} tabIndex={-1}>
-                {visible(variant.display_name)}
-              </p>
-              <button
-                type="button"
-                className="quiet"
-                aria-label={`Змінити модель ${visible(variant.display_name)}`}
-                onClick={() => {
-                  chooseModel(null);
-                }}
-              >
-                Змінити
-              </button>
-            </div>
+            <>
+              <div className="receive-model">
+                <p className="t-row" ref={modelName} tabIndex={-1}>
+                  {visible(variant.display_name)}
+                </p>
+                <button
+                  type="button"
+                  className="quiet"
+                  aria-label={`Змінити модель ${visible(variant.display_name)}`}
+                  onClick={() => {
+                    chooseModel(null);
+                  }}
+                >
+                  Змінити
+                </button>
+              </div>
+              <AddedStub said={added} />
+            </>
           ) : (
             <div ref={picker}>
               <CatalogPicker
@@ -534,9 +540,10 @@ export function Receive({
                 token={token}
                 scopeKey={journalKey}
                 variant={variant}
-                onVariant={(picked) => {
-                  if (picked) chooseModel(picked);
+                onVariant={(picked, said) => {
+                  if (picked) chooseModel(picked, said);
                 }}
+                adds
               />
             </div>
           )}
