@@ -272,7 +272,9 @@ test("text from outside is shown with its hidden characters marked, on every scr
   // «Моделі».
   await open(page, fixture.telegram_user_id, "Оля", "Моделі");
   await page.getByLabel("Знайти модель").fill(tag);
-  await page.getByRole("button", { name: "Знайти", exact: true }).click();
+  await expect(
+    page.getByRole("list", { name: "Знайдені моделі" }),
+  ).toBeVisible();
   await shownSafely(page, `${tag}${marks[RLO]}21 шт`);
 
   // «Покупці»: the customer, the goods, who sold, and the reason — the

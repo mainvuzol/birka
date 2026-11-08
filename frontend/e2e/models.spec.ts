@@ -65,9 +65,13 @@ function initData(): string {
   return fields.toString();
 }
 
-async function enter(page: Page, tab: string): Promise<void> {
+/** A section; `version`: inside Telegram of that version. */
+async function enter(page: Page, tab: string, version?: string): Promise<void> {
   await page.goto(
-    `/#${new URLSearchParams({ tgWebAppData: initData() }).toString()}`,
+    `/#${new URLSearchParams({
+      tgWebAppData: initData(),
+      ...(version === undefined ? {} : { tgWebAppVersion: version }),
+    }).toString()}`,
   );
   await openStore(page, "Основний MAIN");
   await section(page, tab);
@@ -198,10 +202,112 @@ async function held(
     .reduce((sum, row) => sum + row.quantity, 0);
 }
 
-async function open(page: Page, query: string, name: RegExp): Promise<void> {
+/** The models found as their words are typed — no «Знайти» (stage 2, goods
+ * task list, P1-2). */
+function foundModels(page: Page): Locator {
+  return page.getByRole("list", { name: "Знайдені моделі" });
+}
+
+/** A model found and opened: its big tag, the cursor on its name. */
+async function open(
+  page: Page,
+  query: string,
+  name: RegExp | string,
+): Promise<void> {
   await page.getByLabel("Знайти модель").fill(query);
-  await page.getByRole("button", { name: "Знайти" }).click();
-  await page.getByRole("button", { name }).click();
+  await foundModels(page).getByRole("button", { name }).click();
+  await expect(page.locator("h1.model-hero-name")).toBeFocused();
+}
+
+/** The model's ⋯ sheet, its way taken (P1-2). */
+async function way(page: Page, name: string): Promise<void> {
+  await page.getByRole("button", { name: "Дії з моделлю" }).click();
+  const ways = page.getByRole("dialog");
+  await expect(ways).toHaveAttribute("data-ready", "");
+  await ways.getByRole("button", { name, exact: true }).click();
+}
+
+/** «Перейменувати» in its own sheet. */
+async function renameSheet(page: Page): Promise<Locator> {
+  await way(page, "Перейменувати");
+  const sheet = page.getByRole("dialog", { name: "Перейменувати модель" });
+  await expect(sheet).toHaveAttribute("data-ready", "");
+  return sheet;
+}
+
+/** «Зберегти назву»: outside Telegram, its MainButton in the sheet's foot. */
+function saveName(sheet: Locator): Locator {
+  return sheet.getByRole("button", { name: "Зберегти назву" });
+}
+
+/** «Об’єднати з іншою», the model that stays found and chosen. */
+async function mergeWith(
+  page: Page,
+  query: string,
+  name: RegExp | string,
+): Promise<void> {
+  await way(page, "Об’єднати з іншою");
+  await expect(page.getByLabel("Модель, що лишиться")).toBeFocused();
+  await page.getByLabel("Модель, що лишиться").fill(query);
+  await foundModels(page)
+    .getByRole("button", {
+      name,
+      ...(typeof name === "string" ? { exact: true } : {}),
+    })
+    .click();
+}
+
+/** «Об’єднати»: outside Telegram, its MainButton as the dock's button. */
+function mergeButton(page: Page): Locator {
+  return page
+    .locator(".order-dock")
+    .getByRole("button", { name: "Об’єднати", exact: true });
+}
+
+/** «Об’єднати», then the sheet that asks — Telegram's popup where it has
+ * none — answered «Об’єднати». */
+async function confirmMerge(
+  page: Page,
+  from: string,
+  into: string,
+): Promise<void> {
+  await mergeButton(page).click();
+  const ask = page.getByRole("dialog", {
+    name: `Об’єднати «${from}» з «${into}»?`,
+    exact: true,
+  });
+  await expect(ask).toHaveAttribute("data-ready", "");
+  await expect(ask.getByText("Скасувати не можна.")).toBeVisible();
+  await ask.getByRole("button", { name: "Об’єднати", exact: true }).click();
+  await expect(ask).toHaveCount(0);
+}
+
+/**
+ * A kept correction's next attempts, held until `release`: the phone asks
+ * again by itself as soon as anything answers (ADR-0013 §4.3), so the
+ * journey sees it kept first.
+ */
+function gate(): { held: Promise<void>; release: () => void } {
+  let release = (): void => undefined;
+  const held = new Promise<void>((done) => {
+    release = done;
+  });
+  return { held, release };
+}
+
+/** «Перевірити результат зміни» pressed — unless the phone, answered
+ * meanwhile by another read, asked again by itself first: either way, the
+ * same correction, and then `settled` is said. */
+async function checked(page: Page, settled: Locator): Promise<void> {
+  const pressed = page
+    .getByRole("button", { name: "Перевірити результат зміни" })
+    .click()
+    .catch(() => undefined);
+  await Promise.race([pressed, settled.waitFor()]);
+  await expect(settled).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Зміну каталогу ще не підтверджено" }),
+  ).toHaveCount(0);
 }
 
 /** A proposal of this test's own in «Каталог», waiting for review. */
@@ -280,41 +386,78 @@ test("a duplicate is merged after a preview, its stock moving to the model that 
   const { stays, typo } = await duplicate(page, bearer, name, colour);
   await enter(page, "Моделі");
   await open(page, name, new RegExp(colour.typo));
-  await page.getByRole("button", { name: "Об’єднати з іншою" }).click();
+  await way(page, "Об’єднати з іншою");
+  await expect(page.getByLabel("Модель, що лишиться")).toBeFocused();
   await page.getByLabel("Модель, що лишиться").fill(name);
-  await page.getByRole("button", { name: "Знайти" }).click();
-  await page
+  // The duplicate itself is not offered to stay.
+  await expect(foundModels(page).getByRole("button")).toHaveText([
+    `${name} ${colour.right}`,
+  ]);
+  await foundModels(page)
     .getByRole("button", { name: `${name} ${colour.right}`, exact: true })
     .click();
-  // Both models, and the stock that would move, before anything is done.
-  await expect(page.getByRole("definition").first()).toHaveText(
-    `${name} ${colour.typo}`,
-  );
-  // What moves, and what the model that stays holds already.
-  await expect(page.getByText("Склад повернень · M · 3 шт.")).toBeVisible();
-  await expect(page.getByText("Залишок моделі, що лишається")).toBeVisible();
-  await expect(page.getByText("Склад повернень · M · 2 шт.")).toBeVisible();
-  const merge = page.getByRole("button", { name: "Об’єднати", exact: true });
-  await expect(merge).toBeDisabled();
-  await page.getByLabel("Розумію: об’єднання не можна скасувати.").check();
+  // Both models' tags, and the stock that would move, before anything is
+  // done: what goes, and what the model that stays holds already. The
+  // cursor on the screen's heading, the tags under it.
+  await expect(
+    page.getByRole("heading", { name: "Об’єднати моделі", exact: true }),
+  ).toBeFocused();
+  const goes = page.getByRole("group", {
+    name: `${name} ${colour.typo}`,
+    exact: true,
+  });
+  const staying = page.getByRole("group", {
+    name: `${name} ${colour.right}`,
+    exact: true,
+  });
+  await expect(goes.locator(".sticker")).toHaveText("Зникне");
+  await expect(staying.locator(".sticker")).toHaveText("Лишається");
+  await expect(
+    goes.getByRole("list", { name: "Склад повернень" }).getByRole("listitem"),
+  ).toHaveText(["M — 3 шт.M3"]);
+  await expect(
+    staying
+      .getByRole("list", { name: "Склад повернень" })
+      .getByRole("listitem"),
+  ).toHaveText(["M — 2 шт.M2"]);
+  // The box to tick is gone: what cannot be undone is asked (§6.6).
+  await expect(page.getByRole("checkbox")).toHaveCount(0);
+  await expect(mergeButton(page)).toBeEnabled();
   // The first answer is lost after the server merged: the journal keeps the
-  // correction, and asking again answers with what was done, once.
+  // correction, and asking again answers with what was done, once. The
+  // phone asks again by itself as soon as anything answers, and as
+  // «Моделі» opens again (ADR-0013 §4.3): those answers lost too, until
+  // the screen is seen kept.
   let attempts = 0;
+  let lost = true;
   const keys: (string | null)[] = [];
   await page.route("**/api/v1/catalog/models/*/merge", async (route) => {
     attempts += 1;
     keys.push(await route.request().headerValue("Idempotency-Key"));
-    const response = await route.fetch();
-    if (attempts === 1) await route.abort("failed");
-    else await route.fulfill({ response });
+    if (attempts === 1) {
+      await route.fetch();
+      await route.abort("failed");
+    } else if (lost) await route.abort("failed");
+    else await route.fulfill({ response: await route.fetch() });
   });
   await refuseOnce(page, "**/api/v1/catalog/models/*/merge", 422);
-  await merge.click();
+  await confirmMerge(page, `${name} ${colour.typo}`, `${name} ${colour.right}`);
   await expect(
     page.getByText("Моделі не об’єднано. Спробуйте ще раз.", { exact: true }),
   ).toBeVisible();
-  await merge.click();
-  await expect(page.getByText("Незавершена зміна каталогу")).toBeVisible();
+  await confirmMerge(page, `${name} ${colour.typo}`, `${name} ${colour.right}`);
+  await expect(
+    page.getByRole("heading", { name: "Зміну каталогу ще не підтверджено" }),
+  ).toBeVisible();
+  await expect(
+    page.getByText(
+      /^Чекає відповіді сервера з \d\d:\d\d\. Телефон перевірить сам\./,
+    ),
+  ).toBeVisible();
+  // Held while it is unknown: the merge's own ways, and every section.
+  await expect(
+    page.getByRole("button", { name: "Поміняти місцями" }),
+  ).toBeDisabled();
   await expect(
     page.getByRole("button", { name: "Продаж", exact: true }),
   ).toBeDisabled();
@@ -337,20 +480,20 @@ test("a duplicate is merged after a preview, its stock moving to the model that 
   await sections(page)
     .getByRole("button", { name: "Моделі", exact: true })
     .click();
-  await page
-    .getByRole("button", { name: "Перевірити результат зміни" })
-    .click();
   await expect(
+    page.getByRole("heading", { name: "Зміну каталогу ще не підтверджено" }),
+  ).toBeVisible();
+  lost = false;
+  // Answered on the search it opened on: said there.
+  await checked(
+    page,
     page.getByText(
       `Об’єднано: «${name} ${colour.typo}» тепер веде до «${name} ${colour.right}». Залишок і ціни перенесено.`,
     ),
-  ).toBeVisible();
-  expect(attempts).toBe(2);
-  expect(keys[0]).toBe(keys[1]);
-  // The card now is the model that stays.
-  await expect(
-    page.getByRole("heading", { name: `${name} ${colour.right}`, exact: true }),
-  ).toBeVisible();
+  );
+  // Every attempt the same correction, under its one key.
+  expect(attempts).toBeGreaterThanOrEqual(2);
+  expect(new Set(keys).size).toBe(1);
   expect(await held(page, bearer, stays.variant)).toBe(5);
   expect(await held(page, bearer, typo.variant)).toBe(0);
   // Searching the old name finds the model that stays.
@@ -389,21 +532,60 @@ test("nothing is merged into a retired model: the preview says so and the merge 
   expect(retired.status()).toBe(200);
   await enter(page, "Моделі");
   await open(page, name, new RegExp(colour.typo));
-  await page.getByRole("button", { name: "Об’єднати з іншою" }).click();
-  await page.getByLabel("Модель, що лишиться").fill(name);
-  await page.getByRole("button", { name: "Знайти" }).click();
+  await mergeWith(page, name, `${name} ${colour.right} — Прибрана`);
+  // What stops it, as rows under their heading (P1-2).
+  const blockers = page.getByRole("alert").filter({
+    has: page.getByRole("heading", { name: "Поки що не можна об’єднати" }),
+  });
+  await expect(blockers.getByRole("listitem")).toHaveText([
+    "Модель, що лишається, прибрана. Спершу поверніть її.",
+  ]);
+  // The model that stays says it is retired on its tag.
+  await expect(
+    page
+      .getByRole("group", { name: `${name} ${colour.right}`, exact: true })
+      .locator(".sticker"),
+  ).toHaveText(["Лишається", "Прибрана"]);
+  await expect(mergeButton(page)).toBeDisabled();
+  // «Поміняти місцями»: the retired one goes, and nothing stops it.
+  await page.getByRole("button", { name: "Поміняти місцями" }).click();
+  await expect(blockers).toHaveCount(0);
+  await expect(
+    page
+      .getByRole("group", { name: `${name} ${colour.right}`, exact: true })
+      .locator(".sticker"),
+  ).toHaveText(["Зникне", "Прибрана"]);
+  // Asked first, outside Telegram in a sheet of the popup's words: «Ні»
+  // sends nothing.
+  const sent: string[] = [];
+  page.on("request", (request) => {
+    if (request.method() === "POST" && request.url().endsWith("/merge"))
+      sent.push(request.url());
+  });
+  await mergeButton(page).click();
+  const ask = page.getByRole("dialog", {
+    name: `Об’єднати «${name} ${colour.right}» з «${name} ${colour.typo}»?`,
+    exact: true,
+  });
+  await expect(ask).toHaveAttribute("data-ready", "");
+  await expect(mergeButton(page)).toHaveCount(0);
+  await ask.getByRole("button", { name: "Ні", exact: true }).click();
+  await expect(ask).toHaveCount(0);
+  await expect(mergeButton(page)).toBeEnabled();
+  expect(sent).toEqual([]);
+  // Back to the model, then to the search: its words as they were left,
+  // the cursor on the row the model was opened from.
   await page
-    .getByRole("button", { name: `${name} ${colour.right} — Прибрана` })
+    .getByRole("button", { name: `Назад до моделі «${name} ${colour.typo}»` })
     .click();
+  await expect(page.locator("h1.model-hero-name")).toBeFocused();
+  await page.getByRole("button", { name: "Назад до пошуку моделей" }).click();
+  await expect(page.getByLabel("Знайти модель")).toHaveValue(name);
   await expect(
-    page.getByText("Модель, що лишається, прибрана. Спершу поверніть її."),
-  ).toBeVisible();
-  await expect(
-    page.getByLabel("Розумію: об’єднання не можна скасувати."),
-  ).toBeDisabled();
-  await expect(
-    page.getByRole("button", { name: "Об’єднати", exact: true }),
-  ).toBeDisabled();
+    foundModels(page).getByRole("button", {
+      name: new RegExp(colour.typo),
+    }),
+  ).toBeFocused();
 });
 
 test("a rename warns of a similar word, and taking the word in use saves it", async ({
@@ -419,48 +601,118 @@ test("a rename warns of a similar word, and taking the word in use saves it", as
     { concept: `${name} інша`, variant: { color: colour.right } },
     0,
   );
-  await model(page, bearer, { concept: name, variant: { color: "графіт" } }, 1);
+  const renamed = await model(
+    page,
+    bearer,
+    { concept: name, variant: { color: "графіт" } },
+    1,
+  );
   await enter(page, "Моделі");
   await open(page, name, /графіт/);
-  await page.getByRole("button", { name: "Перейменувати" }).click();
-  await page.getByLabel("Колір", { exact: true }).fill(colour.typo);
-  await page.getByRole("button", { name: "Зберегти назву" }).click();
-  await expect(page.getByText("Схожа назва вже є")).toBeVisible();
+  const sheet = await renameSheet(page);
+  // Its words grouped: the model and its colour, the rest folded (P1-2).
   await expect(
-    page.getByText(
+    sheet.getByText(
+      "Змінюється лише ця модель. Старі продажі зберігають назву, під якою продали.",
+    ),
+  ).toBeVisible();
+  const more = sheet.getByRole("button", { name: "Ще ознаки" });
+  await expect(more).toHaveAttribute("aria-expanded", "false");
+  await expect(sheet.getByLabel("Джерело", { exact: true })).toHaveCount(0);
+  await sheet.getByLabel("Колір", { exact: true }).fill(colour.typo);
+  await saveName(sheet).click();
+  await expect(sheet.getByText("Схожа назва вже є")).toBeVisible();
+  await expect(
+    sheet.getByText(
       `Колір: «${colour.typo}» схоже на «${colour.right}», що вже є в каталозі.`,
     ),
   ).toBeVisible();
   await expect(
-    page.getByText(`Моделі з нею: ${name} інша ${colour.right}`),
+    sheet.getByText(`Моделі з нею: ${name} інша ${colour.right}`),
   ).toBeVisible();
-  await page.getByRole("button", { name: `Взяти «${colour.right}»` }).click();
-  await expect(page.getByLabel("Колір", { exact: true })).toHaveValue(
+  // A similar word is the sheet's to answer: nothing more unfolds.
+  await expect(more).toHaveAttribute("aria-expanded", "false");
+  await sheet.getByRole("button", { name: `Взяти «${colour.right}»` }).click();
+  await expect(sheet.getByLabel("Колір", { exact: true })).toHaveValue(
     colour.right,
   );
-  // Refused for a reason the screen does not name: its own words, never an
-  // order's (owner decision, 2026-10-25).
-  await refuseOnce(page, "**/api/v1/catalog/models/*/rename", 422);
-  await page.getByRole("button", { name: "Зберегти назву" }).click();
+  // A similar word of a folded field, taken: «Ще ознаки» unfolds to show it
+  // as it changes (review, 2026-11-08). Its answer stubbed: the seed has no
+  // such material.
+  let similarOnce = false;
+  await page.route("**/api/v1/catalog/models/*/rename", async (route) => {
+    if (similarOnce || route.request().method() === "GET") {
+      await route.fallback();
+      return;
+    }
+    similarOnce = true;
+    await route.fulfill({
+      status: 409,
+      json: {
+        code: "CATALOG_SIMILAR",
+        message: "Similar catalog word",
+        details: {
+          similar: [
+            {
+              field: "material",
+              typed: "вавна",
+              existing: ["вовна"],
+              models: [],
+            },
+          ],
+        },
+      },
+    });
+  });
+  await saveName(sheet).click();
   await expect(
-    page.getByText("Назву не змінено. Перевірте поля та спробуйте ще раз.", {
+    sheet.getByText("Матеріал: «вавна» схоже на «вовна», що вже є в каталозі."),
+  ).toBeVisible();
+  await expect(more).toHaveAttribute("aria-expanded", "false");
+  await sheet.getByRole("button", { name: "Взяти «вовна»" }).click();
+  await expect(more).toHaveAttribute("aria-expanded", "true");
+  await expect(sheet.getByLabel("Матеріал", { exact: true })).toHaveValue(
+    "вовна",
+  );
+  // Left as it was, and folded again: the rest renames the colour alone.
+  await sheet.getByLabel("Матеріал", { exact: true }).fill("");
+  await more.click();
+  await expect(more).toHaveAttribute("aria-expanded", "false");
+  // Refused for a reason the screen does not name: its own words, never an
+  // order's (owner decision, 2026-10-25) — every word unfolded to look at.
+  await refuseOnce(page, "**/api/v1/catalog/models/*/rename", 422);
+  await saveName(sheet).click();
+  await expect(
+    sheet.getByText("Назву не змінено. Перевірте поля та спробуйте ще раз.", {
       exact: true,
     }),
   ).toBeVisible();
+  await expect(more).toHaveAttribute("aria-expanded", "true");
+  await expect(sheet.getByLabel("Джерело", { exact: true })).toBeVisible();
   await refuseOnce(page, "**/api/v1/catalog/models/*/rename", 409);
-  await page.getByRole("button", { name: "Зберегти назву" }).click();
+  await saveName(sheet).click();
   await expect(
-    page.getByText(
+    sheet.getByText(
       "Назву не змінено: модель щойно змінили — перегляньте її й спробуйте ще раз.",
       { exact: true },
     ),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Зберегти назву" }).click();
+  await saveName(sheet).click();
+  // Done: the sheet gone, the card says it, the cursor on its new name.
+  await expect(sheet).toHaveCount(0);
   await expect(
     page.getByText(
       `Назву змінено: «${name} графіт» → «${name} ${colour.right}».`,
     ),
   ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: `${name} ${colour.right}`, exact: true }),
+  ).toBeFocused();
+  // Back to the search: the cursor on the row it was opened from.
+  await page.getByRole("button", { name: "Назад до пошуку моделей" }).click();
+  await expect(
+    foundModels(page).locator(`[data-model="${renamed.variant}"]`),
+  ).toBeFocused();
 });
 
 test("a retired model is not received until it is brought back", async ({
@@ -478,7 +730,7 @@ test("a retired model is not received until it is brought back", async ({
   await open(page, name, /графіт/);
   const cardReads = readsOf(page, /\/api\/v1\/catalog\/models\/[^/]+$/);
   await refuseOnce(page, "**/api/v1/catalog/models/*/retire", 409);
-  await page.getByRole("button", { name: "Прибрати модель" }).click();
+  await way(page, "Прибрати модель");
   await expect(
     page.getByText(
       "Модель не прибрано: її щойно змінили — перегляньте її й спробуйте ще раз.",
@@ -487,13 +739,20 @@ test("a retired model is not received until it is brought back", async ({
   ).toBeVisible();
   // The card read again, as it says.
   await expect.poll(cardReads).toBeGreaterThan(0);
-  await page.getByRole("button", { name: "Прибрати модель" }).click();
+  await way(page, "Прибрати модель");
   await expect(
     page.getByText(
       `«${name} графіт» прибрано: залишок продають, нового не приймають.`,
     ),
   ).toBeVisible();
-  await expect(page.getByText("Прибрана", { exact: true })).toBeVisible();
+  // Brought back at will: nothing was asked, the sheet is gone (P1-2).
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.locator(".model-state")).toHaveText("Прибрана");
+  await expect(
+    page.getByText(
+      "Прибрану модель не пропонують у «Прийшов товар» і пошуку; її залишок продають, повертають і списують.",
+    ),
+  ).toBeVisible();
   const receipt = (): Promise<{ status(): number; json(): Promise<unknown> }> =>
     page.request.post("/api/v1/inventory/receipts", {
       headers: {
@@ -522,14 +781,15 @@ test("a retired model is not received until it is brought back", async ({
     "MODEL_RETIRED",
   );
   await refuseOnce(page, "**/api/v1/catalog/models/*/restore", 422);
-  await page.getByRole("button", { name: "Повернути модель" }).click();
+  await way(page, "Повернути модель");
   await expect(
     page.getByText("Модель не повернуто. Спробуйте ще раз.", { exact: true }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Повернути модель" }).click();
+  await way(page, "Повернути модель");
   await expect(
     page.getByText(`«${name} графіт» повернуто: її знову приймають.`),
   ).toBeVisible();
+  await expect(page.locator(".model-state")).toHaveCount(0);
   expect((await receipt()).status()).toBe(201);
 });
 
@@ -639,15 +899,17 @@ test("only a person with the right in every store is offered a merge", async ({
   });
   await enter(page, "Моделі");
   await open(page, name, /графіт/);
-  await expect(
-    page.getByRole("button", { name: "Перейменувати" }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Прибрати модель" }),
-  ).toBeVisible();
+  await page.getByRole("button", { name: "Дії з моделлю" }).click();
+  const ways = page.getByRole("dialog", { name: `${name} графіт` });
+  await expect(ways.getByRole("button")).toHaveText([
+    "Перейменувати",
+    "Прибрати модель",
+  ]);
   await expect(
     page.getByRole("button", { name: "Об’єднати з іншою" }),
   ).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await expect(ways).toHaveCount(0);
 
   // Renamed as another model is named: said so, never who may join them
   // (stage 2, goods task list, P1-5).
@@ -659,14 +921,14 @@ test("only a person with the right in every store is offered a merge", async ({
   );
   await enter(page, "Моделі");
   await open(page, `${name} друга`, /друга графіт/);
-  await page.getByRole("button", { name: "Перейменувати" }).click();
-  await page.getByLabel("Назва моделі", { exact: true }).fill(name);
-  await page.getByRole("button", { name: "Зберегти назву" }).click();
+  const sheet = await renameSheet(page);
+  await sheet.getByLabel("Назва моделі", { exact: true }).fill(name);
+  await saveName(sheet).click();
   // The same model, and the same colour: the name is that one's.
-  await page.getByRole("radio", { name, exact: true }).check();
-  await page.getByRole("button", { name: "Зберегти назву" }).click();
+  await sheet.getByRole("radio", { name, exact: true }).check();
+  await saveName(sheet).click();
   await expect(
-    page.getByText("Така назва вже є в іншої моделі.", { exact: true }),
+    sheet.getByText("Така назва вже є в іншої моделі.", { exact: true }),
   ).toBeVisible();
   await expect(page.getByText(/право/)).toHaveCount(0);
   await expect(
@@ -722,11 +984,12 @@ test("a rename keeps a similar word once the person says it is another", async (
   await model(page, bearer, { concept: name, variant: { color: "графіт" } }, 0);
   await enter(page, "Моделі");
   await open(page, name, /графіт/);
-  await page.getByRole("button", { name: "Перейменувати" }).click();
-  await page.getByLabel("Колір", { exact: true }).fill(colour.typo);
-  await page.getByRole("button", { name: "Зберегти назву" }).click();
-  await expect(page.getByText("Схожа назва вже є")).toBeVisible();
-  await page
+  const sheet = await renameSheet(page);
+  await sheet.getByLabel("Колір", { exact: true }).fill(colour.typo);
+  // Enter in a field saves, as the button does.
+  await sheet.getByLabel("Колір", { exact: true }).press("Enter");
+  await expect(sheet.getByText("Схожа назва вже є")).toBeVisible();
+  await sheet
     .getByRole("button", { name: "Це інша назва — зберегти як є" })
     .click();
   await expect(
@@ -986,13 +1249,8 @@ test("what opened after the preview is shown, and the merge waits for it", async
   const { stays } = await duplicate(page, bearer, name, colour);
   await enter(page, "Моделі");
   await open(page, name, new RegExp(colour.typo));
-  await page.getByRole("button", { name: "Об’єднати з іншою" }).click();
-  await page.getByLabel("Модель, що лишиться").fill(name);
-  await page.getByRole("button", { name: "Знайти" }).click();
-  await page
-    .getByRole("button", { name: `${name} ${colour.right}`, exact: true })
-    .click();
-  await page.getByLabel("Розумію: об’єднання не можна скасувати.").check();
+  await mergeWith(page, name, `${name} ${colour.right}`);
+  await expect(mergeButton(page)).toBeEnabled();
   // Meanwhile someone retires the model that stays.
   const retired = await page.request.post(
     `/api/v1/catalog/models/${stays.variant}/retire`,
@@ -1005,16 +1263,12 @@ test("what opened after the preview is shown, and the merge waits for it", async
     },
   );
   expect(retired.status()).toBe(200);
-  await page.getByRole("button", { name: "Об’єднати", exact: true }).click();
+  // Asked, and answered: the server says what opened, read afresh.
+  await confirmMerge(page, `${name} ${colour.typo}`, `${name} ${colour.right}`);
   await expect(
     page.getByText("Модель, що лишається, прибрана. Спершу поверніть її."),
   ).toBeVisible();
-  await expect(
-    page.getByLabel("Розумію: об’єднання не можна скасувати."),
-  ).not.toBeChecked();
-  await expect(
-    page.getByRole("button", { name: "Об’єднати", exact: true }),
-  ).toBeDisabled();
+  await expect(mergeButton(page)).toBeDisabled();
 });
 
 test("a rename whose answer was lost settles when it was refused", async ({
@@ -1033,30 +1287,42 @@ test("a rename whose answer was lost settles when it was refused", async ({
   // The first attempt never reaches the server; asked again, it is refused
   // as a similar name, which proves nothing was recorded.
   let attempts = 0;
+  const next = gate();
   await page.route("**/api/v1/catalog/models/*/rename", async (route) => {
     attempts += 1;
     if (attempts === 1) await route.abort("connectionfailed");
-    else await route.continue();
+    else {
+      await next.held;
+      await route.continue();
+    }
   });
   await enter(page, "Моделі");
   await open(page, name, /графіт/);
-  await page.getByRole("button", { name: "Перейменувати" }).click();
-  await page.getByLabel("Колір", { exact: true }).fill(colour.typo);
-  await page.getByRole("button", { name: "Зберегти назву" }).click();
-  await expect(page.getByText("Незавершена зміна каталогу")).toBeVisible();
+  const sheet = await renameSheet(page);
+  await sheet.getByLabel("Колір", { exact: true }).fill(colour.typo);
+  await saveName(sheet).click();
+  // Kept: the sheet gone, its stub over the card, the card's ways held.
+  await expect(
+    page.getByRole("heading", { name: "Зміну каталогу ще не підтверджено" }),
+  ).toBeVisible();
+  await expect(sheet).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Дії з моделлю" }),
+  ).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "Назад до пошуку моделей" }),
+  ).toBeDisabled();
   await expect(
     page.getByRole("button", { name: "Продаж", exact: true }),
   ).toBeDisabled();
-  await page
-    .getByRole("button", { name: "Перевірити результат зміни" })
-    .click();
-  await expect(page.getByText("Незавершена зміна каталогу")).toHaveCount(0);
-  await expect(
+  next.release();
+  await checked(
+    page,
     page.getByText(
       "Зміну каталогу не записано. У каталозі вже є схожа назва. Візьміть її або підтвердьте, що це інша.",
       { exact: true },
     ),
-  ).toBeVisible();
+  );
   await expect(
     page.getByRole("button", { name: "Продаж", exact: true }),
   ).toBeEnabled();
@@ -1083,10 +1349,12 @@ for (const [what, status, said] of [
       0,
     );
     let attempts = 0;
+    const next = gate();
     await page.route("**/api/v1/catalog/models/*/rename", async (route) => {
       attempts += 1;
       if (attempts === 1) await route.abort("connectionfailed");
-      else
+      else {
+        await next.held;
         await route.fulfill({
           status,
           json: {
@@ -1095,22 +1363,129 @@ for (const [what, status, said] of [
             details: { recorded: false },
           },
         });
+      }
     });
     await enter(page, "Моделі");
     await open(page, name, /графіт/);
-    await page.getByRole("button", { name: "Перейменувати" }).click();
-    await page.getByLabel("Колір", { exact: true }).fill("сірий");
-    await page.getByRole("button", { name: "Зберегти назву" }).click();
-    await expect(page.getByText("Незавершена зміна каталогу")).toBeVisible();
+    const sheet = await renameSheet(page);
+    await sheet.getByLabel("Колір", { exact: true }).fill("сірий");
+    await saveName(sheet).click();
+    await expect(
+      page.getByRole("heading", { name: "Зміну каталогу ще не підтверджено" }),
+    ).toBeVisible();
     const cardReads = readsOf(page, /\/api\/v1\/catalog\/models\/[^/]+$/);
-    await page
-      .getByRole("button", { name: "Перевірити результат зміни" })
-      .click();
-    await expect(page.getByText(said, { exact: true })).toBeVisible();
+    next.release();
+    await checked(page, page.getByText(said, { exact: true }));
     expect(attempts).toBe(2);
     // A conflict reads the card again.
     if (status === 409) await expect.poll(cardReads).toBeGreaterThan(0);
   });
+
+test("a correction whose answer was lost is sent again by itself as the server answers again, with no tap (ADR-0013 §4.3)", async ({
+  page,
+}) => {
+  const bearer = await token(page);
+  const name = `Сама ${randomUUID().slice(0, 8)}`;
+  await model(page, bearer, { concept: name, variant: { color: "графіт" } }, 0);
+  // The first attempt lost; the server is back at once.
+  let attempts = 0;
+  await page.route("**/api/v1/catalog/models/*/rename", async (route) => {
+    attempts += 1;
+    if (attempts === 1) await route.abort("connectionfailed");
+    else await route.continue();
+  });
+  await enter(page, "Моделі");
+  await open(page, name, /графіт/);
+  const sheet = await renameSheet(page);
+  await sheet.getByLabel("Колір", { exact: true }).fill("сірий");
+  await saveName(sheet).click();
+  // Nothing pressed: the phone's probe, or any answer, brings it back.
+  await expect(
+    page.getByText(`Назву змінено: «${name} графіт» → «${name} сірий».`),
+  ).toBeVisible({ timeout: 20_000 });
+  expect(attempts).toBe(2);
+});
+
+test("a correction whose answer was lost is checked once «Моделі» opens again, with no tap (review, 2026-11-08)", async ({
+  page,
+}) => {
+  const bearer = await token(page);
+  const name = `Повернулась ${randomUUID().slice(0, 8)}`;
+  await model(page, bearer, { concept: name, variant: { color: "графіт" } }, 0);
+  let lost = true;
+  let attempts = 0;
+  await page.route("**/api/v1/catalog/models/*/rename", async (route) => {
+    attempts += 1;
+    if (lost) await route.abort("connectionfailed");
+    else await route.continue();
+  });
+  await enter(page, "Моделі");
+  await open(page, name, /графіт/);
+  const sheet = await renameSheet(page);
+  await sheet.getByLabel("Колір", { exact: true }).fill("сірий");
+  await saveName(sheet).click();
+  const kept = page.getByRole("heading", {
+    name: "Зміну каталогу ще не підтверджено",
+  });
+  await expect(kept).toBeVisible();
+  // The cursor on the stub as it comes.
+  await expect(page.locator(".models-kept")).toBeFocused();
+  // Left for «Ще»: nothing here sees the server come back.
+  await more(page);
+  lost = false;
+  const before = attempts;
+  await sections(page)
+    .getByRole("button", { name: /^Товар і каталог/ })
+    .click();
+  await sections(page)
+    .getByRole("button", { name: "Моделі", exact: true })
+    .click();
+  // Opened again: asked at once, said on the search it opens on — no
+  // model opened for the person.
+  await expect(
+    page.getByText(`Назву змінено: «${name} графіт» → «${name} сірий».`),
+  ).toBeVisible();
+  await expect(page.getByLabel("Знайти модель")).toBeVisible();
+  await expect(page.locator("h1.model-hero-name")).toHaveCount(0);
+  await expect(kept).toHaveCount(0);
+  expect(attempts).toBe(before + 1);
+});
+
+test("a correction whose answer was lost is checked by itself once the app is opened again, with no tap (ADR-0013 §4.3, G11)", async ({
+  page,
+}) => {
+  const bearer = await token(page);
+  const name = `Знову ${randomUUID().slice(0, 8)}`;
+  await model(page, bearer, { concept: name, variant: { color: "графіт" } }, 0);
+  // Every attempt lost until the app is opened again.
+  let lost = true;
+  let attempts = 0;
+  await page.route("**/api/v1/catalog/models/*/rename", async (route) => {
+    attempts += 1;
+    if (lost) await route.abort("connectionfailed");
+    else await route.continue();
+  });
+  await enter(page, "Моделі");
+  await open(page, name, /графіт/);
+  const sheet = await renameSheet(page);
+  await sheet.getByLabel("Колір", { exact: true }).fill("сірий");
+  await saveName(sheet).click();
+  const kept = page.getByRole("heading", {
+    name: "Зміну каталогу ще не підтверджено",
+  });
+  await expect(kept).toBeVisible();
+  // Opened again: «Моделі» at once, its stub, and the same correction asked
+  // by itself.
+  lost = false;
+  const before = attempts;
+  await page.reload();
+  await openStore(page, "Основний MAIN");
+  await expect(
+    page.getByText(`Назву змінено: «${name} графіт» → «${name} сірий».`),
+  ).toBeVisible();
+  await expect(kept).toHaveCount(0);
+  expect(attempts).toBe(before + 1);
+});
 
 test("a product whose creation answer was lost settles when it was refused", async ({
   page,
@@ -1255,11 +1630,284 @@ test("a retirement an opening list stops says so", async ({ page }) => {
     });
   });
   await enter(page, "Моделі");
+  // Words no model has: said so.
+  await page.getByLabel("Знайти модель").fill(`${name} немає`);
+  await expect(
+    page.getByText(`Нічого не знайшли за «${name} немає».`, { exact: true }),
+  ).toBeVisible();
   await open(page, name, /графіт/);
-  await page.getByRole("button", { name: "Прибрати модель" }).click();
+  await way(page, "Прибрати модель");
   await expect(
     page.getByText(
       "Модель є в списку початкових залишків, що чекає. Спершу затвердіть або відхиліть його в «Початкових залишках».",
     ),
   ).toBeVisible();
+});
+
+/** Telegram, the journey's own: what the app tells it, and what it tells
+ * the app. Before the page opens. */
+async function telegram(page: Page): Promise<{
+  told: (event: string) => Promise<unknown[]>;
+  main: () => Promise<unknown>;
+  fire: (type: string, data?: Record<string, unknown>) => Promise<void>;
+}> {
+  await page.addInitScript(() => {
+    const host = window as unknown as {
+      TelegramWebviewProxy: {
+        postEvent: (event: string, data?: string) => void;
+      };
+      told: [string, unknown][];
+    };
+    host.told = [];
+    host.TelegramWebviewProxy = {
+      postEvent: (event, data) => {
+        host.told.push([event, data ? (JSON.parse(data) as unknown) : null]);
+      },
+    };
+  });
+  const told = (event: string): Promise<unknown[]> =>
+    page.evaluate(
+      (wanted) =>
+        (window as unknown as { told: [string, unknown][] }).told
+          .filter(([name]) => name === wanted)
+          .map(([, data]) => data),
+      event,
+    );
+  return {
+    told,
+    main: async () => (await told("web_app_setup_main_button")).at(-1) ?? null,
+    fire: (type, data) =>
+      page.evaluate(
+        ([eventType, eventData]) => {
+          window.dispatchEvent(
+            new MessageEvent("message", {
+              data: JSON.stringify({ eventType, eventData }),
+              source: window.parent,
+            }),
+          );
+        },
+        [type, data] as const,
+      ),
+  };
+}
+
+test("inside Telegram a duplicate is merged in six taps — its row, ⋯, «Об’єднати з іншою», the model that stays, the MainButton «Об’єднати» and the popup's destructive «Об’єднати»; «Ні» and a popup closed send nothing (stage 2, goods task list, P1-2)", async ({
+  page,
+}) => {
+  const { told, main, fire } = await telegram(page);
+  const bearer = await token(page);
+  const name = `Попап ${randomUUID().slice(0, 8)}`;
+  const colour = colours();
+  const { stays, typo } = await duplicate(page, bearer, name, colour);
+  const sent: string[] = [];
+  page.on("request", (request) => {
+    if (request.method() === "POST" && request.url().endsWith("/merge"))
+      sent.push(request.url());
+  });
+  // The preview's first answer held: the MainButton shown, not pressable
+  // until both models and what stops them are read.
+  const preview = gate();
+  let previewed = false;
+  await page.route("**/api/v1/catalog/models/*/merge/*", async (route) => {
+    if (previewed || route.request().method() !== "GET") {
+      await route.fallback();
+      return;
+    }
+    previewed = true;
+    await preview.held;
+    await route.fallback();
+  });
+  await enter(page, "Моделі", "7.0");
+  // 1: the duplicate's row, found as its words are typed.
+  await open(page, name, new RegExp(colour.typo));
+  // 2, 3: ⋯ and «Об’єднати з іншою»; 4: the model that stays.
+  await mergeWith(page, name, `${name} ${colour.right}`);
+  await expect
+    .poll(main)
+    .toMatchObject({ is_visible: true, is_active: false, text: "Об’єднати" });
+  preview.release();
+  await expect(
+    page.getByRole("group", { name: `${name} ${colour.typo}`, exact: true }),
+  ).toBeVisible();
+  // The MainButton is Telegram's: the screen draws none of its own.
+  await expect
+    .poll(main)
+    .toMatchObject({ is_visible: true, is_active: true, text: "Об’єднати" });
+  await expect(page.locator(".order-dock")).toHaveCount(0);
+  // No title: the question is the message (Telegram's title holds 64).
+  const popup = {
+    message: `Об’єднати «${name} ${colour.typo}» з «${name} ${colour.right}»? Скасувати не можна.`,
+    buttons: [
+      { id: "no", type: "default", text: "Ні" },
+      { id: "merge", type: "destructive", text: "Об’єднати" },
+    ],
+  };
+  // Asked there, not in the page; «Ні» merges nothing.
+  await fire("main_button_pressed");
+  await expect.poll(() => told("web_app_open_popup")).toEqual([popup]);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await fire("popup_closed", { button_id: "no" });
+  // Closed without a button: nothing either.
+  await fire("main_button_pressed");
+  await expect
+    .poll(async () => (await told("web_app_open_popup")).length)
+    .toBe(2);
+  await fire("popup_closed", {});
+  // 5, 6: the MainButton, and the popup's «Об’єднати».
+  await fire("main_button_pressed");
+  await expect
+    .poll(async () => (await told("web_app_open_popup")).length)
+    .toBe(3);
+  await fire("popup_closed", { button_id: "merge" });
+  await expect(
+    page.getByText(
+      `Об’єднано: «${name} ${colour.typo}» тепер веде до «${name} ${colour.right}». Залишок і ціни перенесено.`,
+    ),
+  ).toBeVisible();
+  // Merged once, and felt once.
+  expect(sent).toHaveLength(1);
+  expect(
+    (await told("web_app_trigger_haptic_feedback")).filter(
+      (buzz) => (buzz as { type: string }).type === "notification",
+    ),
+  ).toEqual([{ type: "notification", notification_type: "success" }]);
+  // The model that stays, its card; the MainButton gone with the screen.
+  await expect(
+    page.getByRole("heading", { name: `${name} ${colour.right}`, exact: true }),
+  ).toBeFocused();
+  await expect.poll(main).toMatchObject({ is_visible: false });
+  expect(await held(page, bearer, stays.variant)).toBe(5);
+  expect(await held(page, bearer, typo.variant)).toBe(0);
+});
+
+test("inside Telegram «Зберегти назву» is the rename sheet's MainButton, held while its answer is on its way (stage 2, goods task list, P1-2)", async ({
+  page,
+}) => {
+  const { main, fire } = await telegram(page);
+  const bearer = await token(page);
+  const name = `Кнопка ${randomUUID().slice(0, 8)}`;
+  await model(page, bearer, { concept: name, variant: { color: "графіт" } }, 0);
+  let answer = (): void => undefined;
+  const answered = new Promise<void>((done) => {
+    answer = done;
+  });
+  await page.route("**/api/v1/catalog/models/*/rename", async (route) => {
+    await answered;
+    await route.continue();
+  });
+  await enter(page, "Моделі", "7.0");
+  await open(page, name, /графіт/);
+  const sheet = await renameSheet(page);
+  await expect.poll(main).toMatchObject({
+    is_visible: true,
+    is_active: true,
+    text: "Зберегти назву",
+  });
+  await expect(sheet.locator(".sheet-done")).toHaveCount(0);
+  // No name, no save.
+  await sheet.getByLabel("Назва моделі", { exact: true }).fill("");
+  await expect.poll(main).toMatchObject({ is_visible: true, is_active: false });
+  await sheet.getByLabel("Назва моделі", { exact: true }).fill(name);
+  await sheet.getByLabel("Колір", { exact: true }).fill("сірий");
+  await fire("main_button_pressed");
+  // On its way: the ring, and the sheet stands.
+  await expect
+    .poll(main)
+    .toMatchObject({ is_visible: true, is_progress_visible: true });
+  await expect(sheet.getByLabel("Колір", { exact: true })).toBeDisabled();
+  await page.keyboard.press("Escape");
+  await expect(sheet).toBeVisible();
+  answer();
+  await expect(
+    page.getByText(`Назву змінено: «${name} графіт» → «${name} сірий».`),
+  ).toBeVisible();
+  await expect(sheet).toHaveCount(0);
+  await expect.poll(main).toMatchObject({ is_visible: false });
+});
+
+test("the merge's question fits Telegram's popup: long names shortened alike with «…», the question whole (stage 2, goods task list, P1-2)", async ({
+  page,
+}) => {
+  const { told, fire } = await telegram(page);
+  const bearer = await token(page);
+  const tag = randomUUID().slice(0, 8);
+  const name = `Довга ${tag} ${"оксамит ".repeat(20).trim()}`;
+  const colour = colours();
+  await duplicate(page, bearer, name, colour);
+  await enter(page, "Моделі", "7.0");
+  await open(page, name, new RegExp(colour.typo));
+  await mergeWith(page, name, `${name} ${colour.right}`);
+  await expect(
+    page.getByRole("group", { name: `${name} ${colour.typo}`, exact: true }),
+  ).toBeVisible();
+  await fire("main_button_pressed");
+  await expect
+    .poll(async () => (await told("web_app_open_popup")).length)
+    .toBe(1);
+  const [asked] = (await told("web_app_open_popup")) as { message: string }[];
+  const message = asked?.message ?? "";
+  expect(message.length).toBeLessThanOrEqual(256);
+  expect(message.length).toBeGreaterThan(240);
+  expect(message).toMatch(
+    new RegExp(
+      `^Об’єднати «Довга ${tag} оксамит[^«»]*…» з «Довга ${tag} оксамит[^«»]*…»\\? Скасувати не можна\\.$`,
+    ),
+  );
+  await fire("popup_closed", { button_id: "no" });
+});
+
+test("at 360 px, light and dark, the model's big tag and the merge's two tags fit (stage 2, goods task list, P1-2)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  const bearer = await token(page);
+  const name = `Тема ${randomUUID().slice(0, 8)}`;
+  const colour = colours();
+  await duplicate(page, bearer, name, colour);
+  await enter(page, "Моделі");
+  await open(page, name, new RegExp(colour.typo));
+  const fits = (): Promise<boolean> =>
+    page.evaluate(() => document.documentElement.scrollWidth <= innerWidth);
+  const tags: string[] = [];
+  for (const scheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    // The model's big tag, its ⋯ on it.
+    await expect(page.locator(".model-hero")).toBeVisible();
+    expect(await fits()).toBe(true);
+    await page.screenshot({
+      path: `test-results/models-card-360-${scheme}.png`,
+    });
+    // The merge: two tags with their stock, «Об’єднати» in the dock.
+    await mergeWith(page, name, `${name} ${colour.right}`);
+    const goes = page.getByRole("group", {
+      name: `${name} ${colour.typo}`,
+      exact: true,
+    });
+    await expect(goes).toBeVisible();
+    await expect(mergeButton(page)).toBeEnabled();
+    tags.push(
+      await goes
+        .locator(".merge-tag-in")
+        .evaluate((element) => getComputedStyle(element).backgroundColor),
+    );
+    expect(await fits()).toBe(true);
+    await page.screenshot({
+      path: `test-results/models-merge-360-${scheme}.png`,
+    });
+    // Asked: the sheet of the popup's words.
+    await mergeButton(page).click();
+    const ask = page.getByRole("dialog");
+    await expect(ask).toHaveAttribute("data-ready", "");
+    expect(await fits()).toBe(true);
+    await page.screenshot({
+      path: `test-results/models-ask-360-${scheme}.png`,
+    });
+    await ask.getByRole("button", { name: "Ні", exact: true }).click();
+    await page
+      .getByRole("button", { name: `Назад до моделі «${name} ${colour.typo}»` })
+      .click();
+    await expect(page.locator("h1.model-hero-name")).toBeFocused();
+  }
+  // The tags drawn in each theme's own colours.
+  expect(tags[0]).not.toBe(tags[1]);
 });

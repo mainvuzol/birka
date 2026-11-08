@@ -758,11 +758,16 @@ function Workspace({
         // Its own count, kept beside it (owner decision, 2026-10-21).
         misses: saved?.misses ?? 0,
       });
-      if (saved) setTab("models");
+      if (saved) {
+        setTab("models");
+        // Checked once by itself on «Моделі», as every kept operation
+        // (stage 2, goods task list, P1-2).
+        loadedFromDisk("correction");
+      }
     } catch {
       setCorrectionStorageError(true);
     }
-  }, [correctionKey, canCorrect]);
+  }, [correctionKey, canCorrect, loadedFromDisk]);
   // What the store owes its suppliers: the owner's and managers' (owner
   // decision, 2026-10-01); a seller never sees it.
   const canSeeInvoices = store.permissions.includes("supplier:debt");
@@ -888,6 +893,21 @@ function Workspace({
   const [model, setModel] = useState<Opened | null>(null);
   const [tillTyped, setTillTyped] = useState("");
   const [fromModel, setFromModel] = useState<Tab | null>(null);
+  // Opened from «Залишки», for whoever has no till: «← Залишки» over it,
+  // marked with «Ще» (stage 2, goods task list, P2-5).
+  const [modelFromStock, setModelFromStock] = useState(false);
+  // The warehouse «Залишки» shows, kept while a model's detail is open over
+  // it: «← Залишки» comes back to it. Known by the scope it was chosen in.
+  const [stockPlace, setStockPlace] = useState<{
+    scope: string;
+    place: string;
+  } | null>(null);
+  // Left for anything but a model it opened: chosen afresh next time, none
+  // taken while there are several.
+  useEffect(() => {
+    if (tab !== "stock" && !(tab === "model" && modelFromStock))
+      setStockPlace(null);
+  }, [tab, modelFromStock]);
   const [moneyPeriod, setMoneyPeriod] = useState<Period>("today");
   const [reportRange, setReportRange] = useState<{
     from: string;
@@ -2060,8 +2080,15 @@ function Workspace({
       ...(store.permissions.includes("sale:create")
         ? { forgetsOrder: true as const }
         : {}),
-      // A model's detail too, and what it opened.
-      also: ["returns", "deposit", "model", ...(fromModel ? [fromModel] : [])],
+      // A model's detail too, and what it opened — not one «Залишки»
+      // opened, which is «Ще»'s (stage 2, goods task list, P2-5).
+      also: [
+        "returns",
+        "deposit",
+        ...(modelFromStock
+          ? []
+          : (["model", ...(fromModel ? [fromModel] : [])] as Tab[])),
+      ],
       tabbed: true,
     },
     // «Замовлення», a tab of its own: its list, its card and «+ Нове
@@ -2489,7 +2516,17 @@ function Workspace({
   /** A screen the model's detail opens, or the detail itself. */
   const fromModelTo = (section: Tab): void => {
     setTab(section);
-    saleButton.current?.focus();
+    (modelFromStock ? moreButton : saleButton).current?.focus();
+  };
+  // So on a model's detail «Залишки» opened (stage 2, goods task list,
+  // P2-5).
+  const stockBack: MoreBack = {
+    go: () => {
+      setTab("stock");
+      moreButton.current?.focus();
+    },
+    held: sending,
+    to: "Залишки",
   };
   const modelBack = (section: Tab): MoreBack =>
     fromModel === section && model
@@ -2564,6 +2601,7 @@ function Workspace({
   const foundModel = (opened: Opened, typed: string): void => {
     setTodayTyped(typed);
     setModel(opened);
+    setModelFromStock(false);
     setTab("model");
     setFromToday("model");
     todayButton.current?.focus();
@@ -2731,7 +2769,8 @@ function Workspace({
       ? supplierRefused.said
       : null;
   // A correction's own screens: wherever «Виправити залишок» is made — the
-  // model's detail, «Залишки», «Інвентаризація».
+  // model's detail, «Інвентаризація» — and «Залишки», whose balances it
+  // reads again, where a kept one read from the phone opens.
   const correcting =
     tab === "model" || tab === "stock" || tab === "stocktaking";
   // An order's step answered is recorded: only its order is not shown yet.
@@ -3343,6 +3382,7 @@ function Workspace({
               ? {
                   openModel: (opened: Opened, typed: string) => {
                     setModel(opened);
+                    setModelFromStock(false);
                     setTillTyped(typed);
                     fromModelTo("model");
                   },
@@ -3425,10 +3465,16 @@ function Workspace({
             store={store}
             token={token}
             scopeKey={key}
-            journalKey={adjustmentKey}
-            blocked={
-              otherThanAdjustment || adjustmentStorageError || countStorageError
-            }
+            place={stockPlace?.scope === key ? stockPlace.place : ""}
+            choose={(place) => {
+              setStockPlace({ scope: key, place });
+            }}
+            open={(opened) => {
+              setModel(opened);
+              setModelFromStock(true);
+              setTab("model");
+              moreButton.current?.focus();
+            }}
             back={moreBack}
           />
         ) : // Never opened without the right: nothing is said of the rule
@@ -3446,7 +3492,13 @@ function Workspace({
             blocked={
               otherThanAdjustment || adjustmentStorageError || countStorageError
             }
-            back={fromToday === "model" ? todayBack : tillBack}
+            back={
+              fromToday === "model"
+                ? todayBack
+                : modelFromStock
+                  ? stockBack
+                  : tillBack
+            }
             receive={() => {
               fromModelTo("receive");
               setFromModel("receive");
@@ -3784,7 +3836,9 @@ function Workspace({
             store={store}
             token={token}
             journalKey={correctionKey}
-            blocked={otherThanCorrections}
+            loaded={fromDisk.has("correction")}
+            // Its own journal unread: nothing sent, the plate says why.
+            blocked={otherThanCorrections || correctionStorageError}
             back={moreBack}
           />
         ) : // Never opened without the right: nothing is said of the rule
