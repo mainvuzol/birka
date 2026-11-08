@@ -238,6 +238,12 @@ on a fresh seed each, one failure ending the run.
   шоколад 70.0 см», «M 18», the held pin «2», «Можна продати 18 шт.» (the
   E2E base's many warehouses make the chips long; the bar halfway down
   is a whole-page capture of a fixed bar).
+- **GitHub's first run** (PR #181, `33b5a7f7`): 992 of 993 — batch 11's
+  «a list ready to approve is three taps from «Сьогодні»» held its
+  teardown past 30 s: approved, the warehouses are read again through a
+  route that asks the real server, one still on its way as the journey
+  ended (as #176, #177). It now ends once that read is asked and every
+  read is answered; 8 of 8 on repeat and `today.spec` 37 of 37 here.
 - Logs are in `~/.cache/birka-runtime/helpers/`.
 
 ## For the owner
