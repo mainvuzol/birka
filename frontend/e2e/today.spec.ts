@@ -392,6 +392,19 @@ async function lists(
       });
     },
   );
+  // A list opened from its tag: no line or file read here.
+  await page.route(
+    `**/api/v1/snapshots/*/lines?store_id=${store}&**`,
+    async (route) => {
+      await route.fulfill({ json: { items: [], has_more: false } });
+    },
+  );
+  await page.route(
+    `**/api/v1/snapshots/*/parts?store_id=${store}`,
+    async (route) => {
+      await route.fulfill({ json: { items: [] } });
+    },
+  );
 }
 
 /** The night's copy, made today at 03:15. */
@@ -1241,7 +1254,6 @@ test("each verb opens its section, and its «←» comes back to «Сьогод�
   const back = page.getByRole("button", { name: "Назад до «Сьогодні»" });
   for (const [verb, heading] of [
     ["Переглянути", "Резервні копії"],
-    ["Переглянути й затвердити", "Початкові залишки"],
     ["Оглянути", "Брак"],
   ] as const) {
     await waiting(page).getByRole("button", { name: verb, exact: true }).click();
@@ -1258,6 +1270,30 @@ test("each verb opens its section, and its «←» comes back to «Сьогод�
     ).toBeVisible();
     await expect(tab(page, "Сьогодні")).toBeFocused();
   }
+  // The one list waiting for approval: the verb opens it, not the lists
+  // (stage 2, goods task list, P0-6). A step back are the lists, and from
+  // them «← Сьогодні».
+  await waiting(page)
+    .getByRole("button", { name: "Переглянути й затвердити", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Зошит", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "До списків" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Початкові залишки", exact: true }),
+  ).toBeVisible();
+  await expect(back).toHaveText("← Сьогодні");
+  await back.click();
+  await expect(
+    page.getByRole("heading", { name: "Сьогодні", exact: true }),
+  ).toBeVisible();
+  // Opened again from «Ще», the lists: the tag's list is the tag's only.
+  await section(page, "Початкові залишки");
+  await expect(
+    page.getByRole("heading", { name: "Початкові залишки", exact: true }),
+  ).toBeVisible();
+  await tab(page, "Сьогодні").click();
   // Left by the menu, the section a tag opened is opened afresh from «Ще»:
   // «← Ще», as before.
   await waiting(page).getByRole("button", { name: "Оглянути" }).click();
@@ -1283,6 +1319,65 @@ test("each verb opens its section, and its «←» comes back to «Сьогод�
     .click();
   await expect(tab(page, "Замовлення")).toHaveAttribute("aria-current", "page");
   await expect(tab(page, "Замовлення")).toBeFocused();
+});
+
+test("a list ready to approve is three taps from «Сьогодні», with no scrolling: the tag's verb, «Затвердити · 5 шт.», «Так, затвердити» (stage 2, goods task list, P0-6)", async ({
+  page,
+}) => {
+  await twoStores(page);
+  // Nothing else waits: the lists' tag is the first.
+  await orders(page, centre, [0, 0, 0]);
+  await orders(page, market, [0, 0, 0]);
+  await lists(page, centre, [5]);
+  const sent: unknown[] = [];
+  await page.route("**/api/v1/snapshots/*/approve?**", async (route) => {
+    sent.push(route.request().postDataJSON());
+    await route.fulfill({ json: {} });
+  });
+  await onToday(page);
+  const verb = waiting(page).getByRole("button", {
+    name: "Переглянути й затвердити",
+    exact: true,
+  });
+  await expect(verb).toBeInViewport();
+  await verb.click();
+  const main = page.getByRole("button", { name: "Затвердити · 5 шт." });
+  await expect(main).toBeInViewport();
+  await main.click();
+  const sheet = page.getByRole("dialog", { name: "Затвердити «Зошит»?" });
+  await expect(sheet).toHaveAttribute("data-ready", "");
+  await expect(sheet.locator(".opening-units")).toHaveText("5 шт.");
+  await expect(sheet).toContainText("Скасувати це потім не можна.");
+  const yes = sheet.getByRole("button", { name: "Так, затвердити" });
+  await expect(yes).toBeInViewport();
+  await yes.click();
+  await expect.poll(() => sent).toEqual([{ expected_review_revision: 1 }]);
+  await expect(sheet).toHaveCount(0);
+});
+
+test("two lists ready to approve: the tag's verb opens the lists (stage 2, goods task list, P0-6)", async ({
+  page,
+}) => {
+  await twoStores(page);
+  await orders(page, centre, [0, 0, 0]);
+  await orders(page, market, [0, 0, 0]);
+  await lists(page, centre, [5, 7]);
+  await onToday(page);
+  await waiting(page)
+    .getByRole("button", { name: "Переглянути й затвердити", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Початкові залишки", exact: true }),
+  ).toBeVisible();
+  // The lists read — the two ready, the one approved and another store's —
+  // not the first opened.
+  await expect(page.getByRole("article", { name: "Список Зошит" })).toHaveCount(
+    4,
+  );
+  await expect(page.locator(".opening-hero-in")).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Назад до «Сьогодні»" }),
+  ).toHaveText("← Сьогодні");
 });
 
 test("a tag goes by itself once its work is done, at the next read, and the badge with it", async ({

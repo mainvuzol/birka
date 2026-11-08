@@ -210,89 +210,96 @@ export function PartsSection({
         return (
           <article
             key={part.part_id}
-            className={removed ? "line part-removed" : "line"}
+            // A row tag, as the list's lines (stage 2, goods task list,
+            // P0-6).
+            className={`today-tag tag-row tag-outline opening-part${
+              removed ? " part-removed tone-offline ring" : " tone-ink"
+            }`}
             aria-label={`Файл ${String(part.part_no)}`}
           >
-            <strong>
-              {part.part_no}. {partName(part)}
-            </strong>
-            {part.source !== null && (
-              <small>Звідки: {visible(part.source)}</small>
-            )}
-            <small>
-              Рядки {part.first_line_no}–{part.last_line_no}
-              {removed
-                ? ` · рядків ${String(part.lines)}`
-                : ` · розібрано ${String(answered)} з ${String(part.lines)}`}
-            </small>
-            <small>
-              Додано: {visible(part.added_by_name ?? "—")},{" "}
-              {when(part.added_at)}
-            </small>
-            {part.removed_at !== null && (
+            <div className="today-tag-body">
+              <span className="today-tag-eyelet" aria-hidden="true" />
+              <strong>
+                {part.part_no}. {partName(part)}
+              </strong>
+              {part.source !== null && (
+                <small>Звідки: {visible(part.source)}</small>
+              )}
               <small>
-                Прибрано: {visible(part.removed_by_name ?? "—")},{" "}
-                {when(part.removed_at)}
+                Рядки {part.first_line_no}–{part.last_line_no}
+                {removed
+                  ? ` · рядків ${String(part.lines)}`
+                  : ` · розібрано ${String(answered)} з ${String(part.lines)}`}
               </small>
-            )}
-            {!removed && part.photo_lines_elsewhere > 0 && (
               <small>
-                Рядків цього файлу, що вже є в інших файлах списку (те саме фото
-                й рядок): {part.photo_lines_elsewhere}. Якщо файл додано
-                помилково, приберіть його.
+                Додано: {visible(part.added_by_name ?? "—")},{" "}
+                {when(part.added_at)}
               </small>
-            )}
-            <div className="actions">
-              <button
-                className="quiet"
-                onClick={() => {
-                  show(part);
-                }}
-              >
-                Показати рядки
-              </button>
-              {editable && !removed && (
+              {part.removed_at !== null && (
+                <small>
+                  Прибрано: {visible(part.removed_by_name ?? "—")},{" "}
+                  {when(part.removed_at)}
+                </small>
+              )}
+              {!removed && part.photo_lines_elsewhere > 0 && (
+                <small>
+                  Рядків цього файлу, що вже є в інших файлах списку (те саме
+                  фото й рядок): {part.photo_lines_elsewhere}. Якщо файл додано
+                  помилково, приберіть його.
+                </small>
+              )}
+              <div className="actions">
                 <button
                   className="quiet"
-                  disabled={last || busy || blocked}
                   onClick={() => {
-                    setProblem(null);
-                    setAsking(part.part_id);
+                    show(part);
                   }}
                 >
-                  {asked.button}
+                  Показати рядки
                 </button>
-              )}
-            </div>
-            {editable && last && (
-              <p className="hint">
-                {part.kind === "FILE" ? LAST_PART : LAST_TYPED_PART}
-              </p>
-            )}
-            {asking === part.part_id && !last && (
-              <div className="notice" aria-label={`${asked.button}?`}>
-                <p>{asked.question}</p>
-                <div className="actions">
-                  <button
-                    disabled={busy || blocked}
-                    onClick={() => {
-                      void remove(part);
-                    }}
-                  >
-                    Так, прибрати
-                  </button>
+                {editable && !removed && (
                   <button
                     className="quiet"
-                    disabled={busy}
+                    disabled={last || busy || blocked}
                     onClick={() => {
-                      setAsking(null);
+                      setProblem(null);
+                      setAsking(part.part_id);
                     }}
                   >
-                    Скасувати
+                    {asked.button}
                   </button>
-                </div>
+                )}
               </div>
-            )}
+              {editable && last && (
+                <p className="hint">
+                  {part.kind === "FILE" ? LAST_PART : LAST_TYPED_PART}
+                </p>
+              )}
+              {asking === part.part_id && !last && (
+                <div className="notice" aria-label={`${asked.button}?`}>
+                  <p>{asked.question}</p>
+                  <div className="actions">
+                    <button
+                      disabled={busy || blocked}
+                      onClick={() => {
+                        void remove(part);
+                      }}
+                    >
+                      Так, прибрати
+                    </button>
+                    <button
+                      className="quiet"
+                      disabled={busy}
+                      onClick={() => {
+                        setAsking(null);
+                      }}
+                    >
+                      Скасувати
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </article>
         );
       })}

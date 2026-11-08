@@ -6956,3 +6956,258 @@ section.receive-list {
 .stocktake-done .stub-line {
   margin: 0 0 4px;
 }
+/* «Початкові залишки» in the tag's system (stage 2, goods task list,
+   P0-5, P0-6). The lists, a row tag each: the sticker left of «Відкрити»
+   at the foot. Empty, one line on a blank tag. */
+.opening-lists,
+.opening-lines {
+  margin: 12px 0 0;
+}
+.opening-tag-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 4px;
+}
+.opening-tag-foot .tag-verb {
+  margin-top: 0;
+}
+.opening-empty {
+  margin: 0;
+  text-align: center;
+}
+/* A list's big tag (spec §5 «Большая бирка»): its warehouse large, its
+   state's sticker, how far it is answered over a bar of 6 (spec §6.24). */
+.opening-hero {
+  margin: 12px 0 16px;
+}
+.opening-hero-in {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 30px 16px 16px;
+}
+.opening-hero-in::before {
+  content: "";
+  position: absolute;
+  top: 12px;
+  left: calc(50% - 6px);
+  box-sizing: border-box;
+  width: var(--eyelet-hero);
+  height: var(--eyelet-hero);
+  border: 1.5px solid var(--edge);
+  border-radius: 999px;
+  background: var(--paper);
+}
+.opening-hero-in:focus-visible {
+  outline-offset: -3px;
+}
+.openings .opening-hero-place {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 26px;
+}
+.openings .opening-state {
+  margin: 2px 0 4px;
+  padding: 2px 8px;
+}
+.opening-hero-in .t-meta {
+  margin: 0;
+  color: var(--pencil);
+}
+.opening-hero-in .stub {
+  align-self: stretch;
+  margin: 8px 0 0;
+  background-color: var(--fold);
+}
+.opening-progress {
+  align-self: stretch;
+  margin-top: 8px;
+}
+.opening-progress .t-meta {
+  margin: 0 0 6px;
+}
+.openings .opening-rest {
+  margin: 6px 0 0;
+}
+.progress {
+  position: relative;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--fold);
+  box-shadow: inset 0 0 0 1px var(--hairline);
+}
+.progress > span {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--paid);
+}
+/* The switch's three, each word allowed two lines at 360 px, and ⋯ for
+   the rest beside it. */
+.opening-modes {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 8px;
+  margin: 16px 0 0;
+}
+.opening-modes .mode-switch {
+  margin: 0;
+}
+.opening-modes .mode-switch button {
+  font-size: 14px;
+  line-height: 17px;
+  overflow-wrap: anywhere;
+}
+.opening-others {
+  min-width: var(--touch);
+  min-height: 52px;
+  padding: 0 12px;
+  border: 1px solid var(--edge);
+  border-radius: 14px;
+  font-weight: 650;
+}
+.opening-others[aria-pressed="true"] {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+.opening-line .catalog-raw,
+.opening-part strong {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.opening-line .t-meta,
+.opening-part small {
+  margin: 0;
+  color: var(--pencil);
+  overflow-wrap: anywhere;
+}
+.opening-part .actions {
+  margin-top: 4px;
+}
+/* A line's own screen (P0-5): the line as written on the notebook's
+   paper, large; what was read under it; then the model, the size, where
+   the count comes from — what the line says chosen, dashed until it is
+   touched (P6; В-Г7 (а)). */
+.opening-task {
+  overflow-wrap: anywhere;
+}
+.opening-paper {
+  margin: 12px 0 0;
+  padding: 14px 16px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-m);
+  background: var(--paper);
+  box-shadow: var(--shadow-1);
+}
+.opening-paper .catalog-raw {
+  margin: 0;
+}
+.opening-evidence {
+  margin: 8px 0 0;
+}
+.opening-evidence .t-meta,
+.opening-task .opening-why,
+.opening-task .opening-read {
+  margin: 4px 0 0;
+  color: var(--pencil);
+}
+.opening-step {
+  margin: 20px 0 8px;
+  color: var(--pencil);
+}
+.opening-ways .opening-step {
+  margin-bottom: 8px;
+}
+.opening-ways {
+  display: grid;
+  gap: 8px;
+  margin: 16px 0 0;
+}
+.opening-ways legend.t-row {
+  margin-bottom: 8px;
+}
+.opening-model {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.opening-model .t-row {
+  margin: 0;
+  min-width: 0;
+}
+.opening-sizes .size-cell.long .size-letter {
+  font-size: 20px;
+  line-height: 24px;
+}
+.size-cell.suggested {
+  border-style: dashed;
+  border-color: var(--suggest);
+  background: var(--card);
+}
+.opening-split {
+  margin: 0;
+  padding: 6px 0 0;
+  list-style: none;
+}
+/* «Звідки кількість» (spec §6.15's list): a 52 px card a way, its radio
+   at the left; chosen, outlined in ink; what the line said, dashed, with
+   «Прочитали в рядку» under it. */
+label.way-option {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: 12px;
+  min-height: 52px;
+  margin: 0;
+  padding: 8px 16px;
+  box-sizing: border-box;
+  border: 1px solid var(--edge);
+  border-radius: var(--r-l);
+  background: var(--card);
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 600;
+}
+.way-option.chosen {
+  border-color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--ink);
+}
+.way-option.read {
+  border-style: dashed;
+  border-color: var(--suggest);
+}
+.way-option-read {
+  grid-column: 2;
+  color: var(--pencil);
+}
+.opening-count,
+.opening-note,
+.opening-skip {
+  margin: 16px 0 0;
+}
+.opening-alloc {
+  margin-top: 16px;
+}
+.opening-quiet {
+  margin: 16px 0 0;
+}
+/* «Затвердити «…»?»: how many, large, over what they become. */
+.opening-units {
+  margin: 0 0 8px;
+  font-variant-numeric: tabular-nums;
+}
+.opening-new .opening-places {
+  margin: 12px 0 0;
+}
+.openings .opening-place {
+  margin: 12px 0 0;
+}
