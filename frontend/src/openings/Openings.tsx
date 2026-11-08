@@ -1,6 +1,11 @@
-import { useState } from "react";
-import type { JSX } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef, useState } from "react";
+import type { JSX, RefObject } from "react";
+import {
+  useInfiniteQuery,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import type { InfiniteData } from "@tanstack/react-query";
 import {
   ApiError,
   SlowAnswer,
@@ -11,44 +16,43 @@ import {
 } from "@/shared/api";
 import { Unread } from "@/shared/Unread";
 import type { Location, Store } from "@/orders/types";
-import { AddedStub, CatalogPicker } from "@/inventory/CatalogPicker";
-import type { ReceivableVariant, SizeOption } from "@/inventory/receiptTypes";
+import type { SizeOption } from "@/inventory/receiptTypes";
 import { visible } from "@/shared/visible";
 import { FileChooser } from "./FileChooser";
 import { fileProblemTexts } from "./fileErrors";
+import { LineEvidence, LineTask, sizeText } from "./Line";
 import { AddFile, AddLines, PartsSection, partName } from "./Parts";
 import { MAX_BODY_BYTES, TOO_LARGE, bodyBytes } from "./stockFile";
 import type { StockFileRead } from "./stockFile";
 import {
   basisLabels,
   cannotReceiveText,
-  fileReasonLabels,
   lineStatusLabels,
   listConflict,
   listRefusal,
   listStatusLabels,
   number,
-  plural,
-  priceKindLabels,
-  sizesWithCounts,
   sourceQuantity,
-  times,
   typedTooMuch,
 } from "./types";
 import type {
   Basis,
   LineStatus,
   ListLine,
-  Reading,
-  ShownSize,
-  SplitReading,
   StockList,
   StockPart,
 } from "./types";
 import { BackToMore } from "@/shared/More";
 import type { MoreBack } from "@/shared/More";
 import { Back } from "@/shared/Back";
+import { BlankTag } from "@/shared/BlankTag";
+import { Eyelet } from "@/shared/Eyelet";
+import { ModeSwitch } from "@/shared/ModeSwitch";
+import { CARRIED_TAP, usePanelRoom } from "@/shared/panel";
 import { ScreenHeader } from "@/shared/ScreenHeader";
+import { Sheet } from "@/shared/Sheet";
+import { Stub } from "@/shared/Stub";
+import { buzz, useMainButton } from "@/shared/telegram";
 
 /**
  * «Початкові залишки»: the goods already in a shop, entered as a list.
@@ -78,6 +82,13 @@ import { ScreenHeader } from "@/shared/ScreenHeader";
  * While the store that started a shared warehouse's list does not trade,
  * the list is only rejected, through the other store, which releases the
  * warehouse for a new list there (owner decision, 2026-10-09).
+ *
+ * In the tag's system (stage 2, goods task list, P0-5, P0-6): the lists as
+ * row tags under the screen's title, «Новий список» Telegram's MainButton
+ * and its form a screen of its own; a list's big tag with its progress, its
+ * lines on a switch of three, each line answered on a task's screen of its
+ * own and the next opened by itself; the approval Telegram's MainButton,
+ * confirmed in a sheet with its number large.
  */
 export function Openings({
   store,
@@ -85,6 +96,8 @@ export function Openings({
   scopeKey,
   blocked,
   back,
+  task,
+  opened = null,
 }: {
   store: Store;
   token: string;
@@ -94,10 +107,24 @@ export function Openings({
   /** «← Ще» over the heading: a section opened from «Ще» (navigation task
    * list, P0-4). */
   back?: MoreBack | undefined;
+  /** The menu steps aside while a line is answered (P0-5). */
+  task?: ((shown: boolean) => void) | undefined;
+  /** The list «Сьогодні»'s tag opens itself, the one waiting there (P0-6). */
+  opened?: string | null;
 }): JSX.Element {
   const canImport = store.permissions.includes("snapshot:import");
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [openId, setOpenId] = useState<string | null>(opened);
   const [creating, setCreating] = useState(false);
+  // Back from a new list: the lists' heading, at the top (review,
+  // 2026-11-08).
+  const heading = useRef<HTMLHeadingElement>(null);
+  const fromNew = useRef(false);
+  useEffect(() => {
+    if (creating || !fromNew.current) return;
+    fromNew.current = false;
+    window.scrollTo(0, 0);
+    heading.current?.focus();
+  }, [creating]);
   const lists = useQuery({
     queryKey: ["stock-lists", scopeKey, store.id],
     queryFn: () =>
@@ -117,6 +144,12 @@ export function Openings({
   const warehouse = (id: string): string =>
     visible(locations.data?.find((l) => l.id === id)?.name ?? "склад");
   const open = lists.data?.items.find((l) => l.snapshot_id === openId);
+  // The list a draft's command made, its answer lost, opened — from its
+  // tag here or «Сьогодні»'s: made, so nothing of the draft is sent again
+  // (review, fourth round, 2026-10-09; 2026-11-08).
+  useEffect(() => {
+    if (open) forgetDraftOf(store, open);
+  }, [open, store]);
   const cache = useQueryClient();
   // A list saved or found is opened once the lists are read again. A read
   // still on its way — the screen's first, slow while «Сьогодні» reads at
@@ -137,6 +170,21 @@ export function Openings({
         query.queryKey[0] === "stock-lists" && query.queryKey[1] !== scopeKey,
     });
   };
+  // «Сьогодні»'s list, its read still on its way: the list, not the lists,
+  // is what opens.
+  const awaited = openId !== null && lists.isPending;
+  // The lists' one action, Telegram's: «Новий список» (P0-6); not while
+  // «Сьогодні»'s list is on its way.
+  const here = open === undefined && !creating && !awaited;
+  const begin = (): void => {
+    if (!blocked) setCreating(true);
+  };
+  const main = useMainButton("Новий список", begin, {
+    shown: canImport && here,
+    active: !blocked,
+  });
+  const dock = useRef<HTMLDivElement>(null);
+  usePanelRoom(dock, canImport && here && !main);
 
   if (open)
     return (
@@ -147,14 +195,37 @@ export function Openings({
         scopeKey={scopeKey}
         warehouse={warehouse(open.location_id)}
         blocked={blocked}
+        task={task}
         close={() => {
           setOpenId(null);
+        }}
+      />
+    );
+  if (creating && canImport)
+    return (
+      <NewList
+        store={store}
+        token={token}
+        scopeKey={scopeKey}
+        locations={(locations.data ?? []).filter(
+          (l) => l.is_active && l.can_receive && !l.damaged_returns,
+        )}
+        blocked={blocked}
+        done={(list) => {
+          openOnceRead(list.snapshot_id);
+        }}
+        openList={openOnceRead}
+        cancel={() => {
+          fromNew.current = true;
+          setCreating(false);
         }}
       />
     );
   return (
     <>
       <ScreenHeader
+        ref={heading}
+        focusable
         title="Початкові залишки"
         back={back && <BackToMore back={back} />}
         aside={
@@ -170,43 +241,10 @@ export function Openings({
         }
       />
       <section className="openings">
-        <p className="hint">
-          Товар, що вже лежить у магазині, вноситься списком — рядок за рядком, як
-          у зошиті: текстом або файлом від парсера. Кожен рядок розбирає людина,
-          потім власник затверджує список, і він стає початковим залишком складу.
-          Склад має бути без жодного руху товару: поки список чекає рішення, на
-          такому складі нічого не приймають, не продають і не виправляють.
-        </p>
-        {canImport &&
-          (creating ? (
-            <NewList
-              store={store}
-              token={token}
-              scopeKey={scopeKey}
-              locations={(locations.data ?? []).filter(
-                (l) => l.is_active && l.can_receive && !l.damaged_returns,
-              )}
-              blocked={blocked}
-              done={(list) => {
-                openOnceRead(list.snapshot_id);
-              }}
-              openList={openOnceRead}
-              cancel={() => {
-                setCreating(false);
-              }}
-            />
-          ) : (
-            <button
-              disabled={blocked}
-              onClick={() => {
-                setCreating(true);
-              }}
-            >
-              Новий список
-            </button>
-          ))}
         {lists.isPending ? (
-          <p role="status">Завантажуємо списки…</p>
+          <p role="status">
+            {awaited ? "Завантажуємо список…" : "Завантажуємо списки…"}
+          </p>
         ) : lists.error ? (
           <Unread
             error={lists.error}
@@ -215,43 +253,107 @@ export function Openings({
             }}
           />
         ) : lists.data.items.length === 0 ? (
-          <p>Списків ще немає.</p>
+          // The five lines of what a list is: one, on a blank tag (P0-6).
+          <BlankTag>
+            <p className="t-row opening-empty">
+              Списки із зошита — рядок за рядком. Поки список чекає, склад не
+              рухається.
+            </p>
+          </BlankTag>
         ) : (
-          lists.data.items.map((list) => (
-            <article
-              className="line catalog-card"
-              key={list.snapshot_id}
-              aria-label={`Список ${visible(list.source_document_ref ?? "")}`.trim()}
-            >
-              <strong>
-                {listName(list)} · склад «{warehouse(list.location_id)}»
-              </strong>
-              <span className="badge">{listStatusLabels[list.status]}</span>
-              {list.store_id !== store.id && (
-                <small>Веде магазин «{visible(list.store_name ?? "—")}»</small>
-              )}
-              <small>
-                Рядків: {list.summary.lines} · розібрано{" "}
-                {list.summary.resolved + list.summary.skipped} · одиниць{" "}
-                {list.summary.units}
-              </small>
-              <button
-                className="quiet"
-                onClick={() => {
-                  // The list a draft's command made, its answer lost, found
-                  // here: made, so nothing of the draft is sent again (review,
-                  // fourth round, 2026-10-09).
-                  forgetDraftOf(store, list);
+          <div className="tags opening-lists">
+            {lists.data.items.map((list) => (
+              <ListTag
+                key={list.snapshot_id}
+                list={list}
+                store={store}
+                warehouse={warehouse(list.location_id)}
+                open={() => {
                   setOpenId(list.snapshot_id);
                 }}
-              >
-                Відкрити
-              </button>
-            </article>
-          ))
+              />
+            ))}
+          </div>
+        )}
+        {canImport && !main && (
+          // Outside Telegram, its MainButton as the dock's one button.
+          <div className="pay-panel order-dock" ref={dock}>
+            <button
+              type="button"
+              className="main-mimic"
+              disabled={blocked}
+              onClick={begin}
+            >
+              Новий список
+            </button>
+          </div>
         )}
       </section>
     </>
+  );
+}
+
+/** «Розібрано 120 з 412 · не товар 6»: how far a list is answered. */
+function answeredText(list: StockList): string {
+  const { lines, resolved, skipped } = list.summary;
+  return `Розібрано ${number(resolved)} з ${number(lines)}${
+    skipped > 0 ? ` · не товар ${number(skipped)}` : ""
+  }`;
+}
+
+const listTones: Record<StockList["status"], string> = {
+  IN_REVIEW: "tone-ink",
+  APPLIED: "tone-live",
+  REJECTED: "tone-offline",
+};
+
+/** A list on the lists' screen (P0-6): a row tag — «Зошит 1 · склад
+ * «Основний»», how far it is answered, its state's sticker, «Відкрити». */
+function ListTag({
+  list,
+  store,
+  warehouse,
+  open,
+}: {
+  list: StockList;
+  store: Store;
+  warehouse: string;
+  open: () => void;
+}): JSX.Element {
+  return (
+    <article
+      className={`today-tag tag-row tag-outline opening-tag ${listTones[list.status]}`}
+      aria-label={`Список ${visible(list.source_document_ref ?? "")}`.trim()}
+    >
+      <div className="today-tag-body">
+        <span className="today-tag-eyelet" aria-hidden="true" />
+        <h3 className="t-row today-tag-title">
+          <span>
+            {listName(list)} · склад «{warehouse}»
+          </span>
+        </h3>
+        <p className="t-meta today-tag-meta">{answeredText(list)}</p>
+        {list.store_id !== store.id && (
+          <p className="t-meta today-tag-meta">
+            Веде магазин «{visible(list.store_name ?? "—")}»
+          </p>
+        )}
+        <div className="opening-tag-foot">
+          <span className="badge">{listStatusLabels[list.status]}</span>
+          <button
+            type="button"
+            className="tag-verb"
+            onClick={() => {
+              // A tag's verb, felt (spec §6.9).
+              buzz("light");
+              open();
+            }}
+          >
+            Відкрити
+          </button>
+        </div>
+      </div>
+    </article>
   );
 }
 
@@ -424,6 +526,9 @@ function NewList({
           "Розділіть: решту додайте до списку через «Додати рядки вручну».",
         )
       : null;
+  // A draft's warehouse no longer offered — closed, or no longer taking
+  // goods — is no choice: another is chosen, or the only one taken (review,
+  // 2026-11-08).
   const chosen = locations.find((l) => l.id === draft.location_id);
   const warehouse = chosen ? visible(chosen.name) : null;
   // The owner's rule (2026-10-08): a warehouse whose list waits gets no
@@ -458,7 +563,7 @@ function NewList({
     draft.mode === "text"
       ? lines.length > 0 && !tooLong && !tooMuch
       : read?.ok === true;
-  const ready = draft.location_id !== "" && checked && content && !busy;
+  const ready = chosen !== undefined && checked && content && !busy;
 
   /**
    * `file`: the file whose name and date are not kept on the phone. Merged
@@ -582,216 +687,268 @@ function NewList({
     }
   }
 
+  // The only warehouse a list may be started at is said and taken: the
+  // phone choosing among one is not choosing, as at a delivery and a
+  // stocktake (owner decisions, 2026-10-10; stage 2, goods task list, P0-6).
+  const only = locations.length === 1 ? locations[0] : undefined;
+  // Never under a send whose answer is not known: its list is found by the
+  // warehouse it was sent for.
+  const taken = chosen !== undefined || draft.unsettled;
+  useEffect(() => {
+    if (!taken && only) setDraft({ location_id: only.id });
+    // `setDraft` merges into the draft as it is: only the one warehouse.
+  }, [taken, only]);
+  const title = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    window.scrollTo(0, 0);
+    title.current?.focus();
+  }, []);
+  const saving = !other && !mine;
+  const press = (): void => {
+    if (ready && !blocked) void send();
+  };
+  // The screen's one action, Telegram's (spec §6.4).
+  const main = useMainButton("Зберегти список", press, {
+    shown: saving,
+    progress: busy,
+    active: ready && !blocked,
+  });
+  const dock = useRef<HTMLDivElement>(null);
+  usePanelRoom(dock, saving && !main);
+
   return (
-    <form
-      className="notice"
-      aria-label="Новий список"
-      onSubmit={(event) => {
-        event.preventDefault();
-        void send();
-      }}
-    >
-      <h3>Новий список</h3>
-      <label>
-        Склад
-        <select
-          value={draft.location_id}
-          onChange={(event) => {
-            setDraft({ location_id: event.target.value });
-          }}
-        >
-          <option value="">Оберіть склад</option>
-          {locations.map((location) => (
-            <option key={location.id} value={location.id}>
-              {visible(location.name)}
-            </option>
-          ))}
-        </select>
-      </label>
-      {draft.location_id !== "" &&
-        (waiting.isPending ? (
-          <p role="status">Перевіряємо, чи на складі не чекає список…</p>
-        ) : waiting.error ? (
-          <div role="alert">
-            <p>{readText(waiting.error)}</p>
-            <button
-              type="button"
-              className="quiet"
-              onClick={() => {
-                void waiting.refetch();
-              }}
-            >
-              Перевірити ще раз
-            </button>
-          </div>
-        ) : mine ? (
-          <div className="notice" role="status">
-            <p>
-              {`Список «${listName(mine)}» уже збережено, хоч відповідь сервера й не дійшла вчасно. Відкрийте його — інші файли чи рядки додайте вже до нього.`}
-            </p>
-            <button
-              type="button"
-              onClick={() => {
-                // Made: nothing of this draft is to be sent again.
-                saveDraft(store, null);
-                openList(mine.snapshot_id);
-              }}
-            >
-              Відкрити список
-            </button>
-          </div>
+    <>
+      <ScreenHeader
+        ref={title}
+        focusable
+        title="Новий список"
+        back={
+          <Back go={cancel} held={busy} label="Назад до «Початкові залишки»">
+            <span aria-hidden="true">← </span>
+            Початкові залишки
+          </Back>
+        }
+      />
+      <form
+        className="openings opening-new"
+        aria-label="Новий список"
+        onSubmit={(event) => {
+          event.preventDefault();
+          press();
+        }}
+      >
+        {only ? (
+          <p className="t-row opening-place">Склад «{visible(only.name)}»</p>
         ) : (
-          other && (
+          <div className="chips opening-places" role="group" aria-label="Склад">
+            {locations.map((location) => (
+              <button
+                type="button"
+                className="chip"
+                key={location.id}
+                aria-pressed={draft.location_id === location.id}
+                onClick={() => {
+                  // A choice, felt (spec §4.4).
+                  buzz("selection");
+                  setDraft({ location_id: location.id });
+                }}
+              >
+                {visible(location.name)}
+              </button>
+            ))}
+          </div>
+        )}
+        {draft.location_id !== "" &&
+          (waiting.isPending ? (
+            <p role="status">Перевіряємо, чи на складі не чекає список…</p>
+          ) : waiting.error ? (
+            <div role="alert">
+              <p>{readText(waiting.error)}</p>
+              <button
+                type="button"
+                className="quiet"
+                onClick={() => {
+                  void waiting.refetch();
+                }}
+              >
+                Перевірити ще раз
+              </button>
+            </div>
+          ) : mine ? (
             <div className="notice" role="status">
               <p>
-                {other.store_state === "ACTIVE"
-                  ? `На складі «${warehouse ?? "—"}» уже чекає список «${listName(other)}» (веде магазин «${visible(other.store_name ?? "—")}»). Другий список для нього не створюють — додайте файл до наявного.`
-                  : `На складі «${warehouse ?? "—"}» чекає список «${listName(other)}» магазину «${visible(other.store_name ?? "—")}», який не працює. Відкрийте й відхиліть його — тоді можна почати новий список і додати до нього файли.`}
+                {`Список «${listName(mine)}» уже збережено, хоч відповідь сервера й не дійшла вчасно. Відкрийте його — інші файли чи рядки додайте вже до нього.`}
               </p>
               <button
                 type="button"
                 onClick={() => {
-                  openList(other.snapshot_id);
+                  // Made: nothing of this draft is to be sent again.
+                  saveDraft(store, null);
+                  openList(mine.snapshot_id);
                 }}
               >
                 Відкрити список
               </button>
             </div>
-          )
-        ))}
-      <fieldset>
-        <legend>Як внести список</legend>
-        <label className="check">
-          <input
-            type="radio"
-            name="stock-list-mode"
-            checked={draft.mode === "text"}
-            onChange={() => {
-              setDraft({ mode: "text" });
-              setProblems([]);
-            }}
-          />
-          Вставити текст
-        </label>
-        <label className="check">
-          <input
-            type="radio"
-            name="stock-list-mode"
-            checked={draft.mode === "file"}
-            onChange={() => {
-              setDraft({ mode: "file" });
-              setProblems([]);
-            }}
-          />
-          Завантажити файл
-        </label>
-      </fieldset>
-      {draft.mode === "file" && (
-        <>
-          <FileChooser
-            read={read}
-            onRead={picked}
-            warehouse={warehouse}
-            disabled={busy}
-          />
-          {read === null && draft.file_name !== null && (
-            <p className="hint">
-              {`Раніше обрано файл «${visible(draft.file_name)}». Оберіть його ще раз — той самий файл не збережеться двічі.`}
-            </p>
-          )}
-        </>
-      )}
-      <label>
-        Звідки список (необов’язково)
-        <input
-          value={draft.source}
-          maxLength={300}
-          placeholder="Наприклад, «Зошит 2, сторінки 1–4»"
-          onChange={(event) => {
-            setDraft({ source: event.target.value });
-          }}
-        />
-      </label>
-      <label>
-        Коли перелічено (необов’язково)
-        <input
-          value={draft.captured}
-          maxLength={40}
-          placeholder="Наприклад, 30.09.2026"
-          onChange={(event) => {
-            setDraft({ captured: event.target.value });
-          }}
-        />
-      </label>
-      {draft.mode === "text" && (
-        <>
-          <label>
-            Рядки списку — кожен товар з нового рядка, як написано
-            <textarea
-              value={draft.text}
-              rows={10}
-              onChange={(event) => {
-                setDraft({ text: event.target.value });
+          ) : (
+            other && (
+              <div className="notice" role="status">
+                <p>
+                  {other.store_state === "ACTIVE"
+                    ? `На складі «${warehouse ?? "—"}» уже чекає список «${listName(other)}» (веде магазин «${visible(other.store_name ?? "—")}»). Другий список для нього не створюють — додайте файл до наявного.`
+                    : `На складі «${warehouse ?? "—"}» чекає список «${listName(other)}» магазину «${visible(other.store_name ?? "—")}», який не працює. Відкрийте й відхиліть його — тоді можна почати новий список і додати до нього файли.`}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    openList(other.snapshot_id);
+                  }}
+                >
+                  Відкрити список
+                </button>
+              </div>
+            )
+          ))}
+        <fieldset>
+          <legend>Як внести список</legend>
+          <label className="check">
+            <input
+              type="radio"
+              name="stock-list-mode"
+              checked={draft.mode === "text"}
+              onChange={() => {
+                setDraft({ mode: "text" });
+                setProblems([]);
               }}
             />
+            Вставити текст
           </label>
-          <p className="hint">
-            Рядків: {lines.length}. Порожні рядки не зберігаються.
-          </p>
-          {tooLong && (
-            <p role="alert">Рядок довший за 500 символів: розділіть його.</p>
-          )}
-          {tooMuch && <p role="alert">{tooMuch}</p>}
-        </>
-      )}
-      {problems.length === 1 ? (
-        <p role="alert">{visible(problems[0] ?? "")}</p>
-      ) : (
-        problems.length > 1 && (
-          <div role="alert">
-            <ul>
-              {problems.map((problem, index) => (
-                <li key={index}>{visible(problem)}</li>
-              ))}
-            </ul>
-          </div>
-        )
-      )}
-      <div className="actions">
-        {!other && !mine && (
-          <button type="submit" disabled={!ready || blocked}>
-            Зберегти список
-          </button>
+          <label className="check">
+            <input
+              type="radio"
+              name="stock-list-mode"
+              checked={draft.mode === "file"}
+              onChange={() => {
+                setDraft({ mode: "file" });
+                setProblems([]);
+              }}
+            />
+            Завантажити файл
+          </label>
+        </fieldset>
+        {draft.mode === "file" && (
+          <>
+            <FileChooser
+              read={read}
+              onRead={picked}
+              warehouse={warehouse}
+              disabled={busy}
+            />
+            {read === null && draft.file_name !== null && (
+              <p className="hint">
+                {`Раніше обрано файл «${visible(draft.file_name)}». Оберіть його ще раз — той самий файл не збережеться двічі.`}
+              </p>
+            )}
+          </>
         )}
-        <button
-          type="button"
-          className="quiet"
-          disabled={busy}
-          onClick={cancel}
-        >
-          Закрити
-        </button>
+        <label>
+          Звідки список (необов’язково)
+          <input
+            value={draft.source}
+            maxLength={300}
+            placeholder="Наприклад, «Зошит 2, сторінки 1–4»"
+            onChange={(event) => {
+              setDraft({ source: event.target.value });
+            }}
+          />
+        </label>
+        <label>
+          Коли перелічено (необов’язково)
+          <input
+            value={draft.captured}
+            maxLength={40}
+            placeholder="Наприклад, 30.09.2026"
+            onChange={(event) => {
+              setDraft({ captured: event.target.value });
+            }}
+          />
+        </label>
+        {draft.mode === "text" && (
+          <>
+            <label>
+              Рядки списку — кожен товар з нового рядка, як написано
+              <textarea
+                value={draft.text}
+                rows={10}
+                onChange={(event) => {
+                  setDraft({ text: event.target.value });
+                }}
+              />
+            </label>
+            <p className="hint">
+              Рядків: {lines.length}. Порожні рядки не зберігаються.
+            </p>
+            {tooLong && (
+              <p role="alert">Рядок довший за 500 символів: розділіть його.</p>
+            )}
+            {tooMuch && <p role="alert">{tooMuch}</p>}
+          </>
+        )}
+        {problems.length === 1 ? (
+          <p role="alert">{visible(problems[0] ?? "")}</p>
+        ) : (
+          problems.length > 1 && (
+            <div role="alert">
+              <ul>
+                {problems.map((problem, index) => (
+                  <li key={index}>{visible(problem)}</li>
+                ))}
+              </ul>
+            </div>
+          )
+        )}
         {/* Only after an answer: while the last send is unsettled, the list
             it may have made is found by its command, and a new command
             would start a second list beside it (review, 2026-10-09). */}
         {problems.length > 0 && !draft.unsettled && (
-          <button
-            type="button"
-            className="quiet"
-            disabled={busy}
-            onClick={() => {
-              setDraft({ command_id: crypto.randomUUID(), unsettled: false });
-              setProblems([]);
-              // A list made since the last read is found before the new
-              // command can be sent.
-              if (draft.location_id !== "") void waiting.refetch();
-            }}
-          >
-            Почати як новий список
-          </button>
+          <div className="actions">
+            <button
+              type="button"
+              className="quiet"
+              disabled={busy}
+              onClick={() => {
+                setDraft({ command_id: crypto.randomUUID(), unsettled: false });
+                setProblems([]);
+                // A list made since the last read is found before the new
+                // command can be sent.
+                if (draft.location_id !== "") void waiting.refetch();
+              }}
+            >
+              Почати як новий список
+            </button>
+          </div>
         )}
-      </div>
-    </form>
+        {saving && !main && (
+          // Outside Telegram, its MainButton as the dock's one button.
+          <div className="pay-panel order-dock" ref={dock}>
+            <button
+              type="submit"
+              className="main-mimic"
+              disabled={!ready || blocked}
+            >
+              {busy ? (
+                <>
+                  <Eyelet state="spin" size={20} />
+                  <span className="visually-hidden">Зберегти список</span>
+                </>
+              ) : (
+                "Зберегти список"
+              )}
+            </button>
+          </div>
+        )}
+      </form>
+    </>
   );
 }
 
@@ -813,14 +970,63 @@ function decisionText(
     : " Відхилити його можете й ви.";
 }
 
-const lineFilters: { status: LineStatus | null; label: string }[] = [
-  { status: "NEEDS_REVIEW", label: "Потребують уваги" },
-  { status: "PENDING", label: "Чекають" },
-  { status: "RESOLVED", label: "Розібрані" },
+/** The switch's three (P0-6): what waits on a person, what waits, what is
+ * answered — the rest in ⋯. */
+type LineMode = "NEEDS_REVIEW" | "PENDING" | "RESOLVED" | "OTHER";
+
+/** In ⋯'s sheet: «Не товар», «Усі», and «Прибрані» once a file was. */
+const otherFilters: { status: LineStatus | null; label: string }[] = [
   { status: "SKIPPED", label: "Не товар" },
   { status: null, label: "Усі" },
 ];
 const linesPerPage = 50;
+
+interface LinePage {
+  items: ListLine[];
+  has_more: boolean;
+}
+
+/** «Не товар 6 · чекають 280 · 412 шт.»: the rest of the list's tag. */
+function restText(list: StockList): string {
+  const waiting = list.summary.pending + list.summary.needs_review;
+  const parts = [
+    ...(list.summary.skipped > 0
+      ? [`не товар ${number(list.summary.skipped)}`]
+      : []),
+    ...(waiting > 0 ? [`чекають ${number(waiting)}`] : []),
+    `${number(list.summary.units)} шт.`,
+  ].join(" · ");
+  return parts.charAt(0).toUpperCase() + parts.slice(1);
+}
+
+/** «Розібрано 120 з 412» over a bar of 6 (spec §6.24): what is decided,
+ * answered or not stock, of the lines that count. */
+function Progress({ list }: { list: StockList }): JSX.Element {
+  const { lines, resolved, skipped } = list.summary;
+  const decided = resolved + skipped;
+  const share = lines === 0 ? 0 : Math.min(1, decided / lines);
+  return (
+    <div className="opening-progress">
+      <p className="t-meta">
+        Розібрано {number(resolved)} з {number(lines)}
+      </p>
+      <div
+        className="progress"
+        role="progressbar"
+        aria-label="Розібрано рядків"
+        aria-valuemin={0}
+        aria-valuemax={lines}
+        aria-valuenow={decided}
+        aria-valuetext={`Розібрано ${number(resolved)} з ${number(lines)}${
+          skipped > 0 ? `, не товар ${number(skipped)}` : ""
+        }`}
+      >
+        <span style={{ width: `${String(share * 100)}%` }} />
+      </div>
+      <p className="t-meta opening-rest">{restText(list)}</p>
+    </div>
+  );
+}
 
 function ListView({
   list,
@@ -830,6 +1036,7 @@ function ListView({
   warehouse,
   blocked,
   close,
+  task,
 }: {
   list: StockList;
   store: Store;
@@ -838,33 +1045,45 @@ function ListView({
   warehouse: string;
   blocked: boolean;
   close: () => void;
+  task?: ((shown: boolean) => void) | undefined;
 }): JSX.Element {
   const cache = useQueryClient();
   const canImport = store.permissions.includes("snapshot:import");
   const canApprove = store.permissions.includes("snapshot:approve");
   const canPick = store.permissions.includes("inventory:receive");
+  // Where something waits; nothing waits — a list to approve, opened from
+  // «Сьогодні» — the lines answered (review, 2026-11-08).
   const [filter, setFilter] = useState<LineStatus | null>(
-    list.summary.needs_review > 0 ? "NEEDS_REVIEW" : "PENDING",
+    list.summary.needs_review > 0
+      ? "NEEDS_REVIEW"
+      : list.summary.pending > 0 || list.summary.resolved === 0
+        ? "PENDING"
+        : "RESOLVED",
   );
   // One file's lines only, or every file's.
   const [partFilter, setPartFilter] = useState<string | null>(null);
-  const [offset, setOffset] = useState(0);
-  const [editing, setEditing] = useState<number | null>(null);
+  // The line answered on its own screen, as it was read when it opened.
+  const [editing, setEditing] = useState<ListLine | null>(null);
   const [adding, setAdding] = useState<"file" | "lines" | null>(null);
-  const lines = useQuery({
-    queryKey: [
-      "stock-list-lines",
-      scopeKey,
-      list.snapshot_id,
-      filter,
-      partFilter,
-      offset,
-    ],
-    queryFn: () =>
-      api<{ items: ListLine[]; has_more: boolean }>(
-        `/snapshots/${list.snapshot_id}/lines?store_id=${store.id}&limit=${String(linesPerPage)}&offset=${String(offset)}${filter ? `&status=${filter}` : ""}${partFilter ? `&part_id=${partFilter}` : ""}`,
+  // ⋯'s sheet of the other lines.
+  const [others, setOthers] = useState(false);
+  const linesKey = [
+    "stock-list-lines",
+    scopeKey,
+    list.snapshot_id,
+    filter,
+    partFilter,
+  ] as const;
+  const lines = useInfiniteQuery({
+    queryKey: linesKey,
+    queryFn: ({ pageParam }) =>
+      api<LinePage>(
+        `/snapshots/${list.snapshot_id}/lines?store_id=${store.id}&limit=${String(linesPerPage)}&offset=${String(pageParam)}${filter ? `&status=${filter}` : ""}${partFilter ? `&part_id=${partFilter}` : ""}`,
         token,
       ),
+    initialPageParam: 0,
+    getNextPageParam: (last, _all, lastParam) =>
+      last.has_more ? lastParam + last.items.length : undefined,
     retry: false,
   });
   const parts = useQuery({
@@ -889,10 +1108,45 @@ function ListView({
   // decision, 2026-10-09).
   const trading = list.store_state === "ACTIVE";
   const editable = list.status === "IN_REVIEW" && canImport && trading;
-  const statusFilters: { status: LineStatus | null; label: string }[] =
+  const sheetFilters: { status: LineStatus | null; label: string }[] =
     list.summary.parts_removed > 0
-      ? [...lineFilters, { status: "REMOVED", label: "Прибрані" }]
-      : lineFilters;
+      ? [...otherFilters, { status: "REMOVED", label: "Прибрані" }]
+      : otherFilters;
+  const mode: LineMode =
+    filter === "NEEDS_REVIEW" || filter === "PENDING" || filter === "RESOLVED"
+      ? filter
+      : "OTHER";
+  const otherLabel = sheetFilters.find((f) => f.status === filter)?.label;
+  const items = lines.data?.pages.flatMap((page) => page.items) ?? [];
+
+  // Back from a line: to the row it was on, or — the lines done — to the
+  // list's tag, at the top (P0-5).
+  const tag = useRef<HTMLDivElement>(null);
+  const returned = useRef<number | "tag" | null>(null);
+  useEffect(() => {
+    if (editing !== null || returned.current === null) return;
+    const to = returned.current;
+    returned.current = null;
+    const row =
+      to === "tag"
+        ? null
+        : document.querySelector<HTMLElement>(`[data-line="${String(to)}"]`);
+    if (row) {
+      row.scrollIntoView({ block: "center" });
+      (row.querySelector<HTMLElement>(".tag-verb") ?? row).focus();
+      return;
+    }
+    window.scrollTo(0, 0);
+    tag.current?.focus();
+  }, [editing]);
+  // Decided here — approved or rejected — the list's tag says so first.
+  const status = useRef(list.status);
+  useEffect(() => {
+    if (status.current === list.status) return;
+    status.current = list.status;
+    window.scrollTo(0, 0);
+    tag.current?.focus();
+  }, [list.status]);
 
   async function refresh(): Promise<void> {
     await Promise.all([
@@ -906,13 +1160,87 @@ function ListView({
     ]);
   }
 
+  /**
+   * The line after `from` of the same lines (P0-5). One already read opens
+   * at once, the lines read again behind it (review, 2026-11-08). Past
+   * them, answered, the lines are read again first — an answered line
+   * leaves «Чекають», and the next page's place with it — and the next
+   * page read. None left: the list's tag.
+   */
+  async function advance(from: number, answered: boolean): Promise<void> {
+    const after = (pages: LinePage[]): ListLine | undefined =>
+      pages
+        .flatMap((page) => page.items)
+        .find((line) => line.line_no > from && line.status !== "REMOVED");
+    const cached = (): LinePage[] =>
+      cache.getQueryData<InfiniteData<LinePage>>(linesKey)?.pages ?? [];
+    const near = after(cached());
+    if (near) {
+      setEditing(near);
+      if (answered) void refresh();
+      return;
+    }
+    if (answered) await refresh();
+    let pages = cached();
+    for (;;) {
+      const found = after(pages);
+      if (found) {
+        setEditing(found);
+        return;
+      }
+      if (!(pages[pages.length - 1]?.has_more ?? false)) break;
+      const read = await lines.fetchNextPage();
+      if (read.isError) break;
+      pages = read.data?.pages ?? [];
+    }
+    returned.current = "tag";
+    setEditing(null);
+  }
+
   function showPart(id: string | null): void {
     setPartFilter(id);
     // A file's lines, all of them: a removed file's are only «Прибрано».
     if (id !== null) setFilter(null);
-    setOffset(0);
     setEditing(null);
   }
+
+  function show(status: LineStatus | null): void {
+    setFilter(status);
+    setEditing(null);
+  }
+
+  const shown =
+    editing && (items.find((l) => l.line_no === editing.line_no) ?? editing);
+  if (shown)
+    return (
+      <LineTask
+        key={shown.line_no}
+        line={shown}
+        list={list}
+        title={listName(list)}
+        store={store}
+        token={token}
+        scopeKey={scopeKey}
+        sizes={sizes}
+        listParts={allParts}
+        warehouse={warehouse}
+        blocked={blocked}
+        more={
+          items.some(
+            (l) => l.line_no > shown.line_no && l.status !== "REMOVED",
+          ) || lines.hasNextPage
+        }
+        next={(answered) => advance(shown.line_no, answered)}
+        leave={() => {
+          returned.current = shown.line_no;
+          setEditing(null);
+        }}
+        reread={() => {
+          void cache.invalidateQueries({ queryKey: ["stock-list-lines"] });
+        }}
+        task={task}
+      />
+    );
 
   return (
     <>
@@ -926,46 +1254,61 @@ function ListView({
         }
       />
       <section className="openings">
-        <p>
-          Склад «{warehouse}» · {listStatusLabels[list.status]}
-          {list.captured_at ? ` · перелічено ${visible(list.captured_at)}` : ""}
-        </p>
-        {list.store_id !== store.id && (
-          <p className="hint">Веде магазин «{visible(list.store_name ?? "—")}»</p>
-        )}
+        {/* The list's big tag (spec §5 «Большая бирка»; P0-6): its
+            warehouse, its state, how far it is answered — or, decided, what
+            became of it. */}
+        <div className="tag-hero tag-outline opening-hero">
+          <div className="opening-hero-in" ref={tag} tabIndex={-1}>
+            <p className="opening-hero-place">Склад «{warehouse}»</p>
+            <p className="badge opening-state">
+              {listStatusLabels[list.status]}
+            </p>
+            {(list.captured_at || list.store_id !== store.id) && (
+              <p className="t-meta">
+                {[
+                  ...(list.captured_at
+                    ? [`перелічено ${visible(list.captured_at)}`]
+                    : []),
+                  ...(list.store_id !== store.id
+                    ? [`Веде магазин «${visible(list.store_name ?? "—")}»`]
+                    : []),
+                ].join(" · ")}
+              </p>
+            )}
+            {list.status === "IN_REVIEW" && <Progress list={list} />}
+            {list.status === "APPLIED" && (
+              <Stub state="settled">
+                <p className="stub-line" role="status">
+                  Затверджено: {list.application?.units ?? list.summary.units}{" "}
+                  шт. стали початковим залишком складу «{warehouse}».
+                </p>
+              </Stub>
+            )}
+            {list.status === "REJECTED" && (
+              <p role="status">
+                Відхилено
+                {list.rejection_reason
+                  ? `: ${visible(list.rejection_reason)}`
+                  : ""}
+                . Залишків цей список не змінив.
+              </p>
+            )}
+          </div>
+        </div>
         {list.status === "IN_REVIEW" && !trading && (
           <p className="notice" role="status">
             {`Магазин «${visible(list.store_name ?? "—")}», що почав цей список, не працює: список можна лише відхилити, а файли додати до нового списку.`}
           </p>
         )}
-        <p className="hint">
-          Рядків: {list.summary.lines} · розібрано {list.summary.resolved} · не
-          товар {list.summary.skipped} · чекають{" "}
-          {list.summary.pending + list.summary.needs_review} · одиниць{" "}
-          {list.summary.units}
-        </p>
         {list.status === "IN_REVIEW" && (
           <p className="hint">
             {`Місце у списку: рядків ${number(list.summary.lines)} з ${number(list.summary.limits.lines)} · відповідей ${number(list.summary.allocations)} з ${number(list.summary.limits.allocations)}`}
           </p>
         )}
-        {list.status === "APPLIED" && (
-          <p role="status">
-            Затверджено: {list.application?.units ?? list.summary.units} шт.
-            стали початковим залишком складу «{warehouse}».
-          </p>
-        )}
-        {list.status === "REJECTED" && (
-          <p role="status">
-            Відхилено
-            {list.rejection_reason ? `: ${visible(list.rejection_reason)}` : ""}.
-            Залишків цей список не змінив.
-          </p>
-        )}
         {list.status === "IN_REVIEW" && (
           <p className="notice">
-            Поки список чекає рішення, на складі «{warehouse}», де ще не було руху
-            товару, нічого не приймають, не продають і не виправляють.
+            Поки список чекає рішення, на складі «{warehouse}», де ще не було
+            руху товару, нічого не приймають, не продають і не виправляють.
             {decisionText(trading, canApprove, canImport)}
           </p>
         )}
@@ -980,11 +1323,13 @@ function ListView({
             warehouse={warehouse}
             approvable={trading && canApprove}
             blocked={blocked}
+            quiet={others || adding !== null}
+            fallback={tag}
             refresh={refresh}
           />
         )}
         {/* Whoever may not take the stock in reads the lines without
-            «Розібрати рядок», and nothing is said of the rule (stage 2, goods
+            «Розібрати», and nothing is said of the rule (stage 2, goods
             task list, P1-5). */}
         {parts.error ? (
           <Unread
@@ -1002,7 +1347,7 @@ function ListView({
               token={token}
               parts={allParts}
               editable={editable}
-              blocked={blocked || editing !== null}
+              blocked={blocked}
               show={(part) => {
                 showPart(part.part_id);
               }}
@@ -1064,21 +1409,85 @@ function ListView({
               </button>
             </div>
           ))}
-        <nav aria-label="Рядки списку">
-          {statusFilters.map(({ status, label }) => (
-            <button
-              key={label}
-              className={filter === status ? "active" : "quiet"}
-              onClick={() => {
-                setFilter(status);
-                setOffset(0);
-                setEditing(null);
-              }}
-            >
-              {label}
-            </button>
-          ))}
+        <nav className="opening-modes" aria-label="Рядки списку">
+          <ModeSwitch<LineMode>
+            label="Які рядки"
+            filters
+            modes={[
+              {
+                mode: "NEEDS_REVIEW",
+                label: `Потребують уваги ${number(list.summary.needs_review)}`,
+              },
+              {
+                mode: "PENDING",
+                label: `Чекають ${number(list.summary.pending)}`,
+              },
+              {
+                mode: "RESOLVED",
+                label: `Розібрані ${number(list.summary.resolved)}`,
+              },
+            ]}
+            current={mode}
+            choose={(chosen) => {
+              if (chosen !== "OTHER") show(chosen);
+            }}
+            disabled={false}
+          />
+          <button
+            type="button"
+            className="quiet opening-others"
+            aria-haspopup="dialog"
+            aria-pressed={mode === "OTHER"}
+            aria-label={
+              otherLabel === undefined
+                ? "Інші рядки"
+                : `Інші рядки: ${otherLabel}`
+            }
+            onClick={() => {
+              setOthers(true);
+            }}
+          >
+            {otherLabel === undefined ? (
+              "⋯"
+            ) : (
+              <>
+                {otherLabel}
+                <span aria-hidden="true"> ⋯</span>
+              </>
+            )}
+          </button>
         </nav>
+        {others && (
+          <Sheet
+            title="Інші рядки"
+            close={() => {
+              setOthers(false);
+            }}
+          >
+            <div className="debt-more-ways">
+              {sheetFilters.map(({ status, label }) => (
+                <button
+                  type="button"
+                  key={label}
+                  className="sheet-way"
+                  aria-pressed={filter === status}
+                  onClick={() => {
+                    buzz("selection");
+                    setOthers(false);
+                    show(status);
+                  }}
+                >
+                  {label}
+                  {status === "SKIPPED"
+                    ? ` · ${number(list.summary.skipped)}`
+                    : status === null
+                      ? ` · ${number(list.summary.lines)}`
+                      : ""}
+                </button>
+              ))}
+            </div>
+          </Sheet>
+        )}
         {allParts.length > 1 && (
           <label>
             Файл
@@ -1097,80 +1506,51 @@ function ListView({
             </select>
           </label>
         )}
-        {lines.isPending ? (
-          <p role="status">Завантажуємо рядки…</p>
-        ) : lines.error ? (
+        {/* A read that failed is said over the lines read before, as the
+            next page's failing is (review, 2026-11-08). */}
+        {!lines.isPending && lines.error && (
           <Unread
             error={lines.error}
             retry={() => {
               void lines.refetch();
             }}
           />
-        ) : lines.data.items.length === 0 ? (
+        )}
+        {lines.isPending ? (
+          <p role="status">Завантажуємо рядки…</p>
+        ) : lines.error && items.length === 0 ? null : items.length === 0 ? (
           <p>Тут рядків немає.</p>
         ) : (
           <>
-            {lines.data.items.map((line) =>
-              editing === line.line_no ? (
-                <LineEditor
-                  key={line.line_no}
-                  line={line}
-                  list={list}
-                  store={store}
-                  token={token}
-                  scopeKey={scopeKey}
-                  sizes={sizes.data ?? []}
-                  listParts={allParts}
-                  blocked={blocked}
-                  done={() => {
-                    setEditing(null);
-                    void refresh();
-                  }}
-                  cancel={() => {
-                    setEditing(null);
-                  }}
-                  reread={() => {
-                    void cache.invalidateQueries({
-                      queryKey: ["stock-list-lines"],
-                    });
-                  }}
-                />
-              ) : (
-                <LineCard
+            <div className="tags opening-lines">
+              {items.map((line) => (
+                <LineRow
                   key={line.line_no}
                   line={line}
                   parts={allParts}
                   answer={
                     editable && canPick && line.status !== "REMOVED"
                       ? () => {
-                          setEditing(line.line_no);
+                          setEditing(line);
                         }
                       : null
                   }
-                  blocked={blocked || editing !== null}
+                  blocked={blocked}
                 />
-              ),
-            )}
-            <div className="toolbar">
-              <button
-                className="quiet"
-                disabled={offset === 0}
-                onClick={() => {
-                  setOffset(Math.max(0, offset - linesPerPage));
-                }}
-              >
-                Попередні
-              </button>
-              <button
-                className="quiet"
-                disabled={!lines.data.has_more}
-                onClick={() => {
-                  setOffset(offset + linesPerPage);
-                }}
-              >
-                Ще рядки
-              </button>
+              ))}
             </div>
+            {lines.hasNextPage && (
+              <button
+                type="button"
+                className="quiet today-more"
+                disabled={lines.isFetching}
+                onClick={() => {
+                  void lines.fetchNextPage();
+                }}
+              >
+                Показати ще
+              </button>
+            )}
           </>
         )}
       </section>
@@ -1178,80 +1558,18 @@ function ListView({
   );
 }
 
-function sizeText(code: string | null): string {
-  return code === null || code === "UNKNOWN"
-    ? "розмір невідомий"
-    : visible(code);
-}
+const lineTones: Record<LineStatus, string> = {
+  NEEDS_REVIEW: "tone-warning",
+  PENDING: "tone-ink",
+  RESOLVED: "tone-live",
+  SKIPPED: "tone-offline",
+  REMOVED: "tone-offline ring",
+};
 
-/** «Лоран · шоколад · M × 1, L × 2»: what the parser read, field by field. */
-function readingText(reading: Reading): string {
-  const sizes = reading.sizes
-    ? reading.sizes.join(", ")
-    : reading.size_counts
-      ? sizesWithCounts(reading.size_counts)
-      : null;
-  return [reading.model, reading.colours?.join(", ") ?? null, sizes]
-    .filter((part): part is string => part !== null && part !== "")
-    .map(visible)
-    .join(" · ");
-}
-
-/**
- * Where a line from a file was written, and what the parser read of it: a
- * hint beside the line, never its answer (ADR-0014 §6). Every string through
- * `visible()`. Shown on the line's card and in its editor alike.
- */
-function FileEvidence({
-  line,
-  parts,
-}: {
-  line: ListLine;
-  parts: StockPart[];
-}): JSX.Element {
-  const part = parts.find((p) => p.part_id === line.part_id);
-  const reading = line.reading;
-  const read = reading ? readingText(reading) : "";
-  return (
-    <>
-      {line.photo_name !== null && line.photo_line !== null && (
-        <small>
-          Фото: {visible(line.photo_name)}, рядок {line.photo_line}
-        </small>
-      )}
-      {part && (part.kind === "FILE" || parts.length > 1) && (
-        <small>Файл: {partName(part)}</small>
-      )}
-      {read !== "" && <small>Прочитано: {read}</small>}
-      {reading?.count != null && (
-        <small>Парсер прочитав кількість: {reading.count}</small>
-      )}
-      {reading?.price != null && (
-        <small>
-          Ціна з зошита: {visible(reading.price)}
-          {line.price_kind ? ` (${priceKindLabels[line.price_kind]})` : ""}
-        </small>
-      )}
-      {line.file_reasons.map((reason) =>
-        reason === "FILE_NOTE" ? (
-          <small key={reason}>
-            Примітка парсера: {visible(reading?.note ?? "")}
-          </small>
-        ) : (
-          <small key={reason}>{fileReasonLabels[reason] ?? reason}</small>
-        ),
-      )}
-      {line.same_photo_lines > 1 && (
-        <small>
-          Цей рядок того самого фото у списку — {times(line.same_photo_lines)}:
-          можливо, фото прочитано двічі або додано у двох файлах.
-        </small>
-      )}
-    </>
-  );
-}
-
-function LineCard({
+/** A line on the list (P0-6): a row tag — the line as written, its state,
+ * what the list says of its count, its answer once it has one, and one
+ * verb: «Розібрати», or «Змінити відповідь». */
+function LineRow({
   line,
   parts,
   answer,
@@ -1264,68 +1582,67 @@ function LineCard({
 }): JSX.Element {
   return (
     <article
-      className="line catalog-card"
+      className={`today-tag tag-row tag-outline opening-line ${lineTones[line.status]}`}
       aria-label={`Рядок ${String(line.line_no)}`}
+      data-line={line.line_no}
+      tabIndex={-1}
     >
-      <strong className="catalog-raw">
-        {line.line_no}. {line.raw_text === null ? "—" : visible(line.raw_text)}
-      </strong>
-      <span className="badge">{lineStatusLabels[line.status]}</span>
-      <small>{visible(sourceQuantity(line))}</small>
-      <FileEvidence line={line} parts={parts} />
-      {(line.shown_split ?? [])
-        .filter((size) => size.may_be_range)
-        .map((size) => (
-          <small key={`range:${size.size}`}>
-            {`Запис «${recordText(size)}» може означати й діапазон розмірів: під час розбору вкажіть, що саме.`}
-          </small>
-        ))}
-      {line.same_text_lines > 1 && (
-        <small>
-          Такий самий рядок у списку — {times(line.same_text_lines)}: це може
-          бути по рядку на кожну одиницю, або помилка переписування.
-        </small>
-      )}
-      {line.status === "RESOLVED" && (
-        <>
-          {line.allocations.map((a) => (
-            <small key={`${a.product_variant_id}:${a.size_id}`}>
-              → {visible(a.display_name ?? "товар")}, {sizeText(a.size_code)} ×{" "}
-              {a.quantity}
-            </small>
-          ))}
-          {line.quantity_basis && (
-            <small>Звідки кількість: {basisLabels[line.quantity_basis]}</small>
-          )}
-          {line.resolution_note && (
-            <small>Примітка: {visible(line.resolution_note)}</small>
-          )}
-        </>
-      )}
-      {line.status === "SKIPPED" && line.resolution_note && (
-        <small>Не товар: {visible(line.resolution_note)}</small>
-      )}
-      {answer && (
-        <button className="quiet" disabled={blocked} onClick={answer}>
-          {line.status === "RESOLVED" || line.status === "SKIPPED"
-            ? "Змінити відповідь"
-            : "Розібрати рядок"}
-        </button>
-      )}
+      <div className="today-tag-body">
+        <span className="today-tag-eyelet" aria-hidden="true" />
+        <p className="t-row catalog-raw">
+          {line.line_no}.{" "}
+          {line.raw_text === null ? "—" : visible(line.raw_text)}
+        </p>
+        <p className="t-meta today-tag-meta">
+          {lineStatusLabels[line.status]} · {visible(sourceQuantity(line))}
+        </p>
+        {/* The line's screen does not open here: what was read of it,
+            and the reasons to reject, on its row (review, 2026-11-08). */}
+        {answer === null && <LineEvidence line={line} parts={parts} row />}
+        {line.status === "RESOLVED" && (
+          <>
+            {line.allocations.map((a) => (
+              <p
+                className="t-meta"
+                key={`${a.product_variant_id}:${a.size_id}`}
+              >
+                → {visible(a.display_name ?? "товар")}, {sizeText(a.size_code)}{" "}
+                × {a.quantity}
+              </p>
+            ))}
+            {line.quantity_basis && (
+              <p className="t-meta">
+                Звідки кількість: {basisLabels[line.quantity_basis]}
+              </p>
+            )}
+            {line.resolution_note && (
+              <p className="t-meta">
+                Примітка: {visible(line.resolution_note)}
+              </p>
+            )}
+          </>
+        )}
+        {line.status === "SKIPPED" && line.resolution_note && (
+          <p className="t-meta">Не товар: {visible(line.resolution_note)}</p>
+        )}
+        {answer && (
+          <button
+            type="button"
+            className="tag-verb"
+            disabled={blocked}
+            onClick={() => {
+              buzz("light");
+              answer();
+            }}
+          >
+            {line.status === "RESOLVED" || line.status === "SKIPPED"
+              ? "Змінити відповідь"
+              : "Розібрати"}
+          </button>
+        )}
+      </div>
     </article>
   );
-}
-
-/**
- * No room for another answer: a list takes so many in all (`LIST_FULL`,
- * `allocations`), each size of a line one (review, 2026-10-09).
- */
-function noRoomText(limit: unknown): string {
-  const most =
-    typeof limit === "number"
-      ? `${number(limit)} ${plural(limit, "відповідь", "відповіді", "відповідей")}`
-      : `${String(limit)} відповідей`;
-  return `У списку вже ${most} — більше він не вміщує, тож цю відповідь не збережено. Рядок із кількома розмірами бере відповідь на кожен розмір. Звільнити місце можна, прибравши файл.`;
 }
 
 /**
@@ -1347,579 +1664,16 @@ function rangeAgainText(details: Record<string, unknown>): string {
 }
 
 /**
- * An answer by size refused: a record of the line may now be a range of
- * sizes, a size having been created since the line was read
- * (`SPLIT_MAY_BE_RANGE`, `records`; review, fourth round, 2026-10-09). The
- * line is read again, and the record is asked about in the editor.
- */
-function rangeNowText(details: Record<string, unknown>): string {
-  const records = Array.isArray(details.records)
-    ? details.records.filter((r): r is string => typeof r === "string")
-    : [];
-  const named = records.map((record) => `«${visible(record)}»`).join(", ");
-  return records.length === 0
-    ? "Запис у рядку тепер може означати й діапазон розмірів. Рядок прочитано знову: вкажіть нижче, що він означає, і збережіть відповідь ще раз."
-    : records.length === 1
-      ? `Запис ${named} тепер може означати й діапазон розмірів. Рядок прочитано знову: вкажіть нижче, що він означає, і збережіть відповідь ще раз.`
-      : `Записи ${named} тепер можуть означати й діапазон розмірів. Рядок прочитано знову: вкажіть нижче, що вони означають, і збережіть відповідь ще раз.`;
-}
-
-/**
- * A record of a split as the server names it: as the line writes it
- * («42-44»), or its size when the text no longer shows it.
- */
-function recordKey(size: ShownSize): string {
-  return size.written ?? size.size;
-}
-
-/** A record of a split as the line writes it: «42-44». Guarded. */
-function recordText(size: ShownSize): string {
-  return visible(size.written ?? `${size.size}-${String(size.count)}`);
-}
-
-interface Part {
-  variant: ReceivableVariant | null;
-  /** A size id, "UNKNOWN" for size not known, or "" while not chosen. */
-  size: string;
-  quantity: string;
-  picking: boolean;
-}
-
-function LineEditor({
-  line,
-  list,
-  store,
-  token,
-  scopeKey,
-  sizes,
-  listParts,
-  blocked,
-  done,
-  cancel,
-  reread,
-}: {
-  line: ListLine;
-  list: StockList;
-  store: Store;
-  token: string;
-  scopeKey: string;
-  sizes: SizeOption[];
-  listParts: StockPart[];
-  blocked: boolean;
-  done: () => void;
-  cancel: () => void;
-  /** Read the list's lines again, this one with them: the editor stays open
-   * and shows the line as the server reads it now. */
-  reread: () => void;
-}): JSX.Element {
-  const stated =
-    line.quantity_state === "KNOWN" && line.quantity_total !== null;
-  // The split the line's text shows, each size with its count (ADR-0014
-  // §5): offered as it is only when every size is the catalogue's own, and
-  // never chosen for the person.
-  const split = line.shown_split ?? [];
-  // A record that may also be a range of sizes («42-44») is asked about
-  // first, and the split is offered as it is only once each such record is
-  // read as a size with its count (owner decision, 2026-10-09).
-  const [readings, setReadings] = useState<Record<number, SplitReading>>({});
-  // A model added from an empty search: its stub, under that model only
-  // (stage 2, goods task list, P0-1; review).
-  const [added, setAdded] = useState<Readonly<Record<string, string>>>({});
-  const addedSaid = (
-    variant: ReceivableVariant | null,
-    said?: string,
-  ): void => {
-    if (variant === null || said === undefined) return;
-    setAdded((was) => ({ ...was, [variant.product_variant_id]: said }));
-  };
-  const ambiguous = split.flatMap((size, index) =>
-    size.may_be_range ? [index] : [],
-  );
-  const readAsSizes = ambiguous.every(
-    (index) => readings[index] === "SIZE_WITH_COUNT",
-  );
-  const readAsRange = ambiguous.some((index) => readings[index] === "RANGE");
-  const bySizeOffered =
-    split.length > 0 &&
-    split.every((size) => size.size_id !== null) &&
-    readAsSizes;
-  const missing = split.filter((size) => size.size_id === null);
-  const allowed: Basis[] = [
-    ...(stated ? (["STATED"] as const) : []),
-    ...(bySizeOffered ? (["STATED_BY_SIZE"] as const) : []),
-    ...(line.may_imply_one ? (["LINE_IMPLIES_ONE"] as const) : []),
-    "RECOUNTED",
-    "OWNER_KNOWLEDGE",
-  ];
-  // The parser's one size, if it read exactly one, is where to start.
-  const readSize =
-    line.candidates.size?.length === 1 ? line.candidates.size[0] : undefined;
-  const startSize = sizes.find((s) => s.code === readSize)?.size_id ?? "";
-  const [chosen, setBasis] = useState<Basis | "SKIP" | "">(
-    stated ? "STATED" : line.may_imply_one ? "LINE_IMPLIES_ONE" : "",
-  );
-  // A choice the line no longer offers is no choice. The line is read again
-  // while the editor is open (the phone comes back to the app, the
-  // connection returns, an answer is refused): a record made a possible
-  // range since is asked about, and «Як у рядку» waits for its answer
-  // (review, fourth round, 2026-10-09).
-  const basis =
-    chosen === "" || chosen === "SKIP" || allowed.includes(chosen)
-      ? chosen
-      : "";
-  const [parts, setParts] = useState<Part[]>([
-    {
-      variant: null,
-      size: startSize,
-      quantity: stated ? String(line.quantity_total) : "1",
-      picking: true,
-    },
-  ]);
-  const [note, setNote] = useState("");
-  const [reason, setReason] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState<string | null>(null);
-
-  // A stated count, or one piece, is one allocation of exactly that.
-  const fixed =
-    basis === "STATED"
-      ? line.quantity_total
-      : basis === "LINE_IMPLIES_ONE"
-        ? 1
-        : null;
-  const shown = fixed === null ? parts : parts.slice(0, 1);
-  const quantities = shown.map((p) =>
-    fixed === null ? Number(p.quantity) : fixed,
-  );
-  const keys = shown.map(
-    (p) => `${p.variant?.product_variant_id ?? ""}:${p.size}`,
-  );
-  const duplicate = new Set(keys).size !== keys.length;
-  const needsNote = basis === "RECOUNTED" || basis === "OWNER_KNOWLEDGE";
-  // As the line shows it: one model, each size with its own count.
-  const bySize = basis === "STATED_BY_SIZE";
-  const model = parts[0]?.variant ?? null;
-  // The records the person read as a size with its count, by name: what
-  // was answered here, never every record the line now flags (review,
-  // fourth round, 2026-10-09).
-  const readRecords = split.flatMap((size, index) =>
-    readings[index] === "SIZE_WITH_COUNT" ? [recordKey(size)] : [],
-  );
-  const complete =
-    basis === "SKIP"
-      ? reason.trim() !== ""
-      : bySize
-        ? model !== null
-        : basis !== "" &&
-          shown.every((p) => p.variant !== null && p.size !== "") &&
-          quantities.every((q) => Number.isInteger(q) && q > 0 && q <= 10000) &&
-          !duplicate &&
-          (!needsNote || note.trim() !== "");
-
-  function update(index: number, change: Partial<Part>): void {
-    setParts(parts.map((p, i) => (i === index ? { ...p, ...change } : p)));
-  }
-
-  async function send(): Promise<void> {
-    setBusy(true);
-    setProblem(null);
-    const body =
-      basis === "SKIP"
-        ? { skip_reason: reason.trim() }
-        : bySize
-          ? {
-              allocations: split.map((size) => ({
-                product_variant_id: model?.product_variant_id,
-                size_id: size.size_id,
-                size_unknown: false,
-                quantity: size.count,
-              })),
-              quantity_basis: basis,
-              note: note.trim() || null,
-              // What the person said each record that may be a range means,
-              // and of which records: those answered here, as the line
-              // writes them. A record made a range since is refused by name
-              // (review, third and fourth rounds, 2026-10-09).
-              ...(readRecords.length > 0
-                ? {
-                    split_read_as: "SIZE_WITH_COUNT",
-                    split_read_records: readRecords,
-                  }
-                : {}),
-            }
-          : {
-              allocations: shown.map((p, i) => ({
-                product_variant_id: p.variant?.product_variant_id,
-                size_id: p.size === "UNKNOWN" ? null : p.size,
-                size_unknown: p.size === "UNKNOWN",
-                quantity: quantities[i],
-              })),
-              quantity_basis: basis,
-              note: note.trim() || null,
-            };
-    try {
-      await api(
-        `/snapshots/${list.snapshot_id}/lines/${String(line.line_no)}?store_id=${store.id}`,
-        token,
-        body,
-        undefined,
-        "PUT",
-      );
-      done();
-    } catch (error) {
-      const reason =
-        error instanceof ApiError ? error.details.reason : undefined;
-      // A record made a possible range since the line was read: read it
-      // again, so the record named is asked about here.
-      // So is a list changed in a way it does not name (review,
-      // 2026-10-24).
-      if (reason === "SPLIT_MAY_BE_RANGE" || listConflict(error)) reread();
-      setProblem(
-        !(error instanceof ApiError)
-          ? "Немає відповіді сервера. Натисніть ще раз — повторна відповідь безпечна."
-          : reason === "PART_REMOVED"
-            ? "Файл цього рядка прибрали — відповідь не збережено."
-            : reason === "SPLIT_MAY_BE_RANGE"
-              ? rangeNowText(error.details)
-              : reason === "LIST_STORE_NOT_TRADING"
-                ? errorText(error)
-                : reason === "LIST_STORE_CANNOT_RECEIVE"
-                  ? cannotReceiveText(list)
-                  : reason === "LIST_FULL" &&
-                      error.details.what === "allocations"
-                    ? noRoomText(error.details.limit)
-                    : error.code === "SNAPSHOT_CONFLICT"
-                      ? "Список уже затвердили або відхилили — відповідь не збережено."
-                      : error.code === "NOT_FOUND"
-                        ? "Товар або розмір більше недоступний. Оберіть інший."
-                        : listRefusal(
-                            error,
-                            "Відповідь не збережено.",
-                            "Перевірте її та спробуйте ще раз.",
-                          ),
-      );
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  // Not a <form>: the catalogue picker inside it is one, and a form inside a
-  // form would submit the wrong one.
-  return (
-    <div
-      className="line notice"
-      role="form"
-      aria-label={`Розбір рядка ${String(line.line_no)}`}
-    >
-      <strong className="catalog-raw">
-        {line.line_no}. {line.raw_text === null ? "—" : visible(line.raw_text)}
-      </strong>
-      <small>{visible(sourceQuantity(line))}</small>
-      <FileEvidence line={line} parts={listParts} />
-      {ambiguous.map((index) => {
-        const size = split[index];
-        if (size === undefined) return null;
-        const name = `split-${String(line.line_no)}-${String(index)}`;
-        const choose = (reading: SplitReading): void => {
-          setReadings({ ...readings, [index]: reading });
-          // Read as a range, the line is no longer answered as it shows.
-          if (reading === "RANGE" && chosen === "STATED_BY_SIZE") setBasis("");
-        };
-        return (
-          <fieldset key={name}>
-            <legend>{`Запис «${recordText(size)}» — це:`}</legend>
-            <label className="check">
-              <input
-                type="radio"
-                name={name}
-                checked={readings[index] === "SIZE_WITH_COUNT"}
-                onChange={() => {
-                  choose("SIZE_WITH_COUNT");
-                }}
-              />
-              {`Розмір ${visible(size.size)} — ${String(size.count)} шт.`}
-            </label>
-            <label className="check">
-              <input
-                type="radio"
-                name={name}
-                checked={readings[index] === "RANGE"}
-                onChange={() => {
-                  choose("RANGE");
-                }}
-              />
-              {`Діапазон розмірів ${visible(size.size)}–${String(size.count)}`}
-            </label>
-          </fieldset>
-        );
-      })}
-      {readAsRange && (
-        <p className="hint">
-          Діапазон не каже, скільки якого розміру: вкажіть розміри й кількість і
-          звідки вони відомі.
-        </p>
-      )}
-      <fieldset>
-        <legend>Звідки кількість</legend>
-        {allowed.map((option) => (
-          <label className="check" key={option}>
-            <input
-              type="radio"
-              name={`basis-${String(line.line_no)}`}
-              checked={basis === option}
-              onChange={() => {
-                setBasis(option);
-              }}
-            />
-            {option === "STATED"
-              ? `${basisLabels.STATED}: ${String(line.quantity_total)} шт.`
-              : option === "STATED_BY_SIZE"
-                ? `${basisLabels.STATED_BY_SIZE}: ${visible(sizesWithCounts(split))}`
-                : basisLabels[option]}
-          </label>
-        ))}
-        <label className="check">
-          <input
-            type="radio"
-            name={`basis-${String(line.line_no)}`}
-            checked={basis === "SKIP"}
-            onChange={() => {
-              setBasis("SKIP");
-            }}
-          />
-          Це не товар
-        </label>
-      </fieldset>
-      {missing.length > 0 && (
-        <p className="hint">
-          {`Рядок показує кількість по розмірах (${visible(sizesWithCounts(split))}), але ${missing.length === 1 ? "розміру" : "розмірів"} ${missing.map((size) => `«${visible(size.size)}»`).join(", ")} немає в каталозі. Створіть розмір або вкажіть, звідки відома кількість.`}
-        </p>
-      )}
-      {line.quantity_state !== "KNOWN" &&
-        !line.may_imply_one &&
-        split.length === 0 && (
-          <p className="hint">
-            Список не каже, скільки тут штук і якого розміру. Вкажіть, хто
-            перелічив, або звідки це відомо.
-          </p>
-        )}
-      {basis === "SKIP" ? (
-        <label>
-          Чому це не товар
-          <input
-            value={reason}
-            maxLength={1000}
-            placeholder="Наприклад, підсумок сторінки"
-            onChange={(event) => {
-              setReason(event.target.value);
-            }}
-          />
-        </label>
-      ) : bySize ? (
-        <>
-          <div className="section-block">
-            {(parts[0]?.picking ?? true) || model === null ? (
-              <CatalogPicker
-                store={store}
-                token={token}
-                scopeKey={scopeKey}
-                variant={model}
-                initialSearch={
-                  line.reading?.model ?? line.candidates.concept?.[0] ?? ""
-                }
-                onVariant={(variant, said) => {
-                  update(0, { variant, picking: variant === null });
-                  addedSaid(variant, said);
-                }}
-                adds
-              />
-            ) : (
-              <>
-                <div className="fields">
-                  <span>{visible(model.display_name)}</span>
-                  <button
-                    type="button"
-                    className="quiet"
-                    onClick={() => {
-                      update(0, { picking: true });
-                    }}
-                  >
-                    Інший товар
-                  </button>
-                </div>
-                <AddedStub said={added[model.product_variant_id] ?? null} />
-              </>
-            )}
-            <ul aria-label="Розміри й кількість, як у рядку">
-              {split.map((size) => (
-                <li key={size.size}>
-                  {visible(size.size)} × {size.count}
-                </li>
-              ))}
-            </ul>
-          </div>
-          <label>
-            Примітка (необов’язково)
-            <input
-              value={note}
-              maxLength={1000}
-              onChange={(event) => {
-                setNote(event.target.value);
-              }}
-            />
-          </label>
-        </>
-      ) : (
-        <>
-          {shown.map((part, index) => (
-            <div className="section-block" key={index}>
-              {part.picking || part.variant === null ? (
-                <CatalogPicker
-                  store={store}
-                  token={token}
-                  scopeKey={scopeKey}
-                  variant={part.variant}
-                  initialSearch={
-                    line.reading?.model ?? line.candidates.concept?.[0] ?? ""
-                  }
-                  onVariant={(variant, said) => {
-                    update(index, { variant, picking: variant === null });
-                    addedSaid(variant, said);
-                  }}
-                  adds
-                />
-              ) : (
-                <>
-                  <div className="fields">
-                    <span>{visible(part.variant.display_name)}</span>
-                    <button
-                      type="button"
-                      className="quiet"
-                      onClick={() => {
-                        update(index, { picking: true });
-                      }}
-                    >
-                      Інший товар
-                    </button>
-                  </div>
-                  <AddedStub
-                    said={added[part.variant.product_variant_id] ?? null}
-                  />
-                </>
-              )}
-              {/* The size's own room: «Оберіть розмір» whole, even at 375 px. */}
-              <div className="fields size-count">
-                <label>
-                  Розмір
-                  <select
-                    value={part.size}
-                    onChange={(event) => {
-                      update(index, { size: event.target.value });
-                    }}
-                  >
-                    <option value="">Оберіть розмір</option>
-                    {sizes.map((size) => (
-                      <option key={size.size_id} value={size.size_id}>
-                        {visible(size.code)}
-                      </option>
-                    ))}
-                    <option value="UNKNOWN">Розмір невідомий</option>
-                  </select>
-                </label>
-                <label>
-                  Кількість
-                  <input
-                    inputMode="numeric"
-                    value={fixed === null ? part.quantity : String(fixed)}
-                    disabled={fixed !== null}
-                    onChange={(event) => {
-                      update(index, { quantity: event.target.value });
-                    }}
-                  />
-                </label>
-              </div>
-              {fixed === null && shown.length > 1 && (
-                <button
-                  type="button"
-                  className="quiet"
-                  onClick={() => {
-                    setParts(parts.filter((_, i) => i !== index));
-                  }}
-                >
-                  Прибрати
-                </button>
-              )}
-            </div>
-          ))}
-          {fixed === null && basis !== "" && (
-            <button
-              type="button"
-              className="quiet"
-              onClick={() => {
-                const last = parts[parts.length - 1];
-                setParts([
-                  ...parts,
-                  {
-                    variant: last?.variant ?? null,
-                    size: "",
-                    quantity: "1",
-                    picking: last?.variant == null,
-                  },
-                ]);
-              }}
-            >
-              Ще розмір чи колір
-            </button>
-          )}
-          <label>
-            {needsNote
-              ? basis === "RECOUNTED"
-                ? "Хто й коли перелічив"
-                : "Звідки це відомо"
-              : "Примітка (необов’язково)"}
-            <input
-              value={note}
-              maxLength={1000}
-              onChange={(event) => {
-                setNote(event.target.value);
-              }}
-            />
-          </label>
-          {duplicate && (
-            <p role="alert">Той самий товар і розмір двічі: об’єднайте їх.</p>
-          )}
-        </>
-      )}
-      {problem && <p role="alert">{problem}</p>}
-      <div className="actions">
-        <button
-          type="button"
-          disabled={!complete || busy || blocked}
-          onClick={() => {
-            void send();
-          }}
-        >
-          Зберегти відповідь
-        </button>
-        <button
-          type="button"
-          className="quiet"
-          disabled={busy}
-          onClick={cancel}
-        >
-          Скасувати
-        </button>
-      </div>
-    </div>
-  );
-}
-
-/**
  * The decision on a list: approve it, or reject it. Approval is for whoever
  * may approve, while the store that started the list trades (owner decision,
  * 2026-10-09); rejection is for them and for whoever may add and remove the
  * list's files, so a list whose last file is wrong is rejected where it is
  * looked at (owner, 2026-10-08; review, 2026-10-09).
+ *
+ * Approval is Telegram's MainButton, «Затвердити · 412 шт.», once nothing
+ * waits — before, none, and the tag says what waits — and it is confirmed in
+ * a sheet, the number large (spec §6.6; stage 2, goods task list, P0-6).
+ * Rejection stays as it was.
  */
 function Approval({
   list,
@@ -1928,6 +1682,8 @@ function Approval({
   warehouse,
   approvable,
   blocked,
+  quiet,
+  fallback,
   refresh,
 }: {
   list: StockList;
@@ -1937,6 +1693,10 @@ function Approval({
   /** Whether approval is offered at all; rejection always is. */
   approvable: boolean;
   blocked: boolean;
+  /** Another sheet over the list: its MainButton is not this one. */
+  quiet: boolean;
+  /** Where the cursor goes as the sheet closes, its button gone. */
+  fallback: RefObject<HTMLElement>;
   refresh: () => Promise<void>;
 }): JSX.Element {
   const [asking, setAsking] = useState<"approve" | "reject" | null>(null);
@@ -1947,6 +1707,20 @@ function Approval({
   const bases = (Object.keys(basisLabels) as Basis[]).filter(
     (basis) => list.summary.lines_by_basis[basis] > 0,
   );
+  const units = list.summary.units;
+  const ready = approvable && list.ready_to_approve;
+  const ask = (): void => {
+    if (blocked || busy) return;
+    setProblem(null);
+    setAsking("approve");
+  };
+  const words = `Затвердити · ${number(units)} шт.`;
+  const main = useMainButton(words, ask, {
+    shown: ready && asking === null && !quiet,
+    active: !blocked && !busy,
+  });
+  const dock = useRef<HTMLDivElement>(null);
+  usePanelRoom(dock, ready && asking === null && !main);
 
   async function decide(action: "approve" | "reject"): Promise<void> {
     setBusy(true);
@@ -1963,7 +1737,9 @@ function Approval({
         // A large list's approval may take longer than 20 s (ADR-0014 §16).
         { slow: action === "approve" },
       );
+      buzz("success");
     } catch (error) {
+      buzz("error");
       const reasonCode =
         error instanceof ApiError ? error.details.reason : undefined;
       setProblem(
@@ -2009,14 +1785,14 @@ function Approval({
 
   return (
     <div
-      className="notice"
+      className="notice opening-decision"
       aria-label={approvable ? "Затвердження списку" : "Рішення щодо списку"}
     >
       <h3>{approvable ? "Затвердження" : "Рішення щодо списку"}</h3>
       {approvable && (
         <p>
           Стане початковим залишком складу «{warehouse}»:{" "}
-          <strong>{list.summary.units} шт.</strong>
+          <strong>{units} шт.</strong>
         </p>
       )}
       <p>
@@ -2045,30 +1821,7 @@ function Approval({
         </p>
       )}
       {problem && <p role="alert">{problem}</p>}
-      {asking === "approve" ? (
-        <div className="actions">
-          <p>
-            {list.summary.units} шт. стануть початковим залишком складу «
-            {warehouse}». Скасувати це потім не можна.
-          </p>
-          <button
-            disabled={busy || blocked}
-            onClick={() => {
-              void decide("approve");
-            }}
-          >
-            Так, затвердити
-          </button>
-          <button
-            className="quiet"
-            onClick={() => {
-              setAsking(null);
-            }}
-          >
-            Скасувати
-          </button>
-        </div>
-      ) : asking === "reject" ? (
+      {asking === "reject" ? (
         <div className="actions">
           <label>
             Чому відхиляємо
@@ -2099,20 +1852,11 @@ function Approval({
         </div>
       ) : (
         <div className="actions">
-          {approvable && (
-            <button
-              disabled={!list.ready_to_approve || busy || blocked}
-              onClick={() => {
-                setAsking("approve");
-              }}
-            >
-              Затвердити список
-            </button>
-          )}
           <button
             className="quiet"
             disabled={busy || blocked}
             onClick={() => {
+              setProblem(null);
               setAsking("reject");
             }}
           >
@@ -2120,6 +1864,116 @@ function Approval({
           </button>
         </div>
       )}
+      {ready && asking === null && !main && (
+        // Outside Telegram, its MainButton as the dock's one button.
+        <div className="pay-panel order-dock" ref={dock}>
+          <button
+            type="button"
+            className="main-mimic"
+            aria-haspopup="dialog"
+            disabled={blocked || busy}
+            onClick={ask}
+          >
+            {words}
+          </button>
+        </div>
+      )}
+      {asking === "approve" && (
+        <ApproveSheet
+          list={list}
+          warehouse={warehouse}
+          busy={busy}
+          held={blocked}
+          fallback={fallback}
+          approve={() => {
+            void decide("approve");
+          }}
+          close={() => {
+            if (!busy) setAsking(null);
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+/**
+ * «Затвердити «Зошит 1»?» (spec §6.6; P0-6): the number large, what it
+ * becomes, that it cannot be undone, and Telegram's MainButton «Так,
+ * затвердити» — outside Telegram, the sheet's own. A press sooner than
+ * `CARRIED_TAP` after it opened was meant for «Затвердити · … шт.», which
+ * stood where «Так, затвердити» stands: let go.
+ */
+function ApproveSheet({
+  list,
+  warehouse,
+  busy,
+  held,
+  fallback,
+  approve,
+  close,
+}: {
+  list: StockList;
+  warehouse: string;
+  busy: boolean;
+  held: boolean;
+  fallback: RefObject<HTMLElement>;
+  approve: () => void;
+  close: () => void;
+}): JSX.Element {
+  const [openedAt] = useState(() => performance.now());
+  const press = (): void => {
+    if (held || busy || performance.now() - openedAt < CARRIED_TAP) return;
+    approve();
+  };
+  const main = useMainButton("Так, затвердити", press, {
+    progress: busy,
+    active: !held,
+  });
+  return (
+    <Sheet
+      title={`Затвердити «${listName(list)}»?`}
+      close={close}
+      fallback={fallback}
+      held={busy}
+      foot={
+        <div className="count-foot">
+          {!main && (
+            <button
+              type="button"
+              className="sheet-done main-mimic"
+              disabled={held}
+              aria-disabled={busy || undefined}
+              onClick={press}
+            >
+              {busy ? (
+                <>
+                  <Eyelet state="spin" size={20} />
+                  <span className="visually-hidden">Так, затвердити</span>
+                </>
+              ) : (
+                "Так, затвердити"
+              )}
+            </button>
+          )}
+          <button
+            type="button"
+            className="quiet"
+            disabled={busy}
+            onClick={close}
+          >
+            Скасувати
+          </button>
+        </div>
+      }
+    >
+      <p className="t-money-l opening-units">
+        {number(list.summary.units)} шт.
+      </p>
+      <p>
+        стануть початковим залишком складу «{warehouse}». Скасувати це потім не
+        можна.
+      </p>
+    </Sheet>
   );
 }

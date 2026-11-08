@@ -227,7 +227,9 @@ function TagRow({
 }: {
   tag: Tag;
   open: Store;
-  verb: (() => void) | undefined;
+  /** Its section, or the one thing in it the tag is of (stage 2, goods
+   * task list, P0-6). */
+  verb: ((opens?: string) => void) | undefined;
   held: boolean;
   /** «Бачу», for news. */
   seen: (event: MouseEvent) => void;
@@ -272,7 +274,7 @@ function TagRow({
                 // A tag's verb, felt (spec S04; «Усе на бірці» task list,
                 // P1-2).
                 buzz("light");
-                verb();
+                verb(tag.opens);
               }}
             >
               {words}
@@ -309,7 +311,7 @@ function WaitingTags({
   open: Store;
   /** Whose «Бачу» this phone keeps. */
   scopeKey: string;
-  verbs: Partial<Record<Kind, () => void>>;
+  verbs: Partial<Record<Kind, (opens?: string) => void>>;
   held: boolean;
   now: number;
   /** «Сьогодні» searched: kept as it was, unseen, its toast standing. */
@@ -635,7 +637,7 @@ export function Today({
   /** Whether the network's backups are this person's to read. */
   readsBackups: boolean;
   /** Where each kind's verb goes, where this person may open it. */
-  verbs: Partial<Record<Kind, () => void>>;
+  verbs: Partial<Record<Kind, (opens?: string) => void>>;
   /** A kept operation holds every other section: the verbs wait too. */
   held: boolean;
   /** «Замовлення», where this person reads the open store's orders. */

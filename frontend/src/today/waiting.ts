@@ -57,6 +57,9 @@ export interface Tag {
   meta: string[];
   /** News, gone once seen: what this phone keeps of it. */
   seen?: string;
+  /** The one list its verb opens itself, rather than the lists (stage 2,
+   * goods task list, P0-6). */
+  opens?: string;
 }
 
 /** A news tag seen today on this phone, and when. */
@@ -337,6 +340,11 @@ export function useWaiting({
               store,
               title: "Затвердьте початкові залишки",
               meta: [...named(store), linesOf(waiting.approve)],
+              // One list to approve: «Переглянути й затвердити» opens it,
+              // three taps from the approval; more, the lists (P0-6).
+              ...(waiting.approve.length === 1 && waiting.approve[0]
+                ? { opens: waiting.approve[0].snapshot_id }
+                : {}),
             },
           ]
         : []),

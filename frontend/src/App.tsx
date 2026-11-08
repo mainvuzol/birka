@@ -1115,6 +1115,11 @@ function Workspace({
   const [returnTask, setReturnTask] = useState(false);
   // And while a warehouse is counted (stage 2, goods task list, P0-3).
   const [stocktakeTask, setStocktakeTask] = useState(false);
+  // And while a list's line is answered (stage 2, goods task list, P0-5).
+  const [openingsTask, setOpeningsTask] = useState(false);
+  // The list «Сьогодні»'s tag opens itself, until the section is left
+  // (P0-6).
+  const [openingsOpened, setOpeningsOpened] = useState<string | null>(null);
   const taskScreen =
     ((tab === "deposit" || tab === "credits") && depositTask) ||
     (tab === "cash" && cashTask) ||
@@ -1122,6 +1127,7 @@ function Workspace({
     (tab === "suppliers" && supplierTask) ||
     (tab === "returns" && returnTask) ||
     (tab === "stocktaking" && stocktakeTask) ||
+    (tab === "openings" && openingsTask) ||
     // And while a new order is made (stage 2, orders task list, P0-5).
     tab === "new";
   const creditKey = `birka:credit-pending:${me.organization_id}:${me.user_id}:${store.id}`;
@@ -2597,6 +2603,7 @@ function Workspace({
     if (tab !== "borrowed" && tab !== "invoices") setBorrowedFrom("more");
     if (tab !== "invoices") setInvoiceOpening(null);
     if (tab !== "suppliers" && tab !== "invoices") setReturnOpen(null);
+    if (tab !== "openings") setOpeningsOpened(null);
   }, [tab]);
   // Anywhere but the model and what it opened, its way back is forgotten,
   // and the search it held: the till takes it as it opens, once — opened
@@ -3291,7 +3298,12 @@ function Workspace({
               ...(canSeeOrders ? { parcels: ordersFromToday } : {}),
               ...(canSeeDamaged ? { damaged: fromTag("damaged") } : {}),
               ...(store.permissions.includes("snapshot:approve")
-                ? { openings: fromTag("openings") }
+                ? {
+                    openings: (opens?: string) => {
+                      setOpeningsOpened(opens ?? null);
+                      fromTag("openings")();
+                    },
+                  }
                 : {}),
               // Where this person makes the lists: one to finish, or the
               // first to begin (stage 2, admin task list, P0-1, P0-2).
@@ -3627,6 +3639,8 @@ function Workspace({
             scopeKey={key}
             blocked={blocked}
             back={backOf("openings")}
+            task={setOpeningsTask}
+            opened={openingsOpened}
           />
         ) : // Never opened without the right: nothing is said of the rule
         // («Усе на бірці» task list, P2-1).

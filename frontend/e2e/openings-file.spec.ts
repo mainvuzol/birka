@@ -265,7 +265,7 @@ async function refuseOnce(
 async function newFromFile(page: Page, location: string): Promise<Locator> {
   await page.getByRole("button", { name: "Новий список" }).click();
   const form = page.getByRole("form", { name: "Новий список" });
-  await form.getByLabel("Склад").selectOption(location);
+  await warehouse(page, location);
   await form.getByLabel("Завантажити файл").check();
   return form;
 }
@@ -277,11 +277,86 @@ function card(page: Page, line: number): Locator {
   });
 }
 
+/** A line's own screen, from its row (stage 2, goods task list, P0-5). */
 async function answer(page: Page, line: number): Promise<Locator> {
   await card(page, line)
-    .getByRole("button", { name: "Розібрати рядок" })
+    .getByRole("button", { name: /^(Розібрати|Змінити відповідь)$/ })
     .click();
   return page.getByRole("form", { name: `Розбір рядка ${String(line)}` });
+}
+
+/** A warehouse of the store, by its id: its name, as its chip says it. */
+async function placeName(page: Page, location: string): Promise<string> {
+  const answer = await page.request.get(
+    `/api/v1/stock-locations?store_id=${fixture.store_id}`,
+    { headers: { Authorization: `Bearer ${await token(page)}` } },
+  );
+  const places = (await answer.json()) as { id: string; name: string }[];
+  const name = places.find((place) => place.id === location)?.name;
+  expect(name).toBeDefined();
+  return name ?? "";
+}
+
+/** The new list's warehouse: a chip, or — the only one a list may start
+ * at — said and taken (stage 2, goods task list, P0-6). */
+async function chip(page: Page, name: string): Promise<void> {
+  const form = page.getByRole("form", { name: "Новий список" });
+  const button = form
+    .getByRole("group", { name: "Склад" })
+    .getByRole("button", { name, exact: true });
+  const only = form.locator(".opening-place");
+  await expect(button.or(only)).toBeVisible();
+  if (await only.isVisible()) await expect(only).toHaveText(`Склад «${name}»`);
+  else await button.click();
+}
+
+async function warehouse(page: Page, location: string): Promise<void> {
+  await chip(page, await placeName(page, location));
+}
+
+/** The list's other lines, from ⋯'s sheet (P0-6): «Усі», «Не товар»,
+ * «Прибрані». */
+async function showLines(page: Page, which: string): Promise<void> {
+  await page.getByRole("button", { name: /^Інші рядки/ }).click();
+  // A tap is taken once the sheet has risen.
+  const sheet = page.getByRole("dialog", { name: "Інші рядки" });
+  await expect(sheet).toHaveAttribute("data-ready", "");
+  await sheet.getByRole("button", { name: new RegExp(`^${which}`) }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+}
+
+/** A size of a line's model, a cell (P0-5). */
+async function size(editor: Locator, code: string): Promise<void> {
+  await editor
+    .getByRole("radiogroup", { name: "Розмір" })
+    .first()
+    .getByRole("radio", { name: code, exact: true })
+    .click();
+}
+
+/** Its MainButton, outside Telegram the dock's: «Зберегти й далі · …». */
+function saving(editor: Locator): Locator {
+  return editor.getByRole("button", { name: /^Зберегти/ });
+}
+
+/** Saved: the next line opens by itself, or the list; back on the list
+ * either way. */
+async function save(page: Page, editor: Locator): Promise<void> {
+  await saving(editor).click();
+  await expect(editor).toHaveCount(0);
+  const another = page.getByRole("form", { name: /^Розбір рядка/ });
+  if ((await another.count()) > 0)
+    await page.getByRole("button", { name: "Назад до списку" }).click();
+  await expect(another).toHaveCount(0);
+}
+
+/** «Затвердити · N шт.», then «Так, затвердити» in its sheet once the
+ * sheet takes a tap (P0-6). */
+async function approve(page: Page): Promise<void> {
+  await page.getByRole("button", { name: /^Затвердити · / }).click();
+  const sheet = page.getByRole("dialog");
+  await expect(sheet).toHaveAttribute("data-ready", "");
+  await sheet.getByRole("button", { name: "Так, затвердити" }).click();
 }
 
 /** The model is the person's choice: searched for, then picked. The search
@@ -396,24 +471,12 @@ test("a file fills a new list: lines show their photo and reading, a split the l
       `Місце у списку: рядків 5 з ${limits.lines.toLocaleString("uk-UA")} · відповідей 0 з ${limits.allocations.toLocaleString("uk-UA")}`,
     ),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Усі", exact: true }).click();
+  await showLines(page, "Усі");
 
-  // A line keeps its photo and what the parser read, as a hint.
-  await expect(card(page, 1)).toContainText("Фото: IMG_0001.jpg, рядок 1");
+  // A line's row: its text, and what the list says of its count.
   await expect(card(page, 1)).toContainText(
     "у рядку по розмірах: M × 1, L × 2",
   );
-  await expect(card(page, 1)).toContainText(
-    `Прочитано: ${coat} · сірий · M × 1, L × 2`,
-  );
-  // A number without «шт» is the parser's, not the line's.
-  const hinted = card(page, 2);
-  await expect(hinted).toContainText("Парсер прочитав кількість: 3");
-  await expect(hinted).toContainText(
-    "Парсер прочитав кількість, але в рядку вона не написана зі «шт» — це лише підказка. Вкажіть кількість і звідки вона відома.",
-  );
-  await expect(hinted).toContainText("Ціна з зошита: 1200 (закупівельна)");
-  await expect(card(page, 3)).toContainText("Примітка парсера: заголовок");
   // What reorders the line, or prints nothing, is shown as a mark, and the
   // line kept as is.
   const reordered = card(page, 4).locator(".catalog-raw");
@@ -421,29 +484,15 @@ test("a file fills a new list: lines show their photo and reading, a split the l
   expect(await card(page, 4).innerText()).not.toContain(RLO);
   expect(await card(page, 4).innerText()).not.toContain(SHY);
 
-  // The count the parser read is never offered as stated, nor one piece.
-  let editor = await answer(page, 2);
-  await expect(editor.getByLabel(/Як у списку/)).toHaveCount(0);
-  await expect(editor.getByLabel(/Як у рядку/)).toHaveCount(0);
-  await expect(
-    editor.getByLabel("Рядок без кількості — одна штука"),
-  ).toHaveCount(0);
-  await expect(editor.getByRole("radio", { checked: true })).toHaveCount(0);
-  // The search starts from the model as read, never with its colour.
-  await expect(editor.getByLabel("Пошук у каталозі")).toHaveValue(coat);
-  await editor.getByLabel("Відомо інакше").check();
-  await pickModel(editor, coat);
-  await editor.getByLabel("Розмір").selectOption({ label: "M" });
-  await editor.getByLabel("Кількість").fill("3");
-  const save = editor.getByRole("button", { name: "Зберегти відповідь" });
-  await expect(save).toBeDisabled();
-  await editor.getByLabel("Звідки це відомо").fill("на фото видно 3 шт");
-  await save.click();
-  await expect(card(page, 2)).toContainText("Звідки кількість: Відомо інакше");
-
-  // The split the line shows is offered, and taken only by a tap.
-  editor = await answer(page, 1);
-  const bySize = editor.getByLabel("Як у рядку, по розмірах: M × 1, L × 2");
+  // On its own screen, its photo and what the parser read, as a hint; the
+  // split the line shows offered, and taken only by a tap (stage 2, goods
+  // task list, P0-5).
+  let editor = await answer(page, 1);
+  await expect(editor).toContainText("Фото: IMG_0001.jpg, рядок 1");
+  await expect(editor).toContainText(
+    `Прочитано: ${coat} · сірий · M × 1, L × 2`,
+  );
+  const bySize = editor.getByLabel("Як у рядку: M 1 · L 2");
   await expect(bySize).toBeVisible();
   await expect(bySize).not.toBeChecked();
   await expect(editor.getByRole("radio", { checked: true })).toHaveCount(0);
@@ -453,40 +502,87 @@ test("a file fills a new list: lines show their photo and reading, a split the l
       .getByRole("list", { name: "Розміри й кількість, як у рядку" })
       .getByRole("listitem"),
   ).toHaveText(["M × 1", "L × 2"]);
-  await expect(
-    editor.getByRole("combobox", { name: "Розмір", exact: true }),
-  ).toHaveCount(0);
-  const saveSplit = editor.getByRole("button", { name: "Зберегти відповідь" });
-  await expect(saveSplit).toBeDisabled();
+  await expect(editor.getByRole("radiogroup", { name: "Розмір" })).toHaveCount(
+    0,
+  );
+  await expect(saving(editor)).toBeDisabled();
   await pickModel(editor, coat);
-  await saveSplit.click();
+  await expect(saving(editor)).toHaveText("Зберегти й далі · M × 1, L × 2 шт.");
+  await saving(editor).click();
+
+  // The next line opens by itself. A number without «шт» is the parser's,
+  // not the line's.
+  editor = page.getByRole("form", { name: "Розбір рядка 2" });
+  await expect(editor).toContainText("Парсер прочитав кількість: 3");
+  await expect(editor).toContainText(
+    "Парсер прочитав кількість, але в рядку вона не написана зі «шт» — це лише підказка. Вкажіть кількість і звідки вона відома.",
+  );
+  await expect(editor).toContainText("Ціна з зошита: 1200 (закупівельна)");
+  // The count the parser read is never offered as stated, nor one piece;
+  // the one size it read is chosen, dashed until touched (В-Г7 (а)).
+  await expect(editor.getByLabel(/Як у списку/)).toHaveCount(0);
+  await expect(editor.getByLabel(/Як у рядку/)).toHaveCount(0);
+  await expect(
+    editor.getByLabel("Рядок без кількості — одна штука"),
+  ).toHaveCount(0);
+  await expect(editor.locator(".opening-ways input:checked")).toHaveCount(0);
+  const read = editor.getByRole("radio", { name: "M", exact: true });
+  await expect(read).toHaveAttribute("aria-checked", "true");
+  await expect(read).toHaveClass(/suggested/);
+  await expect(read).toHaveAccessibleDescription(
+    "Схоже на M — торкніться, щоб підтвердити",
+  );
+  await expect(editor).toContainText(
+    "Схоже на M — торкніться, щоб підтвердити",
+  );
+  // The search starts from the model as read, never with its colour.
+  await expect(editor.getByLabel("Пошук у каталозі")).toHaveValue(coat);
+  await editor.getByLabel("Відомо інакше").check();
+  await pickModel(editor, coat);
+  await size(editor, "M");
+  await expect(read).toHaveClass(/chosen/);
+  await expect(editor).not.toContainText("Схоже на M");
+  await editor.getByLabel("Кількість").fill("3");
+  await expect(saving(editor)).toBeDisabled();
+  await editor.getByLabel("Звідки це відомо").fill("на фото видно 3 шт");
+  await saving(editor).click();
+
+  editor = page.getByRole("form", { name: "Розбір рядка 3" });
+  await expect(editor).toContainText("Примітка парсера: заголовок");
+  for (const [line, why] of [
+    [3, "заголовок сторінки"],
+    [4, "не наша модель"],
+  ] as const) {
+    editor = page.getByRole("form", { name: `Розбір рядка ${String(line)}` });
+    await editor.getByRole("button", { name: "Не товар" }).click();
+    await editor.getByLabel("Чому це не товар").fill(why);
+    await saving(editor).click();
+  }
+
+  // A size the catalogue lacks: no tap; the person creates it, or says how.
+  editor = page.getByRole("form", { name: "Розбір рядка 5" });
+  await expect(editor.getByLabel(/Як у рядку/)).toHaveCount(0);
+  await expect(editor).toContainText(
+    "Рядок показує кількість по розмірах (M × 1, 4XL × 2), але розміру «4XL» немає в каталозі.",
+  );
+  await editor.getByRole("button", { name: "Не товар" }).click();
+  await editor.getByLabel("Чому це не товар").fill("розмір 4XL ще не заведено");
+  // The last line: «Зберегти», back to the list.
+  await expect(saving(editor)).toHaveText("Зберегти · не товар");
+  await saving(editor).click();
+  await expect(editor).toHaveCount(0);
   await expect(card(page, 1)).toContainText(
     "Звідки кількість: Як у рядку, по розмірах",
   );
   await expect(card(page, 1)).toContainText(`→ ${coat} сірий, M × 1`);
   await expect(card(page, 1)).toContainText(`→ ${coat} сірий, L × 2`);
-
-  // A size the catalogue lacks: no tap; the person creates it, or says how.
-  editor = await answer(page, 5);
-  await expect(editor.getByLabel(/Як у рядку/)).toHaveCount(0);
-  await expect(editor).toContainText(
-    "Рядок показує кількість по розмірах (M × 1, 4XL × 2), але розміру «4XL» немає в каталозі.",
-  );
-  await editor.getByLabel("Це не товар").check();
-  await editor.getByLabel("Чому це не товар").fill("розмір 4XL ще не заведено");
-  await editor.getByRole("button", { name: "Зберегти відповідь" }).click();
-  await expect(card(page, 5)).toContainText("Не товар");
-
+  await expect(card(page, 2)).toContainText("Звідки кількість: Відомо інакше");
   for (const [line, why] of [
     [3, "заголовок сторінки"],
     [4, "не наша модель"],
-  ] as const) {
-    editor = await answer(page, line);
-    await editor.getByLabel("Це не товар").check();
-    await editor.getByLabel("Чому це не товар").fill(why);
-    await editor.getByRole("button", { name: "Зберегти відповідь" }).click();
+    [5, "розмір 4XL ще не заведено"],
+  ] as const)
     await expect(card(page, line)).toContainText(`Не товар: ${why}`);
-  }
 
   // A second file joins the same list.
   await page.getByRole("button", { name: "Додати файл" }).click();
@@ -522,13 +618,13 @@ test("a file fills a new list: lines show their photo and reading, a split the l
     .selectOption({ label: "2. «зошит-2.json»" });
   await expect(card(page, 6)).toBeVisible();
   await expect(card(page, 1)).toHaveCount(0);
-  await expect(card(page, 6)).toContainText("Файл: «зошит-2.json»");
   editor = await answer(page, 6);
-  const oneSize = editor.getByLabel("Як у рядку, по розмірах: L × 1");
+  await expect(editor).toContainText("Файл: «зошит-2.json»");
+  const oneSize = editor.getByLabel("Як у рядку: L 1");
   await expect(oneSize).not.toBeChecked();
   await oneSize.check();
   await pickModel(editor, coat);
-  await editor.getByRole("button", { name: "Зберегти відповідь" }).click();
+  await save(page, editor);
   await expect(card(page, 6)).toContainText(`→ ${coat} сірий, L × 1`);
 
   // The approval names what rests on the split the lines showed.
@@ -540,13 +636,16 @@ test("a file fills a new list: lines show their photo and reading, a split the l
   await expect(
     approval.getByText("Відомо інакше: рядків 1, одиниць 3"),
   ).toBeVisible();
-  await approval.getByRole("button", { name: "Затвердити список" }).click();
-  await approval.getByRole("button", { name: "Так, затвердити" }).click();
+  await approve(page);
   await expect(
     page.getByText(
       "Затверджено: 7 шт. стали початковим залишком складу «Склад для файлу».",
     ),
   ).toBeVisible();
+  // Decided, a line's screen opens no more: what was read of it is on its
+  // row (review, 2026-11-08).
+  await expect(card(page, 6)).toContainText("Фото: IMG_0002.jpg, рядок 1");
+  await expect(card(page, 6).getByRole("button")).toHaveCount(0);
 
   // The line is kept as the file wrote it: the mark was only on the screen.
   const headers = { Authorization: `Bearer ${await token(page)}` };
@@ -618,14 +717,16 @@ test("a file added by mistake is removed with its answers, the last file is not,
   await expect(one).not.toContainText(LAST);
 
   // One of its lines answered, then the file goes, with that answer.
-  await page.getByRole("button", { name: "Усі", exact: true }).click();
+  await showLines(page, "Усі");
   let editor = await answer(page, 2);
   await expect(editor.getByLabel("Як у списку: 1 шт.")).toBeChecked();
   await pickModel(editor, coat);
-  await editor.getByLabel("Розмір").selectOption({ label: "L" });
-  await editor.getByRole("button", { name: "Зберегти відповідь" }).click();
+  await size(editor, "L");
+  await save(page, editor);
   await expect(two).toContainText("розібрано 1 з 2");
-  await expect(page.getByText(/^Рядків: 3 · розібрано 1/)).toBeVisible();
+  await expect(page.locator(".opening-progress")).toContainText(
+    "Розібрано 1 з 3",
+  );
 
   await two.getByRole("button", { name: "Прибрати файл" }).click();
   await expect(two.getByLabel("Прибрати файл?", { exact: true })).toContainText(
@@ -643,7 +744,9 @@ test("a file added by mistake is removed with its answers, the last file is not,
   await two.getByRole("button", { name: "Так, прибрати" }).click();
   await expect(two).toContainText(/Прибрано: Оля, /);
   await expect(two).toHaveClass(/part-removed/);
-  await expect(page.getByText(/^Рядків: 1 · розібрано 0/)).toBeVisible();
+  await expect(page.locator(".opening-progress")).toContainText(
+    "Розібрано 0 з 1",
+  );
   // The one left is the last again.
   await expect(
     one.getByRole("button", { name: "Прибрати файл" }),
@@ -654,7 +757,7 @@ test("a file added by mistake is removed with its answers, the last file is not,
   );
 
   // Its lines stay readable, as removed, and take no answer.
-  await page.getByRole("button", { name: "Прибрані" }).click();
+  await showLines(page, "Прибрані");
   await expect(card(page, 2)).toContainText("Прибрано");
   await expect(card(page, 3)).toContainText("Прибрано");
   await expect(
@@ -671,29 +774,28 @@ test("a file added by mistake is removed with its answers, the last file is not,
   await page.getByRole("button", { name: "Додати до списку" }).click();
   const three = page.getByRole("article", { name: "Файл 3" });
   await expect(three).toContainText("Рядки 4–5 · розібрано 0 з 2");
-  await page.getByRole("button", { name: "Усі", exact: true }).click();
+  await showLines(page, "Усі");
   await expect(card(page, 4)).toContainText(/Чекає|Потребує уваги/);
 
   editor = await answer(page, 1);
   await pickModel(editor, coat);
-  await editor.getByLabel("Розмір").selectOption({ label: "M" });
-  await editor.getByRole("button", { name: "Зберегти відповідь" }).click();
+  await size(editor, "M");
+  await save(page, editor);
   await expect(card(page, 1)).toContainText("Розібрано");
   editor = await answer(page, 4);
   await pickModel(editor, coat);
-  await editor.getByLabel("Розмір").selectOption({ label: "L" });
-  await editor.getByRole("button", { name: "Зберегти відповідь" }).click();
+  await size(editor, "L");
+  await save(page, editor);
   await expect(card(page, 4)).toContainText("Розібрано");
   editor = await answer(page, 5);
-  await editor.getByLabel("Це не товар").check();
+  await editor.getByRole("button", { name: "Не товар" }).click();
   await editor.getByLabel("Чому це не товар").fill("підсумок сторінки");
-  await editor.getByRole("button", { name: "Зберегти відповідь" }).click();
+  await save(page, editor);
   await expect(card(page, 5)).toContainText("Не товар: підсумок сторінки");
 
   const approval = page.getByLabel("Затвердження списку");
   await expect(approval).toContainText("Файлів у списку: 2 · прибрано: 1");
-  await approval.getByRole("button", { name: "Затвердити список" }).click();
-  await approval.getByRole("button", { name: "Так, затвердити" }).click();
+  await approve(page);
   await expect(
     page.getByText(
       "Затверджено: 3 шт. стали початковим залишком складу «Склад, де прибирають файл».",
@@ -874,10 +976,10 @@ test("a file not in Birka's format is refused before it is sent, and the same fi
 
   // The search starts from the model the parser read: not Birka's own
   // reading of the concept, and never with the colour.
-  await page.getByRole("button", { name: "Усі", exact: true }).click();
+  await showLines(page, "Усі");
   const editor = await answer(page, 2);
   await expect(editor.getByLabel("Пошук у каталозі")).toHaveValue("Лоран");
-  await editor.getByRole("button", { name: "Скасувати" }).click();
+  await page.getByRole("button", { name: "Назад до списку" }).click();
 
   // The same file again is the server's to refuse, naming the file.
   await page.getByRole("button", { name: "Додати файл" }).click();
@@ -1043,20 +1145,18 @@ test("a record that may be a size with its count or a range of sizes is asked ab
   await expect(
     page.getByRole("heading", { name: "Зошит діапазонів" }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Усі", exact: true }).click();
-  // 44 is a size too: the record may be read either way.
-  await expect(card(page, 1)).toContainText(
-    "Запис «42-44» може означати й діапазон розмірів: під час розбору вкажіть, що саме.",
-  );
+  await showLines(page, "Усі");
 
-  // Asked first; the split as the line shows it waits for the answer.
+  // 44 is a size too: the record may be read either way, and the line's
+  // screen asks it first, nothing answered for the person; the split as
+  // the line shows it waits for the answer.
   let editor = await answer(page, 1);
   const question = editor.getByRole("group", { name: "Запис «42-44» — це:" });
   await expect(question).toBeVisible();
   await expect(editor.getByLabel(/Як у рядку/)).toHaveCount(0);
-  await expect(editor.getByRole("radio", { checked: true })).toHaveCount(0);
+  await expect(editor.locator("input[type=radio]:checked")).toHaveCount(0);
   await question.getByLabel("Розмір 42 — 44 шт.").check();
-  const bySize = editor.getByLabel("Як у рядку, по розмірах: 42 × 44");
+  const bySize = editor.getByLabel("Як у рядку: 42 44");
   await expect(bySize).toBeVisible();
   await expect(bySize).not.toBeChecked();
   // Read as a range after all: the tap goes, and the choice made with it.
@@ -1070,7 +1170,7 @@ test("a record that may be a size with its count or a range of sizes is asked ab
   await expect(bySize).not.toBeChecked();
   await bySize.check();
   await pickModel(editor, parka);
-  await editor.getByRole("button", { name: "Зберегти відповідь" }).click();
+  await save(page, editor);
   await expect(card(page, 1)).toContainText(
     "Звідки кількість: Як у рядку, по розмірах",
   );
@@ -1093,14 +1193,12 @@ test("a record that may be a size with its count or a range of sizes is asked ab
   await expect(editor.getByLabel(/Як у рядку/)).toHaveCount(0);
   await editor.getByLabel("Відомо інакше").check();
   await pickModel(editor, parka);
-  await editor
-    .getByRole("combobox", { name: "Розмір", exact: true })
-    .selectOption({ label: "42" });
+  await size(editor, "42");
   await editor.getByLabel("Кількість").fill("1");
   await editor
     .getByLabel("Звідки це відомо")
     .fill("діапазон 42–44: на полиці одна 42");
-  await editor.getByRole("button", { name: "Зберегти відповідь" }).click();
+  await save(page, editor);
   await expect(card(page, 2)).toContainText("Звідки кількість: Відомо інакше");
   expect(answers).toHaveLength(2);
   expect(answers[1]).toMatchObject({ quantity_basis: "OWNER_KNOWLEDGE" });
@@ -1112,12 +1210,12 @@ test("a record that may be a size with its count or a range of sizes is asked ab
   // comes back to the app asks about it, «Як у рядку» waits for the answer,
   // and only the record answered is named.
   editor = await answer(page, 3);
-  const asShown = editor.getByLabel(`Як у рядку, по розмірах: M × ${early}`);
+  const asShown = editor.getByLabel(`Як у рядку: M ${early}`);
   await expect(editor.getByRole("group", { name: /^Запис/ })).toHaveCount(0);
   await asShown.check();
   await pickModel(editor, coat);
-  const save = editor.getByRole("button", { name: "Зберегти відповідь" });
-  await expect(save).toBeEnabled();
+  const saveButton = saving(editor);
+  await expect(saveButton).toBeEnabled();
   await sizeMade(page, early);
   await page.evaluate(() => {
     window.dispatchEvent(new Event("visibilitychange"));
@@ -1127,11 +1225,11 @@ test("a record that may be a size with its count or a range of sizes is asked ab
   });
   await expect(madeRange).toBeVisible();
   await expect(editor.getByLabel(/Як у рядку/)).toHaveCount(0);
-  await expect(save).toBeDisabled();
+  await expect(saveButton).toBeDisabled();
   expect(answers).toHaveLength(2);
   await madeRange.getByLabel(`Розмір M — ${early} шт`).check();
   await expect(asShown).toBeChecked();
-  await save.click();
+  await save(page, editor);
   await expect(card(page, 3)).toContainText(
     "Звідки кількість: Як у рядку, по розмірах",
   );
@@ -1146,10 +1244,10 @@ test("a record that may be a size with its count or a range of sizes is asked ab
   // arrives: the server refuses the answer naming the record, the line is
   // read again, and the record is asked about here.
   editor = await answer(page, 4);
-  await editor.getByLabel(`Як у рядку, по розмірах: M × ${late}`).check();
+  await editor.getByLabel(`Як у рядку: M ${late}`).check();
   await pickModel(editor, coat);
   await sizeMade(page, late);
-  await editor.getByRole("button", { name: "Зберегти відповідь" }).click();
+  await saving(editor).click();
   await expect(editor.getByRole("alert")).toHaveText(
     `Запис «M-${late}» тепер може означати й діапазон розмірів. Рядок прочитано знову: вкажіть нижче, що він означає, і збережіть відповідь ще раз.`,
   );
@@ -1157,11 +1255,9 @@ test("a record that may be a size with its count or a range of sizes is asked ab
     name: `Запис «M-${late}» — це:`,
   });
   await expect(askedNow).toBeVisible();
-  await expect(
-    editor.getByRole("button", { name: "Зберегти відповідь" }),
-  ).toBeDisabled();
+  await expect(saving(editor)).toBeDisabled();
   await askedNow.getByLabel(`Розмір M — ${late} шт`).check();
-  await editor.getByRole("button", { name: "Зберегти відповідь" }).click();
+  await save(page, editor);
   await expect(card(page, 4)).toContainText(
     "Звідки кількість: Як у рядку, по розмірах",
   );
@@ -1195,8 +1291,7 @@ test("a record that may be a size with its count or a range of sizes is asked ab
     "Рядок 1 треба розібрати ще раз: запис у ньому тепер може бути діапазоном розмірів.",
     "Рядки 1, 2 і ще 1 треба розібрати ще раз: запис у них тепер може бути діапазоном розмірів.",
   ]) {
-    await approval.getByRole("button", { name: "Затвердити список" }).click();
-    await approval.getByRole("button", { name: "Так, затвердити" }).click();
+    await approve(page);
     await expect(approval.getByRole("alert")).toHaveText(said);
   }
   await page.unrouteAll({ behavior: "wait" });
@@ -1249,12 +1344,12 @@ test("the shared warehouse's list is seen and filled from the other store, and n
   await expect(page.getByRole("article", { name: "Файл 2" })).toContainText(
     "Рядки 2–2 · розібрано 0 з 1",
   );
-  await page.getByRole("button", { name: "Усі", exact: true }).click();
+  await showLines(page, "Усі");
   const editor = await answer(page, 2);
   await expect(editor.getByLabel("Як у списку: 2 шт.")).toBeChecked();
   await pickModel(editor, coat);
-  await editor.getByLabel("Розмір").selectOption({ label: "L" });
-  await editor.getByRole("button", { name: "Зберегти відповідь" }).click();
+  await size(editor, "L");
+  await save(page, editor);
   await expect(card(page, 2)).toContainText("Розібрано");
   // Every call on the list named the store it was made through.
   expect(asked.length).toBeGreaterThan(0);
@@ -1267,9 +1362,7 @@ test("the shared warehouse's list is seen and filled from the other store, and n
   await page.getByRole("button", { name: "До списків" }).click();
   await page.getByRole("button", { name: "Новий список" }).click();
   const another = page.getByRole("form", { name: "Новий список" });
-  await another
-    .getByLabel("Склад")
-    .selectOption(fixture.shared_opening_location_id);
+  await chip(page, "Спільний новий склад");
   await expect(another).toContainText(
     `На складі «Спільний новий склад» уже чекає список «${name}» (веде магазин «Основний»). Другий список для нього не створюють — додайте файл до наявного.`,
   );
@@ -1354,7 +1447,7 @@ test("a shared list whose own store stopped trading is only rejected, from the o
     await section(page, "Початкові залишки");
     await page.getByRole("button", { name: "Новий список" }).click();
     const form = page.getByRole("form", { name: "Новий список" });
-    await form.getByLabel("Склад").selectOption(between);
+    await chip(page, "Склад півночі й півдня");
     await expect(form).toContainText(
       `На складі «Склад півночі й півдня» чекає список «${name}» магазину «Північний», який не працює. Відкрийте й відхиліть його — тоді можна почати новий список і додати до нього файли.`,
     );
@@ -1369,16 +1462,16 @@ test("a shared list whose own store stopped trading is only rejected, from the o
       ),
     ).toBeVisible();
     // Nothing else is done to it: no approval, no file, no answer.
-    await page.getByRole("button", { name: "Усі", exact: true }).click();
+    await showLines(page, "Усі");
     await expect(card(page, 1)).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "Затвердити список" }),
+      page.getByRole("button", { name: /^Затвердити · / }),
     ).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Додати файл" })).toHaveCount(
       0,
     );
     await expect(
-      card(page, 1).getByRole("button", { name: "Розібрати рядок" }),
+      card(page, 1).getByRole("button", { name: "Розібрати", exact: true }),
     ).toHaveCount(0);
 
     // A manager rejects it, and the warehouse is released.
@@ -1401,7 +1494,7 @@ test("a shared list whose own store stopped trading is only rejected, from the o
     await page.getByRole("button", { name: "До списків" }).click();
     await page.getByRole("button", { name: "Новий список" }).click();
     const fresh = page.getByRole("form", { name: "Новий список" });
-    await fresh.getByLabel("Склад").selectOption(between);
+    await chip(page, "Склад півночі й півдня");
     await fresh.getByLabel("Завантажити файл").check();
     await choose(
       fresh,
@@ -1428,7 +1521,7 @@ test("a shared list whose own store stopped trading is only rejected, from the o
       LAST,
     );
     await expect(
-      page.getByRole("button", { name: "Затвердити список" }),
+      page.getByRole("button", { name: /^Затвердити · / }),
     ).toHaveCount(0);
     // Nothing said of who may approve (stage 2, goods task list, P1-5).
     await expect(page.getByText(/Відхилити його можете й ви\.$/)).toBeVisible();
@@ -1614,21 +1707,20 @@ test("a slow answer is no outage: a file and an approval wait 60 s, say so, and 
     await add.release();
   }
 
-  await page.getByRole("button", { name: "Усі", exact: true }).click();
+  await showLines(page, "Усі");
   const editor = await answer(page, 1);
   await expect(editor.getByLabel("Як у списку: 1 шт.")).toBeChecked();
   await pickModel(editor, coat);
-  await editor.getByLabel("Розмір").selectOption({ label: "M" });
-  await editor.getByRole("button", { name: "Зберегти відповідь" }).click();
+  await size(editor, "M");
+  await save(page, editor);
   await expect(card(page, 1)).toContainText("Розібрано");
 
-  const approve = hold(page, "**/api/v1/snapshots/*/approve?*");
-  await approve.ready;
+  const held = hold(page, "**/api/v1/snapshots/*/approve?*");
+  await held.ready;
   try {
     const approval = page.getByLabel("Затвердження списку");
-    await approval.getByRole("button", { name: "Затвердити список" }).click();
-    await approval.getByRole("button", { name: "Так, затвердити" }).click();
-    await expect.poll(() => approve.held()).toBe(1);
+    await approve(page);
+    await expect.poll(() => held.held()).toBe(1);
     await page.clock.fastForward("00:21");
     await page.waitForTimeout(300);
     await expect(approval.getByRole("alert")).toHaveCount(0);
@@ -1636,7 +1728,7 @@ test("a slow answer is no outage: a file and an approval wait 60 s, say so, and 
     await expect(approval.getByRole("alert")).toHaveText(SLOW);
     expect(await down(page)).toBe(false);
   } finally {
-    await approve.release();
+    await held.release();
   }
 });
 
@@ -1684,13 +1776,13 @@ test("answers lost on their way back: a file removed since comes back as a new o
   await expect(page.getByRole("heading", { name: source })).toBeVisible();
 
   // A split the line does not show as the parser read it is offered no tap.
-  await page.getByRole("button", { name: "Усі", exact: true }).click();
-  await expect(card(page, 2)).toContainText(
+  await showLines(page, "Усі");
+  const editor = await answer(page, 2);
+  await expect(editor).toContainText(
     "Парсер прочитав кількість по розмірах, але рядок показує її не так або не лише її — одним натиском її не підтвердити. Вкажіть, звідки відома кількість.",
   );
-  const editor = await answer(page, 2);
   await expect(editor.getByLabel(/Як у рядку/)).toHaveCount(0);
-  await editor.getByRole("button", { name: "Скасувати" }).click();
+  await page.getByRole("button", { name: "Назад до списку" }).click();
 
   // A file added, its answer lost: the person leaves it at that.
   const second = stockFile([
@@ -1771,9 +1863,11 @@ test("answers lost on their way back: a file removed since comes back as a new o
   expect(posted[4]).toBe(posted[3]);
   expect(posted[5]).not.toBe(posted[3]);
 
-  // The same text twice in the list is said, with its count.
-  await page.getByRole("button", { name: "Усі", exact: true }).click();
-  await expect(card(page, 6)).toContainText(
+  // The same text twice in the list is said, with its count, on the
+  // line's screen.
+  await showLines(page, "Усі");
+  const twice = await answer(page, 6);
+  await expect(twice).toContainText(
     "Такий самий рядок у списку — 2 рази: це може бути по рядку на кожну одиницю, або помилка переписування.",
   );
 });
@@ -1875,7 +1969,7 @@ test("on a narrow phone a file's long name breaks, never pushes the page sideway
   await two.getByRole("button", { name: "Скасувати" }).click();
 
   // The line's editor names the file and the photo.
-  await page.getByRole("button", { name: "Усі", exact: true }).click();
+  await showLines(page, "Усі");
   const editor = await answer(page, 1);
   await expect(editor).toContainText(`Файл: «${long}»`);
   await expect(editor).toContainText(`Фото: ${long}, рядок 1`);
@@ -1917,18 +2011,18 @@ test("on a narrow phone a file's long name breaks, never pushes the page sideway
   });
   await expect(editor.getByLabel("Як у списку: 1 шт.")).toBeChecked();
   await pickModel(editor, coat);
-  await editor.getByLabel("Розмір").selectOption({ label: "M" });
-  const save = editor.getByRole("button", { name: "Зберегти відповідь" });
-  await save.click();
+  await size(editor, "M");
+  const saveButton = saving(editor);
+  await saveButton.click();
   await expect(editor.getByRole("alert")).toHaveText(
     "У списку вже 5 000 відповідей — більше він не вміщує, тож цю відповідь не збережено. Рядок із кількома розмірами бере відповідь на кожен розмір. Звільнити місце можна, прибравши файл.",
   );
-  await save.click();
+  await saveButton.click();
   await expect(editor.getByRole("alert")).toHaveText(
     "Магазин «Основний», що почав цей список, більше не може приймати товар на цей склад: список можна лише відхилити.",
   );
   await page.unrouteAll({ behavior: "wait" });
-  await editor.getByRole("button", { name: "Скасувати" }).click();
+  await page.getByRole("button", { name: "Назад до списку" }).click();
 
   // A reason given as one long word, a link, breaks too (review,
   // 2026-10-09).
@@ -2279,7 +2373,9 @@ test("a send refused as the same command in another form settles the draft: what
 
     // Meanwhile someone rejects the list made: the file was wrong.
     await noListWaits(page, location);
-    await form.getByRole("button", { name: "Закрити" }).click();
+    await page
+      .getByRole("button", { name: "Назад до «Початкові залишки»" })
+      .click();
 
     // Later, a corrected file: the same command, as the draft is
     // unsettled, refused as sent before in another form. That settles it:
@@ -2330,7 +2426,9 @@ test("a send refused as the same command in another form settles the draft: what
     await form.getByRole("button", { name: "Зберегти список" }).click();
     await expect(form.getByRole("alert")).toHaveText(unknown);
     expect((await draft())?.command_id).toBe(sent[3]?.command_id);
-    await form.getByRole("button", { name: "Закрити" }).click();
+    await page
+      .getByRole("button", { name: "Назад до «Початкові залишки»" })
+      .click();
     lost = null;
     await page.getByRole("button", { name: "Оновити" }).click();
     await page

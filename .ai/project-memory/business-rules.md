@@ -7256,3 +7256,126 @@ the similar-spelling check stands where it was.
     model it says, not under every part.
   - After «Далі» and «Ні, це нова модель» the cursor stands on the words in
     quotes at the step's top, not lost.
+
+## Chosen in chat — 2026-11-08 (stage 2 batch 11: «Початкові залишки» — a line answered on its own task screen, «Зберегти й далі»; the lists as tags, the list's big tag with its progress, a switch of three, approval as Telegram's MainButton and a sheet; «Сьогодні»'s tag opening the list; goods P0-5, P0-6)
+
+Chosen in chat on 2026-11-08 («merged, go next»), after #179: the goods
+task list's P0-5 and P0-6 in one batch. The owner's question В-Г7 stands by
+its (а): what the line states stays chosen for the person, drawn dashed
+until it is touched, and the MainButton names what will be recorded. No
+right, no server rule, no command and no field changes: a line's answer is
+`PUT /snapshots/{id}/lines/{n}` with the same bodies, approval and
+rejection `POST /snapshots/{id}/approve` and `/reject` as before. Every
+line is still answered by a person; the split a line shows is offered and
+never chosen for them; approving is `snapshot:approve`'s only; the
+warehouse waits while a list does; the limits of 5 000 stand.
+
+- **A line's screen (P0-5).** «Розібрати» on a line's row opens the line as
+  a task screen, the menu set aside: «Рядок 12 з 412» over «Склад «…» ·
+  чекають N», «← {список}» back to the list with nothing sent (Telegram's
+  «Назад» too; both held while an answer is on its way).
+  - The line as the paper wrote it, on paper; under it what the list says
+    of its count, its photo and file, what the parser read and its notes,
+    the lines with the same text, and a range or a duplicate asked about —
+    all moved here from the list's rows (decided here). A record that may
+    be a range is asked as «Запис «42-44» — це:» on the screen, nothing in
+    it chosen for the person; on a row whose screen opens, the row says
+    «Потребує уваги» and no more. Where the screen does not open, the row
+    keeps all of it (settled in the review, below).
+  - «Модель»: the catalogue's search from the model as read, or the model
+    chosen with «Інша модель».
+  - «Розмір»: the size cells, «Розмір невідомий» last. The one size the
+    parser read is chosen, dashed, with «Схоже на M — торкніться, щоб
+    підтвердити» until it is touched (В-Г7 (а)); a tap on it confirms it.
+  - The split a line shows is offered in «Розмір» as «Як у рядку: M 1 · L 2»
+    (decided here; «Як у рядку, по розмірах: M × 1, L × 2» in «Звідки
+    кількість» before), never taken by itself; taken, its sizes and counts
+    stand as cells and nothing is typed.
+  - «Звідки кількість»: the ways, one card each. What the line states —
+    «Як у списку: 3 шт.», or one piece where the line implies it — is
+    chosen, dashed, with «Прочитали в рядку» until it is touched (В-Г7
+    (а)); as before, it was chosen for the person, only now it is drawn as
+    the line's reading.
+  - «Не товар» a toggle (decided here), its reason under it; «Пропустити»
+    opens the next line with nothing sent (on the last, the list).
+  - **The MainButton** names what will be recorded: «Зберегти й далі · M × 3
+    шт.», «Зберегти й далі · M × 1, L × 2 шт.», «… · розмір невідомий × 1
+    шт.», «… · не товар»; «Зберегти й далі» alone, held, until the answer
+    is whole. The line's last in its filter says «Зберегти · …» and leads
+    back to the list's big tag. Outside Telegram, its own docked over the
+    menu.
+  - **The next line** is found by the phone, the server unchanged: the
+    first after this one in the same filter among the lines already read
+    opens at once, the lines read again behind it (settled in the review:
+    the screen does not wait for the server to say what the phone knows);
+    none among them, the lines are read again, then the next pages; none
+    left, the list's big tag. «Змінити відповідь» stays the verb of an
+    answered line (decided here: the TZ's one verb «Розібрати» would not
+    say the answer is there).
+- **The lists (P0-6).** Rows on tags: «{список} · склад «…»», «Розібрано R
+  з L · не товар S», «Веде магазин …» where another store keeps it, the
+  state's sticker and «Відкрити». «Новий список» is Telegram's MainButton
+  (`snapshot:import`), and the new list its own screen, «← Початкові
+  залишки», «Закрити» gone; «Зберегти список» its MainButton. Its
+  warehouse is chips; the only warehouse a list may be started at is said
+  and taken (decided here, as at a delivery and a stocktake). Empty, a
+  blank tag and one line: «Списки із зошита — рядок за рядком. Поки список
+  чекає, склад не рухається.»; the five lines of hint are gone.
+- **The list.** Its big tag: «Склад «…»», its state, when it was counted or
+  which store keeps it, and — in review — «Розібрано R з L» over a bar,
+  then «Не товар S · чекають N · U шт.». «Розібрано» counts the lines
+  answered; «не товар» stands apart, and the bar fills with both, what is
+  decided (decided here). The files stay above the lines.
+  - **A switch of three:** «Потребують уваги N», «Чекають N», «Розібрані
+    N»; «Не товар · N», «Усі · N» and «Прибрані» (where a file was removed)
+    in the sheet «Інші рядки» behind ⋯. No filter is lost.
+  - The lines as row tags: «N. текст», its state and what the list says of
+    its count, what it was answered as, where its count came from, its
+    note, its reason when not stock; «Розібрати» or «Змінити відповідь»;
+    «Показати ще» for the next page.
+- **Approval.** «Затвердити · 412 шт.» is Telegram's MainButton once
+  nothing waits and the person may approve; before, there is none, and the
+  big tag says what waits. It opens the sheet «Затвердити «{список}»?»:
+  «412 шт.» large, «стануть початковим залишком складу «…». Скасувати це
+  потім не можна.» and «Так, затвердити» (a press within 0.7 s of the
+  sheet's opening was meant for the button under it and is let go). The
+  summary of where the counts came from stays above; «Відхилити список» is
+  as it was. Approved: a settled stub «Затверджено: 412 шт. стали
+  початковим залишком складу «…».» — the sentence as it was (decided here:
+  the TZ's «на «Основному»» needs a warehouse's name in the locative,
+  which the app does not know).
+- **«Сьогодні»'s tag.** «Переглянути й затвердити» opens the list itself
+  when one list waits for approval, the lists when several do; «Доробити»
+  opens the lists, as before. From a list the tag opened, «До списків»
+  leads to the lists, and from them «← Сьогодні» (decided here: the list
+  is under its lists). From «Сьогодні» to an approval: three taps, the
+  tag's verb, «Затвердити · N шт.», «Так, затвердити».
+- **Settled in the review (2026-11-08).** An independent review of the
+  batch; each of these is decided here, none changes a rule:
+  - **Where a line's screen does not open** — an approver who does not
+    answer lines, a list only to reject, a list approved or rejected — its
+    row keeps what the list and the parser say of it: the photo and file,
+    what was read, the file's notes, the same-text count, and a record
+    that may be a range said as «Запис «…» може означати й діапазон
+    розмірів: під час розбору вкажіть, що саме.». The reasons to reject a
+    list are not hidden behind a screen the person cannot open.
+  - **«Рядок N з M»:** M is the last line's number, not the count of lines
+    left: numbers go on past a file removed, so «Рядок 14 з 12» cannot be.
+  - **A draft's warehouse no longer offered** (closed, or no longer taking
+    goods) is no choice: the person chooses again, or the only one is
+    taken. Never while a send's answer is unknown: its list is found by
+    the warehouse it was sent for.
+  - **The list's first filter:** «Потребують уваги» when any line needs
+    it, else «Чекають» when any waits (or nothing is answered yet), else
+    «Розібрані» — a list opened to approve shows what was answered.
+  - **While lines are added by hand,** the approval's MainButton is not
+    shown; the form's own is. The same under ⋯'s sheet.
+  - **Back's names:** the line's screen «Назад до списку «{список}»», the
+    new list «Назад до «Початкові залишки»»; each held while a send is on
+    its way. Coming back from the new list, the cursor is on the lists'
+    heading; from a line's screen, on that line's verb.
+  - **The bar** says itself: «Розібрано R з L, не товар S».
+  - **Not changed:** the headings' levels stay as the screens have them;
+    the split as the line shows it stays an option in «Розмір», not in
+    «Звідки кількість»; «Прибрати» stays on the extra size rows only, the
+    first row being the answer itself.
