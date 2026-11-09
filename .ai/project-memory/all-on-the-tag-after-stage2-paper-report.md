@@ -73,6 +73,11 @@ All in business-rules.md under the heading above. In short:
   command is kept unanswered: «Каса»'s banner holds that, as before.
 - **«Клієнт забрав»'s ways brought into view** on a press, so the line
   over them is never out of the sheet's view.
+- **The model's grid: its rows' names in `meta`** (§5.5's 14/19/500, the
+  floor for reading text; they were 15/19/500, off the ramp). GitHub's run
+  found the grid's room to spare under 12 px at 360 px on its Roboto once
+  the gutter took 4 px; 14 px gives back about as much. «з них у резерві»
+  was 14 already.
 
 ## How it was built and proven
 
@@ -160,7 +165,7 @@ sees written in business-rules.md («Settled in the review»):
   white.
 - **«Гроші»'s rows,** «Ще»'s own, stood on the bare paper — now on the block.
 - **The 4 px the gutter took** from screens already on the paper (14 → 16
-  at 360 px): the full run below, and GitHub's on DejaVu.
+  at 360 px): the full run below, and GitHub's on Roboto.
 - Seen and left to their tasks: fields, the mode switch's track and the
   chips nearly vanish on the paper in the light theme (frame P1-1); other
   lists' rows not on a block (P2-2 and the sections); placeholders fainter
@@ -211,6 +216,19 @@ on a fresh seed each, one failure ending the run.
     `go-p1-review2.log`;
   - `till-receipt`, `orders-card`, `cash-move-fix`, `till-cells` — 94 of
     94, `go-p1-tight.log`.
+- **GitHub's first run** (36ca0476): 1006 of 1008. The two, and how they
+  were settled:
+  - `model.spec.ts:282`, the six sizes at 360 px: the grid's least width
+    under 12 px short of its room on CI's Roboto (the room 294, 4 px less
+    with the gutter 16). Its rows' names in `meta` 14 px; here its spare
+    went from 13 px to about 18.
+  - `suppliers.spec.ts:253`, a refused return's warehouse read again: the
+    search's own read, sent 300 ms after the typing, left 27 ms before the
+    refused send, so the re-read joined it and no read followed. The
+    journey now waits for that read before it counts. The app is left as
+    it is: the read on its way then is the re-read.
+  - `model`, `suppliers`, `correct`, `person-limit`, `stocktake`,
+    `design-system` on a fresh seed: 59 of 59 — `ci183-fix-1.txt`.
 - **Screenshots** (`frontend/test-results/`, wiped by the next Playwright
   run): `paper-till-390-{light,dark}.png` — the till at 390 × 844, the tag
   the card's white on the paper in both themes (in the dark the fill parts
@@ -235,4 +253,4 @@ on a fresh seed each, one failure ending the run.
   journey makes `crypto.randomUUID` or the journal throw.
 - CI's font: the 360 px widths of screens that were on the paper before
   lost 4 px to the gutter; the full run proves them on this Mac's font,
-  GitHub's run on DejaVu.
+  GitHub's on Roboto (the size grid's settled above).

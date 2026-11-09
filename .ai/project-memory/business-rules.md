@@ -7728,3 +7728,10 @@ so, none of it a rule of the owner's:
 - «Клієнт забрав»'s ways brought into the sheet's view on a press.
 - «Гроші»'s rows on a white block, as «Ще»'s.
 - The notebook's line on the openings' task screen the card's white.
+
+### Settled after GitHub's run (2026-11-09)
+
+- The model's grid's rows' names in `meta` (14/19/500, the type ramp's
+  floor for reading text; they were 15, off the ramp): with the gutter 16,
+  the grid at 360 px keeps its 12 px to spare on CI's Roboto. Not a rule of
+  the owner's.

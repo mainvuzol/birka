@@ -6205,10 +6205,12 @@ button.money-place-open {
   line-height: 16px;
   color: var(--pencil);
 }
-/* A warehouse's name wraps between its words, never inside one. */
+/* A warehouse's name wraps between its words, never inside one; in `meta`
+   (§5.5's 14/19/500, the floor for reading text): with the gutter 16, the
+   grid keeps its room to spare on CI's Roboto (2026-11-09). */
 .size-grid th[scope="row"] {
   padding-left: 0;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 500;
   line-height: 19px;
   text-align: left;
@@ -6229,9 +6231,6 @@ button.money-place-open {
 .size-grid .grid-held td {
   padding-top: 0;
   color: var(--online);
-}
-.size-grid .grid-held th {
-  font-size: 14px;
 }
 .size-grid .grid-damaged th,
 .size-grid .grid-damaged td {
