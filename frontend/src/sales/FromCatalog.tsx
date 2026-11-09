@@ -1,8 +1,9 @@
 import { useState } from "react";
 import type { JSX } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { api, readText } from "@/shared/api";
+import { api } from "@/shared/api";
 import { visible } from "@/shared/visible";
+import { Unread } from "@/shared/Unread";
 import type { StockOption, Store } from "@/orders/types";
 import { CatalogPicker } from "@/inventory/CatalogPicker";
 import type { ReceivableVariant, SizeOption } from "@/inventory/receiptTypes";
@@ -85,17 +86,12 @@ export function FromCatalog({
         (sizes.error ? (
           // What could not be read: a warning's plate (stage 2, orders task
           // list, P0-2; review, 2026-11-05).
-          <div className="notice read-failure" role="alert">
-            <p>{readText(sizes.error)}</p>
-            <button
-              type="button"
-              onClick={() => {
-                void sizes.refetch();
-              }}
-            >
-              Спробувати ще раз
-            </button>
-          </div>
+          <Unread
+            error={sizes.error}
+            retry={() => {
+              void sizes.refetch();
+            }}
+          />
         ) : sizes.isPending ? (
           <p role="status">Завантажуємо розміри…</p>
         ) : (

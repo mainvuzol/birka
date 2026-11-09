@@ -12,7 +12,7 @@ import type {
   InfiniteData,
   UseInfiniteQueryResult,
 } from "@tanstack/react-query";
-import { api, readText } from "@/shared/api";
+import { api } from "@/shared/api";
 import { visible } from "@/shared/visible";
 import { money } from "@/orders/types";
 import type { Store } from "@/orders/types";
@@ -24,6 +24,7 @@ import { ModeSwitch } from "@/shared/ModeSwitch";
 import { Toast } from "@/shared/Toast";
 import { ScreenHeader } from "@/shared/ScreenHeader";
 import { hideKeyboard } from "@/shared/telegram";
+import { Unread } from "@/shared/Unread";
 import { number, plural } from "@/openings/types";
 import { CustomerRow, debtsCount } from "./CustomerRow";
 import { Customer as CustomerCard } from "./Customer";
@@ -570,17 +571,13 @@ export function Credits({
           // The rows' places while they are read (credits task list, P2-3).
           <Placeholder said="Завантажуємо борги…" rows={3} debts block />
         ) : !customers.data ? (
-          <div role="alert">
-            <p>{readText(customers.error, refusalText)}</p>
-            <button
-              type="button"
-              onClick={() => {
-                void customers.refetch();
-              }}
-            >
-              Спробувати ще раз
-            </button>
-          </div>
+          <Unread
+            error={customers.error}
+            said={refusalText}
+            retry={() => {
+              void customers.refetch();
+            }}
+          />
         ) : listed.length === 0 ? (
           elsewhere ? (
             <p>
@@ -828,17 +825,13 @@ function Block({
           block
         />
       ) : !customers.data ? (
-        <div role="alert">
-          <p>{readText(customers.error, refusalText)}</p>
-          <button
-            type="button"
-            onClick={() => {
-              void customers.refetch();
-            }}
-          >
-            Спробувати ще раз
-          </button>
-        </div>
+        <Unread
+          error={customers.error}
+          said={refusalText}
+          retry={() => {
+            void customers.refetch();
+          }}
+        />
       ) : listed.length === 0 ? (
         search ? (
           alone ? (
@@ -915,18 +908,14 @@ function Rows({
       {customers.isError && !customers.isFetchNextPageError && (
         // Read again and refused: the rows below are as they were, and that
         // is said (ADR-0011).
-        <div role="alert">
-          <p>{readText(customers.error, refusalText)}</p>
-          <button
-            type="button"
-            disabled={customers.isFetching}
-            onClick={() => {
-              void customers.refetch();
-            }}
-          >
-            Спробувати ще раз
-          </button>
-        </div>
+        <Unread
+          error={customers.error}
+          said={refusalText}
+          held={customers.isFetching}
+          retry={() => {
+            void customers.refetch();
+          }}
+        />
       )}
       <div className="list-block" role="list" aria-label={label}>
         {listed.map((each) => (
@@ -943,18 +932,14 @@ function Rows({
       </div>
       {customers.isFetchNextPageError ? (
         // The next page could not be read: those read stay.
-        <div role="alert">
-          <p>{readText(customers.error, refusalText)}</p>
-          <button
-            type="button"
-            disabled={customers.isFetching}
-            onClick={() => {
-              void customers.fetchNextPage();
-            }}
-          >
-            Спробувати ще раз
-          </button>
-        </div>
+        <Unread
+          error={customers.error}
+          said={refusalText}
+          held={customers.isFetching}
+          retry={() => {
+            void customers.fetchNextPage();
+          }}
+        />
       ) : (
         customers.hasNextPage && (
           <button

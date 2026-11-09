@@ -257,6 +257,7 @@ export function SupplierPicker({
   kept,
   inPlace = false,
   next,
+  sheetOpen,
 }: {
   store: Store;
   token: string;
@@ -270,6 +271,9 @@ export function SupplierPicker({
   inPlace?: boolean;
   /** Where the cursor goes once a supplier is picked: the sum next. */
   next?: RefObject<HTMLElement>;
+  /** Its own sheet open, and closed again: the screen's MainButton waits
+   * under it — one main a screen (frame P1-1; review). */
+  sheetOpen?: (open: boolean) => void;
 }): JSX.Element {
   const cache = useQueryClient();
   const suppliers = useSuppliers(store, token);
@@ -289,6 +293,13 @@ export function SupplierPicker({
     if (picked > 0) next?.current?.focus();
   }, [picked, next]);
   const chosen = suppliers.data?.find((supplier) => supplier.id === value);
+  useEffect(() => {
+    if (inPlace || !open || !sheetOpen) return;
+    sheetOpen(true);
+    return () => {
+      sheetOpen(false);
+    };
+  }, [inPlace, open, sheetOpen]);
 
   function close(): void {
     setOpen(false);
@@ -364,7 +375,9 @@ export function SupplierPicker({
   const addButton = (
     <button
       type="button"
-      className={inPlace ? undefined : "sheet-done"}
+      // In a sheet already, whose foot or MainButton is its main: the
+      // secondary (audit after stage 2, frame P1-1; review).
+      className={inPlace ? undefined : "sheet-done primary"}
       disabled={disabled || busy || name.trim() === ""}
       onClick={() => {
         void add();

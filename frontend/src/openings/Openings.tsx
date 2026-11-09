@@ -762,6 +762,7 @@ function NewList({
           (waiting.isPending ? (
             <p role="status">Перевіряємо, чи на складі не чекає список…</p>
           ) : waiting.error ? (
+            // eslint-disable-next-line no-restricted-syntax -- goods P1-1 moves it onto Unread
             <div role="alert">
               <p>{readText(waiting.error)}</p>
               <button

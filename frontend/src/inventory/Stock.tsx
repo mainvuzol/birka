@@ -432,6 +432,7 @@ function Failure({
   retry: () => void;
 }): JSX.Element {
   return (
+    // eslint-disable-next-line no-restricted-syntax -- goods P1-1 moves it onto Unread
     <div role="alert">
       <p>{readText(error)}</p>
       <button onClick={retry}>Спробувати ще раз</button>

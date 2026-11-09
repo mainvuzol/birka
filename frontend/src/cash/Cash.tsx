@@ -3,7 +3,7 @@ import type { JSX, ReactNode } from "react";
 import { BackToMore } from "@/shared/More";
 import type { MoreBack } from "@/shared/More";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, unreachable, readText } from "@/shared/api";
+import { api, unreachable } from "@/shared/api";
 import { Unread } from "@/shared/Unread";
 import type { JournalOutcome } from "@/shared/journal";
 import { Placeholder } from "@/shared/Placeholder";
@@ -646,8 +646,12 @@ export function Cash({
         ) : drawer.error ? (
           // A warning's plate, as the direction draws a server that does not
           // answer — still said at once (cash task list, P2-3).
-          <div className="notice" role="alert">
-            <p>{readText(drawer.error)}</p>
+          <Unread
+            error={drawer.error}
+            retry={() => {
+              void drawer.refetch();
+            }}
+          >
             {unreachable(drawer.error) && (
               // No close while the server does not answer (owner decisions,
               // 2026-10-04 and 2026-10-07; ADR-0013 §9, G26).
@@ -658,14 +662,7 @@ export function Cash({
                 наступного вечора.
               </p>
             )}
-            <button
-              onClick={() => {
-                void drawer.refetch();
-              }}
-            >
-              Спробувати ще раз
-            </button>
-          </div>
+          </Unread>
         ) : data === undefined ? null : (
           <>
             {due ? (
@@ -722,6 +719,7 @@ export function Cash({
                 </p>
                 <button
                   type="button"
+                  className="primary"
                   onClick={() => {
                     setDone(null);
                     setProblem(null);

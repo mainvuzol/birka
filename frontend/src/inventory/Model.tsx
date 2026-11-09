@@ -279,6 +279,7 @@ export function Model({
       <>
         <ScreenHeader back={<BackToMore back={back} />} />
         <section>
+          {/* eslint-disable-next-line no-restricted-syntax -- goods P1-1 moves it onto Unread */}
           <div role="alert">
             <p>{readText(failed.error)}</p>
             <button

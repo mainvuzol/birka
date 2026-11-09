@@ -21,6 +21,7 @@ import type { Place } from "./Knots";
 import { placesKey, shippingText } from "./types";
 import type { Location, Order, OrderItem, Status, Store } from "./types";
 import { Unread } from "@/shared/Unread";
+import { Empty } from "@/shared/Empty";
 
 interface OrderPage {
   orders: Order[];
@@ -726,12 +727,10 @@ export function Orders({
                 // Nothing yet (spec §6.28): a blank tag drawn, the words
                 // under it, «Нове замовлення» a second button (stage 2,
                 // orders task list, P1-4).
-                <div className="orders-empty">
-                  <Icon name="mark-lg" className="orders-empty-mark" />
-                  <p className="t-row">Замовлень ще немає.</p>
-                  <p className="t-meta">
-                    Замовлення тримає товар у резерві, поки його не відправили.
-                  </p>
+                <Empty
+                  title="Замовлень ще немає."
+                  meta="Замовлення тримає товар у резерві, поки його не відправили."
+                >
                   {mayCreate && (
                     <button
                       type="button"
@@ -742,7 +741,7 @@ export function Orders({
                       Нове замовлення
                     </button>
                   )}
-                </div>
+                </Empty>
               )
             ) : (
               <>

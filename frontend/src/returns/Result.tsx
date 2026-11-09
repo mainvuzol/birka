@@ -401,7 +401,12 @@ export function Result({
           quiet (spec §6.5). */}
       <div className="result-next">
         {next.sell && (
-          <button type="button" disabled={next.blocked} onClick={next.sell}>
+          <button
+            type="button"
+            className="primary"
+            disabled={next.blocked}
+            onClick={next.sell}
+          >
             Новий продаж
           </button>
         )}

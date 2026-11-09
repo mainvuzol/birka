@@ -183,7 +183,9 @@ export function InvoicePay({
               <SendingLine busy={pressing} />
               <button
                 type="button"
-                className={pressing ? "sheet-done pressed" : "sheet-done"}
+                className={
+                  pressing ? "sheet-done primary pressed" : "sheet-done primary"
+                }
                 disabled={held || !typed || over}
                 onClick={pay}
               >

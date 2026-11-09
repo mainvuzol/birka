@@ -2,7 +2,7 @@ import { Fragment, useEffect, useId, useRef, useState } from "react";
 import type { JSX } from "react";
 import { useQueries, useQueryClient } from "@tanstack/react-query";
 import type { UseQueryResult } from "@tanstack/react-query";
-import { api, readText } from "@/shared/api";
+import { api } from "@/shared/api";
 import { visible } from "@/shared/visible";
 import { money } from "@/orders/types";
 import type { Store } from "@/orders/types";
@@ -17,6 +17,7 @@ import { Icon } from "@/shared/Icon";
 import { Sheet } from "@/shared/Sheet";
 import { Toast } from "@/shared/Toast";
 import { ScreenHeader } from "@/shared/ScreenHeader";
+import { Unread } from "@/shared/Unread";
 import { useCreditCommand } from "./commands";
 import {
   DebtActions,
@@ -453,19 +454,14 @@ function StoreBlock({
           Магазин «{storeName}»
         </h3>
         {answer.isError ? (
-          <div role="alert">
-            <p>{readText(answer.error, refusalText)}</p>
-            <button
-              type="button"
-              className="quiet"
-              disabled={answer.isFetching}
-              onClick={() => {
-                void answer.refetch();
-              }}
-            >
-              Спробувати ще раз
-            </button>
-          </div>
+          <Unread
+            error={answer.error}
+            said={refusalText}
+            held={answer.isFetching}
+            retry={() => {
+              void answer.refetch();
+            }}
+          />
         ) : (
           // Its place while it is read, in its own lines' heights.
           <div className="owed-lines" aria-hidden="true">
@@ -508,19 +504,14 @@ function StoreBlock({
       )}
       {answer.isError && (
         // Read again and refused: what is shown is as it was, and said.
-        <div role="alert">
-          <p>{readText(answer.error, refusalText)}</p>
-          <button
-            type="button"
-            className="quiet"
-            disabled={answer.isFetching}
-            onClick={() => {
-              void answer.refetch();
-            }}
-          >
-            Спробувати ще раз
-          </button>
-        </div>
+        <Unread
+          error={answer.error}
+          said={refusalText}
+          held={answer.isFetching}
+          retry={() => {
+            void answer.refetch();
+          }}
+        />
       )}
       {only ? (
         <OneDebt credit={only} />
@@ -651,19 +642,14 @@ function ClosedStores({
     <section className="customer-block" aria-label="Магазини, що не працюють">
       <h3 className="t-label">Магазини, що не працюють</h3>
       {answer?.isError && (
-        <div role="alert">
-          <p>{readText(answer.error, refusalText)}</p>
-          <button
-            type="button"
-            className="quiet"
-            disabled={answer.isFetching}
-            onClick={() => {
-              void answer.refetch();
-            }}
-          >
-            Спробувати ще раз
-          </button>
-        </div>
+        <Unread
+          error={answer.error}
+          said={refusalText}
+          held={answer.isFetching}
+          retry={() => {
+            void answer.refetch();
+          }}
+        />
       )}
       <DebtRows label="Борги" credits={credits} open={open} stores />
     </section>

@@ -70,7 +70,7 @@ export function Reasoned({
           <div className="actions">
             <button
               type="button"
-              className={busy ? "pressed" : undefined}
+              className={busy ? "primary pressed" : "primary"}
               disabled={held || busy || reason.trim() === ""}
               onClick={() => {
                 run(reason.trim());
@@ -444,7 +444,9 @@ function SetOff({
             <SendingLine busy={pressing} />
             <button
               type="button"
-              className={pressing ? "sheet-done pressed" : "sheet-done"}
+              className={
+                pressing ? "sheet-done primary pressed" : "sheet-done primary"
+              }
               disabled={held}
               onClick={submit}
             >

@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import type { JSX } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { api, readText } from "@/shared/api";
+import { api } from "@/shared/api";
 import { Icon } from "@/shared/Icon";
 import { visible } from "@/shared/visible";
 import { money } from "@/orders/types";
@@ -9,6 +9,7 @@ import type { Store } from "@/orders/types";
 import { Sum } from "@/shared/Sum";
 import { Back } from "@/shared/Back";
 import { ScreenHeader } from "@/shared/ScreenHeader";
+import { Unread } from "@/shared/Unread";
 import { refusalText } from "./Debt";
 import { goodsOf, sinceText } from "./format";
 import { erasedCustomer, statusLabels } from "./types";
@@ -87,18 +88,14 @@ export function Debts({
         )}
         {read.isError && (
           // Read again and refused: what is shown is as it was, and said.
-          <div role="alert">
-            <p>{readText(read.error, refusalText)}</p>
-            <button
-              type="button"
-              disabled={read.isFetching}
-              onClick={() => {
-                void read.refetch();
-              }}
-            >
-              Спробувати ще раз
-            </button>
-          </div>
+          <Unread
+            error={read.error}
+            said={refusalText}
+            held={read.isFetching}
+            retry={() => {
+              void read.refetch();
+            }}
+          />
         )}
         {customer.open_debts > 0 && !elsewhere && (
           <div className="owed-card">

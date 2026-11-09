@@ -155,6 +155,7 @@ export function Returned({
           <p className="pay-what">{title}</p>
           <button
             type="button"
+            className="primary"
             disabled={blocked || !received || !reason.trim()}
             // Held until the reason and the tick: no tap carried from the
             // row can take it.

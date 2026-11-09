@@ -1,7 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { JSX, ReactNode } from "react";
 import { money } from "@/orders/types";
-import { readText } from "@/shared/api";
 import { RecordedMark } from "@/shared/Eyelet";
 import { Icon } from "@/shared/Icon";
 import { NoCustomerData } from "@/shared/NoCustomerData";
@@ -13,6 +12,7 @@ import { useMainButton } from "@/shared/telegram";
 import { visible } from "@/shared/visible";
 import { Back } from "@/shared/Back";
 import { ScreenHeader } from "@/shared/ScreenHeader";
+import { Unread } from "@/shared/Unread";
 import { dayOf } from "./errors";
 import {
   cardParts,
@@ -414,7 +414,7 @@ function ReasonForm({
           <p className="pay-what">{line}</p>
           <button
             type="button"
-            className="cash-panel-button"
+            className="cash-panel-button primary"
             disabled={disabled || sending || written === ""}
             onClick={write}
           >
@@ -515,12 +515,7 @@ export function Closed({
           failed ? (
             // A warning's plate, as «Каса»'s own (stage 2, orders task list,
             // P0-2; review, 2026-11-05).
-            <div className="notice read-failure" role="alert">
-              <p>{readText(failed)}</p>
-              <button type="button" onClick={retry}>
-                Спробувати ще раз
-              </button>
-            </div>
+            <Unread error={failed} retry={retry} />
           ) : (
             <ClosePlaceholder />
           )
@@ -533,7 +528,7 @@ export function Closed({
           <ReasonForm key={owedId} disabled={disabled} send={sendReason} />
         ) : (
           <div className="result-next">
-            <button type="button" onClick={finish}>
+            <button type="button" className="primary" onClick={finish}>
               Готово
             </button>
           </div>

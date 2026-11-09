@@ -221,10 +221,10 @@ export function Stores({
       {kept && (
         <Kept
           own
-          title="Незавершена зміна стану"
+          title="Зміну стану магазину ще не підтверджено"
           busy={busy}
           byItself={false}
-          check={{ label: "Перевірити результат", run: check }}
+          check={{ label: "Перевірити результат зміни", run: check }}
         >
           <p>
             Невідомо, чи змінено стан магазину. Перевірте результат — та сама
@@ -572,7 +572,7 @@ function StateSheet({
           <div className="actions">
             <button
               type="button"
-              className={busy ? "pressed" : undefined}
+              className={busy ? "primary pressed" : "primary"}
               disabled={held || !offered || reason.trim() === ""}
               onClick={() => {
                 run(reason.trim());

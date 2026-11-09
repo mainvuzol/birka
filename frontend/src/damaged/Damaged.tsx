@@ -20,13 +20,13 @@ import { visible } from "@/shared/visible";
 import { BackToMore } from "@/shared/More";
 import type { MoreBack } from "@/shared/More";
 import { Eyelet } from "@/shared/Eyelet";
-import { Icon } from "@/shared/Icon";
 import { ModeSwitch } from "@/shared/ModeSwitch";
 import { ScreenHeader } from "@/shared/ScreenHeader";
 import { Sheet } from "@/shared/Sheet";
 import { Stub } from "@/shared/Stub";
 import { CARRIED_TAP } from "@/shared/panel";
 import { buzz, useMainButton } from "@/shared/telegram";
+import { Empty } from "@/shared/Empty";
 import type { DamagedStatus, DamagedUnit } from "./types";
 import { useDamagedUnits } from "./units";
 
@@ -402,10 +402,7 @@ export function Damaged({
           // empty «Брак» (review, 2026-11-07).
           <>
             {told}
-            <div className="orders-empty">
-              <Icon name="mark-lg" className="orders-empty-mark" />
-              <p className="t-row">У «Брак» зараз нічого немає.</p>
-            </div>
+            <Empty title="У «Брак» зараз нічого немає." />
           </>
         ) : (
           <>
@@ -438,12 +435,9 @@ export function Damaged({
             )}
             {told}
             {rows.length === 0 ? (
-              <div className="orders-empty">
-                <Icon name="mark-lg" className="orders-empty-mark" />
-                <p className="t-row">
-                  {segments.find(({ mode }) => mode === segment)?.none}
-                </p>
-              </div>
+              <Empty
+                title={segments.find(({ mode }) => mode === segment)?.none}
+              />
             ) : (
               <ul className="order-tags" aria-label="Брак">
                 {rows.map(({ unit, held: gone }) => (

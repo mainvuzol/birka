@@ -2,11 +2,12 @@ import { useEffect, useId, useRef, useState } from "react";
 import type { JSX, RefObject } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { UseQueryResult } from "@tanstack/react-query";
-import { api, readText } from "@/shared/api";
+import { api } from "@/shared/api";
 import { Banner } from "@/shared/Banner";
 import { Icon } from "@/shared/Icon";
 import { Sheet } from "@/shared/Sheet";
 import { visible } from "@/shared/visible";
+import { Unread } from "@/shared/Unread";
 import type { Store } from "@/orders/types";
 import {
   daysAgo,
@@ -350,17 +351,12 @@ export function PaperSheet({
       {people.error && (
         // What could not be read: a warning's plate (stage 2, orders task
         // list, P0-2), in the sheet.
-        <div className="notice read-failure" role="alert">
-          <p>{readText(people.error)}</p>
-          <button
-            type="button"
-            onClick={() => {
-              void people.refetch();
-            }}
-          >
-            Спробувати ще раз
-          </button>
-        </div>
+        <Unread
+          error={people.error}
+          retry={() => {
+            void people.refetch();
+          }}
+        />
       )}
     </Sheet>
   );

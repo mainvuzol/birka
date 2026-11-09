@@ -341,7 +341,7 @@ export function WayCard({
         <SendingLine busy={sending} />
         <button
           type="button"
-          className={`cash-panel-button${sending ? " pressed" : ""}`}
+          className={`cash-panel-button primary${sending ? " pressed" : ""}`}
           disabled={disabled || sending || to === null}
           onClick={() => {
             if (to === null) return;

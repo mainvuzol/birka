@@ -99,6 +99,7 @@ export function FamilySearch({
         (result.isPending ? (
           <p role="status">Шукаємо моделі…</p>
         ) : result.error ? (
+          // eslint-disable-next-line no-restricted-syntax -- goods P1-1 moves it onto Unread
           <div role="alert">
             <p>{readText(result.error)}</p>
             <button

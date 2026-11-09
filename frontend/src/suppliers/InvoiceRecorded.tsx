@@ -54,7 +54,7 @@ export function InvoiceRecorded({
       </Stub>
       {!main && (
         <div className="result-next">
-          <button type="button" onClick={next}>
+          <button type="button" className="primary" onClick={next}>
             Готово
           </button>
         </div>

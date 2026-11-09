@@ -449,6 +449,7 @@ export function AddFile({
       <div className="actions">
         <button
           type="button"
+          className="primary"
           disabled={!read?.ok || busy || blocked}
           onClick={() => {
             void send();
@@ -631,6 +632,7 @@ export function AddLines({
       <div className="actions">
         <button
           type="button"
+          className="primary"
           disabled={
             lines.length === 0 || !!tooLong || !!tooMuch || busy || blocked
           }

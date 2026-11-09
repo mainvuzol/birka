@@ -142,7 +142,7 @@ export function Move({
           <SendingLine busy={sending} />
           <button
             type="button"
-            className={`sheet-done cash-move-button${sending ? " pressed" : ""}`}
+            className={`sheet-done cash-move-button primary${sending ? " pressed" : ""}`}
             disabled={disabled || sending || kind === null || sum === null}
             onClick={() => {
               void record();

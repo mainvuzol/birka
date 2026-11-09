@@ -55,6 +55,7 @@ export function SuggestedPrice({
       {prices.isPending ? (
         <p role="status">Завантажуємо ціну продажу…</p>
       ) : prices.error ? (
+        // eslint-disable-next-line no-restricted-syntax -- goods P1-1 moves it onto Unread
         <div role="alert">
           <p>{readText(prices.error)}</p>
           <button
@@ -148,6 +149,7 @@ export function PriceEditor({
   if (prices.isPending) return <p role="status">Завантажуємо ціну продажу…</p>;
   if (prices.error)
     return (
+      // eslint-disable-next-line no-restricted-syntax -- goods P1-1 moves it onto Unread
       <div role="alert">
         <p>{readText(prices.error)}</p>
         <button

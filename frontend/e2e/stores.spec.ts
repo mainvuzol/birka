@@ -912,9 +912,14 @@ test("a change whose answer is lost is resent unchanged, and done once", async (
     await expect(sheet).toHaveCount(0);
     const kept = market.locator(".stub-kept");
     await expect(
-      kept.getByRole("heading", { name: "Незавершена зміна стану" }),
+      kept.getByRole("heading", {
+        name: "Зміну стану магазину ще не підтверджено",
+      }),
     ).toBeVisible();
     await expect(kept).toContainText("Ще не підтверджено");
+    // Its title the shared words, never «Незавершена» (audit after stage
+    // 2, frame P1-2).
+    await expect(kept.getByRole("heading")).not.toContainText("Незавершена");
     await expect(kept).toContainText(/Чекає відповіді сервера з \d{2}:\d{2}\./);
     // No answer says nothing more than the stub: never the error's own
     // name (review, 2026-11-07). The cursor on it.
@@ -931,7 +936,7 @@ test("a change whose answer is lost is resent unchanged, and done once", async (
     await page.getByRole("button", { name: "Назад до магазинів" }).click();
     await expect(
       page.locator(".stub-kept").getByRole("heading", {
-        name: "Незавершена зміна стану",
+        name: "Зміну стану магазину ще не підтверджено",
       }),
     ).toBeVisible();
     // Its own section stays open under «Ще», every other is held (P1-6).
@@ -950,20 +955,31 @@ test("a change whose answer is lost is resent unchanged, and done once", async (
     await openStore(page, "Центр CENTRE");
     await expect(
       page.locator(".stub-kept").getByRole("heading", {
-        name: "Незавершена зміна стану",
+        name: "Зміну стану магазину ще не підтверджено",
+      }),
+    ).toBeVisible();
+    // Its check in its own words (audit after stage 2, frame P1-2).
+    await expect(
+      page.locator(".stub-kept").getByRole("button", {
+        name: "Перевірити результат зміни",
+        exact: true,
       }),
     ).toBeVisible();
     // Checked, and answered with no proof: still kept, said why in the
     // shared words — never a manager to ask, its reader the owner (review,
     // 2026-11-07).
     await refuseOnce(page, "**/api/v1/stores/*/state", 409);
-    await page.getByRole("button", { name: "Перевірити результат" }).click();
+    await page
+      .getByRole("button", { name: "Перевірити результат зміни" })
+      .click();
     await expect(page.locator(".stub-kept")).toContainText(
       "Зміну стану ще не підтверджено: сервер відповів, що дані змінилися. Перевірте результат ще раз — двічі вона не виконається.",
     );
     await expect(page.locator(".stub-kept")).not.toContainText("менеджер");
     await expect(page.locator(".stores-notices")).toBeFocused();
-    await page.getByRole("button", { name: "Перевірити результат" }).click();
+    await page
+      .getByRole("button", { name: "Перевірити результат зміни" })
+      .click();
     // Answered: the stub torn off — what, when and why.
     const settled = page.locator(".stub-recorded");
     await expect(settled.locator("p").first()).toHaveText(
@@ -1230,9 +1246,14 @@ test("no store to choose: one blank tag, the owner the one to ask, never an admi
     page.getByRole("heading", { name: "Де ви сьогодні?" }),
   ).toHaveCount(0);
   await expect(menu(page)).toHaveCount(0);
+  // A quiet link, as S03's: nothing there is the screen's main (audit
+  // after stage 2, frame P1-1).
+  const again = tag.getByRole("button", { name: "Спробувати ще раз" });
+  await expect(again).toHaveClass(/\btext-button\b/);
+  await expect(page.locator("button.primary")).toHaveCount(0);
   // Added to a store meanwhile: read again, and in.
   none = false;
-  await tag.getByRole("button", { name: "Спробувати ще раз" }).click();
+  await again.click();
   await expect(
     page.getByRole("heading", { name: "Магазинів поки немає" }),
   ).toHaveCount(0);

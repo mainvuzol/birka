@@ -205,6 +205,18 @@ test("the till opens with the cursor in its search", async ({ page }) => {
   await expect(search(page)).toBeFocused();
 });
 
+/** The design's primary, as the browser writes it. */
+async function primaryColour(page: Page): Promise<string> {
+  return page.evaluate(() => {
+    const probe = document.createElement("span");
+    probe.style.color = "var(--primary)";
+    document.body.append(probe);
+    const drawn = getComputedStyle(probe).color;
+    probe.remove();
+    return drawn;
+  });
+}
+
 test("the tray comes with the first coat: the basket in one row, «Разом», the three ways at 56 — and none with the basket empty", async ({
   page,
 }) => {
@@ -220,11 +232,16 @@ test("the tray comes with the first coat: the basket in one row, «Разом»,
   await expect(tray(page).locator(".pay-total")).toHaveText(
     /^Разом\s1\s850,00\sгрн$/,
   );
+  // Each the primary, 17/700: the button is the sale (spec §6.15; audit
+  // after stage 2, frame P1-1).
+  const primary = await primaryColour(page);
   for (const way of ["Готівка", "Картка", "Переказ"]) {
     const button = tray(page).getByRole("button", { name: way, exact: true });
     expect((await button.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(
       56,
     );
+    await expect(button).toHaveCSS("background-color", primary);
+    await expect(button).toHaveCSS("font-weight", "700");
   }
   // What is paid and how is one group; the basket's row is not of it.
   const paying = page.getByRole("group", {

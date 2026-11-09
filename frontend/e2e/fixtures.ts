@@ -640,7 +640,12 @@ export async function addSupplier(
   await list.getByLabel("Назва постачальника").fill(name);
   if (phone !== null)
     await list.getByLabel("Телефон (необов’язково)").fill(phone);
-  await list.getByRole("button", { name: "Додати постачальника" }).click();
+  const add = list.getByRole("button", { name: "Додати постачальника" });
+  // Its own sheet's main; in another sheet, whose foot or MainButton is,
+  // the secondary (audit after stage 2, frame P1-1; review).
+  if (field.inside) await expect(add).not.toHaveClass(/\bprimary\b/);
+  else await expect(add).toHaveClass(/\bprimary\b/);
+  await add.click();
   await expect(list).toHaveCount(0);
 }
 
@@ -1138,4 +1143,35 @@ export async function listRow(
   await page.mouse.move(1, 1);
   await page.mouse.up();
   await expect(row).toBeVisible();
+}
+
+/** The shared empty place (spec §6.28; audit after stage 2, frame P2-1):
+ * the blank tag 64 square in the edge, its one line 17/600 in ink — one
+ * markup wherever nothing is yet. */
+export async function expectEmpty(
+  empty: Locator,
+  line: string | RegExp,
+): Promise<void> {
+  await expect(empty).toHaveClass(/(?:^|\s)orders-empty(?:\s|$)/);
+  const mark = empty.locator(":scope > svg.orders-empty-mark");
+  await expect(mark).toBeVisible();
+  const box = await mark.boundingBox();
+  expect([box?.width, box?.height]).toEqual([64, 64]);
+  const said = await empty.evaluate(() => {
+    const probe = document.createElement("span");
+    document.body.append(probe);
+    const read = (name: string): string => {
+      probe.style.color = `var(${name})`;
+      return getComputedStyle(probe).color;
+    };
+    const colours = { edge: read("--edge"), ink: read("--ink") };
+    probe.remove();
+    return colours;
+  });
+  await expect(mark).toHaveCSS("color", said.edge);
+  const title = empty.locator(":scope > .t-row");
+  await expect(title).toHaveText(line);
+  await expect(title).toHaveCSS("font-size", "17px");
+  await expect(title).toHaveCSS("font-weight", "600");
+  await expect(title).toHaveCSS("color", said.ink);
 }
