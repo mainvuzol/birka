@@ -1828,6 +1828,7 @@ function Workspace({
         store={store}
         token={token}
         blocked={blocked}
+        waiting={busy}
         refusal={refusal}
         collect={(extra) => {
           take("collect", extra);

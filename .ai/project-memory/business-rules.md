@@ -7649,3 +7649,89 @@ of it a rule of the owner's:
   characters.
 - **Not changed:** one store's yesterday is still five taps and a scroll
   (the owner's question above).
+
+## Chosen in chat — 2026-11-09 (audit after stage 2, batch 1: the page is the paper, never a card — no base card, the gutter 16, a list's rows on a white block; the money buttons wait as the till's dock — «Клієнт забрав», «Змінити на «…»», «Видати / Внести»; frame P0-1, sale P0-1, orders-cash P0-1)
+
+Chosen in chat on 2026-11-09 («Yes, start it»), after the audit after stage
+2: its first batch, the frame's P0-1 with the till's share of it (sale
+P0-1), and the money buttons' waiting (orders-cash P0-1). No right, no
+server rule, no field and no word changes. The money is untouched: the
+command and its `command_id`, the five ways with none chosen beforehand,
+paying in parts and its check, the operation kept when its answer is lost,
+what reaches the till — all as before; only how a press waits changed.
+
+- **The page is the paper.** A `section` is a block of meaning, never a
+  card: no fill, no outline, no corner, no inside of its own; the 2026-10-11
+  card (18 round, 22 inside, 17 at ≤ 480 px) and every screen's own undoing
+  of it are gone. White comes from what is on the paper: a tag, a list's
+  block, a sheet, the menu.
+  - **The screen's gutter 16** at every width (was 18, and 14 at ≤ 480 px).
+  - **A list's rows on a white block** (spec §6.8): the card's white, 4
+    round, a hairline round it in the light theme and none in the dark,
+    where its fill parts it from the paper. Its rows 12 16 inside, the last
+    with no line under it. «Ще»'s groups so, their labels on the paper; and
+    «Гроші»'s rows under «Де гроші зараз» (settled in the review).
+  - **A plate drawn as a section keeps a box of its own** (decided here):
+    `section.notice` 12 16 inside, its warning's outline, 4 round — it had
+    them from the card.
+  - **The customer's card's blocks 4 round,** outlined as a list's block.
+  - **The till's tray and the result's dock** lie on the screen's gutter,
+    their −6 px gone: it was sized to the card's inside.
+  - **The till's search,** held at the top while the tags scroll under it,
+    on the paper (decided here, seen in the screenshots: it was a white
+    band).
+  - **A stub inside a section** is the card's white like any other: the
+    rule that made it the paper's colour on the card is gone (decided
+    here).
+  - **The notebook's line on a line's task screen** («Початкові залишки») a
+    slip of the card's white on the paper, as a tag is (settled in the
+    review: paper on paper it all but vanished).
+  - **Not changed here** (their own tasks): fields still `fold` with an
+    `edge` outline on the paper (frame P1-1); the mode switch's track and
+    the chips (frame P1-1); other lists' rows not yet on a block, and rows'
+    lines across the whole width, not inset 16 (frame P2-2 and the
+    sections' tasks).
+- **«Клієнт забрав» on its way** waits as the till's dock (spec §5; the
+  decision of 2026-10-28):
+  - the pressed way turns the eyelet's ring and keeps its colour, the four
+    others step back; «Оплата частинами» and its fields held, as before;
+  - past 3 s, «Ще надсилаємо…» over the ways;
+  - no way out until it is answered: neither Telegram's «Назад» (hidden),
+    nor Escape, the scrim or the grip;
+  - the five ways the till's height, 56;
+  - pressed with the ways scrolled half out of the sheet («Оплата
+    частинами» open), they are brought back into its view with the line's
+    room over them (settled in the review);
+  - answered, as before: recorded — the sale's stub; refused — why, over
+    the ways, the ring gone; the answer lost — the card's kept operation.
+- **«Змінити на «…»» on its way:** its ring on the button, in its colour;
+  past 3 s, «Ще надсилаємо…» over it. Meanwhile neither «← Каса»,
+  Telegram's «Назад» nor «Інша операція» leads off the screen (settled in
+  the review: a refusal answered after it was left was lost). Only while
+  it is on its way: a command kept unanswered holds nothing here, as
+  before — «Каса»'s banner says it.
+- **«Видати / Внести» on its way:** past 3 s, «Ще надсилаємо…» over the
+  sheet's button; the button keeps its colour with its ring, and
+  Telegram's «Назад» is hidden, as on «Клієнт забрав» (settled in the
+  review). Whatever comes of the send — even one that fails on the phone —
+  the ring stops and the sheet may be left again.
+
+### Settled in the review (2026-11-09)
+
+An independent review read the batch, with the financial-integrity lens on
+the waiting. It found no second command possible, no outcome lost, no ring
+on the wrong way and no state left «sending»; what it found was settled
+so, none of it a rule of the owner's:
+- «Видати / Внести»'s button in its colour and Telegram's «Назад» hidden
+  while on its way; its send always lets the sheet go.
+- «Змінити спосіб оплати» not left while a change is on its way.
+- «Клієнт забрав»'s ways brought into the sheet's view on a press.
+- «Гроші»'s rows on a white block, as «Ще»'s.
+- The notebook's line on the openings' task screen the card's white.
+
+### Settled after GitHub's run (2026-11-09)
+
+- The model's grid's rows' names in `meta` (14/19/500, the type ramp's
+  floor for reading text; they were 15, off the ramp): with the gutter 16,
+  the grid at 360 px keeps its 12 px to spare on CI's Roboto. Not a rule of
+  the owner's.

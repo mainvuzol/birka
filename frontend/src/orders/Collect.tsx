@@ -1,7 +1,9 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { JSX } from "react";
+import { Eyelet } from "@/shared/Eyelet";
 import { methodLabels } from "@/shared/payment";
 import type { PaymentMethod } from "@/shared/payment";
+import { SendingLine } from "@/shared/Sending";
 import { Sheet } from "@/shared/Sheet";
 import { Sum } from "@/shared/Sum";
 import { TermsFields, checkTerms, noTerms } from "@/credits/Terms";
@@ -46,13 +48,17 @@ export function goesOf(order: Order): string | null {
  * chosen, each the step itself; «Оплата частинами» under them, as the till
  * pays in parts. A way is never Telegram's MainButton (spec §4.4). A tap
  * carried from the press that opened it is let go by the sheet. Refused,
- * why over the ways.
+ * why over the ways. Sent, the pressed way turns its ring and the others
+ * step back, «Ще надсилаємо…» over them past 3 s, and the sheet stays
+ * until it is answered, as the till's dock does (audit after stage 2,
+ * orders-cash P0-1).
  */
 export function Collect({
   order,
   store,
   token,
   blocked,
+  waiting,
   refusal,
   collect,
   close,
@@ -62,6 +68,8 @@ export function Collect({
   /** Who asks what a number already owes, paying in parts. */
   token: string;
   blocked: boolean;
+  /** Its step on its way to the server. */
+  waiting: boolean;
   refusal: string | null;
   collect: (extra: Record<string, unknown>) => void;
   close: () => void;
@@ -72,6 +80,17 @@ export function Collect({
   // 2026-10-01).
   const [credit, setCredit] = useState<TermsInput>(noTerms);
   const [problem, setProblem] = useState("");
+  // The way pressed, its ring turning while its step is on its way.
+  const [pressed, setPressed] = useState<PaymentMethod | null>(null);
+  const pressing = waiting ? pressed : null;
+  // The ways, with «Ще надсилаємо…»'s room over them, brought into the
+  // sheet's view as one is pressed: scrolled to «Оплата частинами», the
+  // line would stand out of it (review, 2026-11-09).
+  const waysRef = useRef<HTMLDivElement>(null);
+  function press(way: PaymentMethod): void {
+    setPressed(way);
+    waysRef.current?.scrollIntoView({ block: "nearest" });
+  }
   // Why the terms were not taken, brought to the finger (review,
   // 2026-10-24).
   const why = useRef<HTMLParagraphElement>(null);
@@ -94,16 +113,29 @@ export function Collect({
   function pay(way: PaymentMethod): void {
     setProblem("");
     if (!credit.inParts) {
+      press(way);
       collect({ payment_method: way });
       return;
     }
     const terms = checkTerms(credit, total);
     if (typeof terms === "string") setProblem(terms);
-    else collect({ payment_method: way, credit: terms });
+    else {
+      press(way);
+      collect({ payment_method: way, credit: terms });
+    }
   }
   const goes = goesOf(order);
   return (
-    <Sheet title="Клієнт забрав — як оплачено?" close={close} said={hint}>
+    <Sheet
+      title="Клієнт забрав — як оплачено?"
+      // A way on its way: no way out until it is answered, as «Каса»'s
+      // sheets hold.
+      close={() => {
+        if (pressing === null) close();
+      }}
+      held={pressing !== null}
+      said={hint}
+    >
       <p className="pay-what" id={hint}>
         {titleOf(order)}
         {goes ? ` · ${goes}` : ""}
@@ -131,7 +163,8 @@ export function Collect({
           {problem}
         </p>
       )}
-      <div className="collect-ways">
+      <div className="collect-ways" ref={waysRef}>
+        <SendingLine busy={pressing !== null} />
         {collectWays.map(({ caption, ways }, index) => (
           <div
             key={caption}
@@ -146,11 +179,19 @@ export function Collect({
                 <button
                   type="button"
                   key={way}
+                  className={
+                    pressing === null
+                      ? undefined
+                      : pressing === way
+                        ? "pressed"
+                        : "stepped-back"
+                  }
                   disabled={blocked}
                   onClick={() => {
                     pay(way);
                   }}
                 >
+                  {pressing === way && <Eyelet state="spin" size={20} />}
                   {methodLabels[way]}
                 </button>
               ))}

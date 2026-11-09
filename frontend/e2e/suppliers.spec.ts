@@ -270,6 +270,16 @@ test("goods go back to a supplier from a warehouse, and come back when it is can
   await expect(
     page.getByRole("searchbox", { name: "Пошук моделі" }),
   ).toBeFocused();
+  // The search's own read, sent once the typing settles, answered before
+  // the refusal's re-read is counted: on CI it left with the send and took
+  // the re-read's place (2026-11-09).
+  const searched = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname.endsWith("/api/v1/catalog/stock-options") &&
+      url.searchParams.get("query") === coat.model
+    );
+  });
   await chooseModel(page, coat);
   // Its one size, its free units the most: «вільно 4», «+» held there.
   const size = page.getByRole("group", { name: "Розмір M, вільно 4" });
@@ -290,6 +300,7 @@ test("goods go back to a supplier from a warehouse, and come back when it is can
   // Refused once for a reason the screen does not name: its own words,
   // never an order's (owner decision, 2026-10-25); what was counted stays,
   // and the warehouse is read again.
+  await searched;
   const stockReads = readsOf(page, /\/api\/v1\/catalog\/stock-options$/);
   await refuseOnce(page, "**/api/v1/supplier-returns", 409);
   await sendBack(page, 2).click();

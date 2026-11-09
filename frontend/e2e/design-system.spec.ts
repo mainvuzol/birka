@@ -1,4 +1,13 @@
-import { test, expect, openStore } from "./fixtures";
+import {
+  test,
+  expect,
+  openStore,
+  menu,
+  more,
+  openModel,
+  section,
+  tillWays,
+} from "./fixtures";
 import type { Page } from "@playwright/test";
 import { createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -14,6 +23,7 @@ import { readFileSync } from "node:fs";
 
 interface Fixture {
   telegram_user_id: string;
+  network_owner_telegram_user_id: string;
 }
 
 const fixture = JSON.parse(
@@ -23,10 +33,10 @@ const fixture = JSON.parse(
   ),
 ) as Fixture;
 
-function initData(): string {
+function initData(id = fixture.telegram_user_id): string {
   const fields = new URLSearchParams({
     auth_date: String(Math.floor(Date.now() / 1000)),
-    user: `{"id":${fixture.telegram_user_id},"first_name":"Оля"}`,
+    user: `{"id":${id},"first_name":"Оля"}`,
   });
   const check = [...fields]
     .sort(([a], [b]) => a.localeCompare(b))
@@ -504,3 +514,184 @@ test("a sum keeps «грн» on its line: no-break spaces between thousands and 
     "\u2212150,50\u00a0грн",
   ]);
 });
+
+/** Each section of the page, as the browser draws it: its fill, outline,
+ * corner and inside. */
+async function sectionsDrawn(page: Page): Promise<string[][]> {
+  return page.locator("main > section").evaluateAll((all) =>
+    all.map((node) => {
+      const style = getComputedStyle(node);
+      return [
+        style.backgroundColor,
+        style.borderTopWidth,
+        style.borderTopLeftRadius,
+        style.paddingLeft,
+      ];
+    }),
+  );
+}
+
+/** A colour of the design, as the browser writes it. */
+async function token(page: Page, name: string): Promise<string> {
+  return page.evaluate((each) => {
+    const probe = document.createElement("span");
+    document.body.append(probe);
+    probe.style.color = `var(${each})`;
+    const colour = getComputedStyle(probe).color;
+    probe.remove();
+    return colour;
+  }, name);
+}
+
+for (const width of [360, 390])
+  test(`at ${String(width)} px every screen is the paper, never a card: no section has a fill, an outline, a corner or an inside of its own, the screen's gutter 16; «Ще»'s and «Гроші»'s rows on a white block, outlined in the light theme alone, its labels on the paper; a plate drawn as a section keeps its own box; a model's detail too (audit after stage 2, frame P0-1)`, async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    await page.setViewportSize({ width, height: 844 });
+    await page.goto("about:blank");
+    await page.goto(
+      `/#${new URLSearchParams({ tgWebAppData: initData(fixture.network_owner_telegram_user_id) }).toString()}`,
+    );
+    await openStore(page, "Центр CENTRE");
+    // Each screen: its heading, how it is reached, and — where the heading
+    // is another's too — its own section, waited for.
+    const screens: [string, () => Promise<void>, string?][] = [
+      ["Сьогодні", () => Promise.resolve()],
+      [
+        "Продаж",
+        () =>
+          menu(page)
+            .getByRole("button", { name: "Продаж", exact: true })
+            .click(),
+      ],
+      [
+        "Продаж",
+        () =>
+          tillWays(page)
+            .getByRole("button", { name: "Повернути", exact: true })
+            .click(),
+        "main > section.returns",
+      ],
+      [
+        "Продаж",
+        () =>
+          tillWays(page)
+            .getByRole("button", { name: "Внесок", exact: true })
+            .click(),
+        "main > section.credits",
+      ],
+      ["Замовлення", () => section(page, "Замовлення")],
+      [
+        "Гроші",
+        () =>
+          menu(page)
+            .getByRole("button", { name: "Гроші", exact: true })
+            .click(),
+      ],
+      ["Каса", () => section(page, "Каса")],
+      ["Звіт про продажі", () => section(page, "Звіт про продажі")],
+      ["Покупці", () => section(page, "Покупці")],
+      ["Ще", () => more(page)],
+    ];
+    for (const [title, go, own] of screens) {
+      await go();
+      await expect(
+        page.getByRole("heading", { name: title, exact: true, level: 1 }),
+      ).toBeVisible();
+      if (own !== undefined) await expect(page.locator(own)).toBeVisible();
+      await expect
+        .poll(() => sectionsDrawn(page), { message: title })
+        .not.toEqual([]);
+      for (const drawn of await sectionsDrawn(page))
+        expect(drawn, title).toEqual(["rgba(0, 0, 0, 0)", "0px", "0px", "0px"]);
+      expect(
+        await page
+          .locator("main")
+          .evaluate((node) => [
+            getComputedStyle(node).paddingLeft,
+            getComputedStyle(node).paddingRight,
+          ]),
+        title,
+      ).toEqual(["16px", "16px"]);
+      await expect(page.locator("html")).toHaveJSProperty("scrollWidth", width);
+    }
+    // «Ще»: a group's rows on the card's white, 4 round; its label on the
+    // paper, nothing white under it.
+    const card = await token(page, "--card");
+    const blocks = page.locator(".more-group .list-block");
+    await expect(blocks.first()).toBeVisible();
+    for (const block of await blocks.all())
+      expect(
+        await block.evaluate((node) => [
+          getComputedStyle(node).backgroundColor,
+          getComputedStyle(node).borderTopLeftRadius,
+        ]),
+      ).toEqual([card, "4px"]);
+    for (const label of await page.locator(".more-group h3").all())
+      expect(
+        await label.evaluate((node) => {
+          let at: Element | null = node;
+          while (at && at !== document.documentElement) {
+            const fill = getComputedStyle(at).backgroundColor;
+            if (fill !== "rgba(0, 0, 0, 0)") return fill;
+            at = at.parentElement;
+          }
+          return "paper";
+        }),
+      ).toBe("paper");
+    // A plate drawn as a section has a box of its own, the card's gone.
+    expect(
+      await page.evaluate(() => {
+        const plate = document.createElement("section");
+        plate.className = "notice";
+        plate.textContent = "Пробна плашка";
+        document.querySelector("main")?.append(plate);
+        const style = getComputedStyle(plate);
+        const drawn = [
+          style.paddingTop,
+          style.paddingLeft,
+          style.borderTopWidth,
+          style.borderTopStyle,
+          style.borderTopLeftRadius,
+        ];
+        plate.remove();
+        return drawn;
+      }),
+    ).toEqual(["12px", "16px", "1px", "solid", "4px"]);
+    // «Гроші»'s rows on the same block; outlined by the hairline in the
+    // light theme, by nothing in the dark, where its fill parts it from the
+    // paper (spec §4, «Тени» 1).
+    await menu(page)
+      .getByRole("button", { name: "Гроші", exact: true })
+      .click();
+    const rows = page.locator(".money-rows .list-block");
+    await expect(rows).toBeVisible();
+    expect(
+      await rows.evaluate((node) => [
+        getComputedStyle(node).backgroundColor,
+        getComputedStyle(node).borderTopLeftRadius,
+        getComputedStyle(node).borderTopColor,
+      ]),
+    ).toEqual([card, "4px", await token(page, "--hairline")]);
+    await page.emulateMedia({ colorScheme: "dark" });
+    const dark = await token(page, "--card");
+    expect(dark).not.toBe(card);
+    expect(dark).not.toBe(await token(page, "--paper"));
+    await expect(rows).toHaveCSS("background-color", dark);
+    await expect(rows).toHaveCSS("border-top-color", "rgba(0, 0, 0, 0)");
+    await page.emulateMedia({ colorScheme: "light" });
+    // A model's detail (S23), at the main store.
+    await page.goto("about:blank");
+    await page.goto(
+      `/#${new URLSearchParams({ tgWebAppData: initData() }).toString()}`,
+    );
+    await openStore(page, "Основний MAIN");
+    await openModel(page, "Лоран", /^Лоран шоколад 70(?:\.0)? см$/);
+    await expect
+      .poll(() => sectionsDrawn(page), { message: "S23" })
+      .not.toEqual([]);
+    for (const drawn of await sectionsDrawn(page))
+      expect(drawn, "S23").toEqual(["rgba(0, 0, 0, 0)", "0px", "0px", "0px"]);
+    await expect(page.locator("html")).toHaveJSProperty("scrollWidth", width);
+  });

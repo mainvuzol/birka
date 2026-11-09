@@ -2733,6 +2733,176 @@ test("«Клієнт забрав» by each of its five ways is a sale's stub to
   }
 });
 
+test("«Клієнт забрав» on its way waits as the till's dock: the pressed way's ring, the four others stepped back, «Ще надсилаємо…» past 3 s; neither Telegram's «Назад», Escape nor the scrim closes the sheet; answered, the stub as before (audit after stage 2, orders-cash P0-1)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  let answer = (): void => undefined;
+  const server: Server = {
+    order: order({ status: "ARRIVED" }),
+    sent: [],
+    hold: new Promise<void>((done) => {
+      answer = done;
+    }),
+  };
+  await open(page, server);
+  const taking = await ways(page);
+  // The five ways at the till's height.
+  for (const way of await taking
+    .locator(".collect-ways")
+    .getByRole("button")
+    .all())
+    expect((await way.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(56);
+  const card = taking.getByRole("button", { name: "Картка", exact: true });
+  await card.click();
+  await expect.poll(() => server.sent.length).toBe(1);
+  await expect(card).toHaveClass(/\bpressed\b/);
+  await expect(card.locator(".eyelet-spin")).toBeVisible();
+  for (const other of [
+    "Готівка",
+    "Переказ",
+    "Переказ наперед",
+    "Накладений платіж",
+  ]) {
+    const way = taking.getByRole("button", { name: other, exact: true });
+    await expect(way).toHaveClass(/\bstepped-back\b/);
+    await expect(way.locator(".eyelet-spin")).toHaveCount(0);
+    // Stepped back, still read.
+    expect(await contrast(way)).toBeGreaterThanOrEqual(4.5);
+  }
+  // The ring alone at first; past 3 s, the words over the ways.
+  const line = taking.locator(".sending-line");
+  await expect(line).toBeAttached();
+  await expect(line).not.toContainText("Ще надсилаємо…");
+  await expect(line).toHaveText("Ще надсилаємо…", { timeout: 6000 });
+  // Inside the sheet, just over the ways, never moving them.
+  const [said, sheetBox, waysBox] = await Promise.all([
+    line.locator("span").boundingBox(),
+    taking.boundingBox(),
+    taking.locator(".collect-ways").boundingBox(),
+  ]);
+  if (!said || !sheetBox || !waysBox) throw new Error("not laid out");
+  expect(said.y).toBeGreaterThanOrEqual(sheetBox.y);
+  expect(said.y + said.height).toBeLessThanOrEqual(waysBox.y);
+  expect(waysBox.y - (said.y + said.height)).toBeLessThanOrEqual(12);
+  // No way out while it is on its way: Telegram's «Назад» hidden, and
+  // pressed anyway, Escape and the scrim, the sheet stays.
+  const backs = (): Promise<unknown[]> =>
+    page.evaluate(() =>
+      (window as unknown as { told: [string, unknown][] }).told
+        .filter(([event]) => event === "web_app_setup_back_button")
+        .map(([, data]) => data),
+    );
+  await expect
+    .poll(async () => (await backs()).at(-1))
+    .toEqual({ is_visible: false });
+  await page.evaluate(() => {
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        data: JSON.stringify({ eventType: "back_button_pressed" }),
+        source: window.parent,
+      }),
+    );
+  });
+  await taking.focus();
+  await page.keyboard.press("Escape");
+  await page.mouse.click(180, 20);
+  await wait(page, 300);
+  await expect(taking).toBeVisible();
+  expect(server.sent).toHaveLength(1);
+  // Answered: the sale's stub, as before.
+  answer();
+  const done = page.locator(".order-collected");
+  await expect(
+    done.getByRole("heading", { name: "Продаж записано" }),
+  ).toBeFocused();
+  await expect(taking).toHaveCount(0);
+  await expectStub(done, {
+    way: "Картка",
+    say: "Проведіть на терміналі",
+    sum: "1 200,15 грн",
+  });
+  // The stub the card's white on the paper, never a slip of the paper's
+  // colour (audit after stage 2, frame P0-1).
+  const [slip, cardWhite] = await done.locator(".stub").evaluate((node) => {
+    const probe = document.createElement("span");
+    document.body.append(probe);
+    probe.style.color = "var(--card)";
+    const white = getComputedStyle(probe).color;
+    probe.remove();
+    return [getComputedStyle(node).backgroundColor, white];
+  });
+  expect(slip).toBe(cardWhite);
+  expect(server.sent).toHaveLength(1);
+});
+
+test("«Клієнт забрав» in parts, on its way, in the dark theme: pressed with the ways scrolled half out of the sheet, they come back into view with «Ще надсилаємо…»'s room over them; the ways stepped back read 4.5:1 (audit after stage 2, orders-cash P0-1; review, 2026-11-09)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  let answer = (): void => undefined;
+  const server: Server = {
+    order: order({ status: "ARRIVED", total: "3000.00" }),
+    sent: [],
+    hold: new Promise<void>((done) => {
+      answer = done;
+    }),
+  };
+  await open(page, server, { bg_color: "#17212b", text_color: "#f5f5f5" });
+  const taking = await ways(page);
+  await taking.getByLabel("Оплата частинами").check();
+  await taking.getByLabel("Ім’я покупця").fill("Оксана");
+  await taking.getByLabel("Телефон покупця").fill("0501234567");
+  await taking.getByLabel("Сплачує зараз, грн").fill("500");
+  const first = taking.getByRole("group", { name: "Зараз, у магазині" });
+  const cash = first.getByRole("button", { name: "Готівка", exact: true });
+  // As a hand leaves it after the terms: the first way at the sheet's top,
+  // its caption and the line's room over it out of view.
+  await cash.evaluate((button) => {
+    const body = button.closest(".sheet-body");
+    if (body)
+      body.scrollTop +=
+        button.getBoundingClientRect().top - body.getBoundingClientRect().top;
+  });
+  await expect(first.locator(".pay-caption")).not.toBeInViewport();
+  await expect(cash).toBeInViewport({ ratio: 1 });
+  await cash.click();
+  await expect.poll(() => server.sent.length).toBe(1);
+  await expect(cash).toHaveClass(/\bpressed\b/);
+  const line = taking.locator(".sending-line");
+  await expect(line).toHaveText("Ще надсилаємо…", { timeout: 6000 });
+  await expect(line).toBeInViewport({ ratio: 1 });
+  await expect(cash).toBeInViewport({ ratio: 1 });
+  for (const other of [
+    "Картка",
+    "Переказ",
+    "Переказ наперед",
+    "Накладений платіж",
+  ]) {
+    const way = taking.getByRole("button", { name: other, exact: true });
+    await expect(way).toHaveClass(/\bstepped-back\b/);
+    expect(await contrast(way)).toBeGreaterThanOrEqual(4.5);
+  }
+  answer();
+  await expect(
+    page.getByRole("heading", { name: "Продаж записано" }),
+  ).toBeFocused();
+  expect(server.sent).toEqual([
+    {
+      step: "collect",
+      body: {
+        command_id: expect.any(String),
+        payment_method: "CASH",
+        credit: {
+          customer_name: "Оксана",
+          customer_phone: "0501234567",
+          paid_now: "500.00",
+        },
+      },
+    },
+  ]);
+});
+
 for (const [name, theme] of [
   ["light", { bg_color: "#ffffff", text_color: "#000000" }],
   ["dark", { bg_color: "#17212b", text_color: "#f5f5f5" }],
