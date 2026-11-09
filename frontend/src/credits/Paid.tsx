@@ -168,7 +168,7 @@ export function Paid({
           <PaymentNext {...next} />
         ) : (
           <div className="result-next">
-            <button type="button" onClick={next.back}>
+            <button type="button" className="primary" onClick={next.back}>
               {next.backTo}
             </button>
             <button type="button" className="quiet" onClick={next.debt}>
@@ -197,7 +197,13 @@ function PaymentNext({
   const main = useMainButton("Відкрити борг", debt);
   return (
     <div className="result-next">
-      <button type="button" onClick={back}>
+      {/* The main only where Telegram's is not: there, «Відкрити борг»
+          is (audit after stage 2, frame P1-1). */}
+      <button
+        type="button"
+        className={main ? undefined : "primary"}
+        onClick={back}
+      >
         {backTo}
       </button>
       {!main && (

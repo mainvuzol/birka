@@ -120,6 +120,7 @@ function Crashed(): JSX.Element {
         </div>
         <button
           type="button"
+          className="primary"
           onClick={() => {
             window.location.reload();
           }}

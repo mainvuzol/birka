@@ -1152,7 +1152,7 @@ export function DebtActions({
               <div className="actions">
                 <button
                   type="button"
-                  className={writingOff ? "pressed" : undefined}
+                  className={writingOff ? "primary pressed" : "primary"}
                   disabled={reason.trim() === "" || blocked || working}
                   onClick={() => {
                     void sendWriteOff();
@@ -1203,6 +1203,7 @@ export function DebtActions({
             <div className="actions">
               <button
                 type="button"
+                className="primary"
                 disabled={working || erasing}
                 onClick={() => {
                   void sendErase();

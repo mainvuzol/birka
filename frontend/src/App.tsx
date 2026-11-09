@@ -521,7 +521,9 @@ export function App(): JSX.Element {
                     "Не вдалося увійти. Відкрийте застосунок знову кнопкою в боті вашого магазину.",
                   )}
           </p>
-          <button onClick={readAgain}>Спробувати ще раз</button>
+          <button type="button" className="text-button" onClick={readAgain}>
+            Спробувати ще раз
+          </button>
         </BlankTag>
       </main>
     );
@@ -560,7 +562,9 @@ export function App(): JSX.Element {
         <BlankTag>
           <h1 className="t-title-l">Магазинів поки немає</h1>
           <p className="blank-body">Зверніться до власника.</p>
-          <button onClick={readAgain}>Спробувати ще раз</button>
+          <button type="button" className="text-button" onClick={readAgain}>
+            Спробувати ще раз
+          </button>
         </BlankTag>
       </main>
     );
@@ -631,7 +635,9 @@ export function App(): JSX.Element {
               Продажі, приймання, повернення й оплати тут зупинено. Зверніться
               до власника.
             </p>
-            <button onClick={readAgain}>Спробувати ще раз</button>
+            <button type="button" className="text-button" onClick={readAgain}>
+              Спробувати ще раз
+            </button>
           </BlankTag>
         </WorkspaceLineContext.Provider>
       ) : (

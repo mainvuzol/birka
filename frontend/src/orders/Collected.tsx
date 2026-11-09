@@ -145,7 +145,7 @@ export function Collected({
         {kept && way === "CARD" && <p>{chargeOnce(taken)}</p>}
       </Stub>
       <div className="result-next">
-        <button type="button" onClick={back}>
+        <button type="button" className="primary" onClick={back}>
           До замовлень
         </button>
         <SaleLinks fixWay={fixWay} returnSale={returnSale} />

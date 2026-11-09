@@ -433,6 +433,7 @@ export function Receive({
         <div className="result-next">
           <button
             type="button"
+            className="primary"
             onClick={() => {
               setReceived(null);
             }}
@@ -738,7 +739,7 @@ export function Receive({
           foot={
             <button
               type="button"
-              className="sheet-done"
+              className="sheet-done primary"
               onClick={() => {
                 // A price typed that is not money is said here, where it
                 // is mended.
@@ -857,6 +858,7 @@ function Failure({
   retry: () => void;
 }): JSX.Element {
   return (
+    // eslint-disable-next-line no-restricted-syntax -- goods P1-1 moves it onto Unread
     <div role="alert">
       <p>{readText(error)}</p>
       <button type="button" onClick={retry}>

@@ -18,6 +18,7 @@ import type { ReturnPage, SetOff, SupplierReturn } from "./types";
 import { BackToMore } from "@/shared/More";
 import type { MoreBack } from "@/shared/More";
 import { ScreenHeader } from "@/shared/ScreenHeader";
+import { Empty } from "@/shared/Empty";
 
 export { refusalText, returnedText } from "./returnWords";
 
@@ -240,17 +241,14 @@ export function Suppliers({
         ) : listed.length === 0 ? (
           // Nothing (spec §6.28): the blank mark, what is so now, and what
           // the supplier counts of a return.
-          <div className="orders-empty">
-            <Icon name="mark-lg" className="orders-empty-mark" />
-            <p className="t-row">
-              {supplierId
+          <Empty
+            title={
+              supplierId
                 ? `Постачальнику «${visible(chosen?.name ?? "")}» цей магазин ще нічого не повертав.`
-                : "Цей магазин ще нічого не повертав постачальникам."}
-            </p>
-            <p className="t-meta">
-              Скільки постачальник за нього зарахував, записують заліком у
-              «Накладних».
-            </p>
+                : "Цей магазин ще нічого не повертав постачальникам."
+            }
+            meta="Скільки постачальник за нього зарахував, записують заліком у «Накладних»."
+          >
             <button
               type="button"
               className="quiet"
@@ -259,7 +257,7 @@ export function Suppliers({
             >
               Повернути товар постачальнику
             </button>
-          </div>
+          </Empty>
         ) : (
           <>
             <ul className="return-rows" aria-label="Повернення постачальникам">

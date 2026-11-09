@@ -551,6 +551,67 @@ test("a model is found by the server's search over the warehouse chosen, from tw
   );
 });
 
+test("in Telegram the supplier's sheet over «Повернути постачальнику» hides its MainButton, «Додати постачальника» its one main; picked, the MainButton is back (audit after stage 2, frame P1-1; review)", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const host = window as unknown as {
+      TelegramWebviewProxy: {
+        postEvent: (event: string, data: string) => void;
+      };
+      told: { event: string; data: unknown }[];
+    };
+    host.told = [];
+    host.TelegramWebviewProxy = {
+      postEvent: (event, data) => {
+        host.told.push({ event, data: data ? JSON.parse(data) : null });
+      },
+    };
+  });
+  const mainShown = (): Promise<boolean | undefined> =>
+    page.evaluate(
+      () =>
+        (
+          window as unknown as {
+            told: { event: string; data: { is_visible?: boolean } | null }[];
+          }
+        ).told
+          .filter(({ event }) => event === "web_app_setup_main_button")
+          .at(-1)?.data?.is_visible,
+    );
+  await page.goto(
+    `/#${new URLSearchParams({ tgWebAppData: initData(hanna), tgWebAppVersion: "8.0" }).toString()}`,
+  );
+  await openStore(page, "Центр CENTRE");
+  await section(page, "Постачальникам");
+  await page
+    .locator(".screen-title")
+    .getByRole("button", { name: "Повернути товар постачальнику" })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Повернути постачальнику" }),
+  ).toBeVisible();
+  await expect.poll(mainShown).toBe(true);
+  await returnForm(page)
+    .getByRole("button", { name: /^Постачальник / })
+    .click();
+  const sheet = page.getByRole("dialog", { name: "Постачальник" });
+  await expect(sheet).toHaveAttribute("data-ready", "");
+  await expect.poll(mainShown).toBe(false);
+  await sheet
+    .getByRole("button", { name: "Новий постачальник", exact: true })
+    .click();
+  await sheet
+    .getByLabel("Назва постачальника")
+    .fill(`Тельма ${randomUUID().slice(0, 6)}`);
+  await expect(sheet.locator("button.primary:visible")).toHaveText([
+    "Додати постачальника",
+  ]);
+  await sheet.getByRole("button", { name: "Додати постачальника" }).click();
+  await expect(sheet).toHaveCount(0);
+  await expect.poll(mainShown).toBe(true);
+});
+
 test("a supplier is never written twice: the one on the list is picked", async ({
   page,
 }) => {

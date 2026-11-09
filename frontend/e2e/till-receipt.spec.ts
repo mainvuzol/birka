@@ -267,6 +267,16 @@ test("at 360 px the receipt lies on the paper: its section no card, its stub the
   if (!dock) throw new Error("not laid out");
   expect(Math.round(dock.x)).toBe(16);
   expect(Math.round(dock.x + dock.width)).toBe(344);
+  // «Новий продаж» the screen's one main: the primary, 52, 17/700 (audit
+  // after stage 2, frame P1-1).
+  const next = page
+    .locator(".result-dock")
+    .getByRole("button", { name: "Новий продаж" });
+  await expect(next).toHaveClass(/\bprimary\b/);
+  await expect(next).toHaveCSS("min-height", "52px");
+  await expect(next).toHaveCSS("font-size", "17px");
+  await expect(next).toHaveCSS("font-weight", "700");
+  await expect(page.locator("main button.primary:visible")).toHaveCount(1);
   await expect(page.locator("html")).toHaveJSProperty("scrollWidth", 360);
 });
 

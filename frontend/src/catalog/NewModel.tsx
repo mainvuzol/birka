@@ -2,12 +2,13 @@ import { useEffect, useId, useRef, useState } from "react";
 import type { JSX } from "react";
 import { createPortal } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ApiError, api, readText, recordedNothing } from "@/shared/api";
+import { ApiError, api, recordedNothing } from "@/shared/api";
 import { Eyelet } from "@/shared/Eyelet";
 import { ModeSwitch } from "@/shared/ModeSwitch";
 import { Sheet } from "@/shared/Sheet";
 import { buzz, useMainButton } from "@/shared/telegram";
 import { visible } from "@/shared/visible";
+import { Unread } from "@/shared/Unread";
 import type { Store } from "@/orders/types";
 import type { ReceivableVariant, SizeOption } from "@/inventory/receiptTypes";
 import {
@@ -583,17 +584,12 @@ export function NewModel({
               {!readsSizes ? null : sizes.isPending ? (
                 <p role="status">Завантажуємо розміри…</p>
               ) : sizes.error ? (
-                <div className="notice read-failure" role="alert">
-                  <p>{readText(sizes.error)}</p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      void sizes.refetch();
-                    }}
-                  >
-                    Спробувати ще раз
-                  </button>
-                </div>
+                <Unread
+                  error={sizes.error}
+                  retry={() => {
+                    void sizes.refetch();
+                  }}
+                />
               ) : null}
               <div className="cells" role="group" aria-label="Розміри">
                 {cellsOf.map((size) => {

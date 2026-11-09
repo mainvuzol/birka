@@ -2,6 +2,7 @@ import {
   test,
   expect,
   countTaps,
+  expectEmpty,
   expectGlyphBeside,
   grn,
   menu,
@@ -1838,11 +1839,10 @@ test("nothing owed: the blank mark, what is so now, what an invoice is, and «З
   await expect(page.locator(".invoice-total-line")).toHaveText(
     "Нічого не винні",
   );
+  // The shared empty place, as «Сьогодні»'s (audit after stage 2, frame
+  // P2-1).
   const empty = page.locator(".orders-empty");
-  await expect(empty.locator(".orders-empty-mark")).toBeVisible();
-  await expect(empty.locator(".t-row")).toHaveText(
-    "Зараз магазин нічого не винен постачальникам.",
-  );
+  await expectEmpty(empty, "Зараз магазин нічого не винен постачальникам.");
   await expect(empty.locator(".t-meta")).toHaveText(
     "Кожна накладна — окремий борг: сплачують частинами, без графіка.",
   );

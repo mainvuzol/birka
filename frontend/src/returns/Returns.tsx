@@ -11,7 +11,6 @@ import {
   INVALID_TEXT,
   api,
   errorText,
-  readText,
 } from "@/shared/api";
 import { Unread } from "@/shared/Unread";
 import { NoCustomerData } from "@/shared/NoCustomerData";
@@ -37,6 +36,7 @@ import { buzz, hideKeyboard } from "@/shared/telegram";
 import { Back } from "@/shared/Back";
 import { ScreenHeader } from "@/shared/ScreenHeader";
 import { SearchField } from "@/shared/SearchField";
+import { Empty } from "@/shared/Empty";
 import { useSettled } from "@/sales/StockSearch";
 import { submitReturn, useReturnCommand } from "./commands";
 import { SaleRow, byDay, dayOf, dayTitle } from "./SaleRow";
@@ -308,28 +308,25 @@ export function Returns({
           // The rows' places while they are read (returns task list, P2-3).
           <Placeholder said="Завантажуємо продажі…" rows={3} block />
         ) : !sales.data ? (
-          <div className="notice read-failure" role="alert">
-            <p>{readText(sales.error, refusalText)}</p>
-            <button
-              type="button"
-              onClick={() => {
-                void sales.refetch();
-              }}
-            >
-              Спробувати ще раз
-            </button>
-          </div>
+          <Unread
+            error={sales.error}
+            said={refusalText}
+            retry={() => {
+              void sales.refetch();
+            }}
+          />
         ) : listed.length === 0 ? (
           // Nothing found (spec §6.28): a blank tag drawn, the words under
           // it (stage 2, orders task list, P0-6).
           search ? (
-            <div className="orders-empty returns-empty">
-              <Icon name="mark-lg" className="orders-empty-mark" />
-              <p className="t-row">
-                {away
+            <Empty
+              className="returns-empty"
+              title={
+                away
                   ? `В інших магазинах мережі за «${visible(search)}» продажів не знайдено.`
-                  : `За «${visible(search)}» продажів не знайдено. Перевірте назву або очистіть пошук.`}
-              </p>
+                  : `За «${visible(search)}» продажів не знайдено. Перевірте назву або очистіть пошук.`
+              }
+            >
               <button
                 type="button"
                 className="quiet"
@@ -341,30 +338,26 @@ export function Returns({
               >
                 Очистити
               </button>
-            </div>
+            </Empty>
           ) : (
-            <div className="orders-empty returns-empty">
-              <Icon name="mark-lg" className="orders-empty-mark" />
-              <p className="t-row">Продажів у магазині ще немає.</p>
-            </div>
+            <Empty
+              className="returns-empty"
+              title="Продажів у магазині ще немає."
+            />
           )
         ) : (
           <>
             {sales.isError && !sales.isFetchNextPageError && (
               // Read again and refused: the rows below are as they were, and
               // that is said (ADR-0011; review, 2026-10-17).
-              <div className="notice read-failure" role="alert">
-                <p>{readText(sales.error, refusalText)}</p>
-                <button
-                  type="button"
-                  disabled={sales.isFetching}
-                  onClick={() => {
-                    void sales.refetch();
-                  }}
-                >
-                  Спробувати ще раз
-                </button>
-              </div>
+              <Unread
+                error={sales.error}
+                said={refusalText}
+                held={sales.isFetching}
+                retry={() => {
+                  void sales.refetch();
+                }}
+              />
             )}
             {/* A day keyed by its date: a new sale on top never makes its
                 rows anew, nor takes the focus from one (review). */}
@@ -393,18 +386,14 @@ export function Returns({
             ))}
             {sales.isFetchNextPageError ? (
               // The next page could not be read: those read stay.
-              <div className="notice read-failure" role="alert">
-                <p>{readText(sales.error, refusalText)}</p>
-                <button
-                  type="button"
-                  disabled={sales.isFetching}
-                  onClick={() => {
-                    void sales.fetchNextPage();
-                  }}
-                >
-                  Спробувати ще раз
-                </button>
-              </div>
+              <Unread
+                error={sales.error}
+                said={refusalText}
+                held={sales.isFetching}
+                retry={() => {
+                  void sales.fetchNextPage();
+                }}
+              />
             ) : (
               sales.hasNextPage && (
                 <button
@@ -993,7 +982,9 @@ function ReturnForm({
             <SendingLine busy={pressing} />
             <button
               type="button"
-              className={pressing ? "return-go pressed" : "return-go"}
+              className={
+                pressing ? "return-go primary pressed" : "return-go primary"
+              }
               disabled={
                 blocked ||
                 working ||

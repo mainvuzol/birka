@@ -138,7 +138,7 @@ export function Count({
           />
           <button
             type="button"
-            className="cash-panel-button"
+            className="cash-panel-button primary"
             aria-haspopup="dialog"
             disabled={disabled || reading || cents === null}
             onClick={() => {

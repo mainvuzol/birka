@@ -23,6 +23,7 @@ import { ScreenHeader } from "@/shared/ScreenHeader";
 import { SendingLine } from "@/shared/Sending";
 import { Sum } from "@/shared/Sum";
 import { buzz, useMainButton } from "@/shared/telegram";
+import { Empty } from "@/shared/Empty";
 import { ageOf } from "@/today/reads";
 import { Stamp, staleOf, useNow } from "@/today/age";
 import { shortDay, shortWhen } from "@/credits/format";
@@ -644,20 +645,20 @@ function InvoiceList({
         ) : listed.length === 0 ? (
           // Nothing (spec §6.28): the blank mark, what is so now, and what an
           // invoice is.
-          <div className="orders-empty">
-            <Icon name="mark-lg" className="orders-empty-mark" />
-            <p className="t-row">
-              {elsewhere
+          <Empty
+            title={
+              elsewhere
                 ? "Магазини, що не працюють, нічого не винні постачальникам."
                 : owedOnly
                   ? "Зараз магазин нічого не винен постачальникам."
-                  : "У цьому магазині ще не записували накладних."}
-            </p>
-            {!elsewhere && (
-              <p className="t-meta">
-                Кожна накладна — окремий борг: сплачують частинами, без графіка.
-              </p>
-            )}
+                  : "У цьому магазині ще не записували накладних."
+            }
+            meta={
+              elsewhere
+                ? undefined
+                : "Кожна накладна — окремий борг: сплачують частинами, без графіка."
+            }
+          >
             {makes && (
               <button
                 type="button"
@@ -668,7 +669,7 @@ function InvoiceList({
                 Записати накладну
               </button>
             )}
-          </div>
+          </Empty>
         ) : (
           <>
             <ul className="order-tags invoice-tags" aria-label="Накладні">
@@ -878,7 +879,9 @@ function NewInvoice({
               <SendingLine busy={pressing} />
               <button
                 type="button"
-                className={pressing ? "sheet-done pressed" : "sheet-done"}
+                className={
+                  pressing ? "sheet-done primary pressed" : "sheet-done primary"
+                }
                 disabled={held}
                 onClick={submit}
               >

@@ -7823,3 +7823,112 @@ Settled in the review (an independent reviewer of the batch's diff):
   on a block; a customer's two letters, the fold's colour, are lost in the
   pressed row's fold while pressed; a store's column on «Сьогодні» reads
   its units before its sum, as the task draws it.
+
+## Chosen in chat — 2026-11-09 (audit after stage 2, batch 3: a button the secondary one unless it says it is the screen's main; fields, the ring, what is said under, the weights by §4; one Unread for a read that failed, the lint holding it; «Магазини»' words; one Empty; frame P1-1 part 1, P1-2, P2-1)
+
+Chosen in chat on 2026-11-09 («Yes, start batch 3»), after batch 2 (#184)
+was merged. No right, no server rule, no field changes; words change only
+in «Магазини»' kept stub, as the TZ has them (approved with it). Part 2 of
+frame P1-1 (the mode switch, the menu, the radii off the scale, the dead
+rules, `index.html`) is a later batch.
+
+- **A button is the secondary one** (frame P1-1, spec §5.5 `button-s`,
+  §6.5): the card, an edge of 1, ink, 15/600, 44 high at least, the
+  corner 8. **The screen's main says so** — `.primary`: the primary,
+  52 high, 17/700, the corner 8; Telegram's MainButton's place outside
+  Telegram (`.main-mimic`) is one too. One main a screen at most, its own
+  or Telegram's, with what could not be read said on it too (S04, S07,
+  S08, S16, S19, S25, S29 checked).
+  - **Which buttons are the main** (decided here, by «one main a screen»):
+    a screen's or a sheet's own finishing action where no MainButton
+    stands — «Новий продаж» in the result's dock and after nothing sold,
+    «Готово» on a recorded invoice and a closed drawer, «До замовлень»,
+    «Прийняти повернення», «Записати причину», «Перезапустити», «Прийняти
+    ще», «Так, стерти дані покупця», the write-off, the cash panel's
+    send, the sheets' «Готово» and a picker's choice, a return's
+    record, a store's change confirmed, «Позначити проданим · N шт.» — 33
+    places in 25 files. Every other button that had no class is now the secondary:
+    retries in a plate, «Зрозуміло», steppers, an empty place's «Новий
+    продаж», the shortfall's answers, yes/no asked in the content, a
+    sheet's list of ways, the collect's picker.
+  - **The till's three ways and a debt payment's** (spec §6.15, S21): each
+    the primary, 17/700 — the button is the sale. **«Клієнт забрав»'s
+    ways**: the secondary, as §6.15's «a choice, then the MainButton» has
+    them. «Каса»'s fix ways keep their own look (the fold, the accent
+    pressed).
+  - **The quiet button** (`.quiet`) takes the secondary's type, 15/600 and
+    44 — it was 16/650 and 48; its transparent face as before. Standing in
+    a smaller line («Оформити повернення» under a sale, «Шукати там») it
+    reads at 15 too — it took the line's 13 or 14 before.
+  - **Before a store** («Вхід через Telegram», «Магазинів поки немає», a
+    store that stopped trading): «Спробувати ще раз» the text button, as
+    S03's — three places.
+  - **A server back** (the banner's «Оновити»): left the secondary;
+    §6.23's text button not taken here (the banner is the orders-cash
+    TZ's).
+  - **A row, a picker's line, a tray, a tag or a size's cell that is a
+    button** reads in the body's 16, as before — not a button's 15: its
+    own lines keep their sizes.
+  - **The supplier picker** (review): in its own sheet «Додати
+    постачальника» is that sheet's main, and «Повернути постачальнику»
+    hides Telegram's MainButton while the sheet is over it, showing it
+    again once the sheet is gone; inside another sheet («Як надійшов»,
+    «Брак»'s supplier step), whose foot or MainButton is the main, it is
+    the secondary.
+  - **Not done here** (review, low): outside Telegram the page's own main
+    stays drawn under a modal sheet with a main of its own — the
+    customer's dock «Внесок» under the write-off and erase sheets,
+    «Закрити касу» under the count's confirmation; dimmed, not reachable.
+    Inside Telegram the MainButton is hidden there already.
+- **A field** (frame P1-1, spec §6.6): the corner 8; what is typed 16/400
+  — never the label's 700 now; the card on the paper, the fold inside a
+  white block (a sheet, the pay panel, a dock, a list's block), a field of
+  its own look (the keypad's sum) keeping it. A search in a sheet takes
+  the fold too (review); on the paper it stays the card.
+- **The focus ring** (frame P1-1): 2 at 2 for every control; inside a tag,
+  inward as before (−3; the drawer's ink tag −4); the switch's track 2 at
+  2. No ring of 3 is left.
+- **What is said under** (frame P1-1, spec §5.5 `meta`): `small`, `.hint`
+  and «Ще»'s `.more-meta` 14/500 in pencil; a label 14/700.
+- **No weight but the roles'** — 400, 500, 600, 700, 800: every 650 is 600
+  (a row, a verb) or 700 (a label, a day's heading, a picker's label); a
+  journey reads the stylesheet for it. The two 750s the TZ did not count
+  — a debt's sum on its row and the drawer's difference — are 700, the
+  nearest role (decided here; §4 has money as list text at 600, left to
+  their sections).
+- **One Unread** (frame P1-2, spec §6.23): a read that failed is the shared
+  plate — the warning's, one line in the screen's words, the secondary
+  «Спробувати ще раз» — never a bare alert. `Unread` takes two things it
+  lacked: `held` (asked again, not answered yet: no second ask) and lines
+  under its line (only «Каса»'s close while the server does not answer).
+  - The 11 yellow copies of its markup are `Unread` now (Returns ×3,
+    Closed, Catalog, NewModel, CatalogPicker, FromCatalog, Sale,
+    paperMark, Cash); their words and retries as before.
+  - **«Покупці»'s 8 red copies** (Credits ×4, Customer ×3, Debts) are
+    `Unread` too, here: the frame TZ gave them to the sale TZ's P1-2 and
+    that pointed back at the frame's rule — red for a read was the
+    defect.
+  - **The lint** (`eslint.config.js`, `no-restricted-syntax`): an element
+    whose own `role="alert"` holds a `readText(` call, at any depth, is an
+    error outside `shared/Unread.tsx`; it does not see `role={"alert"}` or
+    a text read into a name first (review). On now, not after the sections' tasks as the TZ
+    put it: the 8 goods places (FamilySearch, Model, Receive, Stock,
+    Stocktaking, Openings, SuggestedPrice ×2) carry a marked exception
+    each, «goods P1-1 moves it onto Unread», so a new copy anywhere fails
+    at once.
+- **«Магазини»' kept stub** (frame P1-2): «Зміну стану магазину ще не
+  підтверджено», its button «Перевірити результат зміни»; its body, its
+  time line and `byItself={false}` as before. The catalog's kept stub
+  still says «Незавершена операція каталогу» — goods P1-4's words, not
+  this task's; frame P1-2's third criterion waits for it.
+- **One Empty** (frame P2-1, spec §6.28): `shared/Empty.tsx` — the blank
+  tag at 64 in the edge, one line 17/600, a line of meta when needed, what
+  the place offers under it; drawn as a section headed by its line when
+  the screen focuses it; `hidden` hides it whatever its own display.
+  «Сьогодні»'s «Вас нічого не чекає.» is on it, «Зроблено сьогодні» the
+  section's gap of 8 under its line, as before.
+  - Beyond the TZ (same markup, nothing else changed): the 9 empty places
+    already drawn as `orders-empty` — Borrowed, Suppliers, SupplierList,
+    Invoices, Damaged ×2, Returns ×2, Orders' «Замовлень ще немає.». The
+    orders' search with nothing found (no mark) is left to orders-cash
+    P2-3; the bare `.empty` places to their sections' tasks.

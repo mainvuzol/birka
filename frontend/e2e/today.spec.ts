@@ -1,6 +1,7 @@
 import {
   test,
   expect,
+  expectEmpty,
   menu,
   openStore,
   section,
@@ -1761,6 +1762,9 @@ test("«Вас нічого не чекає.» from a read that has failed since
   await onToday(page);
   const empty = page.locator(".today-empty");
   await expect(empty).toContainText("Вас нічого не чекає.");
+  // The shared empty place, as «Накладні»'s (audit after stage 2, frame
+  // P2-1).
+  await expectEmpty(empty, "Вас нічого не чекає.");
   await expect(empty.locator(".day-stamp")).toHaveCount(0);
   await page.route(
     `**/api/v1/damaged-units?store_id=${market}`,
@@ -2321,6 +2325,17 @@ test("«Бачу»: the tag goes, «Бірку сховано.» with «Пове
     exact: true,
   });
   await expect(empty).toBeFocused();
+  // «Зроблено сьогодні · 2» the section's gap of 8 under it, no more (audit
+  // after stage 2, frame P2-1; review).
+  const [line, link] = await Promise.all([
+    empty.boundingBox(),
+    page
+      .getByRole("button", { name: "Зроблено сьогодні · 2", exact: true })
+      .boundingBox(),
+  ]);
+  expect(
+    Math.round((link?.y ?? 0) - (line?.y ?? 0) - (line?.height ?? 0)),
+  ).toBe(8);
   await expect(badge).not.toHaveAttribute("data-badge");
   // Opened while its toast stands: the toast goes, the sheet over it would
   // hold it out of reach; the latest seen first.

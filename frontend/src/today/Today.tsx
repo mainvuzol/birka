@@ -18,6 +18,7 @@ import { Sum } from "@/shared/Sum";
 import { Toast } from "@/shared/Toast";
 import { buzz } from "@/shared/telegram";
 import { visible } from "@/shared/visible";
+import { Empty } from "@/shared/Empty";
 import { Stamp, Waiting, dayLine, staleOf, useNow } from "./age";
 import {
   ageOf,
@@ -411,18 +412,17 @@ function WaitingTags({
   return (
     <>
       {empty ? (
-        <section
+        // Nothing waits: the shared empty place (spec §6.28; audit after
+        // stage 2, frame P2-1), its line the section's heading.
+        <Empty
           className="today-empty"
-          aria-labelledby={label}
+          title="Вас нічого не чекає."
+          heading={{ id: label, ref: heading }}
           hidden={searched}
         >
-          <Icon name="mark-lg" className="today-empty-mark" />
-          <h2 ref={heading} id={label} className="t-row" tabIndex={-1}>
-            Вас нічого не чекає.
-          </h2>
           {old && <Stamp age={work.age} now={now} />}
           {doneLink}
-        </section>
+        </Empty>
       ) : (
         <section
           className="today-waiting"

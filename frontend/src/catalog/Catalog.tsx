@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type { JSX } from "react";
 import { createPortal } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { readText, recordedNothing, api } from "@/shared/api";
+import { recordedNothing, api } from "@/shared/api";
 import { Eyelet } from "@/shared/Eyelet";
 import { ModeSwitch } from "@/shared/ModeSwitch";
 import { Sheet } from "@/shared/Sheet";
@@ -25,6 +25,7 @@ import { BackToMore } from "@/shared/More";
 import type { MoreBack } from "@/shared/More";
 import { Back } from "@/shared/Back";
 import { ScreenHeader } from "@/shared/ScreenHeader";
+import { Unread } from "@/shared/Unread";
 const base = "/catalog/match-decisions";
 
 type Queue = "OPEN" | "APPLIED" | "REJECTED";
@@ -373,14 +374,7 @@ function Failure({
   error: unknown;
   retry: () => void;
 }): JSX.Element {
-  return (
-    <div className="notice read-failure" role="alert">
-      <p>{readText(error, catalogMessage)}</p>
-      <button type="button" onClick={retry}>
-        Спробувати ще раз
-      </button>
-    </div>
-  );
+  return <Unread error={error} said={catalogMessage} retry={retry} />;
 }
 
 function Detail({

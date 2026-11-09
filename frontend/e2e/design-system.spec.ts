@@ -711,3 +711,258 @@ for (const width of [360, 390])
       expect(drawn, "S23").toEqual(["rgba(0, 0, 0, 0)", "0px", "0px", "0px"]);
     await expect(page.locator("html")).toHaveJSProperty("scrollWidth", width);
   });
+
+/** Opened from Telegram of 8.0 as the network's owner, its theme light. */
+function ownerInTelegram(): string {
+  const hash = new URLSearchParams({
+    tgWebAppData: initData(fixture.network_owner_telegram_user_id),
+    tgWebAppVersion: "8.0",
+    tgWebAppThemeParams: JSON.stringify(light),
+  });
+  return `/#${hash.toString()}`;
+}
+
+/** How many mains a screen shows: its own `.primary`, the MainButton's
+ * place outside Telegram, and Telegram's MainButton when last told shown. */
+async function mainsShown(page: Page): Promise<number> {
+  // The till's three ways, the primary each, are one main together.
+  const own = await page
+    .locator(
+      "button.primary:visible, .main-mimic:visible, .till-tray .pay-ways:visible, .till-dock .pay-ways:visible",
+    )
+    .count();
+  const last = (await told(page))
+    .filter(({ event }) => event === "web_app_setup_main_button")
+    .at(-1);
+  const telegram =
+    (last?.data as { is_visible?: boolean } | null | undefined)?.is_visible ===
+    true
+      ? 1
+      : 0;
+  return own + telegram;
+}
+
+/** The screens that say what could not be read when every list fails;
+ * «Сьогодні» and «Ще» draw no plate. */
+const PLATES = ["Продаж", "Замовлення", "Гроші", "Каса", "Покупці"];
+
+for (const failing of [false, true])
+  test(`one main a screen at most — its own or Telegram's — on «Сьогодні», «Ще», «Продаж», «Замовлення», «Покупці», «Каса» and «Гроші»${failing ? ", with what could not be read said on it, its «Спробувати ще раз» the secondary button" : ""} (spec S04, S07, S08, S16, S19, S25, S29; audit after stage 2, frame P1-1${failing ? ", P1-2" : ""})`, async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    await hearTelegram(page);
+    await page.goto(ownerInTelegram());
+    await openStore(page, "Центр CENTRE");
+    if (failing)
+      // Every list refused once the store is open: what is shown says so.
+      await page.route("**/api/v1/**", async (route) => {
+        const { pathname } = new URL(route.request().url());
+        if (
+          route.request().method() !== "GET" ||
+          /\/api\/v1\/(?:me|stores|auth)\b/.test(pathname)
+        ) {
+          await route.fallback();
+          return;
+        }
+        await route.fulfill({ status: 500, json: { code: "INTERNAL" } });
+      });
+    const screens: [string, () => Promise<void>][] = [
+      ["Сьогодні", () => Promise.resolve()],
+      [
+        "Продаж",
+        () =>
+          menu(page)
+            .getByRole("button", { name: "Продаж", exact: true })
+            .click(),
+      ],
+      ["Замовлення", () => section(page, "Замовлення")],
+      [
+        "Гроші",
+        () =>
+          menu(page)
+            .getByRole("button", { name: "Гроші", exact: true })
+            .click(),
+      ],
+      ["Каса", () => section(page, "Каса")],
+      ["Покупці", () => section(page, "Покупці")],
+      ["Ще", () => more(page)],
+    ];
+    const plates: string[] = [];
+    for (const [title, go] of screens) {
+      await go();
+      await expect(
+        page.getByRole("heading", { name: title, exact: true, level: 1 }),
+      ).toBeVisible();
+      if (failing) {
+        // Said once the screen's reads have failed — waited for, not
+        // glanced at.
+        const plate = page.locator(".read-failure").first();
+        if (
+          await plate.waitFor({ state: "visible", timeout: 4_000 }).then(
+            () => true,
+            () => false,
+          )
+        ) {
+          plates.push(title);
+          const retry = plate.getByRole("button", {
+            name: "Спробувати ще раз",
+          });
+          await expect(retry).toHaveCSS(
+            "background-color",
+            await token(page, "--card"),
+          );
+          await expect(retry).not.toHaveClass(/\bprimary\b/);
+        }
+      }
+      // Settled: the screen's reads answered, Telegram told.
+      await page.waitForTimeout(300);
+      expect(await mainsShown(page), title).toBeLessThanOrEqual(1);
+    }
+    if (failing) expect(plates).toEqual(PLATES);
+  });
+
+for (const scheme of ["light", "dark"] as const)
+  test(`in the ${scheme} theme a button is the secondary one — the card, an edge, ink, 15/600, 44 high, 8 round — unless it says it is the screen's main, primary 52 and 17/700; a field 8 round, typed 16/400, the card on the paper and the fold in a sheet; the focus ring 2 at 2; what is said under 14/500 in pencil; no weight but the roles' (audit after stage 2, frame P1-1)`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ colorScheme: scheme });
+    await page.goto(
+      `/#${new URLSearchParams({ tgWebAppData: initData(fixture.network_owner_telegram_user_id) }).toString()}`,
+    );
+    await openStore(page, "Центр CENTRE");
+    const [card, edge, ink, primary, onPrimary, pencil, fold] =
+      await Promise.all(
+        [
+          "--card",
+          "--edge",
+          "--ink",
+          "--primary",
+          "--on-primary",
+          "--pencil",
+          "--fold",
+        ].map((name) => token(page, name)),
+      );
+    const drawn = await page.evaluate(() => {
+      const main = document.querySelector("main");
+      if (!main) return null;
+      const keys = [
+        "background-color",
+        "border-top-width",
+        "border-top-color",
+        "color",
+        "border-top-left-radius",
+        "min-height",
+        "font-size",
+        "font-weight",
+      ];
+      // Drawn on the paper for a moment, read, and gone.
+      const read = (html: string, pick: string): string[] => {
+        const box = document.createElement("div");
+        box.innerHTML = html;
+        main.append(box);
+        const style = getComputedStyle(box.querySelector(pick) ?? box);
+        const out = keys.map((key) => style.getPropertyValue(key));
+        box.remove();
+        return out;
+      };
+      return {
+        base: read("<button>Зрозуміло</button>", "button"),
+        main: read('<button class="primary">Новий продаж</button>', "button"),
+        // In its label, whose 14/700 it never takes.
+        field: read("<label>Ціна, грн<input></label>", "input"),
+        inSheet: read(
+          '<div class="sheet"><label>Ціна, грн<input></label></div>',
+          "input",
+        ),
+        hint: read('<p class="hint">Під полем</p>', "p"),
+        small: read("<small>Під полем</small>", "small"),
+        meta: read('<span class="more-meta">2 чекають</span>', "span"),
+        label: read("<label>Ціна, грн</label>", "label"),
+        // A row that is a button reads in the body's 16.
+        row: read('<button class="sale-row">Рядок</button>', "button"),
+        // A field of its own look keeps it in a white block.
+        keypad: read(
+          '<div class="pay-panel"><input class="keypad-sum"></div>',
+          "input",
+        ),
+        // A search in a sheet: the fold on its white (review).
+        search: read(
+          '<div class="sheet"><div class="search-field"><input type="search"></div></div>',
+          "input",
+        ),
+      };
+    });
+    expect(drawn).not.toBeNull();
+    if (!drawn) return;
+    expect(drawn.base).toEqual([
+      card,
+      "1px",
+      edge,
+      ink,
+      "8px",
+      "44px",
+      "15px",
+      "600",
+    ]);
+    expect(drawn.main).toEqual([
+      primary,
+      "1px",
+      "rgba(0, 0, 0, 0)",
+      onPrimary,
+      "8px",
+      "52px",
+      "17px",
+      "700",
+    ]);
+    expect([
+      drawn.field[0],
+      drawn.field[4],
+      drawn.field[6],
+      drawn.field[7],
+    ]).toEqual([card, "8px", "16px", "400"]);
+    expect(drawn.inSheet[0]).toBe(fold);
+    for (const said of [drawn.hint, drawn.small, drawn.meta])
+      expect([said[3], said[6], said[7]]).toEqual([pencil, "14px", "500"]);
+    expect([drawn.label[6], drawn.label[7]]).toEqual(["14px", "700"]);
+    expect(drawn.row[6]).toBe("16px");
+    expect(drawn.keypad[0]).toBe(card);
+    expect(drawn.search[0]).toBe(fold);
+    // A real button, reached by the keyboard: its ring 2, 2 away — never
+    // one inside a tag or the menu, whose ring is drawn inward.
+    for (let at = 0; at < 30; at += 1) {
+      await page.keyboard.press("Tab");
+      if (
+        await page.evaluate(() => {
+          const node = document.activeElement;
+          return (
+            node instanceof HTMLButtonElement &&
+            !node.matches(
+              ".tab, .tag-row, .tag-hero, .order-row, .cash-card, .opening-hero-in",
+            )
+          );
+        })
+      )
+        break;
+    }
+    expect(
+      await page.evaluate(() => {
+        const node = document.activeElement;
+        if (!(node instanceof HTMLButtonElement)) return null;
+        const style = getComputedStyle(node);
+        return [
+          node.matches(":focus-visible"),
+          style.outlineStyle,
+          style.outlineWidth,
+          style.outlineOffset,
+        ];
+      }),
+    ).toEqual([true, "solid", "2px", "2px"]);
+    // No weight but the roles' — 400, 500, 600, 700, 800 — in the sheet.
+    const css = readFileSync("src/styles.css", "utf8");
+    expect(
+      css
+        .match(/font-weight:\s*\d+/g)
+        ?.filter((w) => !/\b(?:400|500|600|700|800)$/.test(w)) ?? [],
+    ).toEqual([]);
+  });

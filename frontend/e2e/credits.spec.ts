@@ -295,6 +295,18 @@ function posts(
   return seen;
 }
 
+/** The design's primary, as the browser writes it. */
+async function primaryColour(page: Page): Promise<string> {
+  return page.evaluate(() => {
+    const probe = document.createElement("span");
+    probe.style.color = "var(--primary)";
+    document.body.append(probe);
+    const drawn = getComputedStyle(probe).color;
+    probe.remove();
+    return drawn;
+  });
+}
+
 test("a sale paid in parts leaves the rest owed, and «Покупці» takes it until nothing is", async ({
   page,
 }) => {
@@ -394,6 +406,11 @@ test("a sale paid in parts leaves the rest owed, and «Покупці» takes it
   // «Прийняти внесок» is the way the customer pays (ADR-0012 G23).
   const ways = paying(page).locator(".pay-ways").getByRole("button");
   await expect(ways).toHaveText(["Готівка", "Картка", "Переказ"]);
+  // Each the primary, as the till's (spec §6.15, S21; audit after stage
+  // 2, frame P1-1).
+  const primary = await primaryColour(page);
+  for (const way of await ways.all())
+    await expect(way).toHaveCSS("background-color", primary);
   // Nothing to press without a sum (credits task list, P0-4).
   for (const way of await ways.all()) await expect(way).toBeDisabled();
   await keyIn(page, "500");

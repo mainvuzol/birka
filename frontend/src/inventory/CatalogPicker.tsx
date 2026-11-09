@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import type { JSX } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { api, readText } from "@/shared/api";
+import { api } from "@/shared/api";
 import { SearchField } from "@/shared/SearchField";
 import { hideKeyboard } from "@/shared/telegram";
 import { Stub } from "@/shared/Stub";
 import { visible } from "@/shared/visible";
+import { Unread } from "@/shared/Unread";
 import { NewModel } from "@/catalog/NewModel";
 import { useCatalogCommand, useCatalogJournal } from "@/catalog/commands";
 import type { Store } from "@/orders/types";
@@ -128,17 +129,12 @@ export function CatalogPicker({
         (variants.isPending ? (
           <p role="status">Шукаємо…</p>
         ) : variants.error ? (
-          <div className="notice read-failure" role="alert">
-            <p>{readText(variants.error)}</p>
-            <button
-              type="button"
-              onClick={() => {
-                void variants.refetch();
-              }}
-            >
-              Спробувати ще раз
-            </button>
-          </div>
+          <Unread
+            error={variants.error}
+            retry={() => {
+              void variants.refetch();
+            }}
+          />
         ) : (
           <>
             {variants.data.items.length === 0 &&

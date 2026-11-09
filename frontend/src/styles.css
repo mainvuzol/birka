@@ -479,7 +479,7 @@ header.screen-header {
   margin: 0;
   padding: 0 4px;
   border: 0;
-  font-weight: 650;
+  font-weight: 600;
 }
 .screen-title > :not(h1) {
   flex: none;
@@ -504,7 +504,7 @@ header.screen-header {
   padding: 0 4px;
   border: 0;
   font-size: 15px;
-  font-weight: 650;
+  font-weight: 600;
   color: var(--link);
 }
 /* A section is a block of meaning on the paper, never a card (spec §4:
@@ -529,15 +529,49 @@ select,
 textarea {
   font: inherit;
 }
+/* A button is the secondary one unless it says it is the screen's main
+   (spec §5.5 `button-s`, §6.5; audit after stage 2, frame P1-1): the card,
+   an edge of 1, ink, 15/600, 44 high at least, the corner 8. */
 button {
-  border: 1px solid transparent;
-  border-radius: 11px;
-  padding: 13px 17px;
-  min-height: 48px;
-  background: var(--accent);
-  color: var(--on-accent);
-  font-weight: 650;
+  border: 1px solid var(--edge);
+  border-radius: var(--r-l);
+  padding: 10px 16px;
+  min-height: var(--h-verb);
+  background: var(--card);
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 600;
   cursor: pointer;
+}
+/* The screen's one main (spec §5.5 `button`, §6.5; frame P1-1): the
+   primary, 52 high, 17/700 — never beside Telegram's MainButton; the
+   MainButton's own place outside Telegram is one too. */
+.primary,
+.main-mimic {
+  min-height: var(--h-primary);
+  border-color: transparent;
+  background: var(--primary);
+  color: var(--on-primary);
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 22px;
+}
+/* A row, a picker's line, a tray, a tag or a size's cell that is a button
+   reads in the body's 16, not a button's 15: its own lines say their sizes
+   (frame P1-1). */
+.sale-row,
+.catalog-row,
+.catalog-proposal,
+.supplier-row,
+.order-row,
+.timeline-row,
+.pick-value,
+.tray-basket,
+.set-off-return,
+.tag-row,
+.tag-hero,
+.size-cell {
+  font-size: 16px;
 }
 button:disabled {
   opacity: 0.45;
@@ -548,8 +582,8 @@ button:focus-visible,
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible {
-  outline: 3px solid var(--focus);
-  outline-offset: 3px;
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
 }
 .quiet {
   background: transparent;
@@ -589,13 +623,13 @@ textarea:focus-visible {
   width: fit-content;
   display: inline-block;
 }
+/* What is said under a field or a task (spec §5.5 `meta`, the floor for
+   reading text; frame P1-1): 14/500 in pencil. */
 small,
 .hint {
-  font-size: 13px;
-  color: var(--text-2);
-}
-label .hint {
-  font-weight: 400;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--pencil);
 }
 .toolbar,
 nav:not(.tab-bar, .more-list),
@@ -634,21 +668,30 @@ label {
   flex-direction: column;
   gap: 8px;
   font-size: 14px;
-  font-weight: 650;
+  font-weight: 700;
   margin: 16px 0;
   flex: 1;
   min-width: 0;
 }
+/* A field (spec §5.5 `body`, §6.6; frame P1-1): the corner 8, what is
+   typed 16/400 — never smaller, iOS would zoom — the card on the paper,
+   the fold in a white block (below). */
 input,
 select,
 textarea {
   width: 100%;
   border: 1px solid var(--line-strong);
-  border-radius: 9px;
-  background: var(--field);
+  border-radius: var(--r-l);
+  background: var(--card);
   color: inherit;
   padding: 13px;
   min-height: 48px;
+  font-size: 16px;
+  font-weight: 400;
+}
+:where(.sheet, .pay-panel, .order-dock, .list-block)
+  :is(input, select, textarea) {
+  background: var(--fold);
 }
 textarea {
   min-height: 90px;
@@ -1402,6 +1445,15 @@ html {
 .till-tray .pay-ways button {
   min-height: var(--h-pay);
 }
+/* Each the primary, the button the sale (spec §6.15, S21; frame P1-1). */
+.till-tray .pay-ways button,
+.till-dock .pay-ways button {
+  border-color: transparent;
+  background: var(--primary);
+  color: var(--on-primary);
+  font-size: 17px;
+  font-weight: 700;
+}
 .till-tray .pay-ways button[aria-disabled="true"] {
   opacity: 0.45;
 }
@@ -1606,6 +1658,11 @@ html {
   color: var(--ink);
   font-size: 17px;
   font-weight: 400;
+}
+/* In a sheet, on the card's white: the fold (spec §6.6; frame P1-1;
+   review). */
+.sheet .search-field input {
+  background: var(--fold);
 }
 .search-field input::placeholder {
   color: var(--pencil);
@@ -1831,6 +1888,7 @@ html {
   min-width: 48px;
   min-height: 52px;
   padding: 8px 14px;
+  border-color: transparent;
   border-radius: 14px;
   background: var(--accent-soft);
   color: var(--accent-text);
@@ -1890,7 +1948,7 @@ html {
   margin: 18px 0 8px;
   font-size: 14px;
   line-height: 1.3;
-  font-weight: 650;
+  font-weight: 700;
   color: var(--text-2);
 }
 /* A list's row (spec §6.8; audit after stage 2, frame P2-2), one rule for
@@ -2011,7 +2069,7 @@ span.tray-open {
   align-items: center;
   gap: 4px;
   padding: 0 8px;
-  font-weight: 650;
+  font-weight: 600;
 }
 .return-step .stepper {
   justify-content: space-between;
@@ -2028,6 +2086,7 @@ span.tray-open {
   color: var(--damaged);
 }
 .return-step.damaged .stepper button {
+  border-color: transparent;
   background: var(--damaged);
   color: var(--surface);
 }
@@ -2039,7 +2098,7 @@ span.tray-open {
 .return-place-ask {
   margin: 12px 0 8px;
   font-size: 14px;
-  font-weight: 650;
+  font-weight: 600;
 }
 .chip[aria-pressed="true"] {
   background: var(--accent);
@@ -2077,7 +2136,7 @@ span.tray-open {
 }
 .owed-what {
   font-size: 14px;
-  font-weight: 650;
+  font-weight: 600;
   color: var(--text-2);
 }
 .owed-sum {
@@ -2129,7 +2188,7 @@ span.tray-open {
   flex-shrink: 0;
   align-items: center;
   gap: 2px;
-  font-weight: 750;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: var(--debt);
 }
@@ -2351,7 +2410,7 @@ span.tray-open {
   min-width: 0;
 }
 .history-what {
-  font-weight: 650;
+  font-weight: 600;
 }
 .history-meta {
   font-size: 14px;
@@ -2365,7 +2424,7 @@ span.tray-open {
 }
 .history-sum {
   flex-shrink: 0;
-  font-weight: 650;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 /* A customer's row (spec §6.8): their two letters, the name and what is
@@ -2697,7 +2756,7 @@ section.credits.customer-card {
 }
 .number-debt .owing {
   color: var(--debt);
-  font-weight: 650;
+  font-weight: 600;
 }
 .number-debt .away {
   white-space: nowrap;
@@ -2814,7 +2873,7 @@ section.credits.customer-card {
 .owed-retry p {
   margin: 0;
   font-size: 15px;
-  font-weight: 650;
+  font-weight: 600;
   color: var(--text-2);
 }
 .owed-retry button {
@@ -2852,7 +2911,7 @@ section.credits.customer-card {
   border-radius: 11px;
   text-align: center;
   color: var(--pencil);
-  font-weight: 650;
+  font-weight: 600;
 }
 /* The whole segment is the radio's target. */
 .way-switch input {
@@ -2877,7 +2936,7 @@ section.credits.customer-card {
   box-shadow: inset 0 0 0 1px var(--edge);
 }
 .way-switch input:focus-visible + span {
-  outline: 3px solid var(--focus);
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
 .way-switch:disabled span {
@@ -2910,7 +2969,7 @@ section.credits.customer-card {
   border-radius: 11px;
   background: transparent;
   color: var(--pencil);
-  font-weight: 650;
+  font-weight: 600;
 }
 /* The price's two (stage 2, admin task list, P1-2): one row at 360 px, a
    long store's name cut short with «…»; its whole name is still read. At
@@ -2956,7 +3015,7 @@ section.credits.customer-card {
 }
 .hand-back-what {
   font-size: 14px;
-  font-weight: 650;
+  font-weight: 600;
   color: var(--text-2);
 }
 .hand-back-sum {
@@ -3188,6 +3247,7 @@ section.credits.customer-card {
   width: 100%;
   min-height: var(--h-primary);
   margin: 16px 0 0;
+  border-color: transparent;
   border-radius: var(--r-l);
   background: var(--primary);
   color: var(--on-primary);
@@ -3219,7 +3279,7 @@ section.credits.customer-card {
   background: transparent;
   color: var(--link);
   font-size: 15px;
-  font-weight: 650;
+  font-weight: 600;
 }
 /* «Де ви сьогодні?» (spec S06's door; P1-4): its line under the title, and
    a store's tag each — the hero's silhouette 96 high, its eyelet at the
@@ -3374,6 +3434,7 @@ section.cash {
   border: 0;
   border-radius: 0;
   background: var(--inverse-edge);
+  color: var(--on-primary);
   text-align: left;
 }
 /* Its focus ring over the face, in the thread's lime: the face would paint
@@ -3385,7 +3446,7 @@ section.cash {
   content: "";
   position: absolute;
   inset: 0;
-  outline: 3px solid var(--thread);
+  outline: 2px solid var(--thread);
   outline-offset: -4px;
   pointer-events: none;
 }
@@ -3465,7 +3526,7 @@ section.cash {
   padding: 0;
   border: 0;
   color: var(--accent-text);
-  font-weight: 650;
+  font-weight: 600;
   text-align: left;
 }
 .count-label {
@@ -3495,7 +3556,7 @@ section.cash {
   outline: none;
 }
 .count-field:focus-within {
-  outline: 3px solid var(--focus);
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
 .count-field span {
@@ -3583,7 +3644,7 @@ section.cash-count {
   letter-spacing: -0.6px;
 }
 .cash-difference {
-  font-weight: 750;
+  font-weight: 700;
 }
 .cash-figures .cash-difference {
   margin-top: 8px;
@@ -3735,7 +3796,7 @@ section.cash-count {
 .fix-time {
   flex: 0 0 auto;
   min-width: 48px;
-  font-weight: 650;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
   color: var(--text-2);
 }
@@ -3928,7 +3989,7 @@ section.cash-count {
   background: transparent;
   color: var(--link);
   font-size: 15px;
-  font-weight: 650;
+  font-weight: 600;
   white-space: nowrap;
 }
 .orders-add .icon {
@@ -3947,8 +4008,9 @@ section.cash-count {
 .order-row .sale-meta {
   overflow-wrap: anywhere;
 }
-/* No order yet (spec §6.28): a blank tag drawn, the words under it (stage
-   2, orders task list, P1-4). */
+/* Nothing here yet (spec §6.28): the shared `Empty` — a blank tag drawn,
+   the words under it (stage 2, orders task list, P1-4; audit after stage
+   2, frame P2-1). */
 .orders-empty {
   display: flex;
   flex-direction: column;
@@ -3958,8 +4020,19 @@ section.cash-count {
   padding-top: 20px;
   text-align: center;
 }
+/* Kept, not shown — while a search answers instead (review). */
+.orders-empty[hidden] {
+  display: none;
+}
 .orders-empty p {
   margin: 0;
+}
+/* Its line a section's heading — «Вас нічого не чекає.» — in the text's
+   face, as a row's title. */
+.orders-empty h2 {
+  margin: 0;
+  font-family: var(--font-text);
+  letter-spacing: 0;
 }
 .orders-empty .t-meta {
   color: var(--pencil);
@@ -4031,7 +4104,7 @@ section.cash-count {
   justify-content: space-between;
   margin: 6px 0;
   line-height: 1.1;
-  font-weight: 650;
+  font-weight: 600;
 }
 .order-total .sum {
   font-size: 34px;
@@ -4120,7 +4193,7 @@ section.cash-count {
    on the right. */
 .shipping-kind {
   font-size: 15px;
-  font-weight: 650;
+  font-weight: 600;
 }
 .shipping-how {
   max-width: 45%;
@@ -4391,7 +4464,7 @@ section.cash-count {
   outline: none;
 }
 .order-tag .order-row:focus-visible::after {
-  outline: 3px solid var(--focus);
+  outline: 2px solid var(--focus);
   outline-offset: -3px;
 }
 .order-tag-title {
@@ -4533,7 +4606,7 @@ section.cash-count {
 }
 .returned-places li {
   padding: 4px 0;
-  font-weight: 650;
+  font-weight: 600;
   overflow-wrap: anywhere;
 }
 .order-panel button {
@@ -4567,7 +4640,7 @@ section.cash-count {
   align-items: center;
   gap: 8px;
   margin: 12px 0;
-  font-weight: 650;
+  font-weight: 600;
   overflow-wrap: anywhere;
 }
 .step-done.tone-online {
@@ -4610,7 +4683,7 @@ section.cash-count {
 }
 .line .line-short {
   margin: 0;
-  font-weight: 650;
+  font-weight: 600;
 }
 /* The tag's silhouette (spec §6.0; P0-1), for the tags to come: a row's
    two left corners cut 10 px, a hero's two top corners 14 px. In light a
@@ -4710,7 +4783,7 @@ section.cash-count {
 .more-meta {
   display: block;
   margin-top: 2px;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
   color: var(--pencil);
 }
@@ -4855,8 +4928,8 @@ section.cash-count {
   background: var(--on-primary);
 }
 .switch-row input:focus-visible ~ .switch-track {
-  outline: 3px solid var(--focus);
-  outline-offset: 3px;
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
 }
 .switch-row input:disabled {
   cursor: not-allowed;
@@ -5790,25 +5863,6 @@ button.day-folded {
   font-size: 15px;
   font-weight: 600;
 }
-/* Nothing waits (spec §6.28): a blank tag drawn, the words under it. */
-.today-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  padding-top: 20px;
-  text-align: center;
-}
-.today-empty h2 {
-  margin: 0;
-  font-family: var(--font-text);
-  letter-spacing: 0;
-}
-.today-empty-mark {
-  width: 64px;
-  height: 64px;
-  color: var(--edge);
-}
 .today-backups {
   display: flex;
   flex-wrap: wrap;
@@ -5879,6 +5933,11 @@ button.day-folded {
    first «Бачу» of the day never moves the tags under the finger. */
 .today-waiting-side .today-done {
   margin-block: -14px;
+}
+/* Under «Вас нічого не чекає.»: the section's gap alone over it, as before
+   it was drawn by `Empty` (review). */
+.today-empty .today-done {
+  margin-top: 0;
 }
 /* Its sheet: what was seen today, each tied off with a knot. */
 .today-done-list {
@@ -6472,7 +6531,7 @@ section.receive-list {
 }
 .pick-label {
   font-size: 14px;
-  font-weight: 650;
+  font-weight: 700;
 }
 .pick-value {
   display: flex;
@@ -7073,7 +7132,7 @@ section.receive-list {
   padding: 0 12px;
   border: 1px solid var(--edge);
   border-radius: 14px;
-  font-weight: 650;
+  font-weight: 600;
 }
 .opening-others[aria-pressed="true"] {
   border-color: var(--ink);

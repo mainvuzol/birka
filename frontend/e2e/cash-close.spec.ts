@@ -1191,7 +1191,8 @@ for (const [name, theme, scheme] of [
         own: getComputedStyle(node).outlineStyle,
       };
     });
-    expect(ring).toMatchObject({ style: "solid", width: "3px", own: "none" });
+    // The ring 2, inside the ink tag (audit after stage 2, frame P1-1).
+    expect(ring).toMatchObject({ style: "solid", width: "2px", own: "none" });
     expect(
       (luminance(ring.color) + 0.05) / (luminance(look.face) + 0.05),
     ).toBeGreaterThanOrEqual(3);

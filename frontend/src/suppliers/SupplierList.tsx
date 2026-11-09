@@ -10,6 +10,7 @@ import { Sheet } from "@/shared/Sheet";
 import { Unread } from "@/shared/Unread";
 import { buzz } from "@/shared/telegram";
 import { visible } from "@/shared/visible";
+import { Empty } from "@/shared/Empty";
 import type { Store } from "@/orders/types";
 import { matching, useSuppliers } from "./Picker";
 import type { Supplier } from "./types";
@@ -61,13 +62,10 @@ export function SupplierList({
             }}
           />
         ) : suppliers.data.length === 0 ? (
-          <div className="orders-empty">
-            <Icon name="mark-lg" className="orders-empty-mark" />
-            <p className="t-row">Постачальників ще немає.</p>
-            <p className="t-meta">
-              Нового додають у полі «Постачальник» — там, де його обирають.
-            </p>
-          </div>
+          <Empty
+            title="Постачальників ще немає."
+            meta="Нового додають у полі «Постачальник» — там, де його обирають."
+          />
         ) : (
           <>
             <SearchField
@@ -192,7 +190,7 @@ function SupplierEdit({
       foot={
         <button
           type="button"
-          className="sheet-done"
+          className="sheet-done primary"
           disabled={busy || name.trim() === ""}
           onClick={() => {
             void save();

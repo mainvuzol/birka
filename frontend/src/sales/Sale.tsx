@@ -1,13 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { JSX } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  api,
-  CONFLICT_TEXT,
-  errorText,
-  INVALID_TEXT,
-  readText,
-} from "@/shared/api";
+import { api, CONFLICT_TEXT, errorText, INVALID_TEXT } from "@/shared/api";
 import type { ApiError } from "@/shared/api";
 import { Icon } from "@/shared/Icon";
 import { decimal, kopecks, money } from "@/orders/types";
@@ -32,6 +26,7 @@ import { Sum } from "@/shared/Sum";
 import { visible } from "@/shared/visible";
 import { Placeholder } from "@/shared/Placeholder";
 import { ScreenHeader } from "@/shared/ScreenHeader";
+import { Unread } from "@/shared/Unread";
 import { submitSale, useSaleCommand } from "./commands";
 import { StockSearch, useElsewhere, useSettled, useStock } from "./StockSearch";
 import { PriceHint, priceText } from "./PriceHint";
@@ -1964,7 +1959,7 @@ function Receipt({
       )}
       {/* Under the thumb, as the pay ways were (spec §6.5). */}
       <div className="result-dock">
-        <button type="button" onClick={next}>
+        <button type="button" className="primary" onClick={next}>
           Новий продаж
         </button>
       </div>
@@ -2001,7 +1996,7 @@ function NothingSold({
           </div>
         ))}
         <p className="hint">Перевірте склад із менеджером.</p>
-        <button type="button" onClick={next}>
+        <button type="button" className="primary" onClick={next}>
           Новий продаж
         </button>
       </section>
@@ -2069,12 +2064,5 @@ function Failure({
 }): JSX.Element {
   // What could not be read: a warning's plate (stage 2, orders task list,
   // P0-2).
-  return (
-    <div className="notice read-failure" role="alert">
-      <p>{readText(error)}</p>
-      <button type="button" onClick={retry}>
-        Спробувати ще раз
-      </button>
-    </div>
-  );
+  return <Unread error={error} retry={retry} />;
 }

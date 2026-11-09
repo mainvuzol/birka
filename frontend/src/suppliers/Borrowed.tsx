@@ -19,6 +19,7 @@ import { buzz, useMainButton } from "@/shared/telegram";
 import type { JournalOutcome } from "@/shared/journal";
 import { BackToMore } from "@/shared/More";
 import type { MoreBack } from "@/shared/More";
+import { Empty } from "@/shared/Empty";
 import { shortDay } from "@/credits/format";
 import { submitReturnToSupplier, useReturnToSupplier } from "./commands";
 import { submitInvoiceCommand, useInvoiceCommand } from "./invoiceCommands";
@@ -336,19 +337,14 @@ export function Borrowed({
         ) : listed.length === 0 ? (
           // Nothing (spec §6.28): the blank mark, what is so now, and what
           // these goods are — said here alone.
-          <div className="orders-empty">
-            <Icon name="mark-lg" className="orders-empty-mark" />
-            <p className="t-row">
-              {onHandOnly
+          <Empty
+            title={
+              onHandOnly
                 ? "Позиченого на руках немає."
-                : "Цей магазин нічого не позичав."}
-            </p>
-            <p className="t-meta">
-              Товар інших магазинів і постачальників: сплачують лише продане, за
-              домовленою ціною, непродане повертають. Береться через «Прийшов
-              товар».
-            </p>
-          </div>
+                : "Цей магазин нічого не позичав."
+            }
+            meta="Товар інших магазинів і постачальників: сплачують лише продане, за домовленою ціною, непродане повертають. Береться через «Прийшов товар»."
+          />
         ) : (
           <>
             <ul className="order-tags" aria-label="Позичене">
@@ -531,7 +527,7 @@ function LotSheet({
               <>
                 <button
                   type="button"
-                  className={selling ? "pressed" : undefined}
+                  className={selling ? "primary pressed" : "primary"}
                   disabled={held}
                   onClick={() => {
                     setProblem(null);

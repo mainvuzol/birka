@@ -73,7 +73,7 @@ function OtherDays({
       foot={
         <button
           type="button"
-          className="sheet-done"
+          className="sheet-done primary"
           disabled={!from || !to}
           onClick={() => {
             choose({ from, to });

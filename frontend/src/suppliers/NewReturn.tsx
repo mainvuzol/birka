@@ -278,8 +278,12 @@ export function NewReturn({
     if (returned) done();
     else if (ready) void send();
   };
-  // The screen's one action, Telegram's; «Готово» on the stub.
+  // The screen's one action, Telegram's; «Готово» on the stub. Hidden
+  // while the supplier's sheet is over the screen: its own button is the
+  // main there (frame P1-1; review).
+  const [picking, setPicking] = useState(false);
   const main = useMainButton(words, press, {
+    shown: !picking,
     progress: sending,
     active: returned !== null || ready,
   });
@@ -407,6 +411,7 @@ export function NewReturn({
             }}
             disabled={blocked || working}
             next={search}
+            sheetOpen={setPicking}
           />
           {warehouse &&
             (model ? (

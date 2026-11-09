@@ -2866,9 +2866,11 @@ test("«Клієнт забрав» in parts, on its way, in the dark theme: pre
   // its caption and the line's room over it out of view.
   await cash.evaluate((button) => {
     const body = button.closest(".sheet-body");
+    // Whole pixels, the way never clipped by a fraction over it.
     if (body)
-      body.scrollTop +=
-        button.getBoundingClientRect().top - body.getBoundingClientRect().top;
+      body.scrollTop += Math.floor(
+        button.getBoundingClientRect().top - body.getBoundingClientRect().top,
+      );
   });
   await expect(first.locator(".pay-caption")).not.toBeInViewport();
   await expect(cash).toBeInViewport({ ratio: 1 });
