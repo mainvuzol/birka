@@ -1,126 +1,114 @@
-import { paperText } from "@/sales/paperMark";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { JSX } from "react";
-import { useQuery } from "@tanstack/react-query";
-import type { UseQueryResult } from "@tanstack/react-query";
-import { api, ApiError, errorText } from "@/shared/api";
-import { Unread } from "@/shared/Unread";
-import { money } from "@/orders/types";
-import { markText } from "@/sales/types";
-import { visible } from "@/shared/visible";
-import {
-  isTillMethod,
-  methodHow,
-  methodLabels,
-  notStated,
-  refundHow,
-  type PaymentMethod,
-} from "@/shared/payment";
-import {
-  dayText,
-  daysBefore,
-  monthStart,
-  weekStart,
-  type Entries,
-  type Entry,
-  type Figures,
-  type Models,
-  type OffTillFigures,
-  type SalesReport as Report,
-  type StoreFigures,
-  type WayFigures,
-} from "./types";
+import { periods, rangeOf, usePeriodReport } from "@/money/reads";
+import type { Period } from "@/money/reads";
+import { ApiError, errorText } from "@/shared/api";
+import { Back } from "@/shared/Back";
+import { Icon } from "@/shared/Icon";
 import { BackToMore } from "@/shared/More";
 import type { MoreBack } from "@/shared/More";
+import { ModeSwitch } from "@/shared/ModeSwitch";
 import { ScreenHeader } from "@/shared/ScreenHeader";
+import { Sheet } from "@/shared/Sheet";
+import { Unread } from "@/shared/Unread";
+import { Stamp, Waiting, staleOf, useNow } from "@/today/age";
+import { ageOf } from "@/today/reads";
+import { daysText, periodLead } from "./format";
+import type { Chosen, Range } from "./format";
+import { ReportEntries } from "./ReportEntries";
+import { ReportModels } from "./ReportModels";
+import { ReportTable } from "./ReportTable";
+import { StoreSwitch } from "./StoreSwitch";
 
-type Range = { from: string; to: string };
+/** The report's own screens, opened from its rows. */
+type View = "table" | "models" | "entries";
 
-// A sum that may be below nothing: what a till handed back exceeded what it
-// took.
-function signed(value: string): string {
-  return value.startsWith("-") ? `−${money(value.slice(1))}` : money(value);
+/** How the report counts, said once a row is tapped (В5 (а)): the three
+ * sentences as they were. */
+const howWeCount =
+  "Продажі й повернення рахуються магазину, який продав, гроші — магазину, через чию касу пройшли. Повернення — у день, коли його прийняли, виправлення способу оплати — у день, коли його записали.";
+
+/** A way to another screen, a row with its chevron (spec §6.8). */
+function WayRow({
+  title,
+  way,
+  open,
+}: {
+  title: string;
+  way: string;
+  open: () => void;
+}): JSX.Element {
+  return (
+    <button
+      type="button"
+      className="sale-row cash-row report-way"
+      data-way={way}
+      onClick={open}
+    >
+      <span className="sale-main">
+        <span className="cash-row-title">{title}</span>
+      </span>
+      <Icon name="chevron-right" size={16} />
+    </button>
+  );
 }
 
-// What went out: returned goods, money handed back.
-function minus(value: string): string {
-  return value === "0.00" ? money(value) : signed(`-${value}`);
+/** «Інші дні» (spec §6.29): the first and the last day, shown once
+ * «Показати» is pressed; the server says whether they make a period. */
+function OtherDays({
+  shown,
+  choose,
+  close,
+}: {
+  shown: Range | null;
+  choose: (range: Range) => void;
+  close: () => void;
+}): JSX.Element {
+  const [from, setFrom] = useState(shown?.from ?? "");
+  const [to, setTo] = useState(shown?.to ?? "");
+  return (
+    <Sheet
+      title="Інші дні"
+      close={close}
+      foot={
+        <button
+          type="button"
+          className="sheet-done"
+          disabled={!from || !to}
+          onClick={() => {
+            choose({ from, to });
+            close();
+          }}
+        >
+          Показати
+        </button>
+      }
+    >
+      <div className="fields period">
+        <label>
+          Від
+          <input
+            type="date"
+            value={from}
+            onChange={(event) => {
+              setFrom(event.target.value);
+            }}
+          />
+        </label>
+        <label>
+          До
+          <input
+            type="date"
+            value={to}
+            onChange={(event) => {
+              setTo(event.target.value);
+            }}
+          />
+        </label>
+      </div>
+    </Sheet>
+  );
 }
-
-// What a correction moved: «+350,00 грн», «−350,00 грн».
-function moved(value: string): string {
-  return value.startsWith("-") ? signed(value) : `+${money(value)}`;
-}
-
-function nothing(value: string): boolean {
-  return value === "0.00";
-}
-
-// A way's name in the report: «Не вказано» for money recorded before the way
-// was asked (owner decision, 2026-10-04).
-const wayLabels: Record<WayFigures["method"], string> = {
-  CASH: methodLabels.CASH,
-  CARD: methodLabels.CARD,
-  TRANSFER: methodLabels.TRANSFER,
-  NOT_STATED: `${notStated.charAt(0).toUpperCase()}${notStated.slice(1)}`,
-};
-
-type Way = { label: string; came_in: string; corrected: string; net: string };
-
-// An order's money paid off the till, outside «Разом» (owner decision,
-// 2026-10-04; ADR-0012 §G24).
-function offTill(figures: Figures): Way[] {
-  const ways: [string, OffTillFigures][] = [
-    [methodLabels.PREPAID_TRANSFER, figures.off_till.prepaid_transfer],
-    [methodLabels.CARRIER_COD, figures.off_till.carrier_cod],
-  ];
-  return ways.map(([label, sums]) => ({ label, ...sums }));
-}
-
-// «Виправлення способу оплати: картка −350,00 грн, готівка +350,00 грн» —
-// what corrections made in these days moved, the way it left first. A
-// correction counts on the day it is made, never back on the day of its sale
-// (owner decision, 2026-10-04).
-function correctionsText(figures: Figures): string {
-  const ways: Way[] = [
-    ...figures.ways.map((way) => ({ ...way, label: wayLabels[way.method] })),
-    ...offTill(figures),
-  ].filter((way) => !nothing(way.corrected));
-  const ordered = [
-    ...ways.filter((way) => way.corrected.startsWith("-")),
-    ...ways.filter((way) => !way.corrected.startsWith("-")),
-  ];
-  return ordered
-    .map((way) => `${way.label.toLowerCase()} ${moved(way.corrected)}`)
-    .join(", ");
-}
-
-function query(
-  range: Range | null,
-  storeId = "",
-  extra: Record<string, string> = {},
-): string {
-  const params = new URLSearchParams(extra);
-  if (range) {
-    params.set("date_from", range.from);
-    params.set("date_to", range.to);
-  }
-  if (storeId) params.set("store_id", storeId);
-  const text = params.toString();
-  return text ? `?${text}` : "";
-}
-
-function periodText(from: string, to: string): string {
-  return from === to
-    ? `за ${dayText(from)}`
-    : `з ${dayText(from)} по ${dayText(to)}`;
-}
-
-const stateLabels: Record<StoreFigures["store_state"], string> = {
-  ACTIVE: "",
-  BLOCKED: "заблоковано",
-  ARCHIVED: "в архіві",
-};
 
 /**
  * The sales report (owner decisions, 2026-10-02): what each store sold and
@@ -129,480 +117,250 @@ const stateLabels: Record<StoreFigures["store_state"], string> = {
  * together when there are several. Since 2026-10-04 the money is split by the
  * way it was paid, and an order paid off the till has its own lines, outside
  * «Разом» (ADR-0012 §B11, §G24).
+ *
+ * Since stage 2 (money task list, P1-1): «Гроші»'s periods as one switch,
+ * days of one's own in a sheet; one table, a column a store and «Усі
+ * разом»; how old it is while today is in it; «Моделі» and «Продажі й
+ * повернення» each a screen of its own, with a switch of the store.
  */
 export function SalesReport({
   token,
   scopeKey,
   back,
-  period = null,
+  period = { mode: "today", range: null },
 }: {
   token: string;
   scopeKey: string;
   /** «← Гроші» over the heading, or «← Ще» (navigation task list, P0-4;
    * «Усе на бірці» sections task list, P0-7). */
   back?: MoreBack | undefined;
-  /** The days it opens on: «Надійшло»'s period on «Гроші». */
-  period?: Range | null;
+  /** What it opens on: «Надійшло»'s period on «Гроші», and its days. */
+  period?: { mode: Period; range: Range | null };
 }): JSX.Element {
   // None is today, as the server counts it where the stores are.
-  const [range, setRange] = useState<Range | null>(period);
+  const [range, setRange] = useState<Range | null>(period.range);
+  // The period as chosen, never guessed from its days: on a Monday
+  // «Тиждень» is one day, today's, and still «Тиждень» (review,
+  // 2026-11-08). Its days not known yet on «Гроші», today's are read.
+  const [chosen, setChosen] = useState<Chosen>(
+    period.range === null ? "today" : period.mode,
+  );
+  const [view, setView] = useState<View>("table");
+  // Whose models and entries: kept between the two screens.
   const [storeId, setStoreId] = useState("");
-  const [offset, setOffset] = useState(0);
-  const report = useQuery({
-    queryKey: ["sales-report", scopeKey, range],
-    queryFn: () => api<Report>(`/reports/sales${query(range)}`, token),
-    retry: false,
-  });
-  const models = useQuery({
-    queryKey: ["sales-report-models", scopeKey, range, storeId],
-    queryFn: () =>
-      api<Models>(`/reports/sales/models${query(range, storeId)}`, token),
-    retry: false,
-    enabled: report.isSuccess,
-  });
-  const entries = useQuery({
-    queryKey: ["sales-report-entries", scopeKey, range, storeId, offset],
-    queryFn: () =>
-      api<Entries>(
-        `/reports/sales/entries${query(range, storeId, {
-          limit: "50",
-          offset: String(offset),
-        })}`,
-        token,
-      ),
-    retry: false,
-    enabled: report.isSuccess,
-  });
+  const [otherDays, setOtherDays] = useState(false);
+  const [how, setHow] = useState(false);
+  // «Гроші»'s own read of these days: what one learns, the other shows;
+  // read again as it is opened.
+  const report = usePeriodReport(token, scopeKey, range, true);
   const data = report.data;
-  function choose(next: Range): void {
-    setRange(next);
-    setOffset(0);
-  }
-  const today = data?.today;
-  const shortcuts: [string, Range][] = today
-    ? [
-        ["Сьогодні", { from: today, to: today }],
-        ["Вчора", { from: daysBefore(today, 1), to: daysBefore(today, 1) }],
-        ["Цей тиждень", { from: weekStart(today), to: today }],
-        ["Цей місяць", { from: monthStart(today), to: today }],
-      ]
-    : [];
+  // The server's today, kept while other days are read: the switch names
+  // its periods by it.
+  const [today, setToday] = useState<string | undefined>(undefined);
+  if (data !== undefined && data.today !== today) setToday(data.today);
   const shown: Range | null = data
     ? { from: data.date_from, to: data.date_to }
     : range;
+  const lead = periodLead(shown, chosen, today);
+  const now = useNow();
+  const age = ageOf([report]);
+  const withToday =
+    today !== undefined && (shown === null || shown.to >= today);
+  const refused =
+    report.error instanceof ApiError &&
+    report.error.details.reason === "PERIOD";
+  // Back from a screen of its own: where the list was read to, and the row
+  // that opened it in hand.
+  const place = useRef(0);
+  const heading = useRef<HTMLHeadingElement>(null);
+  const opened = useRef<View | null>(null);
+  // How far the stores were scrolled across: the same on coming back.
+  const across = useRef(0);
+  useEffect(() => {
+    if (view !== "table") {
+      window.scrollTo(0, 0);
+      heading.current?.focus();
+      return;
+    }
+    if (opened.current === null) return;
+    window.scrollTo(0, place.current);
+    document
+      .querySelector<HTMLButtonElement>(`[data-way="${opened.current}"]`)
+      ?.focus({ preventScroll: true });
+  }, [view]);
+  const open = (next: View) => (): void => {
+    place.current = window.scrollY;
+    opened.current = next;
+    setView(next);
+  };
+  const stores = data?.stores ?? [];
+  if (view !== "table") {
+    const title = view === "models" ? "Моделі" : "Продажі й повернення";
+    return (
+      <>
+        <ScreenHeader
+          ref={heading}
+          focusable
+          title={title}
+          lead={lead}
+          back={
+            <Back
+              go={() => {
+                setView("table");
+              }}
+              label="Назад до «Звіт про продажі»"
+            >
+              <span aria-hidden="true">← </span>Звіт про продажі
+            </Back>
+          }
+        />
+        <section className="report report-screen">
+          <StoreSwitch stores={stores} current={storeId} choose={setStoreId} />
+          {view === "models" ? (
+            <ReportModels
+              token={token}
+              scopeKey={scopeKey}
+              range={range}
+              storeId={storeId}
+            />
+          ) : (
+            <ReportEntries
+              token={token}
+              scopeKey={scopeKey}
+              range={range}
+              today={today}
+              storeId={storeId}
+              everyStore={storeId === "" && stores.length > 1}
+            />
+          )}
+        </section>
+      </>
+    );
+  }
   return (
     <>
       <ScreenHeader
         title="Звіт про продажі"
         back={back && <BackToMore back={back} />}
+        lead={lead}
         aside={
           <button
             className="quiet"
             disabled={report.isFetching}
             onClick={() => {
               void report.refetch();
-              void models.refetch();
-              void entries.refetch();
             }}
           >
             Оновити
           </button>
         }
       />
-      <section>
-        <p className="hint">
-          Продажі й повернення рахуються магазину, який продав, гроші — магазину,
-          через чию касу пройшли. Повернення — у день, коли його прийняли,
-          виправлення способу оплати — у день, коли його записали.
-        </p>
-        <div className="choices" aria-label="Період">
-          {shortcuts.map(([label, value]) => (
-            <button
-              key={label}
-              className={
-                shown?.from === value.from && shown.to === value.to
-                  ? "active"
-                  : "quiet"
-              }
-              onClick={() => {
-                choose(value);
-              }}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-        {shown && (
-          <div className="fields period">
-            <label>
-              Від
-              <input
-                type="date"
-                value={shown.from}
-                onChange={(event) => {
-                  if (event.target.value)
-                    choose({ from: event.target.value, to: shown.to });
-                }}
-              />
-            </label>
-            <label>
-              До
-              <input
-                type="date"
-                value={shown.to}
-                onChange={(event) => {
-                  if (event.target.value)
-                    choose({ from: shown.from, to: event.target.value });
-                }}
-              />
-            </label>
-          </div>
+      <section className="report">
+        <ModeSwitch<Chosen>
+          label="Період"
+          modes={periods}
+          current={chosen}
+          // The days are the server's: held until the report says which day
+          // today is. «Сьогодні» is none, the server's own: never held.
+          disabled={(mode) => mode !== "today" && today === undefined}
+          choose={(mode) => {
+            if (mode === "other" || (mode !== "today" && today === undefined))
+              return;
+            setChosen(mode);
+            setRange(today === undefined ? null : rangeOf(mode, today));
+          }}
+          filters
+          className="report-periods"
+        />
+        <button
+          type="button"
+          className="quiet report-days"
+          onClick={() => {
+            setOtherDays(true);
+          }}
+        >
+          {chosen === "other" && shown
+            ? `${daysText(shown, today)} · Змінити`
+            : "Інші дні"}
+        </button>
+        {withToday && age.at !== undefined && staleOf(age, now) && (
+          <p className="report-age">
+            <Stamp age={age} now={now} />
+          </p>
         )}
-        {report.isPending ? (
-          <p role="status">Рахуємо…</p>
-        ) : report.error instanceof ApiError &&
-          report.error.details.reason === "PERIOD" ? (
-          // Days refused as chosen: reading them again changes nothing, so
-          // no «Спробувати ще раз» (review, 2026-11-05).
-          <p role="alert">{errorText(report.error)}</p>
-        ) : report.error ? (
+        {/* Read again and failed: what was read stands, and it is said. */}
+        {data !== undefined && report.isError && (
           <Unread
             error={report.error}
             retry={() => {
               void report.refetch();
             }}
           />
+        )}
+        {data === undefined ? (
+          refused ? (
+            // Days refused as chosen: reading them again changes nothing,
+            // so no «Спробувати ще раз» (review, 2026-11-05).
+            <p role="alert">{errorText(report.error)}</p>
+          ) : report.error ? (
+            <Unread
+              error={report.error}
+              retry={() => {
+                void report.refetch();
+              }}
+            />
+          ) : (
+            <div className="money-table-wait" role="status">
+              <span className="visually-hidden">Рахуємо…</span>
+              {[0, 1, 2, 3, 4, 5].map((row) => (
+                <Waiting key={row} width="100%" />
+              ))}
+            </div>
+          )
         ) : (
           <>
-            <h3>{periodText(report.data.date_from, report.data.date_to)}</h3>
-            {report.data.stores.map((store) => (
-              <Summary
-                key={store.store_id}
-                title={visible(store.store_name)}
-                state={stateLabels[store.store_state]}
-                figures={store}
+            <ReportTable report={data} across={across} />
+            <nav aria-label="Звіт про продажі" className="report-ways">
+              <WayRow title="Моделі" way="models" open={open("models")} />
+              <WayRow
+                title="Продажі й повернення"
+                way="entries"
+                open={open("entries")}
               />
-            ))}
-            {report.data.total && (
-              <Summary
-                title="Усі магазини разом"
-                state=""
-                figures={report.data.total}
-              />
-            )}
-            {report.data.stores.length > 1 && (
-              <label>
-                Моделі й продажі
-                <select
-                  value={storeId}
-                  onChange={(event) => {
-                    setStoreId(event.target.value);
-                    setOffset(0);
-                  }}
-                >
-                  <option value="">Усі магазини</option>
-                  {report.data.stores.map((store) => (
-                    <option key={store.store_id} value={store.store_id}>
-                      {visible(store.store_name)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
-            <ModelList models={models} />
-            <EntryList
-              entries={entries}
-              everyStore={storeId === "" && report.data.stores.length > 1}
-              offset={offset}
-              setOffset={setOffset}
-            />
+            </nav>
           </>
         )}
+        <WayRow
+          title="Як рахуємо"
+          way="how"
+          open={() => {
+            setHow(true);
+          }}
+        />
       </section>
-    </>
-  );
-}
-
-function Summary({
-  title,
-  state,
-  figures,
-}: {
-  title: string;
-  state: string;
-  figures: Figures;
-}): JSX.Element {
-  return (
-    <div className="section-block" role="group" aria-label={title}>
-      <h3>
-        {title}
-        {state && <span className="badge">{state}</span>}
-      </h3>
-      <dl className="debt">
-        <dt>
-          Продажі: {figures.sales} ({figures.units} шт.)
-        </dt>
-        <dd>{money(figures.sold)}</dd>
-        <dt>
-          Повернення: {figures.returns} ({figures.returned_units} шт.)
-        </dt>
-        <dd>{minus(figures.returned)}</dd>
-        <dt>
-          <strong>Продано з урахуванням повернень</strong>
-        </dt>
-        <dd>
-          <strong>{signed(figures.net)}</strong>
-        </dd>
-      </dl>
-      {/* «Гроші», not «Гроші в касі»: card and transfer are in it too, and
-          «Каса» is now the cash drawer (ADR-0012 §B11, §G24). */}
-      <h4>Гроші</h4>
-      <dl className="debt">
-        <dt>Оплачено одразу повністю</dt>
-        <dd>{money(figures.paid_in_full)}</dd>
-        <dt>Внески за борг</dt>
-        <dd>{money(figures.debt_payments)}</dd>
-        <dt>Віддано при поверненнях</dt>
-        <dd>{minus(figures.paid_back)}</dd>
-        {!nothing(figures.corrected_into_till) && (
-          <>
-            <dt>Виправлення способу оплати</dt>
-            <dd>{moved(figures.corrected_into_till)}</dd>
-          </>
-        )}
-        <dt>
-          <strong>Разом</strong>
-        </dt>
-        <dd>
-          <strong>{signed(figures.money)}</strong>
-        </dd>
-      </dl>
-      {/* The till's ways add up to «Разом». «Не вказано» only when it holds
-          something: money recorded before the way was asked. */}
-      <h4>За способом оплати</h4>
-      <dl className="debt" aria-label="За способом оплати">
-        {figures.ways
-          .filter(
-            (way) =>
-              way.method !== "NOT_STATED" ||
-              ![way.came_in, way.went_out, way.corrected].every(nothing),
-          )
-          .map((way) => (
-            <Row
-              key={way.method}
-              label={wayLabels[way.method]}
-              value={signed(way.net)}
-            />
-          ))}
-      </dl>
-      {offTill(figures).some(
-        (way) => !nothing(way.came_in) || !nothing(way.corrected),
-      ) && (
-        <>
-          <h4>Замовлення, оплачені поза касою</h4>
-          <dl className="debt">
-            {offTill(figures)
-              .filter((way) => !nothing(way.came_in) || !nothing(way.corrected))
-              .map((way) => (
-                <Row
-                  key={way.label}
-                  label={way.label}
-                  value={signed(way.net)}
-                />
-              ))}
-          </dl>
-        </>
-      )}
-      {correctionsText(figures) && (
-        <p className="hint">
-          Виправлення способу оплати: {correctionsText(figures)}
-        </p>
-      )}
-    </div>
-  );
-}
-
-function Row({ label, value }: { label: string; value: string }): JSX.Element {
-  return (
-    <>
-      <dt>{label}</dt>
-      <dd>{value}</dd>
-    </>
-  );
-}
-
-function ModelList({
-  models,
-}: {
-  models: UseQueryResult<Models>;
-}): JSX.Element {
-  return (
-    <div className="section-block">
-      <h3>Моделі</h3>
-      {models.isPending ? (
-        <p role="status">Рахуємо моделі…</p>
-      ) : models.error ? (
-        <Unread
-          error={models.error}
-          retry={() => {
-            void models.refetch();
+      {otherDays && (
+        <OtherDays
+          shown={shown}
+          choose={(days) => {
+            // Days of one's own stay one's own, whatever period they make.
+            setChosen("other");
+            setRange(days);
+          }}
+          close={() => {
+            setOtherDays(false);
           }}
         />
-      ) : models.data.models.length === 0 ? (
-        <p className="hint">Нічого не продано.</p>
-      ) : (
-        <ul className="nights" aria-label="Моделі">
-          {models.data.models.map((model) => (
-            <li key={model.product_variant_id}>
-              <strong>{visible(model.display_name)}</strong>
-              <br />
-              {model.units} шт. на {money(model.sold)}
-              {model.returned_units > 0 &&
-                ` · повернено ${String(model.returned_units)} шт. на ${money(model.returned)}`}
-            </li>
-          ))}
-        </ul>
       )}
-    </div>
-  );
-}
-
-// How an entry's money moved, after its sum: «готівкою», «на картку».
-function how(entry: Entry, method: PaymentMethod): string {
-  return entry.kind === "RETURN" && isTillMethod(method)
-    ? refundHow[method]
-    : methodHow[method];
-}
-
-// The way as it was stated; a correction is a note beside it, never a
-// rewrite (ADR-0012 §B11).
-function wayText(entry: Entry): string {
-  const stated =
-    entry.payment_method === null
-      ? ` · спосіб ${notStated}`
-      : ` ${how(entry, entry.payment_method)}`;
-  return entry.method_now
-    ? `${stated} (виправлено: ${how(entry, entry.method_now)})`
-    : stated;
-}
-
-function entryNote(entry: Entry, everyStore: boolean): string {
-  if (entry.kind === "SALE") {
-    const paid = entry.paid_in_parts
-      ? `частинами, внесено ${money(entry.money)}${wayText(entry)}`
-      : `оплачено повністю${wayText(entry)}`;
-    return everyStore ? `${paid} · «${visible(entry.store_name)}»` : paid;
-  }
-  const handed =
-    entry.money === "0.00"
-      ? "лише зменшило борг"
-      : `віддано ${money(entry.money)}${wayText(entry)}`;
-  return entry.taken_at_store_id && entry.taken_at_store_id !== entry.store_id
-    ? `${handed} · продав «${visible(entry.store_name)}», прийняв «${visible(entry.taken_at_store_name ?? "")}»`
-    : everyStore
-      ? `${handed} · «${visible(entry.store_name)}»`
-      : handed;
-}
-
-/**
- * A sale typed from paper (ADR-0013 §5.6): who sold and the paper's time,
- * from the mark, and who typed it, the entry's `by`. Its figures are the
- * day it was typed.
- */
-function OutageLine({ entry }: { entry: Entry }): JSX.Element | null {
-  const { outage } = entry;
-  if (outage === undefined || outage === null) return null;
-  return (
-    <>
-      <br />
-      <small>
-        {entry.kind === "RETURN"
-          ? paperText("return", {
-              by_user_id: null,
-              by: outage.sold_by,
-              at: outage.sold_at,
-              first_days: outage.first_days === true,
-            })
-          : markText(outage)}{" "}
-        · внесено: {visible(entry.by)}
-      </small>
-    </>
-  );
-}
-
-function EntryList({
-  entries,
-  everyStore,
-  offset,
-  setOffset,
-}: {
-  entries: UseQueryResult<Entries>;
-  everyStore: boolean;
-  offset: number;
-  setOffset: (offset: number) => void;
-}): JSX.Element {
-  return (
-    <div className="section-block">
-      <h3>Продажі й повернення</h3>
-      {entries.isPending ? (
-        <p role="status">Завантажуємо продажі…</p>
-      ) : entries.error ? (
-        <Unread
-          error={entries.error}
-          retry={() => {
-            void entries.refetch();
+      {how && (
+        <Sheet
+          title="Як рахуємо"
+          close={() => {
+            setHow(false);
           }}
-        />
-      ) : entries.data.entries.length === 0 ? (
-        <p className="hint">Ні продажів, ні повернень.</p>
-      ) : (
-        <>
-          <ul className="nights" aria-label="Продажі й повернення">
-            {entries.data.entries.map((entry) => (
-              <li key={entry.id}>
-                <strong>
-                  {entry.kind === "SALE" ? "Продаж" : "Повернення"}{" "}
-                  {entry.kind === "SALE"
-                    ? money(entry.amount)
-                    : minus(entry.amount)}
-                </strong>{" "}
-                <small>
-                  {new Date(entry.at).toLocaleString("uk-UA", {
-                    dateStyle: "short",
-                    timeStyle: "short",
-                  })}{" "}
-                  · {visible(entry.by)}
-                </small>
-                <br />
-                {entry.goods.map(visible).join(", ")}
-                <br />
-                <small>{entryNote(entry, everyStore)}</small>
-                <OutageLine entry={entry} />
-              </li>
-            ))}
-          </ul>
-          <div className="toolbar">
-            <button
-              className="quiet"
-              disabled={offset === 0}
-              onClick={() => {
-                setOffset(Math.max(0, offset - 50));
-              }}
-            >
-              Попередні
-            </button>
-            <button
-              className="quiet"
-              disabled={!entries.data.has_more}
-              onClick={() => {
-                setOffset(offset + 50);
-              }}
-            >
-              Наступні
-            </button>
-          </div>
-        </>
+        >
+          <p className="report-how">{howWeCount}</p>
+        </Sheet>
       )}
-    </div>
+    </>
   );
 }

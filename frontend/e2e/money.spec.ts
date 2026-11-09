@@ -904,13 +904,14 @@ test("«Вчора», «Тиждень» and «Місяць» ask from the serve
   await expect(
     page.getByRole("heading", { name: "Звіт про продажі", exact: true }),
   ).toBeVisible();
+  // «Гроші»'s periods are the report's (stage 2, money task list, P1-1).
   await expect(
     page
-      .locator(".choices[aria-label='Період']")
-      .getByRole("button", { name: "Цей місяць" }),
-  ).toHaveClass(/\bactive\b/);
-  await expect(page.locator("input[type='date']").first()).toHaveValue(
-    "2026-10-01",
+      .getByRole("group", { name: "Період", exact: true })
+      .getByRole("button", { name: "Місяць", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator(".store-line > p")).toContainText(
+    "Місяць · 01.10 – 22.10 · ",
   );
   await expect(
     menu(page).getByRole("button", { name: "Гроші", exact: true }),

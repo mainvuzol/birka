@@ -55,8 +55,9 @@ const stateWords: Record<StoreState, string> = {
   ARCHIVED: "в архіві",
 };
 
-/** «Центр», and its mark when it does not trade. */
-function StoreName({
+/** «Центр», and its mark when it does not trade: «Гроші»'s and the
+ * report's columns alike. */
+export function StoreName({
   name,
   state,
 }: {

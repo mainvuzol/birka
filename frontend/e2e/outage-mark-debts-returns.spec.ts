@@ -264,6 +264,9 @@ test("a return typed from paper by «Ліда» naming «Ганна» says not t
   // The owner reads it in today's «Звіт»: taken by «Ганна», typed by «Ліда».
   await openAs(page, fixture.network_owner_telegram_user_id, "Власник мережі");
   await section(page, "Звіт про продажі");
+  await page
+    .getByRole("button", { name: "Продажі й повернення", exact: true })
+    .click();
   const entry = page
     .getByRole("list", { name: "Продажі й повернення" })
     .getByRole("listitem")
@@ -544,6 +547,9 @@ test("the first days' paper: a return and a payment typed from it are «з па�
 
   await openAs(page, fixture.network_owner_telegram_user_id, "Власник мережі");
   await section(page, "Звіт про продажі");
+  await page
+    .getByRole("button", { name: "Продажі й повернення", exact: true })
+    .click();
   await expect(
     page
       .getByRole("list", { name: "Продажі й повернення" })
