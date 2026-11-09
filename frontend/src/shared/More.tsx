@@ -71,48 +71,53 @@ export function More({
             {shown.map((group) => (
               <div className="more-group" key={group.title}>
                 {group.title !== "" && <h3>{group.title}</h3>}
-                {group.rows.map((row) =>
-                  row.on === undefined ? (
-                    <button
-                      key={row.key}
-                      type="button"
-                      className="sale-row more-row"
-                      disabled={row.disabled}
-                      onClick={row.open}
-                    >
-                      <Icon name={row.icon} />
-                      <span className="more-label">
-                        {row.label}
-                        {/* Read as two words, not run together. */}
-                        {row.meta !== undefined && " "}
-                        {typeof row.meta === "string" ? (
-                          <span className="more-meta">{row.meta}</span>
-                        ) : (
-                          row.meta
-                        )}
-                      </span>
-                      <span className="sale-open" aria-hidden="true">
-                        ›
-                      </span>
-                    </button>
-                  ) : (
-                    <button
-                      key={row.key}
-                      type="button"
-                      role="switch"
-                      aria-checked={row.on}
-                      className="sale-row more-row more-switch"
-                      disabled={row.disabled}
-                      onClick={row.open}
-                    >
-                      <Icon name={row.icon} />
-                      <span className="more-label">{row.label}</span>
-                      <span className="switch-track" aria-hidden="true">
-                        <span className="switch-knob" />
-                      </span>
-                    </button>
-                  ),
-                )}
+                {/* The group's rows on a white block, its label on the
+                    paper (spec S07, §6.8; audit after stage 2, frame
+                    P0-1). */}
+                <div className="list-block">
+                  {group.rows.map((row) =>
+                    row.on === undefined ? (
+                      <button
+                        key={row.key}
+                        type="button"
+                        className="sale-row more-row"
+                        disabled={row.disabled}
+                        onClick={row.open}
+                      >
+                        <Icon name={row.icon} />
+                        <span className="more-label">
+                          {row.label}
+                          {/* Read as two words, not run together. */}
+                          {row.meta !== undefined && " "}
+                          {typeof row.meta === "string" ? (
+                            <span className="more-meta">{row.meta}</span>
+                          ) : (
+                            row.meta
+                          )}
+                        </span>
+                        <span className="sale-open" aria-hidden="true">
+                          ›
+                        </span>
+                      </button>
+                    ) : (
+                      <button
+                        key={row.key}
+                        type="button"
+                        role="switch"
+                        aria-checked={row.on}
+                        className="sale-row more-row more-switch"
+                        disabled={row.disabled}
+                        onClick={row.open}
+                      >
+                        <Icon name={row.icon} />
+                        <span className="more-label">{row.label}</span>
+                        <span className="switch-track" aria-hidden="true">
+                          <span className="switch-knob" />
+                        </span>
+                      </button>
+                    ),
+                  )}
+                </div>
               </div>
             ))}
           </nav>

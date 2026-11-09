@@ -774,11 +774,23 @@ test("at 360 px, light and dark, the lists, a list's big tag and a line's screen
     // A line's screen.
     const line = await answer(page, 1);
     await expect(line.locator(".opening-paper")).toBeVisible();
-    paper.push(
-      await line
-        .locator(".opening-paper")
-        .evaluate((element) => getComputedStyle(element).backgroundColor),
-    );
+    // The notebook's line a slip of the card's white on the paper (review
+    // of the audit after stage 2's first batch, 2026-11-09).
+    const [slip, white, ground] = await line
+      .locator(".opening-paper")
+      .evaluate((element) => {
+        const probe = document.createElement("span");
+        document.body.append(probe);
+        probe.style.color = "var(--card)";
+        const card = getComputedStyle(probe).color;
+        probe.style.color = "var(--paper)";
+        const under = getComputedStyle(probe).color;
+        probe.remove();
+        return [getComputedStyle(element).backgroundColor, card, under];
+      });
+    expect(slip).toBe(white);
+    expect(slip).not.toBe(ground);
+    paper.push(slip);
     expect(await fits()).toBe(true);
     await page.screenshot({
       path: `test-results/openings-line-360-${scheme}.png`,

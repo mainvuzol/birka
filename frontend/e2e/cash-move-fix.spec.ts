@@ -171,6 +171,8 @@ async function stub(
     now: Drawer;
     method: Record<string, unknown>;
     answers?: (number | "lost")[];
+    /** The next command answered only once this opens. */
+    hold?: Promise<void>;
   },
 ): Promise<Server> {
   const sent: Record<string, Record<string, unknown>[]> = {
@@ -200,6 +202,11 @@ async function stub(
     await page.route(`**/api/v1/cash/${path}`, async (route, request) => {
       const body = request.postDataJSON() as Record<string, unknown>;
       sent[path]?.push(body);
+      if (state.hold) {
+        const held = state.hold;
+        delete state.hold;
+        await held;
+      }
       const next = state.answers?.shift();
       if (next === "lost") {
         await route.abort("connectionreset");
@@ -437,6 +444,120 @@ test("«Видати з каси»: a sheet over «Каса», what for as chips
   expect(await buzzes(page)).toEqual([
     { type: "notification", notification_type: "success" },
   ]);
+});
+
+test("cash taken out and a way changed, on their way, wait as the till's dock: the pressed button's ring in its colour, «Ще надсилаємо…» over it past 3 s, the sheet kept and «← Каса» held, Telegram's «Назад» hidden; answered, as before (audit after stage 2, orders-cash P0-1; review, 2026-11-09)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  await record(page);
+  // What the app tells Telegram of its «Назад», shown or not.
+  await page.addInitScript(() => {
+    const host = window as unknown as {
+      TelegramWebviewProxy: {
+        postEvent: (event: string, data: string) => void;
+      };
+      backs: boolean[];
+    };
+    host.backs = [];
+    host.TelegramWebviewProxy = {
+      postEvent: (event, data) => {
+        if (event === "web_app_setup_back_button")
+          host.backs.push(
+            (JSON.parse(data) as { is_visible: boolean }).is_visible,
+          );
+      },
+    };
+  });
+  const back = (): Promise<boolean | undefined> =>
+    page.evaluate(() =>
+      (window as unknown as { backs: boolean[] }).backs.at(-1),
+    );
+  let answer = (): void => undefined;
+  const hold = (): Promise<void> =>
+    new Promise<void>((done) => {
+      answer = done;
+    });
+  const state: Parameters<typeof stub>[1] = {
+    now: drawer(),
+    method: { ...sale },
+    hold: hold(),
+  };
+  const server = await stub(page, state);
+  await open(page);
+  await cash(page);
+  // «Видати з каси» on its way.
+  await page
+    .getByRole("button", { name: "Видати з каси", exact: true })
+    .click();
+  const out = await moveSheet(page, "Видати з каси");
+  await out
+    .getByRole("group", { name: "Кому чи на що" })
+    .getByRole("button", { name: "Витрати", exact: true })
+    .click();
+  await sum(page).fill("150");
+  await expect.poll(back).toBe(true);
+  await moveButton(page).click();
+  await expect.poll(() => server.sent.movements?.length).toBe(1);
+  await expect(moveButton(page)).toHaveClass(/\bpressed\b/);
+  await expect(moveButton(page).locator(".eyelet-spin")).toBeVisible();
+  await expect.poll(back).toBe(false);
+  const outLine = out.locator(".sending-line");
+  await expect(outLine).toBeAttached();
+  await expect(outLine).not.toContainText("Ще надсилаємо…");
+  await expect(outLine).toHaveText("Ще надсилаємо…", { timeout: 6000 });
+  // Over the button, never moving it.
+  const [said, button] = await Promise.all([
+    outLine.locator("span").boundingBox(),
+    moveButton(page).boundingBox(),
+  ]);
+  if (!said || !button) throw new Error("not laid out");
+  expect(said.y + said.height).toBeLessThanOrEqual(button.y);
+  expect(button.y - (said.y + said.height)).toBeLessThanOrEqual(12);
+  await out.focus();
+  await page.keyboard.press("Escape");
+  await expect(out).toBeVisible();
+  answer();
+  await expect(
+    page.getByText("Записано: Витрати, 150,00 грн.", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  // «Змінити на «Готівка»» on its way.
+  state.hold = hold();
+  await page
+    .getByRole("button", { name: "Змінити спосіб оплати", exact: true })
+    .click();
+  await page
+    .getByRole("list", { name: "Ваші операції" })
+    .getByRole("button")
+    .first()
+    .click();
+  await page
+    .getByRole("group", { name: "Новий спосіб оплати" })
+    .getByRole("button", { name: "Готівка", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Змінити на «Готівка»" }).click();
+  await expect.poll(() => server.sent.corrections?.length).toBe(1);
+  await expect(panelButton(page)).toHaveClass(/\bpressed\b/);
+  await expect(panelButton(page)).toBeDisabled();
+  await expect(panelButton(page).locator(".eyelet-spin")).toBeVisible();
+  // No way out meanwhile: «← Каса» held, Telegram's «Назад» hidden.
+  await expect(
+    page.getByRole("button", { name: "Назад до каси" }),
+  ).toBeDisabled();
+  await expect.poll(back).toBe(false);
+  const fixLine = page.locator(".pay-panel .sending-line");
+  await expect(fixLine).toBeAttached();
+  await expect(fixLine).not.toContainText("Ще надсилаємо…");
+  await expect(fixLine).toHaveText("Ще надсилаємо…", { timeout: 6000 });
+  answer();
+  await expect(
+    page.getByText("Спосіб оплати змінено: Картка → Готівка.", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  expect(server.sent.corrections).toHaveLength(1);
+  expect(server.sent.movements).toHaveLength(1);
 });
 
 test("«Внести в касу»: one kind, nothing to choose, the cursor in «Сума» at once — three taps and the sum (cash task list, P1-2)", async ({
@@ -760,15 +881,16 @@ test("an order's sale offers its five ways, a row each; a way changed meanwhile 
   ]);
 });
 
-test("the owner's and managers' correction takes the same card: the operation's sum and way, the ways as buttons, «Інша операція» (cash task list, P1-3)", async ({
+test("the owner's and managers' correction takes the same card: the operation's sum and way, the ways as buttons, «Інша операція»; on its way, neither «← Каса» nor «Інша операція» leads off it (cash task list, P1-3; review, 2026-11-09)", async ({
   page,
 }) => {
   await record(page);
-  const server = await stub(page, {
+  const state: Parameters<typeof stub>[1] = {
     now: drawer({ may_correct: true }),
     method: sale,
     answers: [409],
-  });
+  };
+  const server = await stub(page, state);
   await open(page);
   await cash(page);
   await page
@@ -797,7 +919,19 @@ test("the owner's and managers' correction takes the same card: the operation's 
   await expect(events).toBeVisible();
   await events.getByRole("button").first().click();
   await ways.getByRole("button", { name: "Готівка", exact: true }).click();
+  let answer = (): void => undefined;
+  state.hold = new Promise<void>((done) => {
+    answer = done;
+  });
   await page.getByRole("button", { name: "Змінити на «Готівка»" }).click();
+  await expect.poll(() => server.sent.corrections?.length).toBe(2);
+  await expect(
+    page.getByRole("button", { name: "Назад до каси" }),
+  ).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "Інша операція" }),
+  ).toBeDisabled();
+  answer();
   await expect(
     page.getByText("Спосіб оплати змінено: Картка → Готівка.", {
       exact: true,

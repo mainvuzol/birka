@@ -76,6 +76,9 @@
   --shadow-3: 0 8px 24px rgba(21, 23, 15, 0.16);
   --shadow-1-drop: drop-shadow(0 1px 0 rgba(21, 23, 15, 0.06));
   --tag-outline: var(--hairline);
+  /* A white block's outline on the paper: none in the dark (spec §4,
+     «Тени» 1). */
+  --block-outline: var(--hairline);
   --thread-line: var(--ink);
   --match-bg: var(--inverse);
   --match-fg: var(--thread);
@@ -236,6 +239,7 @@
     --shadow-3: 0 8px 24px rgba(0, 0, 0, 0.5);
     --shadow-1-drop: none;
     --tag-outline: var(--card);
+    --block-outline: transparent;
     --thread-line: var(--thread);
     --match-bg: var(--thread);
     --match-fg: var(--on-thread);
@@ -300,6 +304,7 @@
   --shadow-3: 0 8px 24px rgba(0, 0, 0, 0.5);
   --shadow-1-drop: none;
   --tag-outline: var(--card);
+  --block-outline: transparent;
   --thread-line: var(--thread);
   --match-bg: var(--thread);
   --match-fg: var(--on-thread);
@@ -354,7 +359,7 @@ main {
   max-width: 560px;
   min-height: var(--tg-viewport-stable-height, 100dvh);
   margin: auto;
-  padding: calc(24px + env(safe-area-inset-top)) 18px
+  padding: calc(24px + env(safe-area-inset-top)) 16px
     calc(40px + var(--menu-h, env(safe-area-inset-bottom)));
 }
 header {
@@ -476,11 +481,6 @@ header.screen-header {
   border: 0;
   font-weight: 650;
 }
-/* The card under the head starts at its own edge: its first line no longer
-   sits under a heading. */
-.screen-header + section > :first-child {
-  margin-top: 0;
-}
 .screen-title > :not(h1) {
   flex: none;
 }
@@ -507,11 +507,11 @@ header.screen-header {
   font-weight: 650;
   color: var(--link);
 }
+/* A section is a block of meaning on the paper, never a card (spec §4:
+   `paper` under everything, `card` only for tags, rows, sheets and the
+   menu; audit after stage 2, frame P0-1): white comes from what is in it —
+   a list's block, a tag, a field. */
 section {
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 18px;
-  padding: 22px;
   margin: 18px 0;
 }
 p {
@@ -687,6 +687,13 @@ textarea {
   margin: 0;
   text-align: right;
 }
+/* A plate drawn as a section keeps a box of its own, the card's gone (audit
+   after stage 2, frame P0-1). */
+section.notice {
+  padding: 12px 16px;
+  border: 1px solid var(--warn-line);
+  border-radius: var(--r-s);
+}
 .notice {
   background: var(--warn-bg);
   color: var(--text);
@@ -735,18 +742,11 @@ button.active {
   box-shadow: var(--shadow-1);
 }
 @media (max-width: 480px) {
-  main {
-    padding-left: 14px;
-    padding-right: 14px;
-  }
   header {
     align-items: flex-start;
   }
   header > span {
     font-size: 12px;
-  }
-  section {
-    padding: 17px;
   }
   .toolbar {
     align-items: flex-start;
@@ -1089,10 +1089,6 @@ nav:not(.tab-bar, .more-list) {
    at the foot. */
 section.backups {
   margin: 12px 0 0;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: none;
 }
 .backups-verdict-in {
   position: relative;
@@ -1231,10 +1227,6 @@ section.backups {
    whole at 360 px (review, 2026-11-07). */
 .goods-part.damaged {
   margin: 12px 0 18px;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: none;
 }
 .damaged .mode-switch {
   grid-auto-columns: auto;
@@ -1313,7 +1305,7 @@ section.backups {
   position: sticky;
   bottom: 0;
   z-index: 1;
-  margin: 18px -6px 0;
+  margin: 18px 0 0;
   padding: 12px 12px calc(12px + env(safe-area-inset-bottom));
   background: var(--surface);
   border: 1px solid var(--line-strong);
@@ -1639,7 +1631,8 @@ html {
   color: var(--pencil);
 }
 /* The search over the tags; at the till it stays at the top while they
-   scroll under it, and its height is kept clear (`shared/panel.ts`). */
+   scroll under it, and its height is kept clear (`shared/panel.ts`). On
+   the paper, as the till is (audit after stage 2, sale P0-1). */
 .find {
   margin: 16px 0 4px;
   padding: 8px 0;
@@ -1648,7 +1641,7 @@ html {
   position: sticky;
   top: 0;
   z-index: var(--z-stickyHeader);
-  background: var(--surface);
+  background: var(--paper);
 }
 /* A model's tag (spec §6.12): a row tag, its hole punched where the
    eyelet of a row tag sits, its name and price, then its cells. */
@@ -2414,10 +2407,6 @@ html {
 section.credits.customers,
 section.credits.customer-card {
   margin: 12px 0 0;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: none;
 }
 /* «Покупці» (spec S19; «Усе на бірці» sections task list, P0-4): the
    context under the heading, then a block a store — its label in capitals,
@@ -2429,10 +2418,6 @@ section.credits.customer-card {
 }
 .credits-block {
   margin: 20px 0 0;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: none;
 }
 .credits-block-head {
   margin: 0 0 8px;
@@ -2507,8 +2492,8 @@ section.credits.customer-card {
 .customer-block {
   margin: 12px 0 0;
   padding: 12px 16px 14px;
-  border: 1px solid var(--hairline);
-  border-radius: var(--r-l);
+  border: 1px solid var(--block-outline);
+  border-radius: var(--r-s);
   background: var(--card);
 }
 .customer-block-head {
@@ -3239,10 +3224,6 @@ section.credits.customer-card {
   flex-direction: column;
   gap: 12px;
   margin: 16px 0 0;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: none;
 }
 .store-tag {
   display: block;
@@ -3295,10 +3276,6 @@ section.credits.customer-card {
    store, nothing on them to press but the tag. */
 section.stores {
   margin: 12px 0 0;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: none;
 }
 .stores-list {
   margin-top: 4px;
@@ -3371,10 +3348,6 @@ section.stores {
    gutters. */
 section.cash {
   margin: 12px 0 0;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: none;
 }
 /* The ink tag (spec §6.11; «Усе на бірці» sections task list, P1-1): the
    row tag's silhouette at least 112 high, `inverse` in either theme within
@@ -3537,10 +3510,6 @@ section.cash {
    under the reminders unscrolled. */
 section.cash-count {
   margin: 4px 0 0;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: none;
 }
 .cash-count .hint {
   margin-top: 6px;
@@ -4708,7 +4677,7 @@ section.cash-count {
 /* A group's label in capitals, «ЛЮДИ», «ТОВАР» (spec S07): by style, so a
    reader says the word. */
 .more-group h3 {
-  margin: 18px 0 2px;
+  margin: 18px 0 8px;
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -4737,6 +4706,20 @@ section.cash-count {
    its glyph at 24 in ink before the label. */
 .more-row {
   min-height: var(--h-row);
+}
+/* A list's rows on a white block over the paper (spec §6.8; audit after
+   stage 2, frame P0-1): the block 4 round, a hairline round it in the light
+   theme, none in the dark, where its fill parts it from the paper. */
+.list-block {
+  background: var(--card);
+  border: 1px solid var(--block-outline);
+  border-radius: var(--r-s);
+}
+.list-block > .sale-row {
+  padding: 12px 16px;
+}
+.list-block > .sale-row:last-child {
+  border-bottom: 0;
 }
 .more-row > .icon {
   color: var(--ink);
@@ -5228,6 +5211,21 @@ section.cash-count {
 .sending-words {
   display: inline-block;
 }
+/* A sheet's ways, or its one button, wait as the till's dock does (audit
+   after stage 2, orders-cash P0-1): «Ще надсилаємо…» stands over them. */
+.collect-ways,
+.sending-room {
+  position: relative;
+}
+/* Brought into the sheet's view with the line's room over it (review,
+   2026-11-09). */
+.collect-ways {
+  scroll-margin-top: 44px;
+}
+/* «Клієнт забрав»'s five ways, the till's height. */
+.collect-ways .pay-ways button {
+  min-height: var(--h-pay);
+}
 button.pressed:disabled {
   display: inline-flex;
   align-items: center;
@@ -5266,13 +5264,6 @@ button.stepped-back:disabled {
     animation: none;
   }
 }
-/* A result on the page itself (spec S11, S22; P0-2): its title with the
-   check, then its stub, and «Новий продаж» under the thumb. */
-section.receipt {
-  padding: 0;
-  border: 0;
-  background: none;
-}
 .stub-sum-what {
   font-size: 17px;
   font-weight: 600;
@@ -5298,7 +5289,7 @@ section.receipt {
   position: sticky;
   bottom: 0;
   z-index: 1;
-  margin: 18px -6px 0;
+  margin: 18px 0 0;
   padding: 12px 12px calc(12px + env(safe-area-inset-bottom));
   background: var(--card);
   border: 1px solid var(--edge);
@@ -5308,11 +5299,6 @@ section.receipt {
 .result-dock button {
   width: 100%;
   min-height: 52px;
-}
-/* A stub inside a card is a slip of the paper's colour, so it is seen on
-   the card in either theme. */
-section:not(.receipt):not(.stub-notice) .stub {
-  background-color: var(--paper);
 }
 .stub .hand-back {
   margin: 0;
@@ -5403,9 +5389,6 @@ nav.tab-bar {
    line under them. ≤ 240 px high at 390 px wide with two stores. */
 .today {
   margin: 12px 0 18px;
-  padding: 0;
-  border: 0;
-  background: none;
 }
 .day-hang {
   position: relative;
@@ -5656,10 +5639,6 @@ button.day-folded {
 .today-waiting,
 .today-empty {
   margin: 0 0 8px;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: none;
 }
 /* Its heading, and how old it all is when old, as the day-tag's head. */
 .today-waiting-head {
@@ -5890,10 +5869,6 @@ button.day-folded {
 }
 .found-group {
   margin: 0;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: none;
 }
 .found-group + .found-group {
   margin-top: 20px;
@@ -5966,9 +5941,6 @@ button.day-folded {
    than the phone at 360 with two stores. */
 .money {
   margin: 12px 0 18px;
-  padding: 0;
-  border: 0;
-  background: none;
 }
 /* Four periods across 328: at 15, «Сьогодні» whole in its way. */
 .money-in .mode-switch button {
@@ -6134,9 +6106,6 @@ button.money-place-open {
    room on every phone. */
 .model-screen {
   margin: 12px 0 18px;
-  padding: 0;
-  border: 0;
-  background: none;
 }
 .model-hang {
   position: relative;
@@ -6314,10 +6283,6 @@ button.money-place-open {
 section.receive,
 section.receive-list {
   margin: 12px 0 0;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: none;
 }
 .receive-place {
   margin: 4px 0 12px;
@@ -7099,12 +7064,15 @@ section.receive-list {
 .opening-task {
   overflow-wrap: anywhere;
 }
+/* The notebook's line a slip of the card's white on the paper, as a tag
+   is: a paper-coloured slip stood out on the card it no longer has (review
+   of the audit after stage 2's first batch, 2026-11-09). */
 .opening-paper {
   margin: 12px 0 0;
   padding: 14px 16px;
-  border: 1px solid var(--hairline);
+  border: 1px solid var(--block-outline);
   border-radius: var(--r-m);
-  background: var(--paper);
+  background: var(--card);
   box-shadow: var(--shadow-1);
 }
 .opening-paper .catalog-raw {
@@ -7331,9 +7299,6 @@ label.way-option {
    «Продажі й повернення» as rows under it. */
 .report {
   margin: 12px 0 18px;
-  padding: 0;
-  border: 0;
-  background: none;
 }
 .report-periods button {
   font-size: 15px;

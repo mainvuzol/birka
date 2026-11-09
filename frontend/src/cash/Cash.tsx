@@ -972,6 +972,9 @@ function CorrectStep({
   const day =
     which === "today" ? cashDay(0) : which === "yesterday" ? cashDay(1) : other;
   const [chosen, setChosen] = useState<DayEvent | null>(null);
+  // A change on its way: no way out, nor to another operation, until it is
+  // answered (review, 2026-11-09).
+  const [sending, setSending] = useState(false);
   // Why a correction was refused: said over the day's list read again,
   // where the operation is chosen anew (review, 2026-10-22).
   const [problem, setProblem] = useState<string | null>(null);
@@ -992,6 +995,7 @@ function CorrectStep({
             go={() => {
               back(null);
             }}
+            held={sending}
             label="Назад до каси"
           >
             <span aria-hidden="true">← </span>Каса
@@ -1019,6 +1023,7 @@ function CorrectStep({
                 <button
                   type="button"
                   className="quiet"
+                  disabled={sending}
                   onClick={() => {
                     setChosen(null);
                   }}
@@ -1027,6 +1032,8 @@ function CorrectStep({
                 </button>
               }
               disabled={disabled}
+              sending={sending}
+              setSending={setSending}
               send={async (to, note) => {
                 const outcome = await send({
                   command: "correction",

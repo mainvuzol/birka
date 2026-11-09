@@ -5,6 +5,7 @@ import type { Store } from "@/orders/types";
 import { Eyelet } from "@/shared/Eyelet";
 import { NoCustomerData } from "@/shared/NoCustomerData";
 import type { JournalOutcome } from "@/shared/journal";
+import { SendingLine } from "@/shared/Sending";
 import { Sheet } from "@/shared/Sheet";
 import { buzz } from "@/shared/telegram";
 import { cashErrorText, dayOf } from "./errors";
@@ -91,17 +92,23 @@ export function Move({
     if (kind === null || sum === null || sending) return;
     setProblem(null);
     setSending(true);
-    const outcome = await send({
-      command: "movement",
-      store_id: store.id,
-      command_id: crypto.randomUUID(),
-      movement_kind: kind,
-      amount: decimal(sum),
-      note: note.trim() === "" ? null : note.trim(),
-      after_close_id: drawer.last_close?.id ?? null,
-      ...(forClose === "" ? {} : { for_close_id: forClose }),
-    });
-    setSending(false);
+    let outcome: JournalOutcome<CashAnswer>;
+    try {
+      outcome = await send({
+        command: "movement",
+        store_id: store.id,
+        command_id: crypto.randomUUID(),
+        movement_kind: kind,
+        amount: decimal(sum),
+        note: note.trim() === "" ? null : note.trim(),
+        after_close_id: drawer.last_close?.id ?? null,
+        ...(forClose === "" ? {} : { for_close_id: forClose }),
+      });
+    } finally {
+      // Whatever came of it, the ring stops and the sheet may be left: never
+      // a sheet held for good (review, 2026-11-09).
+      setSending(false);
+    }
     if (outcome.kind === "done") {
       // A buzz in the hand once the server answers, as at the close.
       buzz("success");
@@ -124,19 +131,27 @@ export function Move({
       close={() => {
         if (!sending) back(null);
       }}
+      // On its way: Telegram's «Назад» hidden, as «Клієнт забрав» (review,
+      // 2026-11-09).
+      held={sending}
       fallback={fallback}
       foot={
-        <button
-          type="button"
-          className="sheet-done cash-move-button"
-          disabled={disabled || sending || kind === null || sum === null}
-          onClick={() => {
-            void record();
-          }}
-        >
-          {sending && <Eyelet state="spin" size={20} />}
-          {sum === null ? verb : `${verb} ${money(decimal(sum))}`}
-        </button>
+        // «Ще надсилаємо…» over the button past 3 s, as the till's dock
+        // (audit after stage 2, orders-cash P0-1).
+        <div className="sending-room">
+          <SendingLine busy={sending} />
+          <button
+            type="button"
+            className={`sheet-done cash-move-button${sending ? " pressed" : ""}`}
+            disabled={disabled || sending || kind === null || sum === null}
+            onClick={() => {
+              void record();
+            }}
+          >
+            {sending && <Eyelet state="spin" size={20} />}
+            {sum === null ? verb : `${verb} ${money(decimal(sum))}`}
+          </button>
+        </div>
       }
     >
       <div className="cash-move">

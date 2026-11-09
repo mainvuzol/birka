@@ -225,6 +225,51 @@ test("the receipt names each line's size, and the shelf's corrections in coats",
   await expect(page.getByText(/рух\(и\)/)).toHaveCount(0);
 });
 
+test("at 360 px the receipt lies on the paper: its section no card, its stub the card's white, «Новий продаж»'s dock on the screen's gutter (audit after stage 2, frame P0-1, sale P0-1)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  await stubList(page);
+  await stubSale(page, { items: [item({ size: "M" })] });
+  await onTheTill(page);
+  await tapSize(page, fixture.variant_id, fixture.size_id);
+  await pay(page, "Готівка").click();
+  await expect(
+    page.getByRole("heading", { name: "Продаж записано" }),
+  ).toBeVisible();
+  const receipt = page.locator("main > section.receipt");
+  expect(
+    await receipt.evaluate((node) => {
+      const style = getComputedStyle(node);
+      return [
+        style.backgroundColor,
+        style.borderTopWidth,
+        style.borderTopLeftRadius,
+        style.paddingLeft,
+      ];
+    }),
+  ).toEqual(["rgba(0, 0, 0, 0)", "0px", "0px", "0px"]);
+  const [slip, white, ground] = await receipt
+    .locator(".stub")
+    .evaluate((node) => {
+      const probe = document.createElement("span");
+      document.body.append(probe);
+      probe.style.color = "var(--card)";
+      const card = getComputedStyle(probe).color;
+      probe.style.color = "var(--paper)";
+      const paper = getComputedStyle(probe).color;
+      probe.remove();
+      return [getComputedStyle(node).backgroundColor, card, paper];
+    });
+  expect(slip).toBe(white);
+  expect(white).not.toBe(ground);
+  const dock = await page.locator(".result-dock").boundingBox();
+  if (!dock) throw new Error("not laid out");
+  expect(Math.round(dock.x)).toBe(16);
+  expect(Math.round(dock.x + dock.width)).toBe(344);
+  await expect(page.locator("html")).toHaveJSProperty("scrollWidth", 360);
+});
+
 test("an answer stored before the server named sizes and coats is read from the basket, without numbers", async ({
   page,
 }) => {

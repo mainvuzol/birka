@@ -779,12 +779,17 @@ test("the owner's menu is «Сьогодні · Продаж · Замовлен
     );
   // 52 px or more each, its label whole; scrolled, never wider than the
   // phone.
-  const list = await page.getByRole("navigation", { name: "Ще" }).boundingBox();
   for (const button of await moreRows(page).all()) {
     const box = await button.boundingBox();
     expect(box?.height ?? 0).toBeGreaterThanOrEqual(52);
-    // The whole width, its chevron at the edge (review of the screens).
-    expect(Math.round(box?.width ?? -1)).toBe(Math.round(list?.width ?? -2));
+    // The whole width of its group's white block, its chevron at the
+    // block's edge (review of the screens; audit after stage 2, frame
+    // P0-1).
+    expect(Math.round(box?.width ?? -1)).toBe(
+      await button.evaluate(
+        (element) => element.closest(".list-block")?.clientWidth ?? -2,
+      ),
+    );
     expect(
       await button.evaluate(
         (element) => element.scrollWidth - element.clientWidth,

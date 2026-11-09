@@ -203,6 +203,25 @@ async function serveDebt(
   return serve(page, one, paid, [aside()]);
 }
 
+/** Every section of the screen on the paper, never a card (audit after
+ * stage 2, frame P0-1, sale P0-1). */
+async function onPaper(page: Page, screen: string): Promise<void> {
+  const drawn = await page.locator("main > section").evaluateAll((all) =>
+    all.map((node) => {
+      const style = getComputedStyle(node);
+      return [
+        style.backgroundColor,
+        style.borderTopWidth,
+        style.borderTopLeftRadius,
+        style.paddingLeft,
+      ];
+    }),
+  );
+  expect(drawn.length, screen).toBeGreaterThan(0);
+  for (const each of drawn)
+    expect(each, screen).toEqual(["rgba(0, 0, 0, 0)", "0px", "0px", "0px"]);
+}
+
 /** «Ще» › «Покупці», her row, her card, and the debt's row (spec S19,
  * S20): its detail. */
 async function opened(
@@ -260,6 +279,36 @@ async function writeOff(page: Page, sum: string): Promise<void> {
   await sheet.getByLabel("Чому списуємо").fill("виїхала");
   await sheet.getByRole("button", { name: `Так, списати ${sum}` }).click();
 }
+
+test("«Покупці», her card and the debt's detail lie on the paper, never a card; the card's blocks 4 round (audit after stage 2, frame P0-1, sale P0-1)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  await serveDebt(page, debt());
+  await page.goto(launch());
+  await openStore(page, "Основний MAIN");
+  await toTill(page);
+  await section(page, "Покупці");
+  const her = page.getByRole("button", { name: /^Відкрити борг: Оксана/ });
+  await expect(her).toBeVisible();
+  await onPaper(page, "S19");
+  await her.click();
+  const debts = page.getByRole("list", {
+    name: "Борги в магазині «Основний»",
+  });
+  await expect(debts).toBeVisible();
+  await onPaper(page, "S20");
+  const blocks = page.locator(".customer-block");
+  await expect(blocks.first()).toBeVisible();
+  for (const block of await blocks.all())
+    await expect(block).toHaveCSS("border-top-left-radius", "4px");
+  await debts.getByRole("button", { name: /^Відкрити борг: Лоран/ }).click();
+  await expect(
+    page.getByRole("heading", { name: "Оксана Петренко", level: 1 }),
+  ).toBeVisible();
+  await onPaper(page, "the debt's detail");
+  await expect(page.locator("html")).toHaveJSProperty("scrollWidth", 360);
+});
 
 test("«Ще» › «Покупці» opened again on a debt brings the list's first screen («Усе на бірці» task list, P0-4)", async ({
   page,
@@ -1346,6 +1395,7 @@ test.describe("«Продаж» › «Внесок»: a payment on a debt from t
     await expect(owed.locator(".owed-count")).toHaveText(
       "Сплачено 1 000,00 грн з 3 000,00 грн · останній внесок 12.10",
     );
+    await onPaper(page, "S21");
     // No write-off nor erasing here: they are the debt's from «Покупці».
     await expect(
       page.getByRole("button", { name: "Списати борг" }),
@@ -1370,6 +1420,7 @@ test.describe("«Продаж» › «Внесок»: a payment on a debt from t
       sum: "1 500,00 грн",
     });
     await expect(paid.locator(".stub")).toHaveClass(/\bstub-recorded\b/);
+    await onPaper(page, "S22");
     await expect(
       paid.getByText("Залишок боргу 500,00 грн", { exact: true }),
     ).toBeVisible();

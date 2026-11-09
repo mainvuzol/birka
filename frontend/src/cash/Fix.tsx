@@ -5,12 +5,14 @@ import { money } from "@/orders/types";
 import type { Store } from "@/orders/types";
 import { api } from "@/shared/api";
 import { Unread } from "@/shared/Unread";
+import { Eyelet } from "@/shared/Eyelet";
 import { NoCustomerData } from "@/shared/NoCustomerData";
 import { Placeholder } from "@/shared/Placeholder";
 import type { JournalOutcome } from "@/shared/journal";
 import { usePanelRoom } from "@/shared/panel";
 import { methodLabels } from "@/shared/payment";
 import type { PaymentMethod } from "@/shared/payment";
+import { SendingLine } from "@/shared/Sending";
 import { WaySticker } from "@/shared/Stub";
 import { Sum } from "@/shared/Sum";
 import { buzz } from "@/shared/telegram";
@@ -47,10 +49,16 @@ function momentOf(at: string): string {
     : whenOf(at);
 }
 
-/** «← Каса», as on the count's screen. */
-function ToCash({ back }: { back: () => void }): JSX.Element {
+/** «← Каса», as on the count's screen; held while a change is on its way. */
+function ToCash({
+  back,
+  held = false,
+}: {
+  back: () => void;
+  held?: boolean;
+}): JSX.Element {
   return (
-    <Back go={back} label="Назад до каси">
+    <Back go={back} held={held} label="Назад до каси">
       <span aria-hidden="true">← </span>Каса
     </Back>
   );
@@ -83,6 +91,9 @@ export function FixStep({
   back: (done: string | null) => void;
 }): JSX.Element {
   const [chosen, setChosen] = useState<FixTarget | null>(initial);
+  // A change on its way: no way out until it is answered, as the till's
+  // dock holds (review, 2026-11-09).
+  const [sending, setSending] = useState(false);
   const mine = useQuery({
     queryKey: ["cash-mine", store.id],
     queryFn: () =>
@@ -102,6 +113,7 @@ export function FixStep({
   });
   const leave = (
     <ToCash
+      held={sending}
       back={() => {
         back(null);
       }}
@@ -135,6 +147,8 @@ export function FixStep({
               ways={waysFor(answer.is_order)}
               closedNote={null}
               disabled={disabled}
+              sending={sending}
+              setSending={setSending}
               send={async (to, note) => {
                 const outcome = await send({
                   command: "correction",
@@ -238,6 +252,8 @@ export function WayCard({
   closedNote,
   aside,
   disabled,
+  sending,
+  setSending,
   send,
 }: {
   /** «Продаж · 20:05». */
@@ -250,6 +266,11 @@ export function WayCard({
   /** Under the ways: another operation to choose, for whoever lists them. */
   aside?: ReactNode;
   disabled: boolean;
+  /** Sent: its ring, and «Ще надсилаємо…» past 3 s, as the till's dock
+   * (audit after stage 2, orders-cash P0-1) — the screen's, which holds its
+   * way out meanwhile. */
+  sending: boolean;
+  setSending: (sending: boolean) => void;
   /** The refusal's text, or null. */
   send: (to: PaymentMethod, note: string | null) => Promise<string | null>;
 }): JSX.Element {
@@ -317,14 +338,16 @@ export function WayCard({
       </label>
       {problem && <p role="alert">{problem}</p>}
       <div className="pay-panel" ref={panel}>
+        <SendingLine busy={sending} />
         <button
           type="button"
-          className="cash-panel-button"
-          disabled={disabled || to === null}
+          className={`cash-panel-button${sending ? " pressed" : ""}`}
+          disabled={disabled || sending || to === null}
           onClick={() => {
             if (to === null) return;
-            void send(to, note.trim() === "" ? null : note.trim()).then(
-              (text) => {
+            setSending(true);
+            void send(to, note.trim() === "" ? null : note.trim())
+              .then((text) => {
                 setProblem(text);
                 // Refused: on a way to choose again (review, 2026-10-22).
                 if (text !== null)
@@ -335,10 +358,13 @@ export function WayCard({
                       )
                       ?.focus(),
                   );
-              },
-            );
+              })
+              .finally(() => {
+                setSending(false);
+              });
           }}
         >
+          {sending && <Eyelet state="spin" size={20} />}
           {to === null
             ? "Оберіть новий спосіб"
             : `Змінити на «${methodLabels[to]}»`}

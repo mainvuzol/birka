@@ -436,3 +436,101 @@ for (const scheme of ["light", "dark"] as const)
     ])
       expect(await contrast(part)).toBeGreaterThanOrEqual(4.5);
   });
+
+for (const scheme of ["light", "dark"] as const)
+  test(`on the paper at 360 px in the ${scheme} theme: the till no card, a model's tag the card's white on the paper, four sizes of one warehouse in one row, the tray's edges on the screen's gutter (audit after stage 2, frame P0-1, sale P0-1)`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 360, height: 640 });
+    await page.emulateMedia({ colorScheme: scheme });
+    const sizeS = randomUUID();
+    const sizeXL = randomUUID();
+    await page.route("**/api/v1/catalog/stock-options?**", async (route) => {
+      await route.fulfill({
+        json: {
+          items: [
+            row(sizeS, "S", 1),
+            row(fixture.size_id, "M", 2),
+            row(sizeL, "L", 1),
+            row(sizeXL, "XL", 1),
+          ],
+          has_more: false,
+        },
+      });
+    });
+    await onTheTill(page);
+    // The till's section is no card: nothing round it, nothing inside it.
+    expect(
+      await tag(page).evaluate((node) => {
+        const section = node.closest("main > section");
+        if (!section) return null;
+        const style = getComputedStyle(section);
+        return [
+          style.backgroundColor,
+          style.borderTopWidth,
+          style.borderTopLeftRadius,
+          style.paddingLeft,
+        ];
+      }),
+    ).toEqual(["rgba(0, 0, 0, 0)", "0px", "0px", "0px"]);
+    // The tag the card's white, the paper round it, in either theme.
+    const [fill, card, paper] = await tag(page).evaluate((node) => {
+      const probe = document.createElement("span");
+      document.body.append(probe);
+      probe.style.color = "var(--card)";
+      const white = getComputedStyle(probe).color;
+      probe.style.color = "var(--paper)";
+      const ground = getComputedStyle(probe).color;
+      probe.remove();
+      const inside = node.querySelector(".model-tag-in");
+      return [
+        inside ? getComputedStyle(inside).backgroundColor : "",
+        white,
+        ground,
+      ];
+    });
+    expect(fill).toBe(card);
+    expect(card).not.toBe(paper);
+    // The search held over the tags on the paper too, never a white band.
+    await expect(page.locator(".find.sticky")).toHaveCSS(
+      "background-color",
+      paper,
+    );
+    // Four sizes in one row, each 60 × 60 still.
+    const cells = tag(page).locator("button.size-cell");
+    await expect(cells).toHaveCount(4);
+    const boxes = await cells.evaluateAll((all) =>
+      all.map((each) => {
+        const box = each.getBoundingClientRect();
+        return [box.top, box.width, box.height];
+      }),
+    );
+    expect(new Set(boxes.map(([top]) => top)).size).toBe(1);
+    for (const [, width, height] of boxes) {
+      expect(width).toBeGreaterThanOrEqual(60);
+      expect(height).toBeGreaterThanOrEqual(60);
+    }
+    // The screen's gutter 16, and the tray's edges on it.
+    expect(
+      await page
+        .locator("main")
+        .evaluate((node) => [
+          getComputedStyle(node).paddingLeft,
+          getComputedStyle(node).paddingRight,
+        ]),
+    ).toEqual(["16px", "16px"]);
+    await cell(page, fixture.size_id).click();
+    const tray = page.locator(".till-tray");
+    await expect(tray).toBeVisible();
+    const edges = await tray.boundingBox();
+    if (!edges) throw new Error("not laid out");
+    expect(Math.round(edges.x)).toBe(16);
+    expect(Math.round(edges.x + edges.width)).toBe(344);
+    await expect(page.locator("html")).toHaveJSProperty("scrollWidth", 360);
+    // For the report: the till at 390 × 844, its tags on the paper.
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(page.locator("html")).toHaveJSProperty("scrollWidth", 390);
+    await page.screenshot({
+      path: `test-results/paper-till-390-${scheme}.png`,
+    });
+  });

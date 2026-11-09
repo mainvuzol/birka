@@ -612,7 +612,9 @@ export function Money({
         )}
       </section>
       <nav aria-label="Гроші" className="more-list money-rows">
-        <div className="more-group">
+        {/* On a white block, as «Ще»'s rows (spec §6.8; review of the audit
+            after stage 2's first batch, 2026-11-09). */}
+        <div className="more-group list-block">
           {[
             {
               key: "report",
