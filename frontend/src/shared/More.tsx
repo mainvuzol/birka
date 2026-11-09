@@ -95,9 +95,11 @@ export function More({
                             row.meta
                           )}
                         </span>
-                        <span className="sale-open" aria-hidden="true">
-                          ›
-                        </span>
+                        <Icon
+                          name="chevron-right"
+                          size={16}
+                          className="sale-open"
+                        />
                       </button>
                     ) : (
                       <button

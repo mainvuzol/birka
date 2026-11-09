@@ -39,7 +39,7 @@ import { ScreenHeader } from "@/shared/ScreenHeader";
 import { SearchField } from "@/shared/SearchField";
 import { useSettled } from "@/sales/StockSearch";
 import { submitReturn, useReturnCommand } from "./commands";
-import { SaleRow, dayOf, dayTitle } from "./SaleRow";
+import { SaleRow, byDay, dayOf, dayTitle } from "./SaleRow";
 import { useBackOnSale } from "./places";
 import { Result } from "./Result";
 import { refundLabels, sizeLabel } from "./types";
@@ -306,7 +306,7 @@ export function Returns({
         {!searching ? null : sales.isPending ||
           (sales.isPlaceholderData && listed.length === 0) ? (
           // The rows' places while they are read (returns task list, P2-3).
-          <Placeholder said="Завантажуємо продажі…" rows={3} />
+          <Placeholder said="Завантажуємо продажі…" rows={3} block />
         ) : !sales.data ? (
           <div className="notice read-failure" role="alert">
             <p>{readText(sales.error, refusalText)}</p>
@@ -366,24 +366,29 @@ export function Returns({
                 </button>
               </div>
             )}
-            {listed.map((sale, index) => (
-              <div key={sale.id}>
-                {(index === 0 ||
-                  dayOf(listed[index - 1]?.sold_at ?? "") !==
-                    dayOf(sale.sold_at)) && (
-                  <h3 className="sale-day">{dayTitle(sale.sold_at)}</h3>
-                )}
-                <SaleRow
-                  sale={sale}
-                  here={sale.store_id === store.id}
-                  choose={() => {
-                    // The search done with: the keyboard goes (spec §4.4;
-                    // «Усе на бірці» task list, P1-2).
-                    hideKeyboard();
-                    setSelected(sale);
-                  }}
-                  blocked={blocked}
-                />
+            {/* A day keyed by its date: a new sale on top never makes its
+                rows anew, nor takes the focus from one (review). */}
+            {byDay(listed).map((day) => (
+              <div key={dayOf(day[0]?.sold_at ?? "")}>
+                <h3 className="sale-day">{dayTitle(day[0]?.sold_at ?? "")}</h3>
+                {/* A day's rows on a list's white block (spec §6.8; audit
+                    after stage 2, frame P2-2). */}
+                <div className="list-block">
+                  {day.map((sale) => (
+                    <SaleRow
+                      key={sale.id}
+                      sale={sale}
+                      here={sale.store_id === store.id}
+                      choose={() => {
+                        // The search done with: the keyboard goes (spec
+                        // §4.4; «Усе на бірці» task list, P1-2).
+                        hideKeyboard();
+                        setSelected(sale);
+                      }}
+                      blocked={blocked}
+                    />
+                  ))}
+                </div>
               </div>
             ))}
             {sales.isFetchNextPageError ? (

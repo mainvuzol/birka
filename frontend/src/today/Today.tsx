@@ -111,6 +111,25 @@ function owedParts(debts: StoreDebts): string[] {
     : ["Ніхто не винен"];
 }
 
+/** The day in its one line, after «Сьогодні досі» (spec §6.10; audit after
+ * stage 2, frame P0-2): two stores each named with what it sold, after the
+ * day's sum; one store, or three and more, the sum and its units. Every
+ * sum the report's own. */
+function foldedParts(
+  day: Figures,
+  two: readonly (readonly [Store, StoreFigures])[] | undefined,
+): string[] {
+  return two
+    ? [
+        money(day.sold),
+        ...two.map(
+          ([store, figures]) =>
+            `«${visible(store.name)}» ${money(figures.sold)}`,
+        ),
+      ]
+    : [`${money(day.sold)} · ${units(day.units)}`];
+}
+
 /** Parts said in one line, «·» between them, each kept whole: the line
  * breaks between them, never inside one. */
 function Parts({ parts }: { parts: readonly string[] }): JSX.Element {
@@ -386,8 +405,7 @@ function WaitingTags({
         setDoneShown(true);
       }}
     >
-      Зроблено сьогодні · {done.length}
-      <span aria-hidden="true"> ›</span>
+      Зроблено сьогодні · {done.length} <Icon name="chevron-right" size={16} />
     </button>
   );
   return (
@@ -579,9 +597,14 @@ function StoreColumn({
   const name = useId();
   return (
     <div className="day-store" role="group" aria-labelledby={name}>
-      <h3 id={name} className="t-label">
-        {visible(store.name)}
-      </h3>
+      {/* Its units in its name's row, so its sum stands alone on its line
+          (audit after stage 2, frame P0-2). */}
+      <div className="day-store-head">
+        <h3 id={name} className="t-label">
+          {visible(store.name)}
+        </h3>
+        {figures && <span className="t-meta">{units(figures.units)}</span>}
+      </div>
       {figures ? (
         <p className="day-store-sold">
           <span
@@ -593,7 +616,6 @@ function StoreColumn({
           >
             <Sum value={money(figures.sold)} />
           </span>
-          <span className="t-meta">{units(figures.units)}</span>
         </p>
       ) : (
         !read && (
@@ -686,6 +708,13 @@ export function Today({
   const figuresOf = (store: Store): StoreFigures | undefined =>
     data?.stores.find((one) => one.store_id === store.id);
   const online = onlineParts(orders);
+  // Two stores in columns: the folded line names each with its own sum,
+  // where the report has both.
+  const two = shown.flatMap((store) => {
+    const figures = figuresOf(store);
+    return figures ? [[store, figures] as const] : [];
+  });
+  const pair = shown.length === 2 && two.length === 2 ? two : undefined;
   // One store's lines stand unnamed in the tag only where the report reads
   // that store alone: beside a store that does not trade, it is named.
   const one =
@@ -731,9 +760,7 @@ export function Today({
                   <span className="t-label day-part">Сьогодні досі</span>
                   {" · "}
                   {day ? (
-                    <span className="day-part">
-                      {money(day.sold)} · {units(day.units)}
-                    </span>
+                    <Parts parts={foldedParts(day, pair)} />
                   ) : (
                     <Waiting width="9em" />
                   )}

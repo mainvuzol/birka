@@ -554,7 +554,7 @@ test("an order to send fits the phone: its goods as its title, when it was order
   await cancel.scrollIntoViewIfNeeded();
   await expect(cancel).toBeInViewport({ ratio: 1 });
   // Left: its MainButton put away.
-  await page.getByRole("button", { name: "← До замовлень" }).click();
+  await page.getByRole("button", { name: "До замовлень", exact: true }).click();
   await noMain(page);
 });
 
@@ -1337,8 +1337,11 @@ test("«Клієнт забрав»: its sheet of five ways in two rows, each th
   await expect(page.locator(".knot-string .knot-loop")).toHaveCount(1);
   await noMain(page);
   await page.screenshot({ path: "test-results/order-collected-card.png" });
-  // «До замовлень», and the order seen again: a line.
-  await page.getByRole("button", { name: "До замовлень", exact: true }).click();
+  // «← До замовлень» over the title, and the order seen again: a line.
+  await page
+    .locator(".screen-header")
+    .getByRole("button", { name: "До замовлень", exact: true })
+    .click();
   await expect(
     page.getByRole("heading", { name: "Замовлення", exact: true }),
   ).toBeVisible();
@@ -2286,7 +2289,10 @@ test("goods come back to whoever may not see the store's warehouses: said as bef
   const row = page.getByRole("button", { name: "Товар повернувся на склад" });
   // Back without taking it: nothing sent, the row in focus.
   await row.click();
-  await page.getByRole("button", { name: "← Замовлення" }).click();
+  await page
+    .locator(".screen-header")
+    .getByRole("button", { name: "Замовлення", exact: true })
+    .click();
   await expect(row).toBeFocused();
   expect(server.sent).toEqual([]);
   await row.click();
@@ -2496,7 +2502,7 @@ test("while an order is read, its title, context, pill and two lines hold their 
     page.getByRole("status").filter({ hasText: "Завантажуємо замовлення…" }),
   ).toBeAttached();
   await expect(page.locator(".order-placeholder")).toBeVisible();
-  const back = page.getByRole("button", { name: "← До замовлень" });
+  const back = page.getByRole("button", { name: "До замовлень", exact: true });
   const before = await back.boundingBox();
   const place = await page.locator(".skeleton-title").boundingBox();
   release();

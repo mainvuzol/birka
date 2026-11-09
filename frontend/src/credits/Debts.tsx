@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import type { JSX } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api, readText } from "@/shared/api";
+import { Icon } from "@/shared/Icon";
 import { visible } from "@/shared/visible";
 import { money } from "@/orders/types";
 import type { Store } from "@/orders/types";
@@ -107,7 +108,7 @@ export function Debts({
             </p>
           </div>
         )}
-        <div role="list" aria-label={`Борги: ${name}`}>
+        <div className="list-block" role="list" aria-label={`Борги: ${name}`}>
           {customer.credits.map((credit) => {
             const goods = goodsOf(credit);
             const since = sinceText(credit);
@@ -150,9 +151,7 @@ export function Debts({
                       {statusLabels[credit.status]}
                     </span>
                   )}
-                  <span className="sale-open" aria-hidden="true">
-                    ›
-                  </span>
+                  <Icon name="chevron-right" size={16} className="sale-open" />
                 </button>
               </div>
             );

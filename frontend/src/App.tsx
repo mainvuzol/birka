@@ -4014,7 +4014,7 @@ function Workspace({
                     setCollected(null);
                   }}
                 >
-                  ← До замовлень
+                  <span aria-hidden="true">← </span>До замовлень
                 </Back>
               }
             />

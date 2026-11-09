@@ -399,9 +399,7 @@ export function Customer({
                     <Icon name="owed" size={16} />
                     {money(credit.owed)}
                   </span>
-                  <span className="sale-open" aria-hidden="true">
-                    ›
-                  </span>
+                  <Icon name="chevron-right" size={16} className="sale-open" />
                 </button>
               </div>
             ))}
@@ -584,7 +582,7 @@ function DebtRows({
   stores?: boolean;
 }): JSX.Element {
   return (
-    <div role="list" aria-label={label}>
+    <div className="list-block" role="list" aria-label={label}>
       {credits.map((credit) => {
         const goods = goodsOf(credit);
         const owed = credit.status === "OPEN";
@@ -629,9 +627,7 @@ function DebtRows({
                   {statusLabels[credit.status]}
                 </span>
               )}
-              <span className="sale-open" aria-hidden="true">
-                ›
-              </span>
+              <Icon name="chevron-right" size={16} className="sale-open" />
             </button>
           </div>
         );

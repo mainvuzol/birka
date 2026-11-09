@@ -174,6 +174,12 @@ test("an order's card and the step over it show Telegram's «Назад»; press
   });
   await expect(card).toBeVisible();
   await expect.poll(() => backs(page)).toEqual([true]);
+  // Its «←» drawn, never read aloud: no button's name says it (audit after
+  // stage 2, frame P2-3).
+  await expect(
+    page.getByRole("button", { name: "До замовлень", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: /←/ })).toHaveCount(0);
 
   // The step over the card, a sheet (stage 2, orders task list, P1-1):
   // Telegram's «Назад» never blinks as it rises.
@@ -429,7 +435,7 @@ test("a Telegram before 6.1 is told nothing of «Назад», on an order's car
   await expect(
     page.getByRole("heading", { name: "Лоран шоколад · M", exact: true }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "← До замовлень" }).click();
+  await page.getByRole("button", { name: "До замовлень", exact: true }).click();
   await expect(page.locator(".order-row").first()).toBeVisible();
   expect(await backs(page)).toEqual([]);
 });

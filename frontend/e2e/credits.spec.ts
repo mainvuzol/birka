@@ -7,6 +7,7 @@ import {
   fillLine,
   fromPaper,
   grn,
+  listRow,
   more,
   openStore,
   toTill,
@@ -1327,6 +1328,16 @@ test("one phone is one customer, whatever the name, and the store sees what it i
   // The second debt adds what it leaves owing to the store's total.
   expect(await storeOwed(page, first.token)).toBe(before + 200000n);
 
+  // At the till, two debts on one phone: the seller chooses on a screen of
+  // its own, its rows a list's by §6.8 on a white block (audit after stage
+  // 2, frame P2-2).
+  await atTheTill(page);
+  await searchField(page).fill(tel);
+  await customerRow(page, name).click();
+  const owing = page.getByRole("list", { name: `Борги: ${name}` });
+  await expect(owing.getByRole("listitem")).toHaveCount(2);
+  await listRow(page, owing.getByRole("button").first(), ".debt-name");
+
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
   await toTill(page);
@@ -1366,6 +1377,11 @@ test("one phone is one customer, whatever the name, and the store sees what it i
   const which = page.getByRole("dialog", { name: "На який борг вносить?" });
   await expect(which).toHaveAttribute("data-ready", "");
   await expect(which.getByRole("button")).toHaveCount(2);
+  // Its rows' chevrons the set's 16, never a «›»; on the sheet's own white,
+  // no block of their own (audit after stage 2, frame P2-2).
+  await expect(which.locator("svg.sale-open")).toHaveCount(2);
+  await expect(which).not.toContainText("›");
+  await expect(which.locator(".list-block")).toHaveCount(0);
   await which.getByRole("button", { name: first.model }).click();
   await expect(page.getByRole("heading", { level: 1 })).toContainText(
     first.model,

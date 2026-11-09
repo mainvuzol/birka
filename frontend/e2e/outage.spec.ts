@@ -3050,11 +3050,26 @@ test.describe("10. a kept operation the phone settles says what became of it", (
       menu(page).getByRole("button", { name: /^Ще( — є що перевірити)?$/ }),
     ).toHaveAttribute("aria-current", "true");
     await more(page);
-    await expect(
-      page
-        .getByRole("navigation", { name: "Ще" })
-        .getByRole("button", { name: "Прийшов товар", exact: true }),
-    ).toBeDisabled();
+    const held = page
+      .getByRole("navigation", { name: "Ще" })
+      .getByRole("button", { name: "Прийшов товар", exact: true });
+    await expect(held).toBeDisabled();
+    // Held by §6.8: its label in pencil, nothing faded over it (audit after
+    // stage 2, frame P2-2; review).
+    expect(
+      await held.evaluate((node) => {
+        const probe = document.createElement("span");
+        probe.style.color = "var(--pencil)";
+        document.body.append(probe);
+        const pencil = getComputedStyle(probe).color;
+        probe.remove();
+        const label = node.querySelector(".more-label");
+        return [
+          getComputedStyle(node).opacity,
+          label !== null && getComputedStyle(label).color === pencil,
+        ];
+      }),
+    ).toEqual(["1", true]);
     status = 404;
     await thriceNotFound(
       page.getByRole("button", { name: "Перевірити результат коригування" }),

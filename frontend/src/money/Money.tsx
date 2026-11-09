@@ -216,9 +216,7 @@ function Place({
             >
               <Icon name={icon} size={16} />
               <span>{title}</span>
-              <span className="sale-open" aria-hidden="true">
-                ›
-              </span>
+              <Icon name="chevron-right" size={16} className="sale-open" />
             </button>
           ) : (
             <>
@@ -636,9 +634,7 @@ export function Money({
             >
               <Icon name={row.icon} />
               <span className="more-label">{row.label}</span>
-              <span className="sale-open" aria-hidden="true">
-                ›
-              </span>
+              <Icon name="chevron-right" size={16} className="sale-open" />
             </button>
           ))}
         </div>

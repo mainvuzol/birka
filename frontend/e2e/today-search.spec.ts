@@ -835,7 +835,7 @@ test("«Замовлення» by a waybill alone: the server's order by part of
   await expect(tab(page, "Замовлення")).toHaveAttribute("aria-current", "page");
   await expect(tab(page, "Замовлення")).toBeFocused();
   await expect(
-    page.getByRole("button", { name: "← До замовлень" }),
+    page.getByRole("button", { name: "До замовлень", exact: true }),
   ).toBeVisible();
   await expect(page.locator(".order-goes")).toContainText(waybill);
 
@@ -843,7 +843,7 @@ test("«Замовлення» by a waybill alone: the server's order by part of
   await expect(field(page)).toHaveValue(part);
   await expect(group(page, "Замовлення").getByRole("button")).toHaveCount(1);
   await group(page, "Замовлення").getByRole("button").click();
-  await page.getByRole("button", { name: "← До замовлень" }).click();
+  await page.getByRole("button", { name: "До замовлень", exact: true }).click();
   await tab(page, "Сьогодні").click();
   await expect(field(page)).toHaveValue("");
   await expect(day(page)).toBeVisible();

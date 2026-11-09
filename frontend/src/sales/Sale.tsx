@@ -9,6 +9,7 @@ import {
   readText,
 } from "@/shared/api";
 import type { ApiError } from "@/shared/api";
+import { Icon } from "@/shared/Icon";
 import { decimal, kopecks, money } from "@/orders/types";
 import type { Location, StockOption, Store } from "@/orders/types";
 import type { SizeOption } from "@/inventory/receiptTypes";
@@ -1661,9 +1662,7 @@ export function Sale({
                   {visible(first.name)} · {visible(first.size)}
                 </span>
               )}
-              <span className="tray-open" aria-hidden="true">
-                ›
-              </span>
+              <Icon name="chevron-right" size={16} className="tray-open" />
             </button>
             {/* What is paid and how: the basket's row is not of it. */}
             <div role="group" aria-label="Продати — як платить покупець">

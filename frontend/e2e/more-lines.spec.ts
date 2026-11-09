@@ -264,7 +264,7 @@ test("«Ще» says what waits under each row, its count the row's one colour, a
     .locator("button.more-row");
   expect(await rows.count()).toBeGreaterThanOrEqual(10);
   for (const each of await rows.all()) {
-    const glyph = await each.locator("svg.icon").boundingBox();
+    const glyph = await each.locator("svg.icon:not(.sale-open)").boundingBox();
     expect([glyph?.width, glyph?.height]).toEqual([24, 24]);
   }
   // Who is signed in, and until when: the sign-in's moment and its 90
@@ -291,7 +291,7 @@ test("«Ще» says what waits under each row, its count the row's one colour, a
   // «Товар і каталог»'s own mark on each of its rows; «paper» the paper
   // mode's alone (stage 2, goods task list, P2-3).
   const mark = await row(page, "Товар і каталог")
-    .locator("svg.icon")
+    .locator("svg.icon:not(.sale-open)")
     .innerHTML();
   const paper = page
     .getByRole("navigation", { name: "Ще" })
@@ -303,7 +303,9 @@ test("«Ще» says what waits under each row, its count the row's one colour, a
     "Початкові залишки 2 на затвердження",
   );
   for (const label of ["Перевірка каталогу", "Моделі", "Початкові залишки"])
-    expect(await row(page, label).locator("svg.icon").innerHTML()).toBe(mark);
+    expect(
+      await row(page, label).locator("svg.icon:not(.sale-open)").innerHTML(),
+    ).toBe(mark);
   await expect(page.locator("body")).not.toContainText("⚠");
 });
 

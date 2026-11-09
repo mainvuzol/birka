@@ -368,7 +368,7 @@ test("«Замовлення» is a tab of its own and «Покупці» a row 
   ).toBeVisible();
   expect(await taps()).toBe(2);
   await expect(menu(page)).toBeHidden();
-  await page.getByRole("button", { name: "← До замовлень" }).click();
+  await page.getByRole("button", { name: "До замовлень", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "Замовлення", exact: true }),
   ).toBeVisible();
