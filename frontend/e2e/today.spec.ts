@@ -1,4 +1,11 @@
-import { test, expect, menu, openStore, section } from "./fixtures";
+import {
+  test,
+  expect,
+  menu,
+  openStore,
+  section,
+  shippedFace,
+} from "./fixtures";
 import type { Locator, Page, Request, Route } from "@playwright/test";
 import { createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -781,10 +788,10 @@ test("whoever reads the report opens on «Сьогодні»: the day of «Це�
   );
   // A column a store: its own sale, drawer and debts — never the network's.
   await expect(column(page, "Центр")).toHaveText(
-    "Центр6 950,00 грн4 шт.Каса відкритаВинні 8 400,00 грн · 4 людини",
+    "Центр4 шт.6 950,00 грнКаса відкритаВинні 8 400,00 грн · 4 людини",
   );
   await expect(column(page, "Ринок")).toHaveText(
-    `Ринок5 100,00 грн2 шт.Касу закрито о ${closedAt}Винні 2 600,00 грн · 2 людини`,
+    `Ринок2 шт.5 100,00 грнКасу закрито о ${closedAt}Винні 2 600,00 грн · 2 людини`,
   );
   await expect(tag.getByText(/^Винні /)).toHaveCount(2);
   await expect(tag.locator(".day-columns > *")).toHaveCount(2);
@@ -810,14 +817,137 @@ test("whoever reads the report opens on «Сьогодні»: the day of «Це�
   await expect(page.locator("section.today")).not.toContainText("⚠");
 });
 
-test("under 700 px the day-tag is one line, and opens in place", async ({
+test("at 390 × 741, light and dark, the day-tag of «Центр + Ринок» by spec §6.10: a store's units in its name's row, its sum alone on one line, the tag's padding 28 16 16, the same height in both themes (audit after stage 2, frame P0-2)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 741 });
+  // In the app's face, as it is meant to be seen: measured only once it is
+  // drawn (review).
+  await shippedFace(page);
+  await twoStores(page);
+  const heights: number[] = [];
+  for (const scheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    await onToday(page);
+    const tag = dayTag(page);
+    await expect(tag.locator(".day-online")).toBeVisible();
+    await page.evaluate(() => document.fonts.ready);
+    expect(
+      await page.evaluate(() =>
+        document.fonts.check(
+          '800 32px "Fira Sans Extra Condensed"',
+          "6 950,00 грн",
+        ),
+      ),
+    ).toBe(true);
+    expect(await tag.evaluate((node) => getComputedStyle(node).padding)).toBe(
+      "28px 16px 16px",
+    );
+    // Nothing of its own between its rows: the money's line on the words',
+    // the parcels' 44 reaching 12 into the padding.
+    expect(
+      await tag
+        .locator(".day-money")
+        .evaluate((node) => getComputedStyle(node).margin),
+    ).toBe("0px");
+    expect(
+      await tag
+        .locator("button.day-online")
+        .evaluate((node) => getComputedStyle(node).margin),
+    ).toBe("0px 0px -12px");
+    for (const [name, count] of [
+      ["Центр", "4 шт."],
+      ["Ринок", "2 шт."],
+    ] as const) {
+      const store = column(page, name);
+      const head = store.locator(".day-store-head");
+      await expect(head).toHaveText(`${name}${count}`);
+      const label = await head.getByRole("heading").boundingBox();
+      const units = await head.getByText(count, { exact: true }).boundingBox();
+      // Beside the name, at the column's right.
+      expect(
+        label &&
+          units &&
+          units.x >= label.x + label.width &&
+          Math.abs(units.y + units.height - (label.y + label.height)) <= 4,
+      ).toBe(true);
+      // In `meta`, pencil.
+      expect(
+        await head.getByText(count, { exact: true }).evaluate((node) => {
+          const probe = document.createElement("span");
+          probe.style.color = "var(--pencil)";
+          document.body.append(probe);
+          const pencil = getComputedStyle(probe).color;
+          probe.remove();
+          return getComputedStyle(node).color === pencil;
+        }),
+      ).toBe(true);
+      // The sum alone under them, on one line.
+      const sum = store.locator(".day-store-sum");
+      await expect(store.locator(".day-store-sold")).toHaveText(
+        name === "Центр" ? "6 950,00 грн" : "5 100,00 грн",
+      );
+      // One line: under one and a half of its size high, where two would
+      // be twice its line.
+      expect(
+        await sum.evaluate(
+          (node) =>
+            node.getBoundingClientRect().height <
+            1.5 * Number.parseFloat(getComputedStyle(node).fontSize),
+        ),
+      ).toBe(true);
+      const sumBox = await sum.boundingBox();
+      expect(sumBox && units && sumBox.y >= units.y + units.height - 1).toBe(
+        true,
+      );
+    }
+    // Whole over the menu.
+    const box = await tag.boundingBox();
+    const bar = await menu(page).boundingBox();
+    expect(box && bar && box.y + box.height <= bar.y).toBe(true);
+    heights.push(box?.height ?? 0);
+    await page.screenshot({
+      path: `test-results/today-day-tag-390-${scheme}.png`,
+    });
+  }
+  expect(Math.abs((heights[0] ?? 0) - (heights[1] ?? 0))).toBeLessThan(0.5);
+});
+
+test("under 700 px the day-tag is one line naming both stores with their sums, broken between its parts only, and opens in place (audit after stage 2, frame P0-2)", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 360, height: 640 });
   await twoStores(page);
   await onToday(page);
   const line = page.getByRole("button", { name: /^Сьогодні досі/ });
-  await expect(line).toHaveText("Сьогодні досі · 12 050,00 грн · 6 шт.");
+  // Spec §6.10: the day's sum, then each store's — the report's own, never
+  // added here.
+  await expect(line).toHaveText(
+    "Сьогодні досі · 12 050,00 грн · «Центр» 6 950,00 грн · «Ринок» 5 100,00 грн",
+  );
+  await expect(line.locator(".day-part")).toHaveText([
+    "Сьогодні досі",
+    "12 050,00 грн",
+    "«Центр» 6 950,00 грн",
+    "«Ринок» 5 100,00 грн",
+  ]);
+  // Too long for 360: it breaks between its parts, never inside one — each
+  // part a line high, the last on a line under the first.
+  const parts = line.locator(".day-part");
+  for (const part of await parts.all())
+    expect(
+      await part.evaluate(
+        (node) =>
+          node.getBoundingClientRect().height <
+          1.8 * Number.parseFloat(getComputedStyle(node).fontSize),
+      ),
+    ).toBe(true);
+  const first = await parts.first().boundingBox();
+  const last = await parts.last().boundingBox();
+  expect(first && last && last.y > first.y + first.height / 2).toBe(true);
+  expect(
+    await line.evaluate((node) => node.scrollWidth <= node.clientWidth),
+  ).toBe(true);
   await expect(line).toHaveAttribute("aria-expanded", "false");
   await expect(dayTag(page)).toHaveCount(0);
   await line.click();
@@ -831,6 +961,37 @@ test("under 700 px the day-tag is one line, and opens in place", async ({
   ).toBeFocused();
 });
 
+test("under 700 px the folded line's sums are the report's own, never added on the phone; a store the report has no figures for leaves the line as before (audit after stage 2, frame P0-2; review)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  await twoStores(page);
+  // The report's day more than the two shown: its own sum stands.
+  await report(
+    page,
+    [
+      [centre, "Центр", centreDay],
+      [market, "Ринок", marketDay],
+    ],
+    { ...totalDay, sold: "13050.00", units: 7 },
+  );
+  await onToday(page);
+  const line = page.getByRole("button", { name: /^Сьогодні досі/ });
+  await expect(line).toHaveText(
+    "Сьогодні досі · 13 050,00 грн · «Центр» 6 950,00 грн · «Ринок» 5 100,00 грн",
+  );
+  // «Ринок» not in the report: the day's sum and its units, as before.
+  await report(page, [[centre, "Центр", centreDay]], {
+    ...totalDay,
+    sold: "13050.00",
+    units: 7,
+  });
+  // A launch link that differs only in its hash would not reload the app.
+  await page.goto("about:blank");
+  await onToday(page);
+  await expect(line).toHaveText("Сьогодні досі · 13 050,00 грн · 7 шт.");
+});
+
 test("under 700 px an old day says so in its one line", async ({ page }) => {
   await page.clock.install();
   await page.setViewportSize({ width: 360, height: 640 });
@@ -838,11 +999,13 @@ test("under 700 px an old day says so in its one line", async ({ page }) => {
   await onToday(page);
   const line = page.getByRole("button", { name: /^Сьогодні досі/ });
   // Live: the line alone.
-  await expect(line).toHaveText("Сьогодні досі · 12 050,00 грн · 6 шт.");
+  const said =
+    "Сьогодні досі · 12 050,00 грн · «Центр» 6 950,00 грн · «Ринок» 5 100,00 грн";
+  await expect(line).toHaveText(said);
   await page.clock.fastForward("06:00");
   await expect(line.locator(".day-stamp")).toHaveText(/^дані на \d\d:\d\d$/);
   await expect(line.locator(".day-stamp")).toHaveClass(/stale/);
-  await expect(line).toContainText("Сьогодні досі · 12 050,00 грн · 6 шт.");
+  await expect(line).toContainText(said);
 });
 
 test("a million in a store's day stays in its column, and the day's in the tag, whatever face draws them", async ({
@@ -919,6 +1082,12 @@ test("one store: no columns, its drawer and debts in the tag", async ({
   await expect(tag.locator(".day-owed")).not.toHaveClass(/owes/);
   // No open order: no parcels' line.
   await expect(tag.locator(".day-online")).toHaveCount(0);
+  // Under 700 px, one store's line as before: its sum and its units
+  // (audit after stage 2, frame P0-2).
+  await page.setViewportSize({ width: 360, height: 640 });
+  await expect(page.getByRole("button", { name: /^Сьогодні досі/ })).toHaveText(
+    "Сьогодні досі · 6 950,00 грн · 4 шт.",
+  );
 });
 
 test("three stores: a row each, each with its own debts", async ({ page }) => {
@@ -949,9 +1118,15 @@ test("three stores: a row each, each with its own debts", async ({ page }) => {
   const tag = dayTag(page);
   await expect(tag.locator(".day-rows > *")).toHaveCount(3);
   await expect(column(page, "Старий")).toHaveText(
-    "Старий0,00 грн0 шт.Каса відкритаВинні 500,00 грн · 1 людина",
+    "Старий0 шт.0,00 грнКаса відкритаВинні 500,00 грн · 1 людина",
   );
   await expect(tag.getByText(/^Винні /)).toHaveCount(3);
+  // Under 700 px, three stores' line as before: the day's sum and units
+  // (audit after stage 2, frame P0-2).
+  await page.setViewportSize({ width: 360, height: 640 });
+  await expect(page.getByRole("button", { name: /^Сьогодні досі/ })).toHaveText(
+    "Сьогодні досі · 12 050,00 грн · 6 шт.",
+  );
 });
 
 test("one store trading beside one that does not: its lines named, in a row", async ({
@@ -977,7 +1152,7 @@ test("one store trading beside one that does not: its lines named, in a row", as
   const tag = dayTag(page);
   await expect(tag.locator(".day-rows > *")).toHaveCount(1);
   await expect(column(page, "Центр")).toHaveText(
-    "Центр6 950,00 грн4 шт.Каса відкритаВинні 8 400,00 грн · 4 людини",
+    "Центр4 шт.6 950,00 грнКаса відкритаВинні 8 400,00 грн · 4 людини",
   );
   await expect(column(page, "Ринок")).toHaveCount(0);
 });
@@ -1012,7 +1187,7 @@ test("a store that does not trade has no column; one without the debts' right, n
   await expect(tag.locator(".day-columns > *")).toHaveCount(2);
   await expect(column(page, "Старий")).toHaveCount(0);
   await expect(column(page, "Ринок")).toHaveText(
-    "Ринок5 100,00 грн2 шт.Каса відкрита",
+    "Ринок2 шт.5 100,00 грнКаса відкрита",
   );
   await expect(column(page, "Центр")).toContainText("Винні 8 400,00 грн");
   // «Ринок»'s debts are never asked for; nothing of «Старий»'s is.
@@ -1243,7 +1418,9 @@ test("each verb opens its section, and its «←» comes back to «Сьогод�
   const goods = page
     .getByRole("navigation", { name: "Ще" })
     .getByRole("button", { name: /^Товар і каталог/ });
-  expect(await goods.locator("svg.icon").innerHTML()).toBe(listsMark);
+  expect(await goods.locator("svg.icon:not(.sale-open)").innerHTML()).toBe(
+    listsMark,
+  );
   await expect(
     page
       .getByRole("navigation", { name: "Ще" })
@@ -2112,11 +2289,15 @@ test("«Бачу»: the tag goes, «Бірку сховано.» with «Пове
   await page.clock.fastForward(5_000);
   await expect(toast(page)).toHaveCount(0);
   await expect(tags(page).locator("h3")).toHaveText([counted]);
-  // «Зроблено сьогодні · 1 ›»: what was seen today, tied off, and when.
+  // «Зроблено сьогодні · 1»: what was seen today, tied off, and when; its
+  // chevron the set's 16 in pencil, never a «›» (audit after stage 2, frame
+  // P2-2).
   const done = waiting(page).getByRole("button", {
     name: "Зроблено сьогодні · 1",
     exact: true,
   });
+  await expect(done).not.toContainText("›");
+  await expect(done.locator("svg.icon")).toHaveCount(1);
   await done.click();
   const sheet = page.getByRole("dialog", { name: "Зроблено сьогодні" });
   await expect(sheet.locator(".today-done-row .t-row")).toHaveText([short]);

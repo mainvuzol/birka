@@ -342,7 +342,19 @@ test("a card payment typed from paper never says to charge the card, and the deb
   await page
     .getByRole("button", { name: "Відкрити борг", exact: true })
     .click();
-  await page.getByRole("button", { name: /^Історія · \d+/ }).click();
+  const history = page.getByRole("button", { name: /^Історія · \d+/ });
+  await history.click();
+  // Its chevron the set's 16, turned down while open, never a «›» (audit
+  // after stage 2, frame P2-2).
+  await expect(history).not.toContainText("›");
+  expect(
+    await history
+      .locator("svg.icon")
+      .evaluate(
+        (node) =>
+          Math.round(new DOMMatrix(getComputedStyle(node).transform).b) === 1,
+      ),
+  ).toBe(true);
   await expect(page.getByRole("list", { name: "Історія боргу" })).toContainText(
     "Внесок під час збою · хто прийняв: Ганна · внесено: Ліда",
   );

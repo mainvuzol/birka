@@ -1,4 +1,4 @@
-import { test, expect, openStore, section } from "./fixtures";
+import { test, expect, listRow, openStore, section } from "./fixtures";
 import type { Locator, Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -331,6 +331,9 @@ test("«Покупці» says who they are, the store's block what it is owed, l
   );
   // Two letters (spec §6.26).
   await expect(one.locator(".debt-mark")).toHaveText("ОП");
+  // A list's row by §6.8, its hairline from its text's edge past the two
+  // letters (audit after stage 2, frame P2-2; review).
+  await listRow(page, one, ".debt-name");
   await expect(one).toContainText("067 123 45 67 · Лоран шоколад · M");
   await expect(one).not.toContainText("3 000,00");
   await expect(one).not.toContainText(/готівк|картк|переказ/i);
@@ -1317,7 +1320,11 @@ test("switching to «Сплачені» never shows those who owe as them while 
   await expect(rows(page)).toHaveCount(1);
   await statusWay(page, "Сплачені").click();
   await expect(page.getByRole("status")).toHaveText("Завантажуємо борги…");
-  await expect(page.locator(".placeholder .debt-row")).toHaveCount(3);
+  // On a list's white block, as the rows to come (audit after stage 2,
+  // frame P2-2).
+  await expect(page.locator(".placeholder .list-block .debt-row")).toHaveCount(
+    3,
+  );
   await expect(rows(page)).toHaveCount(0);
   // The switch stays where it was pressed.
   await expect(statusWay(page, "Сплачені")).toHaveAttribute(
@@ -1352,11 +1359,16 @@ test("a closed store's customer is read among the closed stores: a row a debt wi
     params.get("elsewhere") === "true" ? { items: [closedStores()] } : null,
   );
   // This store's answer for the number, slow: nothing offered before it
-  // (review, 2026-10-19).
+  // (review, 2026-10-19). The closed stores' answer, once let go.
+  let release = (): void => undefined;
+  const closedHeld = new Promise<void>((resolve) => {
+    release = resolve;
+  });
   await page.route("**/api/v1/credits/customers?**", async (route) => {
     const params = new URL(route.request().url()).searchParams;
     if (params.get("elsewhere") !== "true" && params.get("query"))
       await new Promise((resolve) => setTimeout(resolve, 800));
+    if (params.get("elsewhere") === "true") await closedHeld;
     await route.fallback();
   });
   await credits(page);
@@ -1376,8 +1388,11 @@ test("a closed store's customer is read among the closed stores: a row a debt wi
   );
   await field(page).fill("050 765 43 21");
   await asking;
-  // Its rows' places while it reads (credits task list, P2-3).
-  await expect(page.locator(".placeholder .debt-row")).toHaveCount(3);
+  // Its rows' places while it reads (credits task list, P2-3), on a list's
+  // white block, as the rows to come (audit after stage 2, frame P2-2).
+  await expect(page.locator(".placeholder .list-block .debt-row")).toHaveCount(
+    3,
+  );
   expect(await ask.count()).toBe(0);
   const none = page.getByText(
     "За цим номером у цьому магазині боргів немає. Внесок приймає магазин, де продали.",
@@ -1402,6 +1417,12 @@ test("a closed store's customer is read among the closed stores: a row a debt wi
   await ask.click();
   // One field, as it was: the number typed is the one asked.
   await expect(field(page)).toHaveValue("050 765 43 21");
+  // Their rows' places while they are read, on a list's white block, as
+  // the rows to come (audit after stage 2, frame P2-2).
+  await expect(page.locator(".placeholder .list-block .debt-row")).toHaveCount(
+    3,
+  );
+  release();
   await page.getByRole("button", { name: /^Відкрити борг: Ірина/ }).click();
   await expect(
     page.getByRole("heading", { name: "Ірина Коваль", level: 1 }),

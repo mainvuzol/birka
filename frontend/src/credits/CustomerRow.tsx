@@ -111,9 +111,7 @@ export function CustomerRow({
         </span>
       )}
       {takenAt === null && (
-        <span className="sale-open" aria-hidden="true">
-          ›
-        </span>
+        <Icon name="chevron-right" size={16} className="sale-open" />
       )}
     </>
   );

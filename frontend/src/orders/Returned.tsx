@@ -101,7 +101,9 @@ export function Returned({
         focusable
         title="Товар повернувся на склад"
         back={
-          <Back go={back}>← Замовлення</Back>
+          <Back go={back}>
+            <span aria-hidden="true">← </span>Замовлення
+          </Back>
         }
       />
       <section className="order-returned">

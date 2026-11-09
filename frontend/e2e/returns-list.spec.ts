@@ -2,6 +2,7 @@ import {
   test,
   expect,
   expectPlate,
+  listRow,
   openStore,
   section,
   tillWays,
@@ -710,6 +711,11 @@ test("while the list is read, its rows keep their places, and the field does not
   // places, said to a screen reader, no words where the rows will be.
   await expect(page.locator(".placeholder .sale-row")).toHaveCount(3);
   await expect(page.locator(".placeholder .skeleton-day")).toHaveCount(1);
+  // On a list's white block, as a day's rows (audit after stage 2, frame
+  // P2-2).
+  await expect(page.locator(".placeholder .list-block .sale-row")).toHaveCount(
+    3,
+  );
   await expect(page.getByRole("status")).toHaveText("Завантажуємо продажі…");
   const before = await page.getByLabel("Що повертають?").boundingBox();
   const place = await page
@@ -827,6 +833,17 @@ for (const [name, theme, scheme] of [
     );
     expect(await contrast(whole.locator(".sale-goods"))).toBeGreaterThanOrEqual(
       4.5,
+    );
+    // A list's row by §6.8, a day's rows on a white block 8 under its
+    // heading (audit after stage 2, frame P2-2).
+    await expect(page.locator(".sale-day").first()).toHaveCSS(
+      "margin-bottom",
+      "8px",
+    );
+    await listRow(
+      page,
+      page.getByRole("button", { name: /^Оформити повернення: Лоран/ }),
+      ".sale-goods",
     );
     await page.screenshot({ path: `test-results/returns-list-${name}.png` });
   });

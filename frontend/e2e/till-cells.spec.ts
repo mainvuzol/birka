@@ -158,6 +158,9 @@ test("every unit held: the cell dashed, «у резерві», and a tap puts no
   await expect(l).not.toHaveAttribute("aria-disabled");
   await l.click();
   await expect(tray).toHaveAccessibleName("Кошик · 1 · Лоран шоколад · L");
+  // Its chevron the set's 16, never a «›» (audit after stage 2, frame P2-2).
+  await expect(tray).not.toContainText("›");
+  await expect(tray.locator("svg.tray-open")).toHaveCount(1);
 });
 
 test("a tap fills the cell and says «×1», the next «×2», and its name says what the basket has; the line names its warehouse under it", async ({

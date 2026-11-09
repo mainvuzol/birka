@@ -3,6 +3,7 @@ import {
   expect,
   openStore,
   menu,
+  listRow,
   more,
   openModel,
   section,
@@ -628,6 +629,21 @@ for (const width of [360, 390])
           getComputedStyle(node).borderTopLeftRadius,
         ]),
       ).toEqual([card, "4px"]);
+    // Its rows by §6.8 (audit after stage 2, frame P2-2).
+    await listRow(
+      page,
+      page.locator(".more-group .more-row").first(),
+      ".more-label",
+    );
+    await listRow(
+      page,
+      page
+        .locator(".more-group .list-block")
+        .first()
+        .locator(".more-row")
+        .last(),
+      ".more-label",
+    );
     for (const label of await page.locator(".more-group h3").all())
       expect(
         await label.evaluate((node) => {

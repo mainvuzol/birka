@@ -397,7 +397,7 @@ function Card({
             go={back}
             carried={(event) => event.timeStamp - backAt.current < CARRIED_TAP}
           >
-            ← До замовлень
+            <span aria-hidden="true">← </span>До замовлень
           </Back>
         }
       />

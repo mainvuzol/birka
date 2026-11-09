@@ -4,6 +4,7 @@ import {
   expectStub,
   openStore,
   toTill,
+  listRow,
   section,
   tillWays,
 } from "./fixtures";
@@ -292,12 +293,29 @@ test("«Покупці», her card and the debt's detail lie on the paper, never
   const her = page.getByRole("button", { name: /^Відкрити борг: Оксана/ });
   await expect(her).toBeVisible();
   await onPaper(page, "S19");
+  // A list's row by §6.8 (audit after stage 2, frame P2-2).
+  await listRow(page, her, ".debt-name");
   await her.click();
   const debts = page.getByRole("list", {
     name: "Борги в магазині «Основний»",
   });
   await expect(debts).toBeVisible();
   await onPaper(page, "S20");
+  await listRow(page, debts.getByRole("button").first(), ".debt-name");
+  // On the card's own white, never a block in a block: the rows the card's
+  // width inside its outline (review).
+  const card = page.locator(".customer-block").filter({ has: debts });
+  const cardBox = await card.boundingBox();
+  const rowBox = await debts.getByRole("button").first().boundingBox();
+  expect(
+    cardBox &&
+      rowBox &&
+      Math.abs(rowBox.x - (cardBox.x + 1)) <= 0.5 &&
+      Math.abs(rowBox.width - (cardBox.width - 2)) <= 0.5,
+  ).toBe(true);
+  expect(
+    await debts.evaluate((node) => getComputedStyle(node).backgroundColor),
+  ).toBe("rgba(0, 0, 0, 0)");
   const blocks = page.locator(".customer-block");
   await expect(blocks.first()).toBeVisible();
   for (const block of await blocks.all())
@@ -1638,6 +1656,17 @@ test.describe("«Продаж» › «Внесок»: a payment on a debt from t
     await expect(row).toContainText("Внесок приймає «Другий»");
     await expect(row).toContainText("2 000,00 грн");
     await expect(row.getByRole("button")).toHaveCount(0);
+    // On a list's white block, as the store's own (audit after stage 2,
+    // frame P2-2).
+    expect(
+      await page
+        .getByRole("list", { name: "Хто винен" })
+        .evaluate(
+          (node) =>
+            node.classList.contains("list-block") &&
+            getComputedStyle(node).backgroundColor !== "rgba(0, 0, 0, 0)",
+        ),
+    ).toBe(true);
     expect(asked).toContain(fixture.second_store_id);
 
     // This person no longer takes payments there: nothing asked of it.

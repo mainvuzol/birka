@@ -277,8 +277,7 @@ export function Credits({
       retry: false,
     })),
   });
-  const othersPending =
-    asksOthers && othersRead.some((read) => read.isPending);
+  const othersPending = asksOthers && othersRead.some((read) => read.isPending);
   const takenElsewhere = asksOthers
     ? others.flatMap((other, at) =>
         (othersRead[at]?.data?.items ?? [])
@@ -569,7 +568,7 @@ export function Credits({
         ) : customers.isPending ||
           (customers.isPlaceholderData && listed.length === 0) ? (
           // The rows' places while they are read (credits task list, P2-3).
-          <Placeholder said="Завантажуємо борги…" rows={3} debts />
+          <Placeholder said="Завантажуємо борги…" rows={3} debts block />
         ) : !customers.data ? (
           <div role="alert">
             <p>{readText(customers.error, refusalText)}</p>
@@ -589,9 +588,9 @@ export function Credits({
               Перевірте номер або зверніться до менеджера.
             </p>
           ) : search && othersPending ? (
-            <Placeholder said="Завантажуємо борги…" rows={1} debts />
+            <Placeholder said="Завантажуємо борги…" rows={1} debts block />
           ) : search && takenElsewhere.length > 0 ? (
-            <div role="list" aria-label="Хто винен">
+            <div className="list-block" role="list" aria-label="Хто винен">
               {takenElsewhere.map(({ other, customer }) => (
                 <div role="listitem" key={`${other.id}:${keyOf(customer)}`}>
                   <CustomerRow
@@ -822,7 +821,12 @@ function Block({
       {customers.isPending ||
       (customers.isPlaceholderData && listed.length === 0) ? (
         // The rows' places while they are read (credits task list, P2-3).
-        <Placeholder said="Завантажуємо борги…" rows={alone ? 3 : 1} debts />
+        <Placeholder
+          said="Завантажуємо борги…"
+          rows={alone ? 3 : 1}
+          debts
+          block
+        />
       ) : !customers.data ? (
         <div role="alert">
           <p>{readText(customers.error, refusalText)}</p>
@@ -924,7 +928,7 @@ function Rows({
           </button>
         </div>
       )}
-      <div role="list" aria-label={label}>
+      <div className="list-block" role="list" aria-label={label}>
         {listed.map((each) => (
           <div role="listitem" key={keyOf(each)}>
             <CustomerRow

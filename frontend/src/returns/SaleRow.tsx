@@ -1,6 +1,7 @@
 import { useId } from "react";
 import type { JSX } from "react";
 import { visible } from "@/shared/visible";
+import { Icon } from "@/shared/Icon";
 import { sizeLabel } from "./types";
 import type { SaleSummary } from "./types";
 
@@ -19,6 +20,19 @@ function timeOf(iso: string): string {
 export function dayOf(iso: string): string {
   const at = new Date(iso);
   return `${String(at.getFullYear())}-${String(at.getMonth() + 1).padStart(2, "0")}-${String(at.getDate()).padStart(2, "0")}`;
+}
+
+/** The sales a day each, in their order: a day's heading over its block
+ * of rows (audit after stage 2, frame P2-2). */
+export function byDay(sales: readonly SaleSummary[]): SaleSummary[][] {
+  const days: SaleSummary[][] = [];
+  for (const sale of sales) {
+    const last = days.at(-1);
+    if (last?.[0] && dayOf(last[0].sold_at) === dayOf(sale.sold_at))
+      last.push(sale);
+    else days.push([sale]);
+  }
+  return days;
 }
 
 /** «Сьогодні», «Вчора», «15 жовтня», and the year when it is not this one. */
@@ -114,9 +128,7 @@ export function SaleRow({
           onClick={choose}
         >
           {body}
-          <span className="sale-open" aria-hidden="true">
-            ›
-          </span>
+          <Icon name="chevron-right" size={16} className="sale-open" />
         </button>
       ) : (
         <div className="sale-row">{body}</div>

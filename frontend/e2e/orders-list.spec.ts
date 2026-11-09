@@ -134,6 +134,8 @@ interface Server {
   cancelRefused?: boolean;
   /** The next «Прибув на пошту»'s answer: refused, or lost on the way. */
   arriveAnswer?: "refused" | "lost";
+  /** The next «Прибув на пошту» answered only once this opens. */
+  arriveHeld?: Promise<void>;
   /** The open orders answered only once this opens. */
   openHeld?: Promise<void>;
   /** The open orders' read fails with the server's own error. */
@@ -217,6 +219,9 @@ async function stub(page: Page, server: Server): Promise<void> {
       sent.push(body);
       const answer = step === "arrive" ? server.arriveAnswer : undefined;
       delete server.arriveAnswer;
+      const held = step === "arrive" ? server.arriveHeld : undefined;
+      delete server.arriveHeld;
+      if (held) await held;
       if (answer === "lost") {
         await route.abort("failed");
         return;
@@ -564,7 +569,7 @@ test("the string of places is the filter: «До відправлення 3 · �
     "sticker tone-offline",
   );
   await expect(knots(page)).toHaveCount(0);
-  await page.getByRole("button", { name: "← До замовлень" }).click();
+  await page.getByRole("button", { name: "До замовлень", exact: true }).click();
   await expect(knot(page, "Клієнт забрав")).toHaveAttribute(
     "aria-pressed",
     "true",
@@ -711,6 +716,90 @@ test("«Прибув на пошту» on its row: a tap carried from the knot l
   await expect(
     page.getByRole("heading", { name: "Замовлення", exact: true }),
   ).toBeVisible();
+});
+
+test("«Прибув на пошту» on its way: the ring on the pressed verb alone, in its colour, the others held as before; answered, held with its ring till the list is read again, then said and gone to its place, one buzz (audit after stage 2, orders-cash P2-5; review)", async ({
+  page,
+}) => {
+  await hear(page);
+  let answer = (): void => undefined;
+  const orders = server({
+    open: [
+      { ...sent, id: randomUUID() },
+      { ...sent, id: randomUUID(), created_at: ago(7) },
+    ],
+    arriveHeld: new Promise((done) => {
+      answer = done;
+    }),
+  });
+  await stub(page, orders);
+  await enter(page, { version: "7.0" });
+  await knot(page, "Відправлено 2").click();
+  await settle(page);
+  const verbs = page
+    .getByRole("list", { name: "Відправлено" })
+    .getByRole("button", { name: "Прибув на пошту" });
+  await expect(verbs).toHaveCount(2);
+  const color = await verbs
+    .first()
+    .evaluate((node) => getComputedStyle(node).color);
+  await verbs.first().click();
+  // The pressed one: its ring, its words, its colour; the other waits
+  // without one.
+  await expect(verbs.first()).toHaveClass(/\bpressed\b/);
+  await expect(verbs.first().locator(".eyelet-spin")).toHaveCount(1);
+  await expect(verbs.first()).toHaveAccessibleName("Прибув на пошту");
+  expect(
+    await verbs.first().evaluate((node) => getComputedStyle(node).color),
+  ).toBe(color);
+  expect(
+    await verbs.first().evaluate((node) => getComputedStyle(node).opacity),
+  ).toBe("1");
+  await expect(verbs.nth(1)).toBeDisabled();
+  await expect(verbs.nth(1)).not.toHaveClass(/\bpressed\b/);
+  await expect(page.locator(".order-rows .eyelet-spin")).toHaveCount(1);
+  // Still on its way a while later: the ring stays, nothing sent twice.
+  await page.waitForTimeout(1_000);
+  await expect(verbs.first().locator(".eyelet-spin")).toHaveCount(1);
+  expect(orders.arrives).toHaveLength(1);
+  // Answered, the list read again: till it comes, the ring stays on a verb
+  // that takes no second tap (review).
+  let reread = (): void => undefined;
+  orders.openHeld = new Promise((done) => {
+    reread = done;
+  });
+  const again = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return (
+      url.pathname === "/api/v1/orders" &&
+      url.searchParams.get("status") === "open"
+    );
+  });
+  answer();
+  await again;
+  await expect(verbs.first()).toBeDisabled();
+  await expect(verbs.first()).toHaveClass(/\bpressed\b/);
+  await expect(verbs.first().locator(".eyelet-spin")).toHaveCount(1);
+  expect(
+    await verbs.first().evaluate((node) => getComputedStyle(node).opacity),
+  ).toBe("1");
+  await verbs.first().click({ force: true });
+  expect(orders.arrives).toHaveLength(1);
+  delete orders.openHeld;
+  reread();
+  await expect(
+    page.getByRole("status").filter({
+      hasText: "Прибув на пошту: Лоран шоколад · M",
+    }),
+  ).toBeVisible();
+  await expect(page.locator(".order-rows .eyelet-spin")).toHaveCount(0);
+  await expect(knot(page, "Прибув на пошту 1")).toBeVisible();
+  await expect(verbs).toHaveCount(1);
+  await expect(verbs.first()).toBeEnabled();
+  await expect(verbs.first()).not.toHaveClass(/\bpressed\b/);
+  expect(
+    (await buzzes(page)).filter((buzz) => buzz !== "selection_change"),
+  ).toEqual(["success"]);
 });
 
 test("«Прибув на пошту» on its row refused says why with a buzz, the row kept; one whose answer never came is the card's kept step, checked and recorded once («Усе на бірці» sections task list, P0-1)", async ({
@@ -928,7 +1017,7 @@ test("a waybill is found as it is typed, from two characters, Enter at once; kep
   await expect(knots(page)).toHaveCount(0);
   // An order opened and left: the search as it was.
   await found.first().click();
-  await page.getByRole("button", { name: "← До замовлень" }).click();
+  await page.getByRole("button", { name: "До замовлень", exact: true }).click();
   await expect(field).toHaveValue("2045");
   await expect(found).toHaveCount(2);
   const none = page.getByText(

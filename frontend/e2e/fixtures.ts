@@ -875,6 +875,21 @@ export async function expectSeries(
   await expect(row.locator(".paper-series-title")).toHaveText(title);
   if (meta === null) await expect(row.locator(".sale-meta")).toHaveCount(0);
   else await expect(row.locator(".sale-meta")).toHaveText(meta);
+  // Its chevron the set's 16 in pencil, whatever is said, never a «›»
+  // (audit after stage 2, frame P2-2; review).
+  await expect(row).not.toContainText("›");
+  const chevron = row.locator("svg.sale-open");
+  await expect(chevron).toHaveCount(1);
+  expect(
+    await chevron.evaluate((node) => {
+      const probe = document.createElement("span");
+      probe.style.color = "var(--pencil)";
+      document.body.append(probe);
+      const pencil = getComputedStyle(probe).color;
+      probe.remove();
+      return getComputedStyle(node).color === pencil;
+    }),
+  ).toBe(true);
 }
 
 /** Who sold or took it, picked in «З паперу»; then «Готово». */
@@ -1047,4 +1062,80 @@ export async function expectPlate(
   }
   expect(look.text).toBeGreaterThanOrEqual(4.5);
   expect(look.mark).toBeGreaterThanOrEqual(3);
+}
+
+/**
+ * A list's row by spec §6.8 (audit after stage 2, frame P2-2): 64 high at
+ * least, on its list's white block with sides of 16; its title 17/600 in
+ * ink; its chevron the set's 16 in pencil, never a «›»; pressed, the fold
+ * under it. `title` finds the row's title inside it.
+ */
+export async function listRow(
+  page: Page,
+  row: Locator,
+  title: string,
+): Promise<void> {
+  const tokens = await page.evaluate(() => {
+    const probe = document.createElement("span");
+    document.body.append(probe);
+    const read = (name: string): string => {
+      probe.style.color = `var(${name})`;
+      return getComputedStyle(probe).color;
+    };
+    const said = { ink: read("--ink"), pencil: read("--pencil") };
+    probe.style.backgroundColor = "var(--fold)";
+    const fold = getComputedStyle(probe).backgroundColor;
+    probe.remove();
+    return { ...said, fold };
+  });
+  expect((await row.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(64);
+  expect(
+    await row.evaluate((node) => [
+      node.closest(".list-block") !== null,
+      getComputedStyle(node).paddingLeft,
+      getComputedStyle(node).paddingRight,
+    ]),
+  ).toEqual([true, "16px", "16px"]);
+  // A hairline under it from its text's edge — 68 past two letters, 16
+  // else; none under its block's last.
+  expect(
+    await row.evaluate((node) => {
+      const block = node.closest(".list-block");
+      const last = block?.lastElementChild?.contains(node) ?? false;
+      const inset = node.querySelector(":scope > .debt-mark") ? 68 : 16;
+      const style = getComputedStyle(node);
+      return last
+        ? style.backgroundImage === "none"
+        : style.backgroundImage.startsWith("linear-gradient") &&
+            style.backgroundPositionX === `${String(inset)}px` &&
+            style.backgroundSize === `calc(100% - ${String(inset)}px) 1px`;
+    }),
+  ).toBe(true);
+  expect(
+    await row
+      .locator(title)
+      .first()
+      .evaluate((node) => {
+        const style = getComputedStyle(node);
+        return [style.fontSize, style.fontWeight, style.color];
+      }),
+  ).toEqual(["17px", "600", tokens.ink]);
+  await expect(row).not.toContainText("›");
+  const chevron = row.locator("svg.sale-open");
+  await expect(chevron).toHaveCount(1);
+  expect(
+    await chevron.evaluate((node) => [
+      node.getBoundingClientRect().width,
+      getComputedStyle(node).color,
+    ]),
+  ).toEqual([16, tokens.pencil]);
+  // Pressed: the fold under it; let go elsewhere, nothing opens.
+  await row.hover();
+  await page.mouse.down();
+  expect(
+    await row.evaluate((node) => getComputedStyle(node).backgroundColor),
+  ).toBe(tokens.fold);
+  await page.mouse.move(1, 1);
+  await page.mouse.up();
+  await expect(row).toBeVisible();
 }

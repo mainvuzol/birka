@@ -7735,3 +7735,91 @@ so, none of it a rule of the owner's:
   floor for reading text; they were 15, off the ramp): with the gutter 16,
   the grid at 360 px keeps its 12 px to spare on CI's Roboto. Not a rule of
   the owner's.
+
+## Chosen in chat — 2026-11-09 (audit after stage 2, batch 2: «Сьогодні» — the folded line names both stores, a store's units in its name's row, the day-tag's padding by the spec; a list's row by §6.8; «←» unread in orders; «Прибув на пошту»'s ring; frame P0-2, P2-2, P2-3, orders-cash P2-5)
+
+Chosen in chat on 2026-11-09 («Yes, start batch 2»), after batch 1 (#183)
+was merged. No right, no server rule, no field and no word changes; every
+figure is the server's, none added on the phone.
+
+- **«Сьогодні»'s folded line** (frame P0-2, spec §6.10): with two stores,
+  «Сьогодні досі · 12 050,00 грн · «Центр» 6 950,00 грн · «Ринок» 5 100,00
+  грн» — the day's sum, then each store's with its name in «», each the
+  report's own field; it breaks between its parts only. One store (a
+  manager), or three and more: as before, the sum and its units. A store
+  whose figures the report lacks (its rights came after the report was
+  read): the line as before.
+- **The day-tag's levers** (frame P0-2, measured at 390 × 741, light,
+  «Центр + Ринок», the e2e day; this Mac's font):
+  1. a store's «N шт.» in its name's row on the right, in `meta`, its sum
+     alone on its line: the tag 366 → 350 px;
+  2. the drawer's and «Винні …» lines on one line where the words fit at
+     390: nothing to gain — the drawer's already is, and «Винні 8 400,00
+     грн · 4 людини» does not fit a column of 154 px;
+  3. the tag's padding spec §6.10's 28 16 16 (was 26 16 12), nothing of
+     its own between its rows (the money line's 2 px and the parcels'
+     line's 2 px gone, its 44 for the finger reaching 12 into the padding):
+     350 → 350 px.
+  - **Not met: two work tags over the menu.** With the tag at 350 px the
+    first work tag ends 41 px under the menu's top, the second's title
+    some 83 px. By В-К1 (б), the owner's default until they answer: the
+    fold stays under 700 px of Telegram's steady height; the measure and
+    the screenshot are in the batch's report.
+- **A list's row** (frame P2-2, spec §6.8), one rule for every list: 64
+  high at least; its title 17/600 in ink, its meta 14/500 in pencil;
+  pressed, the fold under it; taking no tap, its title in pencil and
+  nothing faded over it; its chevron the set's 16 in pencil, never the
+  text «›». On a list's white block its sides are 16 and a hairline runs
+  under it from its text's edge — 68 past a customer's two letters, 16
+  else — none under the last; off a block, its sides stay 4, as the
+  paper's other lines.
+  - On a block now: «Покупці»'s lists (who owes, and a search's
+    customers found in another store), the till's list of one customer's
+    debts, «Повернення»'s rows a block a day under the day's heading (its
+    heading 8 over it), and their places while read.
+  - A store's debts on the customer's card lie on that block's own white,
+    never a block in a block: the rows the card's width, their sides its
+    16 (review).
+  - Not on a block (decided here): the debts to pay into in «Внесок»'s
+    sheet — a sheet is already the card's white.
+  - The chevron as the set's in the twelve places the audit named; the
+    orders' and «Каса»'s are their own task (orders-cash P2-4), their
+    text «›» kept at 24 till then.
+  - Still on the paper with the row's rule (their sections' tasks): «Каса»,
+    «Закриття», «Замовлення»'s lists, suppliers', the report's, the
+    search's results.
+- **«←» never read aloud** (frame P2-3): in the five places of orders the
+  arrow is drawn and hidden from a screen reader, as everywhere else; the
+  words as before.
+- **«Прибув на пошту» on its way** (orders-cash P2-5): the pressed verb
+  turns the eyelet's ring before its words and keeps its colour; the
+  list's other verbs held as before; one `success` buzz on the record, none
+  on the press. Answered, the pressed verb keeps its ring and takes no
+  second tap until the list is read again (review).
+
+Settled in the review (an independent reviewer of the batch's diff):
+- **A block in a block** on the customer's card: its debts were put on a
+  list's white block inside the store's own white block — two outlines,
+  26 px of each row lost at 360. Now they lie on the store's block itself.
+- **The separator under a customer's two letters:** the hairline ran from
+  16, under the letters; §6.8 says 68 where a row has them. Now 68.
+- **«Прибув на пошту» answered, its list read again:** the ring went on
+  spinning on a verb that took a tap again; a second tap would have sent
+  a second write, refused by the server. Now it takes none till the list
+  comes.
+- **A row taking no tap was faded twice:** its title pencil under the
+  buttons' 45 % — about 2:1 on the white. Now its title pencil alone, as
+  §6.8 says; nothing faded over it.
+- **The text «›» left to orders and «Каса»** had lost its 24 with the
+  set's chevron's rule; now 24 as before. **The paper's series** turned its
+  new chevron its own glyph's ink, or the warning's colour while the paper
+  is unsaid; now pencil, as every chevron.
+- **«Повернення»'s days** are told apart by their date, not their first
+  sale: a sale coming on top no longer makes the day's rows anew.
+- **«Повернути постачальнику»'s model rows** kept 56 of their own; now a
+  list's row, 64.
+- Seen and left: a pressed row on the paper (not on a block) turns the
+  fold, barely seen in the light theme — those lists' own tasks put them
+  on a block; a customer's two letters, the fold's colour, are lost in the
+  pressed row's fold while pressed; a store's column on «Сьогодні» reads
+  its units before its sum, as the task draws it.

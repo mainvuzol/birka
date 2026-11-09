@@ -1391,8 +1391,6 @@ html {
 }
 .tray-open {
   flex: none;
-  font-size: 24px;
-  line-height: 1;
   color: var(--pencil);
 }
 .till-tray .pay-total .sum {
@@ -1889,18 +1887,23 @@ html {
 /* «Повернення»'s list (returns task list, P0-1): a sale a row, the whole
    row one target, its goods first; never a sum or a way (G32). */
 .sale-day {
-  margin: 18px 0 2px;
+  margin: 18px 0 8px;
   font-size: 14px;
   line-height: 1.3;
   font-weight: 650;
   color: var(--text-2);
 }
+/* A list's row (spec §6.8; audit after stage 2, frame P2-2), one rule for
+   every list: 64 high at least; its title 17/600 in ink, its meta 14/500 in
+   pencil; pressed, the fold under it; taking no tap, its title in pencil;
+   its chevron the set's 16 in pencil. On a list's white block, its sides
+   16 (below). */
 .sale-row {
   display: flex;
   align-items: center;
   gap: 12px;
   width: 100%;
-  min-height: 56px;
+  min-height: var(--h-row);
   padding: 12px 4px;
   border: 0;
   border-bottom: 1px solid var(--line);
@@ -1909,6 +1912,16 @@ html {
   color: var(--text);
   font-weight: 400;
   text-align: left;
+}
+button.sale-row:not(:disabled):active {
+  background-color: var(--fold);
+}
+button.sale-row:disabled :is(.sale-goods, .debt-name, .more-label) {
+  color: var(--pencil);
+}
+/* …and nothing faded over it: what it is still reads (review). */
+button.sale-row:disabled:has(.sale-goods, .debt-name, .more-label) {
+  opacity: 1;
 }
 .sale-main {
   display: flex;
@@ -1920,7 +1933,10 @@ html {
 .sale-goods {
   display: flex;
   flex-direction: column;
-  font-weight: 650;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 22px;
+  color: var(--ink);
   overflow-wrap: anywhere;
 }
 .sale-meta {
@@ -1929,27 +1945,19 @@ html {
   align-items: center;
   gap: 6px;
   font-size: 14px;
+  font-weight: 500;
   color: var(--text-2);
 }
 .sale-open {
+  flex: none;
+  color: var(--pencil);
+}
+/* The text «›» still in orders' and «Каса»'s rows, 24 as before, until
+   their own task (orders-cash P2-4). */
+span.sale-open,
+span.tray-open {
   font-size: 24px;
-  color: var(--text-2);
-}
-/* «Повернути»'s rows (spec §6.8; «Усе на бірці» task list, P1-3): 64 high
-   at least, and so their places while read; the goods are the row's title,
-   17/600 in ink, the hour, the count and the stickers under them in
-   pencil. */
-.returns .sale-row {
-  min-height: var(--h-row);
-}
-.returns .sale-goods {
-  font-size: 17px;
-  font-weight: 600;
-  line-height: 22px;
-  color: var(--ink);
-}
-.returns .sale-meta {
-  font-weight: 500;
+  line-height: 1;
 }
 /* A sale returned whole opens nothing: its goods in pencil, as a row that
    takes no tap (§6.8; review). */
@@ -2110,7 +2118,7 @@ html {
 }
 .debt-name {
   font-size: 17px;
-  font-weight: 700;
+  font-weight: 600;
   overflow-wrap: anywhere;
 }
 .debt-phone {
@@ -2188,10 +2196,11 @@ html {
   border: 0;
   font-weight: 600;
 }
-.history-toggle span {
-  display: inline-block;
+.history-toggle .icon {
+  vertical-align: -3px;
+  color: var(--pencil);
 }
-.history-toggle[aria-expanded="true"] span {
+.history-toggle[aria-expanded="true"] .icon {
   transform: rotate(90deg);
 }
 .till-dock {
@@ -2400,6 +2409,7 @@ html {
 }
 .debt-row > .sale-open {
   grid-area: open;
+  align-self: center;
 }
 /* «Покупці» and the customer's card on the page itself, as the spec draws
    them (S19, S20): the rows and blocks the width of the screen less its
@@ -2753,7 +2763,7 @@ section.credits.customer-card {
 .skeleton-day {
   width: 6em;
   height: 1.3em;
-  margin: 18px 0 2px;
+  margin: 18px 0 8px;
   font-size: 14px;
 }
 /* A warning pill on a warning's notice keeps its edge. */
@@ -4673,7 +4683,7 @@ section.cash-count {
 }
 /* «Ще», a screen of its own (spec S07; «Усе на бірці» task list, P0-4):
    groups under a 13 px label, a row each in the lists' rhythm —
-   `.sale-row`, 56 px, a chevron — this phone's switch with its track. */
+   `.sale-row`, 64 px, a chevron — this phone's switch with its track. */
 /* A group's label in capitals, «ЛЮДИ», «ТОВАР» (spec S07): by style, so a
    reader says the word. */
 .more-group h3 {
@@ -4693,7 +4703,9 @@ section.cash-count {
 .more-label {
   flex: 1;
   min-width: 0;
+  font-size: 17px;
   font-weight: 600;
+  line-height: 22px;
 }
 .more-meta {
   display: block;
@@ -4701,11 +4713,6 @@ section.cash-count {
   font-size: 13px;
   font-weight: 500;
   color: var(--pencil);
-}
-/* A row of «Ще» (spec S07, §6.8; «Усе на бірці» task list, P1-5): 64 high,
-   its glyph at 24 in ink before the label. */
-.more-row {
-  min-height: var(--h-row);
 }
 /* A list's rows on a white block over the paper (spec §6.8; audit after
    stage 2, frame P0-1): the block 4 round, a hairline round it in the light
@@ -4715,13 +4722,35 @@ section.cash-count {
   border: 1px solid var(--block-outline);
   border-radius: var(--r-s);
 }
-.list-block > .sale-row {
+/* Its rows' sides 16, a hairline under each from its text's edge, none
+   under the last (spec §6.8; frame P2-2). */
+.list-block .sale-row {
   padding: 12px 16px;
-}
-.list-block > .sale-row:last-child {
   border-bottom: 0;
+  background: linear-gradient(var(--hairline), var(--hairline)) left 16px
+    bottom / calc(100% - 16px) 1px no-repeat;
 }
-.more-row > .icon {
+/* Two letters before its text: the hairline from the text's edge, 68. */
+.list-block .sale-row:has(> .debt-mark) {
+  background-position: left 68px bottom;
+  background-size: calc(100% - 68px) 1px;
+}
+.list-block > .sale-row:last-child,
+.list-block > :last-child > .sale-row {
+  background-image: none;
+}
+/* A store's debts on the customer's card lie on that block's own white,
+   never a block in a block: the rows the card's width, their sides its 16
+   (review). */
+.customer-block > .list-block {
+  margin: 0 -16px;
+  border: 0;
+  border-radius: 0;
+  background: none;
+}
+/* A row of «Ще» (spec S07, §6.8; «Усе на бірці» task list, P1-5): a list's
+   row, its glyph at 24 in ink before the label. */
+.more-row > .icon:not(.sale-open) {
   color: var(--ink);
 }
 .more-row:disabled > .icon {
@@ -5408,7 +5437,9 @@ nav.tab-bar {
 }
 .day-tag {
   position: relative;
-  padding: 26px 16px 12px;
+  /* Spec §6.10's 28 16 16, nothing of its own in its rows (audit after
+     stage 2, frame P0-2). */
+  padding: 28px 16px 16px;
 }
 .day-eyelet {
   position: absolute;
@@ -5463,7 +5494,7 @@ nav.tab-bar {
   color: var(--pencil);
 }
 .day-money {
-  margin: 2px 0 0;
+  margin: 0;
   color: var(--pencil);
 }
 .day-tag .perforation {
@@ -5478,7 +5509,16 @@ nav.tab-bar {
   display: grid;
   gap: 8px;
 }
+/* A store's name, its units at the row's right in `meta` (frame P0-2). */
+.day-store-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0 8px;
+}
 .day-store h3 {
+  min-width: 0;
   margin: 0;
   color: var(--ink);
   overflow-wrap: anywhere;
@@ -5527,7 +5567,7 @@ nav.tab-bar {
     line-height: 24px;
   }
 }
-.day-store-sold .t-meta,
+.day-store-head .t-meta,
 .day-drawer,
 .day-owed {
   color: var(--pencil);
@@ -5561,7 +5601,8 @@ nav.tab-bar {
 button.day-online {
   width: 100%;
   min-height: 44px;
-  margin: 2px 0 -10px;
+  /* Its 44 for the finger, its words 16 over the tag's edge. */
+  margin: 0 0 -12px;
   padding: 0;
   border: 0;
   border-radius: var(--r-xs);
@@ -5830,6 +5871,10 @@ button.day-folded {
   font-size: 15px;
   font-weight: 600;
 }
+.today-done .icon {
+  vertical-align: -3px;
+  color: var(--pencil);
+}
 /* By the heading it is 44 to the thumb, the label's line to the page: the
    first «Бачу» of the day never moves the tags under the finger. */
 .today-waiting-side .today-done {
@@ -5876,9 +5921,6 @@ button.day-folded {
 .found-group h2 {
   margin: 0 0 4px;
   color: var(--pencil);
-}
-.found-group .sale-row {
-  min-height: var(--h-row);
 }
 .found-row > .icon {
   flex-shrink: 0;
@@ -6370,11 +6412,11 @@ section.receive-list {
 /* The paper's series, one row under its switch (stage 2, orders task
    list, P0-4): its glyph, which paper in ink, who is named in pencil, the
    chevron; the warning's triangle, in its own ink, until the paper is said. */
-.paper-series > .icon {
+.paper-series > .icon:not(.sale-open) {
   flex: none;
   color: var(--ink);
 }
-.paper-series[data-unsaid] > .icon {
+.paper-series[data-unsaid] > .icon:not(.sale-open) {
   color: var(--warning);
 }
 .paper-series-title {
@@ -6738,11 +6780,6 @@ section.receive-list {
 }
 .supplier-return-cancel {
   margin-top: 24px;
-}
-/* «Повернути постачальнику»: a model found a row, its sizes free in pencil;
-   chosen, its steppers as «Прийшов товар»'s, «вільно N» under each. */
-.return-model {
-  min-height: 56px;
 }
 .receive-size-free {
   grid-column: 1 / -1;

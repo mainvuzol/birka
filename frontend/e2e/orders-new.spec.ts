@@ -470,7 +470,7 @@ test("a new order as a sale: a task screen, the cursor in the search, two letter
     page.getByRole("heading", { name: "Нове замовлення", exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "← До замовлень" }),
+    page.getByRole("button", { name: "До замовлень", exact: true }),
   ).toBeVisible();
   // A task screen: the menu steps aside (В-ЗП6 (а)).
   await expect(menu(page)).toBeHidden();
@@ -534,6 +534,9 @@ test("a new order as a sale: a task screen, the cursor in the search, two letter
   await expect(tray(page).locator(".tray-what")).toHaveText(
     "Лоран шоколад · M",
   );
+  // Its «›» as before, 24, until orders' own task (orders-cash P2-4;
+  // review).
+  await expect(tray(page).locator(".tray-open")).toHaveCSS("font-size", "24px");
   await expect(tray(page).locator(".pay-total")).toHaveText(
     "Разом 1 850,00 грн",
   );
@@ -951,7 +954,7 @@ test("a shortfall's screen left: never said over the list, nor on the next new o
   await pressMain(page);
   await expect(page.getByText(/^Доступних уже немає/)).toBeFocused();
   await basketDone(page);
-  await page.getByRole("button", { name: "← До замовлень" }).click();
+  await page.getByRole("button", { name: "До замовлень", exact: true }).click();
   await expect(
     page.getByRole("button", { name: "Нове замовлення" }).first(),
   ).toBeVisible();
@@ -1198,7 +1201,7 @@ test("«← До замовлень» goes back to the list, nothing sent: the M
   await expect
     .poll(() => main(page))
     .toMatchObject({ is_visible: true, text: "Замовити та зарезервувати" });
-  await page.getByRole("button", { name: "← До замовлень" }).click();
+  await page.getByRole("button", { name: "До замовлень", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "Нове замовлення" }),
   ).toHaveCount(0);

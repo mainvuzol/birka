@@ -13,6 +13,7 @@ export function Placeholder({
   rows = 0,
   debts = false,
   day = true,
+  block = false,
   under,
 }: {
   said: string;
@@ -28,6 +29,9 @@ export function Placeholder({
   /** A day's heading over the rows; «Каса»'s lists have none (cash task
    * list, P2-2). */
   day?: boolean;
+  /** The rows on a list's white block, as the list whose place they hold
+   * (spec §6.8; audit after stage 2, frame P2-2). */
+  block?: boolean;
   /** What stands under the search field, over the tags, in its own place:
    * the till's paper switch («Усе на бірці» task list, P0-5). */
   under?: ReactNode;
@@ -40,16 +44,18 @@ export function Placeholder({
         </p>
         <div className="placeholder" aria-hidden="true">
           {!debts && day && <span className="skeleton skeleton-day" />}
-          {Array.from({ length: rows }, (_, n) => (
-            <div className={debts ? "sale-row debt-row" : "sale-row"} key={n}>
-              {debts && <span className="debt-mark skeleton" />}
-              <span className="sale-main">
-                <span className="skeleton skeleton-name" />
-                <span className="skeleton skeleton-meta" />
-              </span>
-              {debts && <span className="skeleton skeleton-owed" />}
-            </div>
-          ))}
+          <div className={block ? "list-block" : undefined}>
+            {Array.from({ length: rows }, (_, n) => (
+              <div className={debts ? "sale-row debt-row" : "sale-row"} key={n}>
+                {debts && <span className="debt-mark skeleton" />}
+                <span className="sale-main">
+                  <span className="skeleton skeleton-name" />
+                  <span className="skeleton skeleton-meta" />
+                </span>
+                {debts && <span className="skeleton skeleton-owed" />}
+              </div>
+            ))}
+          </div>
         </div>
       </>
     );

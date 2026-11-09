@@ -386,7 +386,11 @@ export function NewOrder({
     <>
       <ScreenHeader
         title="Нове замовлення"
-        back={<Back go={back}>← До замовлень</Back>}
+        back={
+          <Back go={back}>
+            <span aria-hidden="true">← </span>До замовлень
+          </Back>
+        }
         // One warehouse: named in the screen's line, not chosen (P0-5).
         lead={
           onlyWarehouse ? `Склад: ${visible(onlyWarehouse.name)}` : undefined

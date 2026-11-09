@@ -140,7 +140,13 @@ function OrderTag({
   sticker: boolean;
   open: () => void;
   verb?:
-    | { words: string; held: boolean; act: (event: MouseEvent) => void }
+    | {
+        words: string;
+        held: boolean;
+        /** Its send on its way: the ring on it until answered. */
+        pressed: boolean;
+        act: (event: MouseEvent) => void;
+      }
     | undefined;
 }): JSX.Element {
   const named = order.items.slice(0, NAMED);
@@ -172,11 +178,14 @@ function OrderTag({
           {verb && (
             <button
               type="button"
-              className="tag-verb"
+              className={verb.pressed ? "tag-verb pressed" : "tag-verb"}
               aria-describedby={title}
-              disabled={verb.held}
+              // Pressed, it takes no second tap until its list is read
+              // again, its ring on it till then (review).
+              disabled={verb.held || verb.pressed}
               onClick={verb.act}
             >
+              {verb.pressed && <Eyelet state="spin" size={20} />}
               {verb.words}
             </button>
           )}
@@ -390,6 +399,10 @@ export function Orders({
   const [toast, setToast] = useState<{ text: string; times: number } | null>(
     null,
   );
+  // The order whose «Прибув на пошту» is on its way: its verb pressed, the
+  // ring on it until answered, as the card's (audit after stage 2,
+  // orders-cash P2-5).
+  const [arriving, setArriving] = useState<string | null>(null);
   // The cancelled opened: their heading in focus; back, the link that
   // opened them.
   const goneLink = useRef<HTMLButtonElement>(null);
@@ -407,6 +420,7 @@ export function Orders({
     return {
       words: verbWords[next],
       held: blocked,
+      pressed: arriving === order.id,
       act: (event: MouseEvent) => {
         if (carried(event)) return;
         if (next !== "arrive") {
@@ -415,13 +429,18 @@ export function Orders({
           open(order, next);
           return;
         }
-        void arrive(order).then((recorded) => {
-          if (recorded)
-            setToast((now) => ({
-              text: `Прибув на пошту: ${titleOf(order)}`,
-              times: (now?.times ?? 0) + 1,
-            }));
-        });
+        setArriving(order.id);
+        void arrive(order)
+          .then((recorded) => {
+            if (recorded)
+              setToast((now) => ({
+                text: `Прибув на пошту: ${titleOf(order)}`,
+                times: (now?.times ?? 0) + 1,
+              }));
+          })
+          .finally(() => {
+            setArriving(null);
+          });
       },
     };
   }
@@ -562,7 +581,7 @@ export function Orders({
                 change({ ...view, gone: false });
               }}
             >
-              ← До замовлень
+              <span aria-hidden="true">← </span>До замовлень
             </Back>
           }
         />

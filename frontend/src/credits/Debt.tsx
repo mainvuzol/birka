@@ -639,7 +639,7 @@ export function Debt({
                   }}
                 >
                   Історія · {number(credit.entries.length)}{" "}
-                  <span aria-hidden="true">›</span>
+                  <Icon name="chevron-right" size={16} />
                 </button>
               )}
               {history && <History credit={credit} id={historyList} />}

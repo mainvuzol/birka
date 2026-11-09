@@ -1,4 +1,4 @@
-import { test, expect, menu, openStore } from "./fixtures";
+import { test, expect, listRow, menu, openStore } from "./fixtures";
 import type { Locator, Page, Route } from "@playwright/test";
 import { createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -560,10 +560,15 @@ test("the owner's fourth tab is «Гроші»: each place on its own, a line a 
     "З них внески за борг: «Центр» 500,00 грн",
   ]);
   await expect(moneyRow(page, /./)).toHaveText([
-    "Звіт про продажі›",
-    "Закриття›",
-    "Каса · Центр›",
+    "Звіт про продажі",
+    "Закриття",
+    "Каса · Центр",
   ]);
+  // Their chevron the set's 16 in pencil, never a «›» (audit after stage 2,
+  // frame P2-2).
+  await expect(moneyRow(page, /./).locator("svg.sale-open")).toHaveCount(3);
+  // A list's row by §6.8, one line and still 64 (review's mutants).
+  await listRow(page, moneyRow(page, /./).first(), ".more-label");
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth),
   ).toBeLessThanOrEqual(360);
@@ -1198,6 +1203,14 @@ for (const [name, theme, scheme] of [
       await page.evaluate(() => document.documentElement.dataset.theme),
     ).toBe(scheme);
     await expect(table(page)).toHaveCount(5);
+    // A place's row, its chevron the set's 16, never a «›» (audit after
+    // stage 2, frame P2-2).
+    await expect(
+      page.locator(".money-place-open").first().locator("svg.sale-open"),
+    ).toHaveCount(1);
+    await expect(page.locator(".money-place-open").first()).not.toContainText(
+      "›",
+    );
     for (const part of [
       page.locator(".money-head h2").first(),
       page.locator(".money-head .day-stamp").first(),
