@@ -46,11 +46,14 @@ export function rangeOf(
 
 /** The report of a period's days, as «Звіт про продажі» reads it; none, the
  * day's — «Сьогодні»'s own read, and the only one asked until it has said
- * which day today is. */
+ * which day today is. `fresh`: read again each time it is shown, whatever
+ * «Гроші» read a minute ago — «Звіт про продажі» itself, a sale made since
+ * in its table as on its own screens (review, 2026-11-08). */
 export function usePeriodReport(
   token: string,
   scopeKey: string,
   range: { from: string; to: string } | null,
+  fresh = false,
 ): UseQueryResult<SalesReport> {
   return useQuery({
     queryKey: ["sales-report", scopeKey, range],
@@ -62,6 +65,7 @@ export function usePeriodReport(
         token,
       ),
     ...often,
+    ...(fresh ? { staleTime: 0 } : {}),
   });
 }
 

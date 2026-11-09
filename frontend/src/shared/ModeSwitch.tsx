@@ -28,7 +28,8 @@ export function ModeSwitch<Mode extends string>({
   modes: readonly { mode: Mode; label: string }[];
   current: Mode;
   choose: (mode: Mode) => void;
-  disabled: boolean;
+  /** Every way held, or each by itself: «Сьогодні» needs no day said. */
+  disabled: boolean | ((mode: Mode) => boolean);
   /** Mounted by a way just chosen: the focus on the way now open. */
   focus?: boolean;
   /** The focus taken. */
@@ -57,7 +58,7 @@ export function ModeSwitch<Mode extends string>({
           {...(filters
             ? { "aria-pressed": mode === current }
             : { "aria-current": mode === current ? "page" : undefined })}
-          disabled={disabled}
+          disabled={typeof disabled === "function" ? disabled(mode) : disabled}
           onClick={() => {
             if (mode === current) return;
             // A choice, felt (spec §4.4; «Усе на бірці» task list, P1-2).

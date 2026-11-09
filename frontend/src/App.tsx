@@ -909,10 +909,11 @@ function Workspace({
       setStockPlace(null);
   }, [tab, modelFromStock]);
   const [moneyPeriod, setMoneyPeriod] = useState<Period>("today");
-  const [reportRange, setReportRange] = useState<{
-    from: string;
-    to: string;
-  } | null>(null);
+  // «Звіт про продажі» opens on «Надійшло»'s period and its days.
+  const [reportPeriod, setReportPeriod] = useState<{
+    mode: Period;
+    range: { from: string; to: string } | null;
+  }>({ mode: "today", range: null });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   // «Замовлення» as it was left: what was typed, the place chosen (review,
   // 2026-10-23); afresh when «Замовлення» is chosen again.
@@ -3882,7 +3883,7 @@ function Workspace({
             toReport={{
               disabled: blocked,
               open: (range) => {
-                setReportRange(range);
+                setReportPeriod({ mode: moneyPeriod, range });
                 fromMoneyTo("report")();
               },
             }}
@@ -3920,7 +3921,7 @@ function Workspace({
             token={token}
             scopeKey={reportKey}
             back={backOf("report")}
-            period={reportRange}
+            period={reportPeriod}
           />
         ) : // Never opened without the right: nothing is said of the rule
         // («Усе на бірці» task list, P2-1).

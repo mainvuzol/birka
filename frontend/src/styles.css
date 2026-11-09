@@ -7324,3 +7324,168 @@ label.way-option {
 .models-kept:focus {
   outline: none;
 }
+/* «Звіт про продажі» (stage 2, money task list, P1-1): «Гроші»'s four
+   periods at 15, «Інші дні» a quiet word under them; one table, the rows
+   down and a column a store, two stores and «Усі разом» across 390 and its
+   first column in view while the rest scrolls; the ways to «Моделі» and
+   «Продажі й повернення» as rows under it. */
+.report {
+  margin: 12px 0 18px;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+.report-periods button {
+  font-size: 15px;
+}
+.report-days {
+  min-height: 44px;
+  margin: -8px 0 4px;
+  padding: 0;
+  border-color: transparent;
+  font-size: 15px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.report-age {
+  margin: 0 0 4px;
+}
+.report-table th,
+.report-table td {
+  vertical-align: top;
+}
+.report-table td {
+  padding-left: 4px;
+  font-size: 15px;
+}
+.report-table thead th,
+.report-table thead td {
+  vertical-align: bottom;
+}
+/* Scrolled, a column stops whole beside the first: never a figure half
+   under it, «2 250,00» of «12 250,00». */
+.report-table-wrap {
+  scroll-snap-type: x mandatory;
+  scroll-padding-left: 118px;
+}
+.report-table th[scope="row"],
+.report-table .money-unit {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  width: 118px;
+  min-width: 118px;
+  max-width: 118px;
+  padding: 7px 6px 6px 0;
+  vertical-align: top;
+  background: var(--bg);
+  font-size: 14px;
+  line-height: 18px;
+  white-space: normal;
+}
+.report-table .money-unit {
+  vertical-align: bottom;
+}
+/* Where the table's edge falls inside a device pixel (2.625 to a CSS
+   pixel), the figures scrolled under the first column showed as a sliver
+   at its edge: covered to a pixel inside it, short of its words. */
+.report-table th[scope="row"]::before,
+.report-table .money-unit::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -2px;
+  width: 3px;
+  background: var(--bg);
+}
+.report-table th[scope="col"] {
+  min-width: 5.5em;
+  padding-left: 4px;
+  scroll-snap-align: start;
+}
+.report-table tbody tr.report-section {
+  border-top: 0;
+}
+.report-section th {
+  padding: 14px 0 2px;
+  text-align: left;
+}
+/* The section's name stays where the eye is while the stores scroll,
+   wrapped within what it can keep in view to the last column — never cut
+   to «РАЗОМ» — ЗАМОВЛЕННЯ» (set by the table, `--report-label`). */
+.report-section .t-label {
+  position: sticky;
+  left: 0;
+  display: inline-block;
+  max-width: var(--report-label, none);
+  color: var(--pencil);
+  white-space: normal;
+}
+.report-meta {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 16px;
+  color: var(--pencil);
+}
+.report-note {
+  margin: 6px 0 0;
+  color: var(--pencil);
+}
+nav.report-ways {
+  display: block;
+  margin-top: 8px;
+}
+.report-screen > .mode-switch,
+.report-screen > .chips {
+  margin: 0 0 8px;
+}
+.report-stores button {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 15px;
+}
+/* Four stores or more: one row of chips that scrolls alone. */
+.report-chips {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+}
+.report-chips .chip {
+  flex: none;
+  min-height: 44px;
+}
+.report-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.report-row .t-row {
+  overflow-wrap: anywhere;
+}
+.report-sum {
+  flex-shrink: 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.report-thread {
+  margin-top: 4px;
+}
+/* A day of another year: its year under it, the column five characters
+   wide (review, 2026-11-08). */
+.report-thread .timeline-year {
+  display: block;
+  font-size: 12px;
+  font-weight: 400;
+}
+.report-empty {
+  margin: 12px 0;
+  color: var(--pencil);
+}
+.report-how {
+  margin: 0;
+}

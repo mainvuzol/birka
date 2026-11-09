@@ -7527,3 +7527,125 @@ of it a rule of the owner's:
 - **A long name** in a sheet's title or a «←» wraps rather than overflows.
 - **Not changed:** the detail opened from «Залишки» still reads the whole
   list until the model (a recorded cost, «Not covered» in the report).
+
+## Chosen in chat — 2026-11-08 (stage 2 batch 13: «Звіт про продажі» — «Гроші»'s periods as one switch, days of one's own in a sheet; one table, a column a store and «Усі разом»; «Моделі» and «Продажі й повернення» each a screen of its own with a switch of the store; «Як рахуємо» a sheet; money P1-1)
+
+Chosen in chat on 2026-11-08 («Yes, start it»), after #181: the money task
+list's P1-1, the last point of stage 2. The owner's В4 and В5 were not
+answered; both built by (а), as the chat said — В4: the periods are
+«Гроші»'s; В5: «Як рахуємо ›» opens a sheet. No right, no server rule and
+no field changes: the report reads `/reports/sales`, `/reports/sales/models`
+and `/reports/sales/entries` with the same queries, `report:view_financial`
+as before, each store only where the person holds it (the server's).
+Every figure is a field of the server's answer; nothing is added up on the
+phone. Orders paid off the till stay outside «Разом»; a correction of the
+way stays a note beside what was stated.
+
+- **The period.** «Сьогодні · Вчора · Тиждень · Місяць» — «Гроші»'s own
+  periods and days (`periods`, `rangeOf`), by the server's today; «Цей
+  тиждень» and «Цей місяць» are gone (В4 (а)). It opens on the period
+  chosen on «Гроші», as before. «Вчора», «Тиждень» and «Місяць» wait for
+  the first answer, the server saying which day today is; «Сьогодні» is
+  asked with no days, the server's own.
+  - **«Інші дні»** is a quiet line under the switch; with days of one's
+    own it reads «03.10 – 05.11 · Змінити», and nothing in the switch is
+    pressed. It opens the sheet «Інші дні»: «Від», «До», «Показати» —
+    pressable once both are given. The two date fields on the screen are
+    gone.
+  - **Days refused** as no period: «Оберіть період від одного дня до року;
+    перший день — не пізніше останнього.», as an alert, with no «Спробувати
+    ще раз» (as before).
+  - **The line under the title** says the period in words and its days:
+    «Тиждень · 02.11 – 05.11», «Вчора · 04.11», «Сьогодні · 05.11»; days of
+    one's own, the days alone. A day of another year than the server's
+    today carries its year, «30.12.2025 – 02.01» (decided here).
+- **One table.** Rows down, the stores across, each as «Гроші» names it
+  («в архіві», «заблоковано»); with two stores or more, the last column «Усі
+  разом» — the server's `total`, never the stores' sum. «грн» once, in the
+  corner; kopecks always; «−» for what went out.
+  - **ПРОДАЖІ:** «Продажі», under the sum «12 · 15 шт.» (sales · units);
+    «Повернення», «1 · 1 шт.»; «З урахуванням повернень», bold. «од.» is
+    gone: «шт.» as everywhere.
+  - **ГРОШІ:** «Оплачено одразу повністю», «Внески за борг», «Віддано при
+    поверненнях»; «Виправлення способу оплати» only where a store's
+    corrections moved money into or out of the till, «0,00» in the others
+    (decided here: a row a store lacks reads «0,00», not blank); «Разом»,
+    bold.
+  - **ЗА СПОСОБОМ ОПЛАТИ:** «Готівка», «Картка», «Переказ» always;
+    «Не вказано» only where a store has any.
+  - **ОКРЕМО ВІД «РАЗОМ» — ЗАМОВЛЕННЯ:** «Переказ наперед», «Накладений
+    платіж», each only where a store's orders brought or corrected any; the
+    section gone where neither.
+  - **Under the table,** a line a store whose way of payment was corrected:
+    «Виправлення способу оплати: картка −350,00 грн, готівка +350,00 грн
+    («Центр»)».
+  - **Wider than the phone,** the table alone scrolls; its first column
+    stays, 118 px wide, the labels wrapping in it; a column comes to rest
+    whole beside it, never half hidden under it, and the last one can be
+    brought there (decided here: a figure cut at the first column's edge
+    read as another figure, «12 250,00» as «250,00»). A section's name stays
+    in view as the stores scroll, wrapped within what the first column and
+    the last keep in view — «Окремо від «Разом» —» over «замовлення», never
+    cut to «РАЗОМ» — ЗАМОВЛЕННЯ», which reads the other way (decided here,
+    seen in the screenshots).
+- **How old it is** — «дані на HH:MM» — only while today is in the days
+  and the answer is older than five minutes: past days do not change (as
+  before).
+- **Ways under the table** (spec §6.8): «Моделі ›» and «Продажі й
+  повернення ›»; under them «Як рахуємо ›», a sheet of the three sentences
+  the screen said before, unchanged (В5 (а)). The hint over the table is
+  gone.
+- **«Моделі»** — a screen of its own, «← Звіт про продажі», the period
+  under its title. With two stores or more, the store's switch «Усі ·
+  «Центр» · «Ринок»»; with four or more, a row of chips that scrolls. A
+  row a model: its name; «15 шт. · повернено 1 шт. на 1 850,00 грн», or
+  «15 шт.» where none came back; the sum sold on the right. None: «Нічого
+  не продано.». The select «Моделі й продажі» is gone.
+- **«Продажі й повернення»** — a screen of its own, the same switch: a
+  thread by day, the newest first, the day said once at its first entry,
+  each a filled eyelet; «Продаж 1 850,00 грн» or «Повернення −1 850,00
+  грн»; «20:05 · Оля · Кокон графіт, M»; how it was paid or handed back,
+  and the store's name where every store is shown («продав «…», прийняв
+  «…»» for a return taken at another store, as before); the paper it was
+  typed from, «… · внесено: …». «Показати ще» reads the next 50; an entry
+  moved by a sale made meanwhile is shown once. «Попередні» and
+  «Наступні» are gone. None: «Ні продажів, ні повернень.».
+  - **The store chosen is kept** between the two screens and forgotten
+    when the report is left (decided here).
+  - **Back** to the report: where it was read to, the cursor on the row
+    that opened the screen; each screen opens at its top, the cursor on its
+    title (decided here).
+- **The taps** (decided here, the owner to see): a week is three taps from
+  «Гроші» — the tab, «Звіт про продажі», «Тиждень» — and the table, the
+  switch, «ПРОДАЖІ» and «ГРОШІ» whole above the menu at 390 × 844 with two
+  stores. One store's sales yesterday are five — «Гроші», the report,
+  «Вчора», «Продажі й повернення», the store — but the rows stand under
+  the table, as the task list draws them, so at 844 with two stores they
+  are reached with one scroll. The task list asked for no scroll; to
+  meet it the rows would go above the table. **Owner's question.**
+
+### Settled in the review (2026-11-08)
+
+An independent review read the batch; what it found was settled so, none
+of it a rule of the owner's:
+- **The period is kept as chosen,** never guessed from its days: on a
+  Monday «Тиждень» is that day alone and stays «Тиждень», on the 1st
+  «Місяць» stays «Місяць»; the report opens on «Гроші»'s period whatever
+  its days are. Days of one's own stay one's own, even where they are a
+  period's.
+- **Read again each time it is opened** or its days chosen, whatever
+  «Гроші» or «Сьогодні» read a minute before: a sale made since is in the
+  table, as on its two screens.
+- **«Сьогодні» is never held:** it needs no day said, so it can be chosen
+  while the days it opened on could not be read; the others wait for the
+  server's today.
+- **A re-read that fails is said** under what was read, with «Спробувати
+  ще раз»: on the table, on «Моделі», on the thread. A page of the thread
+  that failed has that one retry; «Показати ще» is gone meanwhile.
+- **Back from «Моделі» or «Продажі й повернення»,** the stores scrolled
+  across as they were left.
+- **A day of the thread of another year** than the server's today has its
+  year under it, «31.12» and «2025»: the day's column holds five
+  characters.
+- **Not changed:** one store's yesterday is still five taps and a scroll
+  (the owner's question above).

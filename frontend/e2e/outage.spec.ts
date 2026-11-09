@@ -1958,6 +1958,9 @@ test.describe("8. the real server keeps the mark", () => {
       "Власник мережі",
     );
     await section(page, "Звіт про продажі");
+    await page
+      .getByRole("button", { name: "Продажі й повернення", exact: true })
+      .click();
     const entry = page
       .getByRole("list", { name: "Продажі й повернення" })
       .getByRole("listitem")
