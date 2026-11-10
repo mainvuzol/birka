@@ -1,4 +1,11 @@
-import { test, expect, moveSheet, openStore, section } from "./fixtures";
+import {
+  test,
+  expect,
+  expectEmpty,
+  moveSheet,
+  openStore,
+  section,
+} from "./fixtures";
 import type { Locator, Page, Route } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -185,15 +192,40 @@ test("the seller's operations, one of them, and the closes read keep their place
   mine.release();
   const rows = page.getByRole("list", { name: "Ваші операції" });
   await expect(rows.getByRole("listitem")).toHaveCount(1);
+  // Its row's chevron the set's 16, never a «›» (orders and «Каса» task
+  // list after stage 2, P2-4).
+  await expect(rows).not.toContainText("›");
+  expect(
+    (await rows.locator(".fix-row > svg.sale-open").boundingBox())?.width,
+  ).toBe(16);
   const way = await hold(page, "**/api/v1/cash/*/*/method?**");
   await rows.getByRole("button").first().click();
   await expect(said(page)).toHaveText("Завантажуємо операцію…");
   await expect(page.locator(".placeholder .skeleton-way")).toHaveCount(3);
+  // A way's place the way's own form: its corner 8, a way's height — 54,
+  // «зараз» under the way it has and all (P2-4).
+  const place = page.locator(".placeholder .skeleton-way").first();
+  const held = (await place.boundingBox())?.height ?? 0;
+  expect(held).toBe(54);
+  await expect(place).toHaveCSS("border-top-left-radius", "8px");
   way.release();
-  await expect(
-    page.getByRole("group", { name: "Новий спосіб оплати" }),
-  ).toBeVisible();
+  const ways = page.getByRole("group", { name: "Новий спосіб оплати" });
+  await expect(ways).toBeVisible();
   await expect(page.locator(".placeholder")).toHaveCount(0);
+  const heights = await ways
+    .getByRole("button")
+    .evaluateAll((nodes) =>
+      nodes.map((node) => node.getBoundingClientRect().height),
+    );
+  expect(heights).toEqual([held, held, held]);
+  await expect(ways.getByRole("button").first()).toHaveCSS(
+    "border-top-left-radius",
+    "8px",
+  );
+  // The dock's one button the main one's 52, corner 8.
+  const change = page.locator(".pay-panel .cash-panel-button");
+  expect((await change.boundingBox())?.height).toBe(52);
+  await expect(change).toHaveCSS("border-top-left-radius", "8px");
 });
 
 test("«Закриття» read keeps four rows' places, and says «Завантажуємо закриття…» (cash task list, P2-2)", async ({
@@ -207,9 +239,11 @@ test("«Закриття» read keeps four rows' places, and says «Завант
   await expect(said(page)).toHaveText("Завантажуємо закриття…");
   await expect(page.locator(".placeholder .sale-row")).toHaveCount(4);
   closes.release();
-  await expect(
-    page.getByText("Касу цього магазину ще не закривали."),
-  ).toBeVisible();
+  // The blank tag (orders and «Каса» task list after stage 2, P2-3).
+  await expectEmpty(
+    page.locator(".cash-history .orders-empty"),
+    "Касу цього магазину ще не закривали.",
+  );
 });
 
 for (const [path, name, notTaken] of [

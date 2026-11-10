@@ -8085,3 +8085,79 @@ the frame TZ after stage 2 is built whole but for what its sections took.
     line's middle.
   - **No «брак» tone yet**: no screen says a status of damaged goods in a
     sticker; the torn tag comes with the first one that does.
+
+## Chosen in chat — 2026-11-10 (audit after stage 2, batch 6: «Каса»'s pack — what was recorded a line with its eyelet; to the kopeck the till's match, a line's difference with its sign; one context line; the history's thread; the blank tag; the docks' 52 and every corner on the scale; orders-cash P1-3, P1-4, P2-1, P2-2, P2-3, P2-4)
+
+Chosen in chat on 2026-11-10 («Yes, start batch 6»), after batch 5 (#187)
+was merged. No right, no server rule, no field, no word changes; the
+money's sums, signs and blind count are as they were.
+
+- **What «Каса» recorded** (P1-3; spec §2 P3): the line under «Каса», the
+  count and the close's result — «Записано: …», «Записано до закриття …»,
+  «Спосіб оплати змінено: …», «Причину записано…», «… записано один раз» —
+  is an order's step line: its eyelet filled in ink, its words 600, still
+  `role="status"`, gone with the next action as before. One component,
+  `cash/DoneLine.tsx`.
+- **To the kopeck the till's own match** (P1-4; owner's В4 (а), the design
+  decision of 2026-10-28; spec §6.18): «Збіглося до копійки» on the close's
+  stub and «Збіглося» in «Закриття» are the sticker's `match` tone — the
+  thread on ink in the light theme, ink on the thread in the dark — its
+  glyph the knot, brought by the tone. The paid's green is no longer theirs.
+  - **A difference said in a line has its sign** (decided here, by the
+    task): an old close's card and «Каса»'s own line of today draw the
+    triangle before «Нестача» / «Надлишок» and the knot before «Збіглося до
+    копійки», 16, in the line's colour; the line's colour stays — the
+    warning's, and the accent's green for the match in text (2026-10-28).
+  - **Found and set right:** batch 5 narrowed the line's rule to
+    `p.cash-difference`, so «Каса»'s own line of today — a span — lost its
+    700 and its colour. Its rule is every difference but the sticker now.
+  - «Сьогодні» names a close only when it owes a reason, never one to the
+    kopeck: nothing there to match.
+- **One context line** (P2-1; spec §2 P2): under the title, the screen's
+  one line, no second one —
+  - the order's card: «{Магазин} · {Ім’я} · замовлено 13.10 · № {8}», the
+    number small as the owner chose (В1); the header's line takes markup
+    after the person for it. **Decided here:** at 360 the line holds two
+    lines where it has the width; beside «Змінити магазин», kept at its
+    right as on every screen (spec §6.2), a store named as long as
+    «Основний» takes a third — the button is not moved under the line for
+    one screen;
+  - the close's result: «{магазин закриття} · {хто рахував} · закриття
+    03.11» (decided here: the store always, not only another's; who counted
+    by the close's own name); while the close is read, the store's line;
+  - a close opened from «Закриття»: «{магазин} · 20:14 · Оля».
+- **The history's thread** (P2-2; spec §6.21): «Видано й внесено після
+  закриття» and «Історія доставки» — the day at the left, an eyelet filled
+  on the thread, what it was 16/600, who and when in meta, a cash sum on
+  the right with «−» / «+». Order as before: the drawer's as the server
+  answers, the delivery's first version first (§10 of the task list: newest
+  first waits for the sellers' answer).
+  - **Decided here:** a movement of today has its time at the left; one of
+    an earlier day its day there and its time first in the meta, so no
+    moment is lost; a delivery version its day at the left, its time in the
+    meta, how it went a line in ink under what it was.
+  - **Decided here:** the day's column is the thread's shared one, 44 and
+    its gap of 8 — 52 to the thread, as a customer's and an invoice's
+    histories draw it; the sum in the thread's own place for it.
+- **The blank tag** (P2-3; spec §6.28): «Касу цього магазину ще не
+  закривали.», «Після останнього закриття ви ще нічого не провели.»,
+  «Цього дня грошових операцій не було.» — the shared `Empty`; «Оберіть
+  день.» stays the field's hint.
+  - **Decided here:** «Доступних складів немає. Зверніться до менеджера.»
+    on «Нове замовлення» is the line «Доступних складів немає.» and its
+    meta «Зверніться до менеджера.» — the same words, a sentence each. The
+    till's own words of it are the sale's task list's (P1-2).
+- **The docks' 52 and every corner on the scale** (P2-4; direction §4;
+  spec S26 №9): «Закрити касу», «Записати причину» (on the result and on
+  «Каса»), «Змінити на «…»» and «Прийняти повернення» — the main button's
+  52 and corner 8. The MainButton's own place outside Telegram on an
+  order's card stays 50 with Telegram's corner 10 (spec §6.4). A way's
+  place is 54 high, the ways' own height, corner 8.
+  - **Decided here, by the review:** a way's lines are set, 18 and
+    «зараз»'s 14, so the way with «зараз» under it is 54 on any font, not
+    the font's own.
+  - «Скасувати замовлення?» a card, corner 4; the same waybill's plate,
+    corner 4. No corner off the scale is left.
+  - The rows of «Закриття», «Змінити спосіб оплати» and the same waybill,
+    and the new order's tray, have the set's chevron 16 in pencil, never a
+    «›».

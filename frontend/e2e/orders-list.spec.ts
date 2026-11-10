@@ -872,10 +872,10 @@ test("«Відправити» on its row opens the card with its sheet, the cur
     .click();
   await expect(page.getByRole("dialog", { name: "Відправити" })).toBeVisible();
   release();
-  await expect(page.locator(".order-context")).toHaveCount(1);
+  await expect(page.locator(".order-number")).toHaveCount(1);
   await fire(page, "back_button_pressed");
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  await expect(page.locator(".order-context")).toBeVisible();
+  await expect(page.locator(".order-number")).toBeVisible();
   delete orders.detailHeld;
   await enter(page, { version: "7.0" });
   // The list just come under the finger: a tap now is let go.
@@ -1355,6 +1355,19 @@ test("«Скасувати замовлення» asks first, «Ні, залиш
   await expect(
     question.getByRole("button", { name: "Ні, залишити" }),
   ).toBeFocused();
+  // A card on the page, its corner 4 (spec §4; orders and «Каса» task list
+  // after stage 2, P2-4).
+  await expect(question).toHaveCSS("border-top-left-radius", "4px");
+  expect(
+    await question.evaluate((node) => {
+      const probe = document.createElement("span");
+      probe.style.backgroundColor = "var(--card)";
+      document.body.append(probe);
+      const card = getComputedStyle(probe).backgroundColor;
+      probe.remove();
+      return getComputedStyle(node).backgroundColor === card;
+    }),
+  ).toBe(true);
   expect(orders.cancels).toEqual([]);
   await question.getByRole("button", { name: "Ні, залишити" }).click();
   await expect(question).toHaveCount(0);

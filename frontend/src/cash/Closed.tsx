@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import type { JSX, ReactNode } from "react";
 import { money } from "@/orders/types";
 import { RecordedMark } from "@/shared/Eyelet";
+import { Icon } from "@/shared/Icon";
 import { NoCustomerData } from "@/shared/NoCustomerData";
 import { usePanelRoom } from "@/shared/panel";
 import { methodLabels } from "@/shared/payment";
@@ -13,6 +14,7 @@ import { Back } from "@/shared/Back";
 import { ScreenHeader } from "@/shared/ScreenHeader";
 import { Unread } from "@/shared/Unread";
 import { Sticker } from "@/shared/Sticker";
+import { DoneLine } from "./DoneLine";
 import { dayOf } from "./errors";
 import {
   cardParts,
@@ -22,7 +24,7 @@ import {
   unclosedText,
   whenOf,
 } from "./format";
-import { ClosePlaceholder, ContextPlaceholder } from "./Placeholders";
+import { ClosePlaceholder } from "./Placeholders";
 import type { Close } from "./types";
 
 /** Nothing to compare with: the first count, or the first after the store
@@ -52,7 +54,9 @@ export function differenceOf(difference: string): {
  * the server's; nothing is summed here. Just counted, they are the stub's
  * and the difference its sticker (spec S28; «Усе на бірці» sections task
  * list, P1-3): a shortage or a surplus the warning's with its triangle, to
- * the kopeck the accent's with its knot. Read later, a card.
+ * the kopeck the till's match with its knot (orders and «Каса» task list
+ * after stage 2, P1-4). Read later, a card, the difference a line with the
+ * same sign.
  */
 function Figures({
   close,
@@ -92,12 +96,10 @@ function Figures({
       </div>
       {now ? (
         <p className="cash-sticker">
-          {/* To the kopeck in the paid's green with its knot until the
-              till's own match colour comes (orders and «Каса» task list,
-              P1-4). */}
+          {/* To the kopeck the till's own match with its knot (orders and
+              «Каса» task list after stage 2, P1-4). */}
           <Sticker
-            tone={difference.match ? "paid" : "warn"}
-            icon={difference.match ? "eyelet-knot" : undefined}
+            tone={difference.match ? "match" : "warn"}
             className={`cash-difference ${difference.match ? "match" : "warn"}`}
           >
             {difference.text}
@@ -105,10 +107,25 @@ function Figures({
         </p>
       ) : (
         <p className={`cash-difference ${difference.match ? "match" : "warn"}`}>
+          <DifferenceSign match={difference.match} />
           {difference.text}
         </p>
       )}
     </div>
+  );
+}
+
+/** A difference said in a line has its sign, as its sticker does: the
+ * triangle by a shortage or a surplus, the knot by one to the kopeck —
+ * never its colour alone (direction §4; orders and «Каса» task list after
+ * stage 2, P1-4). */
+function DifferenceSign({ match }: { match: boolean }): JSX.Element {
+  return (
+    <Icon
+      name={match ? "eyelet-knot" : "warning"}
+      size={16}
+      className="difference-sign"
+    />
   );
 }
 
@@ -308,6 +325,7 @@ export function CloseSummary({ close }: { close: Close }): JSX.Element {
             <span
               className={`cash-difference ${difference.match ? "match" : "warn"}`}
             >
+              <DifferenceSign match={difference.match} />
               {difference.text}
             </span>
           </>
@@ -437,7 +455,6 @@ function ReasonForm({
 export function Closed({
   close,
   owedId,
-  storeId,
   failed,
   kept,
   done,
@@ -452,8 +469,6 @@ export function Closed({
   close: Close | null;
   /** The close a reason is owed for: until it is written, no other tab. */
   owedId: string | null;
-  /** This store: another's close is named by its store. */
-  storeId: string;
   /** The close could not be read. */
   failed: unknown;
   /** The kept command's banner and words, as on every screen of «Каса». */
@@ -481,6 +496,15 @@ export function Closed({
         focusable
         pushed
         className="result-title"
+        // Which close, in the screen's one line: its store, who counted and
+        // its day — a reason owed is the closer's in any store (review,
+        // 2026-10-21; orders and «Каса» task list after stage 2, P2-1).
+        // While it is read, the line is the store's and the person's.
+        context={
+          close
+            ? `${visible(close.store_name)} · ${visible(close.closed_by)} · закриття ${dayOf(close.business_day)}`
+            : undefined
+        }
         title={
           <>
             {close && <RecordedMark />}
@@ -499,18 +523,6 @@ export function Closed({
       />
       {/* On the page itself, as every result (spec §6.30). */}
       <section className="cash-closed receipt">
-        {close ? (
-          // Which close: its day, and its store when it is another's — a
-          // reason owed is the closer's in any store (review, 2026-10-21).
-          <p className="cash-context">
-            Закриття {dayOf(close.business_day)}
-            {close.store_id !== storeId &&
-              ` · магазин «${visible(close.store_name)}»`}
-          </p>
-        ) : (
-          // Its place while read, in its own slot (review, 2026-10-22).
-          !failed && <ContextPlaceholder size="Закриття 00.00" />
-        )}
         {kept}
         {close === null ? (
           failed ? (
@@ -523,7 +535,7 @@ export function Closed({
         ) : (
           <CloseBody close={close} reason={owedId === null} />
         )}
-        {done && <p role="status">{done}</p>}
+        <DoneLine text={done} />
         {problem && <p role="alert">{problem}</p>}
         {owedId !== null ? (
           <ReasonForm key={owedId} disabled={disabled} send={sendReason} />

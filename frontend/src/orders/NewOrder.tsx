@@ -3,6 +3,8 @@ import type { JSX } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError, errorText } from "@/shared/api";
 import { Eyelet } from "@/shared/Eyelet";
+import { Empty } from "@/shared/Empty";
+import { Icon } from "@/shared/Icon";
 import { usePanelRoom } from "@/shared/panel";
 import { Placeholder } from "@/shared/Placeholder";
 import { Sheet } from "@/shared/Sheet";
@@ -408,9 +410,12 @@ export function NewOrder({
               }}
             />
           ) : sellable.length === 0 ? (
-            <p className="empty">
-              Доступних складів немає. Зверніться до менеджера.
-            </p>
+            // The blank tag, its two sentences a line and its meta (spec
+            // §6.28; orders and «Каса» task list after stage 2, P2-3).
+            <Empty
+              title="Доступних складів немає."
+              meta="Зверніться до менеджера."
+            />
           ) : (
             <StockSearch
               text={text}
@@ -518,9 +523,7 @@ export function NewOrder({
                       {visible(first.name)} · {visible(first.size)}
                     </span>
                   )}
-                  <span className="tray-open" aria-hidden="true">
-                    ›
-                  </span>
+                  <Icon name="chevron-right" size={16} className="tray-open" />
                 </button>
                 <p className="pay-total">
                   Разом{" "}

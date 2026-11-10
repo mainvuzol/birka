@@ -6,6 +6,8 @@ import type { Store } from "@/orders/types";
 import { api } from "@/shared/api";
 import { Unread } from "@/shared/Unread";
 import { Eyelet } from "@/shared/Eyelet";
+import { Empty } from "@/shared/Empty";
+import { Icon } from "@/shared/Icon";
 import { NoCustomerData } from "@/shared/NoCustomerData";
 import { Placeholder } from "@/shared/Placeholder";
 import type { JournalOutcome } from "@/shared/journal";
@@ -210,7 +212,9 @@ export function FixStep({
             }}
           />
         ) : mine.data.items.length === 0 ? (
-          <p>Після останнього закриття ви ще нічого не провели.</p>
+          // The blank tag (spec §6.28; orders and «Каса» task list after
+          // stage 2, P2-3).
+          <Empty title="Після останнього закриття ви ще нічого не провели." />
         ) : (
           <ul className="fix-list" aria-label="Ваші операції">
             {mine.data.items.map((event) => (
@@ -234,9 +238,7 @@ export function FixStep({
                     </span>
                     <span className="sale-meta">{visible(event.label)}</span>
                   </span>
-                  <span className="sale-open" aria-hidden="true">
-                    ›
-                  </span>
+                  <Icon name="chevron-right" size={16} className="sale-open" />
                 </button>
               </li>
             ))}

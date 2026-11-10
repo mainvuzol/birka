@@ -4,6 +4,7 @@ import {
   confirmClose,
   test,
   expect,
+  expectEmpty,
   fillLine,
   menu,
   more,
@@ -360,16 +361,27 @@ test.describe("«Оля»'s day at «Каса»", () => {
     // A new attempt, not the refused one resent.
     expect(moves).toHaveLength(2);
     expect(moves[1]?.command_id).not.toBe(moves[0]?.command_id);
-    // A row: what for, when and who, and the sum out (cash task list, P0-1).
+    // Said as recorded: its eyelet filled, as an order's step (orders and
+    // «Каса» task list after stage 2, P1-3).
+    await expect(
+      page
+        .getByRole("status")
+        .filter({ hasText: /^Записано: Витрати, 150,00\sгрн\.$/ })
+        .locator(".eyelet-filled"),
+    ).toHaveCount(1);
+    // On the history's thread: today its time at the left, what for, who,
+    // and the sum out (cash task list, P0-1; P2-2).
     const given = page
       .getByRole("list", { name: "Видано й внесено" })
       .getByRole("listitem");
     await expect(given).toHaveCount(1);
-    await expect(given.locator(".history-what")).toHaveText("Витрати · пакети");
-    await expect(given.locator(".history-meta")).toHaveText(
-      /^\d{2}:\d{2} · Оля$/,
+    await expect(given.locator(".timeline-day")).toHaveText(/^\d{2}:\d{2}$/);
+    await expect(given.locator(".timeline-node")).toHaveCount(1);
+    await expect(given.locator(".timeline-what")).toHaveText(
+      "Витрати · пакети",
     );
-    await expect(given.locator(".history-sum")).toHaveText("−150,00 грн");
+    await expect(given.locator(".timeline-meta")).toHaveText("Оля");
+    await expect(given.locator(".timeline-sum")).toHaveText("−150,00 грн");
 
     // Blind: nothing tells what the drawer should hold, and no list of their
     // sales with their sums (G32).
@@ -622,9 +634,11 @@ test.describe("«Оля»'s day at «Каса»", () => {
     await openStore(page, /^Каса CASH/);
     await section(page, "Каса");
     await page.getByRole("button", { name: "Змінити спосіб оплати" }).click();
-    await expect(
-      page.getByText("Після останнього закриття ви ще нічого не провели."),
-    ).toBeVisible();
+    // The blank tag (orders and «Каса» task list after stage 2, P2-3).
+    await expectEmpty(
+      page.locator(".cash-fix .orders-empty"),
+      "Після останнього закриття ви ще нічого не провели.",
+    );
   });
 
   test("the owner reads the closes, and explains the difference with cash taken out and recorded late", async ({

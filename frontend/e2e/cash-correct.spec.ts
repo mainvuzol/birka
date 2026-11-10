@@ -1,6 +1,7 @@
 import {
   test,
   expect,
+  expectEmpty,
   expectGlyphBeside,
   openStore,
   section,
@@ -413,6 +414,15 @@ test("another day is chosen on the calendar: nothing is read until one is, and a
       }),
   );
   expect(server.days).toHaveLength(2);
+  // A day with nothing in it: the blank tag; «Оберіть день.» was the
+  // field's hint, not an empty place (orders and «Каса» task list after
+  // stage 2, P2-3).
+  await page.getByLabel("День", { exact: true }).fill(dayOf(30));
+  await expect.poll(() => server.days.at(-1)).toBe(dayOf(30));
+  await expectEmpty(
+    page.locator(".orders-empty"),
+    "Цього дня грошових операцій не було.",
+  );
   await page.getByLabel("День", { exact: true }).fill(dayOf(20));
   await expect.poll(() => server.days.at(-1)).toBe(dayOf(20));
   // The close it fell in, as the server names it: the phone has read only

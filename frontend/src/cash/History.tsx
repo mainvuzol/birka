@@ -6,6 +6,8 @@ import type { Store } from "@/orders/types";
 import { api } from "@/shared/api";
 import { Unread } from "@/shared/Unread";
 import { Eyelet } from "@/shared/Eyelet";
+import { Empty } from "@/shared/Empty";
+import { Icon } from "@/shared/Icon";
 import { Placeholder } from "@/shared/Placeholder";
 import { visible } from "@/shared/visible";
 import { Back } from "@/shared/Back";
@@ -27,16 +29,17 @@ function bare(value: string): string {
 }
 
 /** What a close came to, as a sticker: a shortage or a surplus a warning
- * with its triangle, to the kopeck the accent's with its knot, as the
- * close's result says it; a first count nothing to compare, no sign (owner
- * decision, 2026-10-21, В4 (а); cash task list, P1-4; stage 2, money task
- * list, P1-2). */
+ * with its triangle, to the kopeck the till's match with its knot (orders
+ * and «Каса» task list after stage 2, P1-4), as the close's result says
+ * it; a first count nothing to compare, no sign (owner decision,
+ * 2026-10-21, В4 (а); cash task list, P1-4; stage 2, money task list,
+ * P1-2). */
 function Pill({ close }: { close: Close }): JSX.Element {
   if (isOpening(close))
     return <Sticker className="close-pill">Перший підрахунок</Sticker>;
   const difference = differenceOf(close.difference ?? "0.00");
   return difference.match ? (
-    <Sticker tone="paid" icon="eyelet-knot" className="close-pill">
+    <Sticker tone="match" className="close-pill">
       Збіглося
     </Sticker>
   ) : (
@@ -168,6 +171,9 @@ export function History({
         <ScreenHeader
           ref={heading}
           focusable
+          // Its store, when and who, in the screen's one line (orders and
+          // «Каса» task list after stage 2, P2-1).
+          context={`${visible(open.store_name)} · ${timeOf(open.closed_at)} · ${visible(open.closed_by)}`}
           title={
             <>
               {isOpening(open) ? "Перший підрахунок" : "Закриття"}{" "}
@@ -186,9 +192,6 @@ export function History({
           }
         />
         <section className="cash-closed cash-history">
-          <p className="cash-context">
-            {timeOf(open.closed_at)} · {visible(open.closed_by)}
-          </p>
           <CloseBody close={open} now={false} />
         </section>
       </>
@@ -218,7 +221,9 @@ export function History({
             }}
           />
         ) : items.length === 0 ? (
-          <p>Касу цього магазину ще не закривали.</p>
+          // The blank tag (spec §6.28; orders and «Каса» task list after
+          // stage 2, P2-3).
+          <Empty title="Касу цього магазину ще не закривали." />
         ) : (
           <>
             <ul className="history close-list" aria-label="Закриття каси">
@@ -291,9 +296,7 @@ function HistoryRow({
             </span>
             <span className="sale-meta">{metaOf(close)}</span>
           </span>
-          <span className="sale-open" aria-hidden="true">
-            ›
-          </span>
+          <Icon name="chevron-right" size={16} className="sale-open" />
         </button>
       </li>
       {/* Newest first: the days nobody closed came before this close. */}

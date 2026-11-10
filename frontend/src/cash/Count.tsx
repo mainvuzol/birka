@@ -14,6 +14,7 @@ import {
 } from "@/shared/telegram";
 import { Back } from "@/shared/Back";
 import { ScreenHeader } from "@/shared/ScreenHeader";
+import { DoneLine } from "./DoneLine";
 import { timeOf } from "./errors";
 
 /**
@@ -107,7 +108,7 @@ export function Count({
       />
       <section className="cash-count">
         {kept}
-        {done && <p role="status">{done}</p>}
+        <DoneLine text={done} />
         {takeOut && (
           <button
             type="button"

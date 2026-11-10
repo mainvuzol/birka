@@ -1931,13 +1931,6 @@ button.sale-row:disabled:has(.sale-goods, .debt-name, .more-label) {
   flex: none;
   color: var(--pencil);
 }
-/* The text «›» still in orders' and «Каса»'s rows, 24 as before, until
-   their own task (orders-cash P2-4). */
-span.sale-open,
-span.tray-open {
-  font-size: 24px;
-  line-height: 1;
-}
 /* A sale returned whole opens nothing: its goods in pencil, as a row that
    takes no tap (§6.8; review). */
 .returns div.sale-row .sale-goods {
@@ -3486,10 +3479,10 @@ section.cash {
   margin: 10px 0 0;
   font-size: 14px;
 }
+/* A dock's or a sheet's one button, the main one's 52 and corner 8 (spec
+   S26 №9; orders and «Каса» task list after stage 2, P2-4). */
 .cash-panel-button {
   width: 100%;
-  min-height: 54px;
-  border-radius: 15px;
 }
 /* The count (spec S26; «Усе на бірці» sections task list, P1-2) on the
    page itself: the reminders, then the dock with the app's keypad and
@@ -3554,20 +3547,30 @@ section.cash-count {
   font-weight: 800;
   letter-spacing: -0.6px;
 }
-/* Said in a line where the close is an old one; on its stub, a sticker. */
-p.cash-difference {
+/* Said in a line — an old close's card, «Каса»'s own of today — its sign
+   before its words, the triangle or the knot, never its colour alone
+   (orders and «Каса» task list after stage 2, P1-4); on its stub, a
+   sticker. */
+.cash-difference:not(.sticker) {
   font-weight: 700;
 }
 .cash-figures p.cash-difference {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   margin-top: 8px;
   font-size: 20px;
 }
-/* A shortage or a surplus, a warning's colour; to the kopeck, the accent's
-   (owner decision, 2026-10-21, В4 (а)). */
-p.cash-difference.warn {
+span.cash-difference > .difference-sign {
+  margin-right: 4px;
+  vertical-align: -3px;
+}
+/* A shortage or a surplus, a warning's colour; to the kopeck, in a line,
+   the accent's (owner decision, 2026-10-21, В4 (а); 2026-10-28). */
+.cash-difference.warn:not(.sticker) {
   color: var(--warn);
 }
-p.cash-difference.match {
+.cash-difference.match:not(.sticker) {
   color: var(--paid);
 }
 .cash-slip {
@@ -3668,7 +3671,6 @@ p.cash-difference.match {
 }
 .cash-owed button {
   width: 100%;
-  min-height: 54px;
 }
 /* Cash taken out or put in (cash task list, P1-2): what for as chips, the
    sum large, the button in the panel under the thumb. */
@@ -3719,10 +3721,14 @@ p.cash-difference.match {
 .fix-ways {
   margin: 0 0 14px;
 }
+/* A way's lines set, not the font's own: with «зараз» under it a way is
+   the ways' 54 on any font, its place's height while it is read (orders
+   and «Каса» task list after stage 2, P2-4; review). */
 .fix-ways button {
   border-color: var(--line-strong);
   background: var(--field);
   color: var(--text);
+  line-height: 18px;
 }
 .fix-ways button[aria-pressed="true"] {
   border-color: var(--accent);
@@ -3738,6 +3744,7 @@ p.cash-difference.match {
   display: block;
   font-size: 12px;
   font-weight: 500;
+  line-height: 14px;
 }
 /* The closes (cash task list, P1-4): a row each, what it came to as a pill
    under its day — one column down the list, whatever the names — and the
@@ -3792,9 +3799,11 @@ p.cash-difference.match {
   height: 28px;
   border-radius: var(--r-xs);
 }
+/* A way's place, the way's own form: 54 high, the button's corner 8
+   (P2-4). */
 .skeleton-way {
   height: 54px;
-  border-radius: 15px;
+  border-radius: var(--r-l);
 }
 /* A warning said at once — a server that does not answer, what could not
    be read, a name already taken: a warning's plate and its triangle, as
@@ -3939,11 +3948,14 @@ p.cash-difference.match {
 .cancel-order {
   margin-top: 16px;
 }
+/* «Скасувати замовлення?» asked on the card: a card, corner 4 (spec §4;
+   P2-4). */
 .cancel-ask {
   margin-top: 16px;
   padding: 14px 16px;
   border: 1px solid var(--line);
-  border-radius: 16px;
+  border-radius: var(--r-s);
+  background: var(--surface);
 }
 .cancel-ask p {
   margin: 0 0 12px;
@@ -3953,12 +3965,6 @@ p.cash-difference.match {
    button in the panel; the rare quiet at the foot. A waybill pasted whole
    breaks where it must (review, 2026-10-23). */
 .order {
-  overflow-wrap: anywhere;
-}
-.order-context {
-  margin: 0 0 6px;
-  font-size: 14px;
-  color: var(--text-2);
   overflow-wrap: anywhere;
 }
 .order-number {
@@ -4048,9 +4054,10 @@ p.cash-difference.match {
 .opening .sale-row {
   min-height: var(--h-row);
 }
-/* Where an order went: its history a row a version, how it went on the
-   right; the same waybill's other order its row, opened by a tap (orders
-   task list, P1-3). */
+/* Where an order went (orders task list, P1-3): its history the thread
+   (spec §6.21; orders and «Каса» task list after stage 2, P2-2), how it
+   went a line in ink under what it was; the same waybill's other order its
+   row, opened by a tap, on a warning's plate of corner 4 (§6.23; P2-4). */
 .shipping-changes-title {
   margin: 22px 0 0;
   font-size: 14px;
@@ -4059,35 +4066,16 @@ p.cash-difference.match {
 }
 .shipping-changes {
   margin: 4px 0 0;
-  padding: 0;
-  list-style: none;
-}
-.shipping-change {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 8px 0;
-  border-bottom: 1px solid var(--line);
-  overflow-wrap: anywhere;
-}
-/* What it was keeps more of a 360 px row than how it went, which wraps
-   on the right. */
-.shipping-kind {
-  font-size: 15px;
-  font-weight: 600;
 }
 .shipping-how {
-  max-width: 45%;
-  font-size: 15px;
-  text-align: right;
+  font-size: 16px;
   overflow-wrap: anywhere;
 }
 .same-waybill {
   margin: 12px 0;
   padding: 12px 16px 4px;
   border: 1px solid var(--warn-line);
-  border-radius: 16px;
+  border-radius: var(--r-s);
 }
 .same-waybill p {
   margin: 0;
@@ -4270,6 +4258,13 @@ p.cash-difference.match {
   --tone: var(--transit);
   --tone-bg: var(--transit-bg);
 }
+/* A drawer counted to the kopeck, the till's own match: the thread on ink
+   in the light theme, ink on the thread in the dark (spec §6.18; owner's
+   В4 (а); orders and «Каса» task list after stage 2, P1-4). */
+.sticker.tone-match {
+  --tone: var(--match-fg);
+  --tone-bg: var(--match-bg);
+}
 .sticker.tone-paid {
   --tone: var(--paid);
   --tone-bg: var(--paid-bg);
@@ -4392,13 +4387,6 @@ p.cash-difference.match {
 }
 /* The card's two sections, «У посилці» and «Доставка» (S17): a label
    over each; the waybill as written, «Скопіювати ТТН» beside it, 44. */
-.order-context {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 2px 10px;
-  color: var(--pencil);
-}
 .order-section {
   margin: 20px 0 4px;
   color: var(--pencil);
@@ -4511,7 +4499,6 @@ p.cash-difference.match {
 }
 .order-panel button {
   width: 100%;
-  min-height: 54px;
 }
 /* «Клієнт забрав» (orders task list, P0-3): its ways in two rows under
    their captions — the money given now, three; ahead or to the carrier,
@@ -4554,6 +4541,11 @@ p.cash-difference.match {
 }
 .step-done.tone-offline {
   --tone: var(--offline);
+}
+/* What «Каса» recorded, its eyelet filled in ink (orders and «Каса» task
+   list after stage 2, P1-3). */
+.step-done.tone-ink {
+  --tone: var(--ink);
 }
 .step-done .eyelet-filled {
   background: var(--tone);

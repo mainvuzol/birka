@@ -3,13 +3,15 @@ import { Icon } from "./Icon";
 import type { IconName } from "./icons";
 
 /** What a sticker means, each in its colours (spec §5.3, §6.18): a debt,
- * a warning or paper, a kept operation not yet confirmed, paid or recorded,
- * on its way, held or online, done with and grey; `neutral` says a thing
- * by the way in pencil. None: ink on the fold. */
+ * a warning or paper, a kept operation not yet confirmed, a drawer counted
+ * to the kopeck, paid or recorded, on its way, held or online, done with
+ * and grey; `neutral` says a thing by the way in pencil. None: ink on the
+ * fold. */
 export type Tone =
   | "debt"
   | "warn"
   | "kept"
+  | "match"
   | "paid"
   | "transit"
   | "online"
@@ -25,6 +27,7 @@ const glyphs = {
   debt: "owed",
   warn: "warning",
   kept: "eyelet-dashed",
+  match: "eyelet-knot",
   paid: "collected",
   transit: "sent",
   online: "held",

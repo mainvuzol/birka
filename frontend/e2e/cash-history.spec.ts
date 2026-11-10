@@ -1,4 +1,5 @@
 import { test, expect, openStore, section, expectOneSticker } from "./fixtures";
+import { icons } from "../src/shared/icons";
 import type { Locator, Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -278,8 +279,10 @@ test("«Закриття»: a row a close — its day and who, what was counted 
     /^\d{2}:\d{2} · порахували 2\s000,00 · мало бути 2\s000,00$/,
   );
   await expect(same.locator(".close-pill")).toHaveText("Збіглося");
+  // The till's own match, not the paid's green (orders and «Каса» task
+  // list after stage 2, P1-4).
   await expect(same.locator(".close-pill")).toHaveClass(
-    "sticker tone-paid close-pill",
+    "sticker tone-match close-pill",
   );
   await expect(same.locator(".close-pill svg.icon")).toHaveCount(1);
   await expect(same.locator(".close-node .eyelet-knot")).toHaveCount(1);
@@ -289,6 +292,30 @@ test("«Закриття»: a row a close — its day and who, what was counted 
   );
   // The ring stands only where a reason waits.
   await expect(list.locator(".close-ring")).toHaveCount(1);
+  // A close's row 64 at least, its chevron the set's 16 in pencil, never a
+  // «›» (P2-4).
+  await expect(list).not.toContainText("›");
+  expect(
+    await list.locator(".close-row").evaluateAll((rows) => {
+      const probe = document.createElement("span");
+      probe.style.color = "var(--pencil)";
+      document.body.append(probe);
+      const pencil = getComputedStyle(probe).color;
+      probe.remove();
+      return [
+        ...new Set(
+          rows.map((row) => {
+            const chevron = row.querySelector(":scope > svg.sale-open");
+            return JSON.stringify([
+              row.getBoundingClientRect().height >= 64,
+              chevron?.getBoundingClientRect().width,
+              chevron ? getComputedStyle(chevron).color === pencil : false,
+            ]);
+          }),
+        ),
+      ];
+    }),
+  ).toEqual([JSON.stringify([true, 16, true])]);
   // The pills one column down the list, under each day.
   const lefts = await list
     .locator(".close-row .close-pill, .close-unclosed .close-pill")
@@ -314,15 +341,29 @@ test("a close tapped shows all of it as its result did — the figures, the slip
   await expect(
     page.getByRole("heading", { name: "Закриття 17.10" }),
   ).toBeFocused();
-  await expect(page.locator(".cash-context")).toHaveText(
-    /^\d{2}:\d{2} · Марко$/,
+  // Its store, when and who, in the screen's one line: no second line under
+  // the title (orders and «Каса» task list after stage 2, P2-1).
+  await expect(page.locator(".store-line p")).toHaveText(
+    /^Каса · \d{2}:\d{2} · Марко$/,
   );
+  await expect(page.locator(".cash-context")).toHaveCount(0);
   const figures = page.getByRole("group", { name: "Закриття каси" });
   await expect(figures.locator(".cash-sum").nth(0)).toHaveText("2 000,00 грн");
   await expect(figures.locator(".cash-sum").nth(1)).toHaveText("2 350,00 грн");
   await expect(figures.locator(".cash-difference")).toHaveText(
     "Надлишок 350,00 грн",
   );
+  // Read later, a line with its sign: the warning's triangle before its
+  // words, 16 (P1-4).
+  const sign = figures.locator(".cash-difference > svg.difference-sign");
+  expect(await sign.innerHTML()).toBe(
+    await sign.evaluate((svg, want) => {
+      const probe = document.createElementNS(svg.namespaceURI, "svg");
+      probe.innerHTML = want;
+      return probe.innerHTML;
+    }, icons.warning),
+  );
+  expect((await sign.boundingBox())?.width).toBe(16);
   await expect(
     page.getByText("Причина: «Розмін не записали» · Марко"),
   ).toBeVisible();
@@ -334,6 +375,23 @@ test("a close tapped shows all of it as its result did — the figures, the slip
   ).toBeVisible();
   await page.getByRole("button", { name: "Назад до закриттів" }).click();
   await expect(row(list, "17.10")).toBeVisible();
+  // One to the kopeck, read later: its knot before «Збіглося до копійки»,
+  // in the accent (P1-4).
+  await row(list, "16.10").getByRole("button").click();
+  const exact = page
+    .getByRole("group", { name: "Закриття каси" })
+    .locator(".cash-difference");
+  await expect(exact).toHaveText("Збіглося до копійки");
+  const knot = exact.locator("svg.difference-sign");
+  expect(await knot.innerHTML()).toBe(
+    await knot.evaluate((svg, want) => {
+      const probe = document.createElementNS(svg.namespaceURI, "svg");
+      probe.innerHTML = want;
+      return probe.innerHTML;
+    }, icons["eyelet-knot"]),
+  );
+  await page.getByRole("button", { name: "Назад до закриттів" }).click();
+  await expect(row(list, "16.10")).toBeVisible();
   // A close far down the list, left: the list where it was.
   const far = list.locator(".close-row").nth(15);
   await far.scrollIntoViewIfNeeded();
