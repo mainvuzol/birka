@@ -372,7 +372,10 @@ test("the count: the card reads the drawer again, a task's screen with the app's
   expect(reminder.y + reminder.height).toBeLessThanOrEqual(room.y);
   expect(sum.y).toBeGreaterThan(room.y);
   expect(room.y + room.height).toBeLessThanOrEqual(640);
-  expect(button.height).toBeGreaterThanOrEqual(54);
+  // The dock's one button, the main one's 52 and corner 8 (spec S26 №9;
+  // orders and «Каса» task list after stage 2, P2-4).
+  expect(button.height).toBe(52);
+  await expect(close).toHaveCSS("border-top-left-radius", "8px");
   expect(await page.evaluate(() => window.scrollY)).toBe(0);
   for (const key of await page.locator(".keypad-key").all())
     expect((await key.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
@@ -594,10 +597,13 @@ test("the close's figures are the server's: «Мало бути» and «Пора
     "1 999,50 грн",
     "2 000,00 грн",
   ]);
-  // Which close: its day.
-  await expect(page.locator(".cash-closed .cash-context")).toHaveText(
-    "Закриття 21.10",
+  // Which close, in the screen's one line: its store, who counted, its
+  // day — no second line under the title (orders and «Каса» task list
+  // after stage 2, P2-1).
+  await expect(page.locator(".store-line p")).toHaveText(
+    "Каса · Оля · закриття 21.10",
   );
+  await expect(page.locator(".cash-closed .cash-context")).toHaveCount(0);
   // A seller's close holds none of the period's figures (G27).
   await expect(page.getByLabel("Готівка за період")).toHaveCount(0);
   const difference = figures.locator(".cash-difference");
@@ -636,10 +642,32 @@ test("the close's figures are the server's: «Мало бути» and «Пора
   ).toContainText(
     "Мало бути 1 999,50 грн · Порахували 2 000,00 грн · Надлишок 0,50 грн",
   );
+  // In a line, its sign before its words, the warning's triangle, in the
+  // warning's colour, 700 — never the colour alone (P1-4).
+  const said = page
+    .getByRole("group", { name: "Закриття каси" })
+    .locator(".cash-difference");
+  expect(await drawn(said, "warning")).toBe(true);
+  expect(
+    await said.evaluate((node) => {
+      const probe = document.createElement("span");
+      probe.style.color = "var(--warn)";
+      document.body.append(probe);
+      const warn = getComputedStyle(probe).color;
+      probe.remove();
+      const sign = node.querySelector(".difference-sign");
+      return [
+        getComputedStyle(node).color === warn,
+        getComputedStyle(node).fontWeight,
+        sign?.getBoundingClientRect().width,
+        sign ? getComputedStyle(sign).color === warn : false,
+      ];
+    }),
+  ).toEqual([true, "700", 16, true]);
   await expect(card(page)).toHaveCount(0);
 });
 
-test("to the kopeck is the accent's, and the first count is one figure", async ({
+test("to the kopeck is the till's match with its knot, and the first count is one figure (orders and «Каса» task list after stage 2, P1-4)", async ({
   page,
 }) => {
   const state: { now: Drawer; answer: Record<string, unknown> | number } = {
@@ -657,11 +685,11 @@ test("to the kopeck is the accent's, and the first count is one figure", async (
     .locator(".cash-difference");
   await expect(difference).toHaveText("Збіглося до копійки");
   await expect(difference).toHaveClass(/\bmatch\b/);
-  // Its knot, not the triangle (spec S28).
+  // Its knot, not the triangle (spec S28), in the till's own match — not
+  // the paid's green (P1-4).
   expect(await drawn(difference, "eyelet-knot")).toBe(true);
-  // The paid's green, until the till's own match colour (orders and «Каса»
-  // TZ after stage 2, P1-4).
-  await expect(difference).toHaveClass(/\btone-paid\b/);
+  await expect(difference).toHaveClass(/\btone-match\b/);
+  await expect(difference).not.toHaveClass(/\btone-paid\b/);
   await expectOneSticker(page.getByRole("group", { name: "Закриття каси" }));
 
   // Never counted: «Перший підрахунок», one figure.
@@ -743,6 +771,10 @@ test("a difference owes its reason under the thumb, the figures read first, and 
   expect(dock.y + dock.height).toBeLessThanOrEqual(640);
   const write = page.getByRole("button", { name: "Записати причину" });
   await expect(write).toBeDisabled();
+  // The dock's one button, the main one's 52 and corner 8 (orders and
+  // «Каса» task list after stage 2, P2-4).
+  expect((await write.boundingBox())?.height).toBe(52);
+  await expect(write).toHaveCSS("border-top-left-radius", "8px");
   await expect(page.locator(".pay-panel")).toContainText(
     "Поки причину не записано, інші розділи недоступні.",
   );
@@ -756,6 +788,12 @@ test("a difference owes its reason under the thumb, the figures read first, and 
   await expect(
     page.getByRole("group", { name: "Закриття каси" }),
   ).toContainText("Нестача 50,00 грн");
+  // «Записати причину» on «Каса» too: 52, corner 8 (P2-4).
+  const fromCash = page.locator(".cash-owed").getByRole("button", {
+    name: "Записати причину",
+  });
+  expect((await fromCash.boundingBox())?.height).toBe(52);
+  await expect(fromCash).toHaveCSS("border-top-left-radius", "8px");
   await page.getByRole("button", { name: "Записати причину" }).click();
   await expect(reason).toBeVisible();
   const chip = page.getByRole("button", { name: "Продаж під час збою" });
@@ -1150,8 +1188,10 @@ for (const [name, theme, scheme] of [
       page.locator(".cash-context"),
       page.locator(".cash-row-title").first(),
       page.locator(".cash-row .sale-meta").first(),
-      page.locator(".history-what").first(),
-      page.locator(".history-sum").first(),
+      page.locator(".cash-moves .timeline-day").first(),
+      page.locator(".cash-moves .timeline-what").first(),
+      page.locator(".cash-moves .timeline-meta").first(),
+      page.locator(".cash-moves .timeline-sum").first(),
     ])
       expect(await contrast(part)).toBeGreaterThanOrEqual(4.5);
     // The ink tag stays dark in either theme (owner decision, 2026-10-21;
@@ -1222,6 +1262,82 @@ for (const [name, theme, scheme] of [
     await page.screenshot({ path: `test-results/cash-closed-${name}.png` });
   });
 
+for (const [name, theme, scheme] of [
+  ["light", { bg_color: "#ffffff", text_color: "#000000" }, "light"],
+  ["dark", { bg_color: "#17212b", text_color: "#f5f5f5" }, "dark"],
+] as const)
+  test(`in the ${name} theme a close to the kopeck is the till's own match — the thread on ink in the light, ink on the thread in the dark — at 4.5:1 with its knot; «Каса»'s own line says it with the knot, in the accent (orders and «Каса» task list after stage 2, P1-4)`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 360, height: 640 });
+    await stubDrawer(page, { now: drawer(), answer: closeOf() });
+    await cash(page, olya, { theme });
+    expect(
+      await page.evaluate(() => document.documentElement.dataset.theme),
+    ).toBe(scheme);
+    await card(page).click();
+    await field(page).fill("2000");
+    await page
+      .getByRole("button", { name: "Закрити касу", exact: true })
+      .click();
+    await confirmClose(page);
+    const sticker = page
+      .getByRole("group", { name: "Закриття каси" })
+      .locator(".cash-difference");
+    await expect(sticker).toHaveText("Збіглося до копійки");
+    const look = await sticker.evaluate((node) => {
+      const probe = document.createElement("span");
+      document.body.append(probe);
+      const read = (name: string): string => {
+        probe.style.color = `var(${name})`;
+        return getComputedStyle(probe).color;
+      };
+      const tokens = {
+        thread: read("--thread"),
+        onThread: read("--on-thread"),
+        inverse: read("--inverse"),
+      };
+      probe.remove();
+      const glyph = node.querySelector(":scope > svg.icon");
+      return {
+        ground: getComputedStyle(node).backgroundColor,
+        ink: getComputedStyle(node).color,
+        glyph: glyph ? getComputedStyle(glyph).color : "",
+        tokens,
+      };
+    });
+    expect([look.ground, look.ink, look.glyph]).toEqual(
+      scheme === "light"
+        ? [look.tokens.inverse, look.tokens.thread, look.tokens.thread]
+        : [look.tokens.thread, look.tokens.onThread, look.tokens.onThread],
+    );
+    expect(await contrast(sticker)).toBeGreaterThanOrEqual(4.5);
+    expect(await drawn(sticker, "eyelet-knot")).toBe(true);
+    await page.screenshot({ path: `test-results/cash-match-${name}.png` });
+    // «Каса»'s own line of today: «Збіглося до копійки» in the accent, 700,
+    // the knot before it, at 4.5:1.
+    await page.getByRole("button", { name: "Готово" }).click();
+    const said = page
+      .getByRole("group", { name: "Закриття каси" })
+      .locator(".cash-difference");
+    await expect(said).toHaveText("Збіглося до копійки");
+    expect(await drawn(said, "eyelet-knot")).toBe(true);
+    expect(
+      await said.evaluate((node) => {
+        const probe = document.createElement("span");
+        probe.style.color = "var(--paid)";
+        document.body.append(probe);
+        const paid = getComputedStyle(probe).color;
+        probe.remove();
+        return [
+          getComputedStyle(node).color === paid,
+          getComputedStyle(node).fontWeight,
+        ];
+      }),
+    ).toEqual([true, "700"]);
+    expect(await contrast(said)).toBeGreaterThanOrEqual(4.5);
+  });
+
 test("the owner's «Каса»: every task as a row, «Закриття» among them", async ({
   page,
 }) => {
@@ -1264,11 +1380,36 @@ test("the owner's «Каса»: every task as a row, «Закриття» among 
   const row = page
     .getByRole("list", { name: "Видано й внесено" })
     .getByRole("listitem");
-  await expect(row.locator(".history-what")).toHaveText("Внесено · розмін");
-  await expect(row.locator(".history-meta")).toHaveText(
-    /^20\.10, \d{2}:\d{2} · Марко$/,
+  // On the history's thread: a day before today at its left, its time
+  // with who under what it was (orders and «Каса» task list after stage 2,
+  // P2-2).
+  await expect(row.locator(".timeline-day")).toHaveText("20.10");
+  await expect(row.locator(".timeline-what")).toHaveText("Внесено · розмін");
+  await expect(row.locator(".timeline-meta")).toHaveText(
+    /^\d{2}:\d{2} · Марко$/,
   );
-  await expect(row.locator(".history-sum")).toHaveText("+100,00 грн");
+  await expect(row.locator(".timeline-sum")).toHaveText("+100,00 грн");
+  // The thread itself: the day at the row's left, the eyelet after it, a
+  // line of 1.5 down through it, what it was after the eyelet, the sum at
+  // the right.
+  expect(
+    await row.evaluate((item) => {
+      const box = item.getBoundingClientRect();
+      const at = (name: string): DOMRect | undefined =>
+        item.querySelector(name)?.getBoundingClientRect();
+      const day = at(".timeline-day");
+      const node = at(".timeline-node");
+      const what = at(".timeline-what");
+      const sum = at(".timeline-sum");
+      if (!day || !node || !what || !sum) return null;
+      return {
+        day: day.left - box.left,
+        node: node.left >= day.right && node.right <= what.left,
+        sum: Math.round(box.right - sum.right),
+        line: getComputedStyle(item, "::before").width,
+      };
+    }),
+  ).toEqual({ day: 0, node: true, sum: 0, line: "1.5px" });
 });
 
 test("the count is four taps and the sum: «Каса», the card, «Закрити касу», «Так, закрити»", async ({

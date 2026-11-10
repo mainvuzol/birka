@@ -62,12 +62,14 @@ export const ScreenHeader = forwardRef<
      * day, for whoever reads the network there; a new order's one
      * warehouse. */
     lead?: string | undefined;
-    /** What the line says after the person: the count's time (spec S26). */
-    after?: string;
+    /** What the line says after the person: the count's time (spec S26);
+     * when an order was made, its number small beside it (orders and
+     * «Каса» task list after stage 2, P2-1). */
+    after?: ReactNode;
     /** The line's words in place of the store and the person, on a task's
      * screen that says its own: «Почато о 10:20 · Тетяна» (stage 2, goods
-     * task list, P0-3). */
-    context?: string;
+     * task list, P0-3); none while what it names is read. */
+    context?: string | undefined;
     /** What tells this screen from the one before it where its title may
      * not — a list and its row's card under one title — and what a screen
      * drawn anew is still: an order's card read again, moved on, stays
@@ -129,7 +131,7 @@ export const ScreenHeader = forwardRef<
             {context ?? (
               <>
                 {lead ?? visible(line.store)} · {visible(line.person)}
-                {after !== undefined && ` · ${after}`}
+                {after !== undefined && <> · {after}</>}
               </>
             )}
           </p>

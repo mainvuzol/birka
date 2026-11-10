@@ -138,9 +138,10 @@ interface CardProps {
   waiting: boolean;
 }
 /**
- * An order's place while it is read (orders task list, P2-2): its line of
- * context, its pill and two of its lines, in their sizes — its title's is
- * the screen's head's («Усе на бірці» task list, P0-4); a screen reader
+ * An order's place while it is read (orders task list, P2-2): its pill and
+ * two of its lines, in their sizes — its title's is the screen's head's
+ * («Усе на бірці» task list, P0-4), its line of context the head's one
+ * line (orders and «Каса» task list after stage 2, P2-1); a screen reader
  * hears «Завантажуємо замовлення…».
  */
 export function CardPlaceholder(): JSX.Element {
@@ -150,7 +151,6 @@ export function CardPlaceholder(): JSX.Element {
         Завантажуємо замовлення…
       </p>
       <div className="placeholder order-placeholder" aria-hidden="true">
-        <span className="skeleton skeleton-meta" />
         <span className="skeleton skeleton-pill" />
         {[0, 1].map((n) => (
           <div className="order-line" key={n}>
@@ -393,6 +393,16 @@ function Card({
         className="order-title"
         title={title}
         screen={order.id}
+        // When it was ordered, and its number small beside it (owner
+        // decision, 2026-10-23, В1), in the screen's one line after the
+        // store and the person (orders and «Каса» task list after stage 2,
+        // P2-1).
+        after={
+          <>
+            {order.created_at ? `замовлено ${dayOf(order.created_at)} · ` : ""}
+            <small className="order-number">№ {order.id.slice(0, 8)}</small>
+          </>
+        }
         back={
           <Back
             go={back}
@@ -403,12 +413,6 @@ function Card({
         }
       />
       <section className="order">
-        {/* When it was ordered, and its number small beside it (owner
-            decision, 2026-10-23, В1): the store is the screen's line. */}
-        <p className="order-context t-meta">
-          {order.created_at ? `замовлено ${dayOf(order.created_at)} · ` : ""}
-          <small className="order-number">№ {order.id.slice(0, 8)}</small>
-        </p>
         {done && (
           // A reserve torn off as recorded over the thread, the coat held
           // for its customer; any other step a line, its eyelet filled in
@@ -539,9 +543,11 @@ function Card({
                       )}
                       <StatusSticker status={other.status} />
                     </span>
-                    <span className="sale-open" aria-hidden="true">
-                      ›
-                    </span>
+                    <Icon
+                      name="chevron-right"
+                      size={16}
+                      className="sale-open"
+                    />
                   </button>
                 </li>
               ))}
@@ -549,8 +555,10 @@ function Card({
           </div>
         )}
         {order.shipping_history && order.shipping_history.length > 0 && (
-          // Folded: each version a row once it is opened (orders task list,
-          // P1-3) — what it was, when and by whom; how it went on the right.
+          // Folded (orders task list, P1-3); opened, the history's thread
+          // (spec §6.21; orders and «Каса» task list after stage 2, P2-2):
+          // its day at the left, a filled eyelet, what it was, how it went
+          // under it, when and by whom — first version first, as before.
           <>
             <button
               type="button"
@@ -563,21 +571,28 @@ function Card({
               Історія доставки <span aria-hidden="true">›</span>
             </button>
             {historyShown && (
-              <ul className="shipping-changes" aria-label="Історія доставки">
+              <ul
+                className="timeline shipping-changes"
+                aria-label="Історія доставки"
+              >
                 {order.shipping_history.map((change, index) => (
                   <li
-                    className="shipping-change"
+                    className="timeline-row"
                     key={`${change.at}:${String(index)}`}
                   >
-                    <span className="sale-main">
-                      <span className="shipping-kind">
+                    <span className="timeline-day">{dayOf(change.at)}</span>
+                    <span className="timeline-node" aria-hidden="true" />
+                    <span className="timeline-main">
+                      <span className="timeline-what">
                         {shippingKinds[change.kind]}
                       </span>
-                      <span className="sale-meta">
+                      <span className="shipping-how">
+                        {shippingText(change)}
+                      </span>
+                      <span className="timeline-meta">
                         {at(change.at)} · {visible(change.by)}
                       </span>
                     </span>
-                    <span className="shipping-how">{shippingText(change)}</span>
                   </li>
                 ))}
               </ul>
@@ -755,11 +770,12 @@ const shippingKinds: Record<ShippingChange["kind"], string> = {
   CORRECTED: "Змінено",
 };
 
-/** «22.10, 14:05»: when a version was stated, by the phone's own clock. */
+/** «14:05»: when a version was stated, by the phone's own clock; its day
+ * stands at the thread's left. */
 function at(iso: string): string {
   const when = new Date(iso);
   const two = (n: number): string => String(n).padStart(2, "0");
-  return `${two(when.getDate())}.${two(when.getMonth() + 1)}, ${two(when.getHours())}:${two(when.getMinutes())}`;
+  return `${two(when.getHours())}:${two(when.getMinutes())}`;
 }
 
 /** Another order with the same waybill, as its card's title says it: its

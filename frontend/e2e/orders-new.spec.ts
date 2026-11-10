@@ -3,6 +3,7 @@ import {
   expect,
   basketDone,
   basketSheet,
+  expectEmpty,
   expectPlate,
   menu,
   openStore,
@@ -534,9 +535,12 @@ test("a new order as a sale: a task screen, the cursor in the search, two letter
   await expect(tray(page).locator(".tray-what")).toHaveText(
     "Лоран шоколад · M",
   );
-  // Its «›» as before, 24, until orders' own task (orders-cash P2-4;
-  // review).
-  await expect(tray(page).locator(".tray-open")).toHaveCSS("font-size", "24px");
+  // Its chevron the set's 16 in pencil, as the till's tray's, never a «›»
+  // (orders and «Каса» task list after stage 2, P2-4).
+  await expect(tray(page)).not.toContainText("›");
+  const chevron = tray(page).locator("svg.tray-open");
+  await expect(chevron).toHaveCount(1);
+  expect((await chevron.boundingBox())?.width).toBe(16);
   await expect(tray(page).locator(".pay-total")).toHaveText(
     "Разом 1 850,00 грн",
   );
@@ -691,6 +695,30 @@ test("a new order as a sale: a task screen, the cursor in the search, two letter
   ]);
   await page.screenshot({ path: "test-results/order-new-reserved.png" });
 });
+
+for (const [name, theme] of [
+  ["light", { bg_color: "#ffffff", text_color: "#000000" }],
+  ["dark", { bg_color: "#17212b", text_color: "#f5f5f5" }],
+] as const)
+  test(`in the ${name} theme no warehouse to sell from is the blank tag: its two sentences a line and its meta, and no search (orders and «Каса» task list after stage 2, P2-3)`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 360, height: 640 });
+    await open(
+      page,
+      server({ places: [{ ...place(own, "Свій"), can_sell: false }] }),
+      { theme },
+    );
+    const empty = page.locator(".orders-empty");
+    await expectEmpty(empty, "Доступних складів немає.");
+    await expect(empty.locator(".t-meta")).toHaveText(
+      "Зверніться до менеджера.",
+    );
+    await expect(search(page)).toHaveCount(0);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(360);
+  });
 
 test("a store with two warehouses: each cell says its own, the line leaves from the cell's (orders task list, P0-5; owner decision, 2026-10-17)", async ({
   page,

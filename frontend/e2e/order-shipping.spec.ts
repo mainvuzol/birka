@@ -184,8 +184,9 @@ const stated = expect.stringMatching(
   /^\d{2}\.\d{2}, \d{2}:\d{2} · Оля$/,
 ) as unknown as string;
 
-/** The history of where it went, a row a version (P1-3): what it was, when
- * and by whom, and how it went. */
+/** The history of where it went, a version on the thread (P1-3; orders and
+ * «Каса» task list after stage 2, P2-2): what it was; its day at the left
+ * with when and by whom under it, «22.10, 14:05 · Оля»; how it went. */
 async function changes(page: Page): Promise<string[][]> {
   // Folded until it is opened («Усе на бірці» sections task list, P0-2).
   const folded = page.getByRole("button", { name: "Історія доставки" });
@@ -195,11 +196,13 @@ async function changes(page: Page): Promise<string[][]> {
     .getByRole("list", { name: "Історія доставки" })
     .getByRole("listitem")
     .evaluateAll((rows) =>
-      rows.map((row) =>
-        [".shipping-kind", ".sale-meta", ".shipping-how"].map(
-          (part) => row.querySelector(part)?.textContent ?? "",
-        ),
-      ),
+      rows.map((row) => [
+        row.querySelector(".timeline-what")?.textContent ?? "",
+        `${row.querySelector(".timeline-day")?.textContent ?? ""}, ${
+          row.querySelector(".timeline-meta")?.textContent ?? ""
+        }`,
+        row.querySelector(".shipping-how")?.textContent ?? "",
+      ]),
     );
 }
 

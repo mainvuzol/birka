@@ -446,6 +446,60 @@ test("«Видати з каси»: a sheet over «Каса», what for as chips
   ]);
 });
 
+for (const [name, theme] of [
+  ["light", { bg_color: "#ffffff", text_color: "#000000" }],
+  ["dark", { bg_color: "#17212b", text_color: "#f5f5f5" }],
+] as const)
+  test(`in the ${name} theme what «Каса» recorded is a line with its eyelet filled in ink, as an order's step, at 4.5:1, its words never over the eyelet at 360 (orders and «Каса» task list after stage 2, P1-3)`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 360, height: 640 });
+    await stub(page, { now: drawer(), method: sale });
+    await open(page, { theme });
+    await cash(page);
+    await page
+      .getByRole("button", { name: "Видати з каси", exact: true })
+      .click();
+    await moveSheet(page, "Видати з каси");
+    await page
+      .getByRole("group", { name: "Кому чи на що" })
+      .getByRole("button", { name: "Витрати", exact: true })
+      .click();
+    await sum(page).fill("150");
+    await moveButton(page).click();
+    const line = page
+      .getByRole("status")
+      .filter({ hasText: /^Записано: Витрати, 150,00\sгрн\.$/ });
+    await expect(line).toBeVisible();
+    await expect(line).toHaveClass(/(?:^|\s)step-done(?:\s|$)/);
+    const look = await line.evaluate((node) => {
+      const probe = document.createElement("span");
+      probe.style.color = "var(--ink)";
+      document.body.append(probe);
+      const ink = getComputedStyle(probe).color;
+      probe.remove();
+      const eyelet = node.querySelector(":scope > .eyelet-filled");
+      const hole = eyelet?.getBoundingClientRect();
+      const words = [...node.childNodes].find(
+        (child) => child.nodeType === Node.TEXT_NODE,
+      );
+      const said = document.createRange();
+      if (words) said.selectNodeContents(words);
+      return {
+        eyelet: eyelet
+          ? [getComputedStyle(eyelet).backgroundColor === ink, hole?.width]
+          : null,
+        clear:
+          hole !== undefined &&
+          [...said.getClientRects()].every((rect) => rect.left >= hole.right),
+        weight: getComputedStyle(node).fontWeight,
+      };
+    });
+    expect(look).toEqual({ eyelet: [true, 12], clear: true, weight: "600" });
+    expect(await contrast(line)).toBeGreaterThanOrEqual(4.5);
+    await page.screenshot({ path: `test-results/cash-recorded-${name}.png` });
+  });
+
 test("cash taken out and a way changed, on their way, wait as the till's dock: the pressed button's ring in its colour, «Ще надсилаємо…» over it past 3 s, the sheet kept and «← Каса» held, Telegram's «Назад» hidden; answered, as before (audit after stage 2, orders-cash P0-1; review, 2026-11-09)", async ({
   page,
 }) => {

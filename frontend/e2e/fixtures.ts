@@ -980,7 +980,7 @@ export async function expectOneSticker(scope: Page | Locator): Promise<void> {
           style.fontWeight,
         ],
         meaning: [...node.classList].some((name) =>
-          /^tone-(?:debt|warn|kept|paid|transit|online)$/.test(name),
+          /^tone-(?:debt|warn|kept|paid|match|transit|online)$/.test(name),
         ),
         glyph: glyph === null ? null : getComputedStyle(glyph).width,
       };

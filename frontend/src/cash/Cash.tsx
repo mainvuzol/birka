@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { JSX, ReactNode } from "react";
 import { BackToMore } from "@/shared/More";
+import { Empty } from "@/shared/Empty";
 import type { MoreBack } from "@/shared/More";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, unreachable } from "@/shared/api";
@@ -27,6 +28,7 @@ import { ContextPlaceholder, DrawerPlaceholder } from "./Placeholders";
 import {
   correctionDone,
   cashDay,
+  dateOf,
   daysAgo,
   isoDay,
   movementDone,
@@ -47,6 +49,7 @@ import {
   staleToday,
   timeOf,
 } from "./errors";
+import { DoneLine } from "./DoneLine";
 import { directionOf, movementLabels, targetLabels, waysFor } from "./types";
 import type {
   CashAnswer,
@@ -567,7 +570,6 @@ export function Cash({
       <Closed
         close={close && (owedId === null || close.id === owedId) ? close : null}
         owedId={owedId}
-        storeId={store.id}
         failed={shown.error}
         kept={kept}
         done={done}
@@ -635,7 +637,7 @@ export function Cash({
           )
         )}
         {behind}
-        {done && <p role="status">{done}</p>}
+        <DoneLine text={done} />
         {problem && <p role="alert">{problem}</p>}
         {drawer.isPending ? (
           // The card's place only for whoever may close: no one else's
@@ -798,7 +800,10 @@ export function Cash({
             {data.movements.length > 0 && (
               <>
                 <h3 className="cash-subhead">Видано й внесено після закриття</h3>
-                <ul className="history" aria-label="Видано й внесено">
+                <ul
+                  className="timeline cash-moves"
+                  aria-label="Видано й внесено"
+                >
                   {data.movements.map((movement) => (
                     <MovementRow key={movement.id} movement={movement} />
                   ))}
@@ -870,15 +875,22 @@ function Row({
   );
 }
 
-/** Cash taken out or put in since the close: what for, when and who, and the
- * sum on the right, out as «−», in as «+» (cash task list, P0-1). */
+/** Cash taken out or put in since the close, as the history's thread (spec
+ * §6.21; orders and «Каса» task list after stage 2, P2-2): when at the left
+ * — today its time, before its day — a filled eyelet on the thread, what
+ * for, who and the close it went to, the sum on the right, out as «−», in
+ * as «+» (cash task list, P0-1). In the order the server answers. */
 function MovementRow({ movement }: { movement: Movement }): JSX.Element {
   const today =
     new Date(movement.at).toDateString() === new Date().toDateString();
   return (
-    <li className="history-row">
-      <span className="history-main">
-        <span className="history-what">
+    <li className="timeline-row">
+      <span className="timeline-day">
+        {today ? timeOf(movement.at) : dateOf(movement.at)}
+      </span>
+      <span className="timeline-node" aria-hidden="true" />
+      <span className="timeline-main">
+        <span className="timeline-what">
           {[
             movement.kind === "CHANGE"
               ? "Внесено · розмін"
@@ -888,9 +900,9 @@ function MovementRow({ movement }: { movement: Movement }): JSX.Element {
             .filter(Boolean)
             .join(" · ")}
         </span>
-        <span className="history-meta">
+        <span className="timeline-meta">
           {[
-            today ? timeOf(movement.at) : whenOf(movement.at),
+            today ? null : timeOf(movement.at),
             visible(movement.by),
             movement.for_day ? `до закриття ${dayOf(movement.for_day)}` : null,
           ]
@@ -898,7 +910,7 @@ function MovementRow({ movement }: { movement: Movement }): JSX.Element {
             .join(" · ")}
         </span>
       </span>
-      <span className="history-sum">
+      <span className="timeline-sum">
         {movement.direction === "OUT" ? "−" : "+"}
         {money(movement.amount)}
       </span>
@@ -1102,7 +1114,10 @@ function CorrectStep({
                 }}
               />
             ) : events.data.items.length === 0 ? (
-              <p>Цього дня грошових операцій не було.</p>
+              // The blank tag (spec §6.28; orders and «Каса» task list
+              // after stage 2, P2-3); «Оберіть день.» above is the field's
+              // hint, not an empty place.
+              <Empty title="Цього дня грошових операцій не було." />
             ) : (
               <ul className="fix-list" aria-label="Операції дня">
                 {events.data.items.map((event) => (

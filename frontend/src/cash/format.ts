@@ -24,8 +24,15 @@ export function moved(value: string): string {
 
 /** «06.10, 20:00» of a moment, the phone's own time. */
 export function whenOf(iso: string): string {
-  const at = new Date(iso);
-  return `${at.toLocaleDateString("uk-UA", { day: "2-digit", month: "2-digit" })}, ${timeOf(iso)}`;
+  return `${dateOf(iso)}, ${timeOf(iso)}`;
+}
+
+/** «21.10» of a moment, by the phone's own clock. */
+export function dateOf(iso: string): string {
+  return new Date(iso).toLocaleDateString("uk-UA", {
+    day: "2-digit",
+    month: "2-digit",
+  });
 }
 
 /** A day nobody closed went into this close (G9); the same words as the bot's. */

@@ -467,14 +467,51 @@ test("an order to send fits the phone: its goods as its title, when it was order
     exact: true,
   });
   await expect(title).toBeVisible();
-  // When it was ordered, its number small beside it; the store is the
-  // screen's line (В1).
-  await expect(page.locator(".order-context")).toHaveText(
-    `замовлено ${short(ready.created_at as string)} · № ${ready.id.slice(0, 8)}`,
+  // When it was ordered, its number small beside it (В1), in the screen's
+  // one line after the store and the person, no second line under it — at
+  // 360, two lines at most where the line has the width; beside «Змінити
+  // магазин», kept at its right (spec §6.2), a store named as long as
+  // «Основний» takes a third (orders and «Каса» task list after stage 2,
+  // P2-1; decided here).
+  const line = page.locator(".store-line p");
+  await expect(line).toHaveText(
+    new RegExp(
+      ` · замовлено ${short(ready.created_at as string)} · № ${ready.id.slice(0, 8)}$`,
+    ),
   );
-  await expect(page.locator(".order-number")).toHaveText(
+  await expect(page.locator(".order-context")).toHaveCount(0);
+  await expect(line.locator(".order-number")).toHaveText(
     `№ ${ready.id.slice(0, 8)}`,
   );
+  await expect(line.locator(".order-number")).toHaveCSS("font-size", "12px");
+  const lines = (): Promise<number> =>
+    line.evaluate((node) =>
+      Math.round(
+        node.getBoundingClientRect().height /
+          parseFloat(getComputedStyle(node).lineHeight),
+      ),
+    );
+  const change = page.locator(".store-line button", {
+    hasText: "Змінити магазин",
+  });
+  await expect(change).toBeVisible();
+  const [words, button] = await Promise.all([
+    line.boundingBox(),
+    change.boundingBox(),
+  ]);
+  expect(
+    words && button && button.x > words.x + words.width,
+    "«Змінити магазин» at the line's right",
+  ).toBe(true);
+  expect(await lines()).toBeLessThanOrEqual(3);
+  await change.evaluate((node) => {
+    (node as HTMLElement).style.display = "none";
+  });
+  expect(await lines()).toBeLessThanOrEqual(2);
+  await change.evaluate((node) => {
+    (node as HTMLElement).style.display = "";
+  });
+
   // Where it stands: to be sent since the day it was ordered, the rest to
   // come.
   const knots = page.locator(".knot-string .knot");
@@ -539,7 +576,7 @@ test("an order to send fits the phone: its goods as its title, when it was order
   // Its top at once, without a scroll.
   for (const part of [
     title,
-    page.locator(".order-context"),
+    page.locator(".store-line"),
     page.locator(".knot-string"),
     page.locator(".order-line"),
     page.locator(".order-total"),
@@ -567,6 +604,11 @@ test("outside Telegram the MainButton is the dock's one button under the thumb, 
   const step = panel(page).getByRole("button", { name: "Відправити" });
   await expect(step).toBeInViewport({ ratio: 1 });
   expect(await main(page)).toBeNull();
+  // The MainButton's own place, never the screen's primary: 50 high,
+  // Telegram's corner 10 (spec §6.4; orders and «Каса» task list after
+  // stage 2, P2-4).
+  expect((await step.boundingBox())?.height).toBe(50);
+  await expect(step).toHaveCSS("border-top-left-radius", "10px");
   // The panel's height kept clear wherever the page scrolls to — a field
   // the keyboard brings up (`shared/panel.ts`) — and none while it is gone.
   const room = (): Promise<string> =>
@@ -1599,10 +1641,10 @@ test("a collected order whose way is not given to this person offers no «Змі
 function stamp(iso: string): string {
   const at = new Date(iso);
   const two = (n: number): string => String(n).padStart(2, "0");
-  return `${two(at.getDate())}.${two(at.getMonth() + 1)}, ${two(at.getHours())}:${two(at.getMinutes())}`;
+  return `${two(at.getHours())}:${two(at.getMinutes())}`;
 }
 
-test("where it went, folded, then a row a version: what it was, when by the phone's clock and by whom, how it went on the right; the string's days, ordered and last sent (orders task list, P1-3; «Усе на бірці» sections task list, P0-2)", async ({
+test("where it went, folded, then the history's thread: a version's day at the left, a filled eyelet, what it was, how it went under it, when by the phone's clock and by whom; the string's days, ordered and last sent (orders task list, P1-3; «Усе на бірці» sections task list, P0-2; orders and «Каса» task list after stage 2, P2-2)", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 360, height: 640 });
@@ -1666,12 +1708,21 @@ test("where it went, folded, then a row a version: what it was, when by the phon
   await folded.click();
   await expect(folded).toHaveAttribute("aria-expanded", "true");
   await expect(rows.getByRole("listitem")).toHaveCount(3);
-  await expect(rows.locator(".shipping-kind")).toHaveText([
+  // The history's thread (spec §6.21): first version first, as before.
+  await expect(rows).toHaveClass(/(?:^|\s)timeline(?:\s|$)/);
+  await expect(rows.locator(".timeline-row")).toHaveCount(3);
+  await expect(rows.locator(".timeline-day")).toHaveText([
+    short(times[0] ?? ""),
+    short(times[1] ?? ""),
+    short(times[2] ?? ""),
+  ]);
+  await expect(rows.locator(".timeline-node")).toHaveCount(3);
+  await expect(rows.locator(".timeline-what")).toHaveText([
     "Вказано при створенні",
     "Вписано при відправленні",
     "Змінено",
   ]);
-  await expect(rows.locator(".sale-meta")).toHaveText([
+  await expect(rows.locator(".timeline-meta")).toHaveText([
     `${stamp(times[0] ?? "")} · Оля`,
     `${stamp(times[1] ?? "")} · Петро`,
     `${stamp(times[2] ?? "")} · Оля`,
@@ -1681,10 +1732,50 @@ test("where it went, folded, then a row a version: what it was, when by the phon
     "Нова пошта · ТТН 20451234567890",
     "За кордон · Варшава, Польща",
   ]);
-  // How it went on the right of what it was, in one row.
-  const kind = await rows.locator(".shipping-kind").nth(1).boundingBox();
+  // What it was 16/600 with how it went under it, in ink; the day 52 at
+  // the left with its gap, the eyelet filled on the thread.
+  const kind = await rows.locator(".timeline-what").nth(1).boundingBox();
   const how = await rows.locator(".shipping-how").nth(1).boundingBox();
-  expect(kind && how && how.x >= kind.x + kind.width).toBe(true);
+  expect(kind && how && how.y >= kind.y + kind.height - 1).toBe(true);
+  expect(kind && how && Math.abs(how.x - kind.x) < 1).toBe(true);
+  expect(
+    await rows
+      .locator(".timeline-what")
+      .first()
+      .evaluate((node) => [
+        getComputedStyle(node).fontSize,
+        getComputedStyle(node).fontWeight,
+      ]),
+  ).toEqual(["16px", "600"]);
+  const thread = await rows.evaluate((list) => {
+    const probe = document.createElement("span");
+    document.body.append(probe);
+    probe.style.color = "var(--success)";
+    const success = getComputedStyle(probe).color;
+    probe.style.color = "var(--ink)";
+    const ink = getComputedStyle(probe).color;
+    probe.remove();
+    const row = list.querySelector(".timeline-row");
+    const day = list.querySelector(".timeline-day");
+    const node = list.querySelector(".timeline-node");
+    const how = list.querySelector(".shipping-how");
+    if (!row || !day || !node || !how) return null;
+    return {
+      day: day.getBoundingClientRect().left - row.getBoundingClientRect().left,
+      node: [
+        getComputedStyle(node).backgroundColor === success,
+        node.getBoundingClientRect().width,
+      ],
+      how: getComputedStyle(how).color === ink,
+      line: getComputedStyle(row, "::before").width,
+    };
+  });
+  expect(thread).toEqual({
+    day: 0,
+    node: [true, 8],
+    how: true,
+    line: "1.5px",
+  });
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth),
   ).toBeLessThanOrEqual(360);
@@ -2389,6 +2480,10 @@ test("a return refused as changed keeps its screen, the reason and the tick; one
     },
   };
   const take = panel(page).getByRole("button", { name: "Прийняти повернення" });
+  // The screen's main button: 52 and corner 8 (orders and «Каса» task list
+  // after stage 2, P2-4).
+  expect((await take.boundingBox())?.height).toBe(52);
+  await expect(take).toHaveCSS("border-top-left-radius", "8px");
   await take.click();
   await expect(page.getByRole("alert")).toBeVisible();
   await expect(
@@ -2521,6 +2616,12 @@ test("while an order is read, its title, context, pill and two lines hold their 
     page.getByRole("status").filter({ hasText: "Завантажуємо замовлення…" }),
   ).toBeAttached();
   await expect(page.locator(".order-placeholder")).toBeVisible();
+  // Its line of context the head's one line: no grey line of its own under
+  // it (orders and «Каса» task list after stage 2, P2-1; review).
+  await expect(page.locator(".store-line p")).toBeVisible();
+  await expect(page.locator(".order-placeholder .skeleton-meta")).toHaveCount(
+    0,
+  );
   const back = page.getByRole("button", { name: "До замовлень", exact: true });
   const before = await back.boundingBox();
   const place = await page.locator(".skeleton-title").boundingBox();
@@ -2656,7 +2757,7 @@ for (const [name, theme] of [
     await apart(page);
     for (const part of [
       page.locator(".order-title"),
-      page.locator(".order-context"),
+      page.locator(".store-line p"),
       page.locator(".order-number"),
       page.locator(".knot-string .knot-label").first(),
       page.locator(".knot-string .knot-label").last(),
@@ -2989,8 +3090,9 @@ for (const [name, theme] of [
       page.locator(".order-goes"),
       page.getByRole("button", { name: "Скопіювати ТТН" }),
       page.locator(".shipping-changes-title"),
-      page.locator(".shipping-kind"),
-      page.locator(".shipping-changes .sale-meta"),
+      page.locator(".shipping-changes .timeline-day"),
+      page.locator(".shipping-changes .timeline-what"),
+      page.locator(".shipping-changes .timeline-meta"),
       page.locator(".shipping-how"),
       page.getByRole("button", { name: "Змінити доставку" }),
     ])
@@ -2998,6 +3100,28 @@ for (const [name, theme] of [
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth),
     ).toBeLessThanOrEqual(360);
+    // The same waybill's plate a warning's, its corner 4 (spec §6.23); its
+    // row's chevron the set's 16 in pencil, never a «›» (orders and «Каса»
+    // task list after stage 2, P2-4).
+    const plate = page.locator(".same-waybill");
+    await expect(plate).toHaveCSS("border-top-left-radius", "4px");
+    const other = plate.locator(".sale-row");
+    await expect(other).not.toContainText("›");
+    expect(
+      await other.evaluate((node) => {
+        const chevron = node.querySelector(":scope > svg.sale-open");
+        const probe = document.createElement("span");
+        probe.style.color = "var(--pencil)";
+        document.body.append(probe);
+        const pencil = getComputedStyle(probe).color;
+        probe.remove();
+        return [
+          node.getBoundingClientRect().height >= 64,
+          chevron?.getBoundingClientRect().width,
+          chevron ? getComputedStyle(chevron).color === pencil : false,
+        ];
+      }),
+    ).toEqual([true, 16, true]);
     // Scrolled to the foot, the panel held over nothing.
     await page
       .getByRole("button", { name: "Товар повернувся на склад" })

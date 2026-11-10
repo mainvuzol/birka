@@ -1100,9 +1100,9 @@ for (const scheme of ["light", "dark"] as const)
     expect(drawn.pill).toBe("8px");
     expect(drawn.openWord).toEqual(["13px", "700"]);
     expect(drawn.otherWord).toEqual(["13px", "600"]);
-    // In the sheet: every corner one of the scale's tokens, or none — but
-    // the four «Замовлення» and «Каса» set right in their own task (orders
-    // and «Каса» task list after stage 2, P2-4).
+    // In the sheet: every corner one of the scale's tokens, or none — the
+    // four «Замовлення» and «Каса» kept set right in their own task too
+    // (orders and «Каса» task list after stage 2, P2-4).
     const css = readFileSync("src/styles.css", "utf8");
     const offScale: string[] = [];
     let rule = "";
@@ -1116,12 +1116,7 @@ for (const scheme of ["light", "dark"] as const)
       )
         offScale.push(rule);
     }
-    expect(offScale).toEqual([
-      ".cash-panel-button",
-      ".skeleton-way",
-      ".cancel-ask",
-      ".same-waybill",
-    ]);
+    expect(offScale).toEqual([]);
     // Nothing left of what no screen draws (P1-1, 9).
     for (const gone of [
       ".t-button",

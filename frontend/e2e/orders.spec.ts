@@ -130,7 +130,7 @@ test("reserve, dispatch, arrive, collect through real API", async ({
   await enter(page);
   await draft(page);
   await reserve(page);
-  await expect(page.locator(".order-context")).toBeVisible();
+  await expect(page.locator(".order-number")).toBeVisible();
   await expect(
     page.locator(".knot-string [aria-current='step'] .knot-label"),
   ).toHaveText("До відправлення");
@@ -225,7 +225,7 @@ test("reserve, dispatch, arrive, collect through real API", async ({
   await expect(
     page.getByRole("heading", { name: "Замовлення", exact: true }),
   ).toBeVisible();
-  await expect(page.locator(".order-context")).toHaveCount(0);
+  await expect(page.locator(".order-number")).toHaveCount(0);
 });
 test("lost committed response survives reopening and reuses the same command", async ({
   page,
@@ -257,7 +257,7 @@ test("lost committed response survives reopening and reuses the same command", a
   // Read from the phone's storage, it is checked at once, with no tap
   // (ADR-0013 §4.3), and its own tab opens (redesign P0-1).
   await reopen(reopened);
-  await expect(reopened.locator(".order-context")).toBeVisible();
+  await expect(reopened.locator(".order-number")).toBeVisible();
   expect(commands).toHaveLength(2);
   expect(commands[1]).toBe(commands[0]);
   // Asked first (orders task list, P0-4).
@@ -324,7 +324,7 @@ test("a kept order its check cannot settle opens on «Замовлення», no
   await reopened.waitForLoadState("networkidle");
   answered = true;
   await retry.click();
-  await expect(reopened.locator(".order-context")).toBeVisible();
+  await expect(reopened.locator(".order-number")).toBeVisible();
   // Its card, «Замовлення» marked still.
   await expect(orders).toHaveAttribute("aria-current", "page");
   expect(new Set(commands).size).toBe(1);
@@ -457,7 +457,7 @@ test("uncertain command stays blocked after access denial, then reconciles", asy
   await expect(menu(page)).toBeHidden();
   await expect(retry).toBeEnabled();
   await retry.click();
-  await expect(page.locator(".order-context")).toBeVisible();
+  await expect(page.locator(".order-number")).toBeVisible();
   expect(new Set(commands).size).toBe(1);
   expect(commands).toHaveLength(3);
 });
