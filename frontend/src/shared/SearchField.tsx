@@ -6,8 +6,8 @@ import { Icon } from "./Icon";
  * the magnifier on its left, what to type as its placeholder, and «×» on
  * its right once something is typed, which empties it and keeps the cursor
  * in it. Its name is read aloud and never seen: the placeholder says it.
- * Built for the till, taken by «Повернути» (P1-3); «Внесок» takes it with
- * its task.
+ * Built for the till, taken by «Повернути» (P1-3), «Внесок» and «Покупці»
+ * (audit after stage 2, sale P1-1).
  */
 export function SearchField({
   label,
@@ -17,6 +17,7 @@ export function SearchField({
   inputRef,
   maxLength = 200,
   autoFocus = false,
+  inputMode,
 }: {
   label: string;
   placeholder: string;
@@ -28,6 +29,8 @@ export function SearchField({
   /** Mounted by a tap: the cursor in it at once, the keyboard with it
    * (iOS opens it only inside the tap). */
   autoFocus?: boolean;
+  /** The keyboard it asks for: digits where only a number is searched. */
+  inputMode?: "tel" | undefined;
 }): JSX.Element {
   return (
     <div className="search-field">
@@ -41,6 +44,7 @@ export function SearchField({
           maxLength={maxLength}
           enterKeyHint="search"
           autoComplete="off"
+          inputMode={inputMode}
           placeholder={placeholder}
           value={value}
           onChange={(event) => {

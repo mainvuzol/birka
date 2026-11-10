@@ -9,6 +9,7 @@ import {
   storeLine,
   sellsFrom,
   shortage,
+  expectEmpty,
 } from "./fixtures";
 import type { Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
@@ -304,11 +305,16 @@ test("nothing found says where, and «Очистити» brings the list back", 
   await stubList(page, [laurent]);
   await onTheTill(page);
   await search(page).fill("зима");
+  // The blank tag (spec §6.28; audit after stage 2, sale P1-2): what was
+  // typed and where its line, what to do its meta, «Очистити» quiet.
+  const empty = page.locator(".orders-empty");
+  await expectEmpty(empty, /^За «зима» на складі «.+» нічого немає\.$/);
+  await expect(empty.locator(".t-meta")).toHaveText(
+    "Перевірте назву або очистіть пошук.",
+  );
   await expect(
-    page.getByText(
-      /^За «зима» на складі «.+» нічого немає\. Перевірте назву або очистіть пошук\.$/,
-    ),
-  ).toBeVisible();
+    empty.getByRole("button", { name: "Очистити", exact: true }),
+  ).toHaveClass("quiet");
   await page.getByRole("button", { name: "Очистити", exact: true }).click();
   await expect(search(page)).toHaveValue("");
   await expect(search(page)).toBeFocused();
@@ -419,6 +425,66 @@ test("a model with no price: its field takes the cursor, and the ways wait for a
   ).toBeVisible();
   expect(sent[0]?.lines[0]?.unit_price).toBe("1500.50");
 });
+
+for (const scheme of ["light", "dark"] as const)
+  test(`in the ${scheme} theme a price that is no price is said in danger's colour with its sign, at 4.5:1 (audit after stage 2, sale P2-2)`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ colorScheme: scheme });
+    await stubList(page, [{ ...laurent, suggested_price: null }]);
+    await onTheTill(page);
+    await chip(page, "Лоран шоколад", "M, вільно 2").click();
+    const price = page
+      .getByRole("dialog", { name: "Кошик" })
+      .locator(".line")
+      .getByLabel("Ціна, грн");
+    await price.fill("15,5,5");
+    const error = page.locator(".hint.price-error");
+    await expect(error).toHaveText(
+      "Впишіть ціну: гривні й копійки, напр. 1850 або 1850,50.",
+    );
+    // Its sign beside the words, never the colour alone (direction §4).
+    const sign = error.locator("svg.icon");
+    await expect(sign).toBeVisible();
+    expect(await sign.boundingBox()).toMatchObject({ width: 16, height: 16 });
+    const drawn = await error.evaluate((node) => {
+      const probe = document.createElement("span");
+      probe.style.color = "var(--danger)";
+      document.body.append(probe);
+      const danger = getComputedStyle(probe).color;
+      probe.remove();
+      const rgb = (value: string): number[] =>
+        (value.match(/[\d.]+/g) ?? []).map(Number);
+      const luminance = ([r, g, b]: number[]): number => {
+        const channel = (c: number): number => {
+          const v = c / 255;
+          return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+        };
+        return (
+          0.2126 * channel(r ?? 0) +
+          0.7152 * channel(g ?? 0) +
+          0.0722 * channel(b ?? 0)
+        );
+      };
+      let ground: Element | null = node;
+      let background = "rgba(0, 0, 0, 0)";
+      while (ground) {
+        background = getComputedStyle(ground).backgroundColor;
+        const alpha = rgb(background)[3];
+        if (alpha === undefined || alpha > 0) break;
+        ground = ground.parentElement;
+      }
+      const fore = luminance(rgb(getComputedStyle(node).color));
+      const back = luminance(rgb(background));
+      return {
+        color: getComputedStyle(node).color,
+        danger,
+        ratio: (Math.max(fore, back) + 0.05) / (Math.min(fore, back) + 0.05),
+      };
+    });
+    expect(drawn.color).toBe(drawn.danger);
+    expect(drawn.ratio).toBeGreaterThanOrEqual(4.5);
+  });
 
 test("a line changed after the server's shortage answer is a new sale, its answers gone", async ({
   page,

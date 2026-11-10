@@ -537,6 +537,22 @@ function owed(page: Page): Locator {
   return page.locator(".owed-sum");
 }
 
+/** How many buttons shown are filled in the main's colour. */
+async function inMainColour(page: Page): Promise<number> {
+  return page.evaluate(() => {
+    const probe = document.createElement("span");
+    probe.style.color = "var(--primary)";
+    document.body.append(probe);
+    const main = getComputedStyle(probe).color;
+    probe.remove();
+    return [...document.querySelectorAll("button")].filter(
+      (button) =>
+        button.getClientRects().length > 0 &&
+        getComputedStyle(button).backgroundColor === main,
+    ).length;
+  });
+}
+
 test("S21 and S22: a sum typed asks before closing, wiped or taken lets go; the result's «Відкрити борг» is Telegram's MainButton in the app's colours, and pressed it opens the debt again", async ({
   page,
 }) => {
@@ -597,6 +613,11 @@ test("S21 and S22: a sum typed asks before closing, wiped or taken lets go; the 
     page.getByRole("button", { name: "Відкрити борг", exact: true }),
   ).toHaveCount(0);
   await expect(page.locator(".result-next button")).toHaveCount(1);
+  // The way back quiet under the stub: one main on the screen, Telegram's —
+  // no button of the app's in the main's colour (audit after stage 2, sale
+  // P1-5).
+  await expect(page.locator(".result-next button")).toHaveClass("quiet");
+  expect(await inMainColour(page)).toBe(0);
 
   // Telegram's theme turns dark: the button in the dark's colours.
   await page.evaluate(() => {
@@ -666,6 +687,14 @@ test("where Telegram names no version, it is told none of this: the result's «�
     .getByRole("group", { name: "Внесок", exact: true })
     .getByRole("button", { name: "Готівка" })
     .click();
+  // The screen's one main, the way back; «Відкрити борг» quiet (sale P1-5).
+  await expect(
+    page.getByRole("heading", { name: "Внесок записано" }),
+  ).toBeVisible();
+  await expect(page.locator(".result-next button").first()).toHaveClass(
+    "primary",
+  );
+  expect(await inMainColour(page)).toBe(1);
   await page
     .getByRole("button", { name: "Відкрити борг", exact: true })
     .click();
@@ -673,11 +702,13 @@ test("where Telegram names no version, it is told none of this: the result's «�
   expect(await rules(page)).toEqual([]);
 });
 
-test("a return's sale found puts the keyboard away; its reason's key makes a new line", async ({
-  page,
-}) => {
-  await hear(page);
-  const saleId = randomUUID();
+/** A sale of today to return, stubbed: «Лоран шоколад» M at 1 850,00,
+ * paid in cash; its return answered by `refund`, when given. */
+async function saleToReturn(
+  page: Page,
+  saleId: string,
+  refund?: (route: Route) => Promise<void>,
+): Promise<void> {
   await page.route("**/api/v1/sales?**", async (route) => {
     await route.fulfill({
       json: {
@@ -724,6 +755,15 @@ test("a return's sale found puts the keyboard away; its reason's key makes a new
       },
     });
   });
+  if (refund) await page.route("**/api/v1/sales/*/refunds", refund);
+}
+
+test("a return's sale found puts the keyboard away; its reason's key makes a new line", async ({
+  page,
+}) => {
+  await hear(page);
+  const saleId = randomUUID();
+  await saleToReturn(page, saleId);
   await page.goto(launch("9.1"));
   await openStore(page, "Основний MAIN");
   await section(page, "Повернення");
@@ -736,6 +776,151 @@ test("a return's sale found puts the keyboard away; its reason's key makes a new
   const found = await keys(page);
   expect(found).toContain("enter");
   expect(found).not.toContain(null);
+});
+
+/** A kept command answered at last: the app resends it by itself once
+ * an answer comes back, else its stub's button checks it — whichever
+ * first, until its result is shown. */
+async function checked(page: Page, what: string, done: string): Promise<void> {
+  const check = page.getByRole("button", {
+    name: `Перевірити результат ${what}`,
+  });
+  await expect(async () => {
+    if ((await check.count()) > 0)
+      await check.click({ timeout: 1000 }).catch(() => undefined);
+    await expect(page.getByRole("heading", { name: done })).toBeVisible({
+      timeout: 1000,
+    });
+  }).toPass();
+}
+
+test("units counted on a return ask before closing, none counted let go; a return kept on the phone asks until it is checked (audit after stage 2, sale P2-1)", async ({
+  page,
+}) => {
+  await hear(page);
+  const saleId = randomUUID();
+  let lose = true;
+  const refund = async (route: Route): Promise<void> => {
+    if (lose) {
+      await route.abort("connectionreset");
+      return;
+    }
+    const body = route.request().postDataJSON() as {
+      lines: { sale_item_id: string; quantity: number }[];
+    };
+    await route.fulfill({
+      status: 201,
+      json: {
+        id: randomUUID(),
+        sale_id: saleId,
+        store_id: fixture.store_id,
+        total_amount: "1850.00",
+        items: body.lines.map((part) => ({
+          sale_item_id: part.sale_item_id,
+          quantity: part.quantity,
+          amount: "1850.00",
+          condition: "INTACT",
+          destination_location_id: fixture.till_location_id,
+          display_name: "Лоран шоколад",
+        })),
+        payment_method: "CASH",
+      },
+    });
+  };
+  await saleToReturn(page, saleId, refund);
+  await page.goto(launch("9.1"));
+  await openStore(page, "Основний MAIN");
+  await section(page, "Повернення");
+  await page.getByRole("button", { name: /^Оформити повернення: / }).click();
+  await expect(page.locator(".line-return")).toBeVisible();
+  const closing = (): Promise<unknown[]> =>
+    only(page, "web_app_setup_closing_behavior");
+  expect(await closing()).toEqual([]);
+  // A unit counted: asked; none, let go.
+  await page.getByRole("button", { name: "Цілі: більше" }).click();
+  await expect
+    .poll(async () => (await closing()).at(-1))
+    .toEqual(asks(true)[1]);
+  await page.getByRole("button", { name: "Цілі: менше" }).click();
+  await expect
+    .poll(async () => (await closing()).at(-1))
+    .toEqual(asks(false)[1]);
+  // Sent and its answer lost: kept on the phone.
+  await page.getByRole("button", { name: "Цілі: більше" }).click();
+  await page
+    .getByRole("button", { name: /^Повернути покупцю 1\s850,00\sгрн/ })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Повернення ще не підтверджено" }),
+  ).toBeVisible();
+  // Reopened, the form gone with the memory: the kept return still asks.
+  await page.reload();
+  await openStore(page, "Основний MAIN");
+  await expect(
+    page.getByRole("heading", { name: "Повернення ще не підтверджено" }),
+  ).toBeVisible();
+  await expect(page.locator(".line-return")).toHaveCount(0);
+  await expect
+    .poll(async () => (await closing()).at(-1))
+    .toEqual(asks(true)[1]);
+  // Checked and answered: let go.
+  lose = false;
+  await checked(page, "повернення", "Повернення записано один раз");
+  await expect
+    .poll(async () => (await closing()).at(-1))
+    .toEqual(asks(false)[1]);
+});
+
+test("a payment kept on the phone asks before closing until it is checked (audit after stage 2, sale P2-1)", async ({
+  page,
+}) => {
+  await hear(page);
+  let lose = true;
+  const answer = async (
+    route: Route,
+    debt: Record<string, unknown>,
+  ): Promise<void> => {
+    if (lose) {
+      await route.abort("connectionreset");
+      return;
+    }
+    await route.fulfill({
+      status: 201,
+      json: { ...debt, paid: "1700.00", owed: "1300.00" },
+    });
+  };
+  await debtAtTheTill(page, answer);
+  await onTheTill(page, "9.1");
+  await tillWays(page)
+    .getByRole("button", { name: "Внесок", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: /^Відкрити борг: Оксана Петренко,/ })
+    .click();
+  await key(page, "700");
+  await page
+    .getByRole("group", { name: "Внесок", exact: true })
+    .getByRole("button", { name: "Готівка" })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Внесок ще не підтверджено" }),
+  ).toBeVisible();
+  const closing = (): Promise<unknown[]> =>
+    only(page, "web_app_setup_closing_behavior");
+  // Reopened, the sum typed gone with the memory: the kept payment asks.
+  await page.reload();
+  await openStore(page, "Основний MAIN");
+  await expect(
+    page.getByRole("heading", { name: "Внесок ще не підтверджено" }),
+  ).toBeVisible();
+  await expect
+    .poll(async () => (await closing()).at(-1))
+    .toEqual(asks(true)[1]);
+  lose = false;
+  await checked(page, "внеску", "Внесок записано один раз");
+  await expect
+    .poll(async () => (await closing()).at(-1))
+    .toEqual(asks(false)[1]);
 });
 
 /** The fields shown that type text, each with the keyboard's key it gets:

@@ -11,6 +11,7 @@ import {
   toTill,
   sellsFrom,
   shortage,
+  expectEmpty,
 } from "./fixtures";
 import type { Page, Route } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
@@ -285,11 +286,19 @@ test("a warehouse where nothing is recorded yet says to sell on paper, and offer
 }) => {
   await serve(page, { waiting: true });
   await openTill(page);
-  await expect(
-    page.getByText(
-      "На складі «Спільний» зараз немає товару в обліку. Поки власник не затвердить початкові залишки, продавайте на папері.",
-    ),
-  ).toBeVisible();
+  // The blank tag, the fact its line and what to do its meta (audit after
+  // stage 2, sale P1-2), seen at 360 × 640 without a scroll.
+  await page.setViewportSize({ width: 360, height: 640 });
+  const empty = page.locator(".orders-empty");
+  await expectEmpty(empty, "На складі «Спільний» зараз немає товару в обліку.");
+  await expect(empty.locator(".t-meta")).toHaveText(
+    "Поки власник не затвердить початкові залишки, продавайте на папері.",
+  );
+  const box = await empty.locator(".t-meta").boundingBox();
+  // On the screen as it opened: nothing scrolled to see it (review).
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
+  expect(box?.y ?? -1).toBeGreaterThanOrEqual(0);
+  expect((box?.y ?? 0) + (box?.height ?? 0)).toBeLessThanOrEqual(640);
   await expect(
     page.getByRole("searchbox", { name: "Знайти модель" }),
   ).toHaveCount(0);
@@ -329,9 +338,10 @@ test("an empty warehouse names itself, and a coat in hand is found in the catalo
     await route.fulfill({ status: 201, json: receiptOf(body) });
   };
   await openTill(page);
-  await expect(
-    page.getByText("На складі «Спільний» зараз немає товару в обліку."),
-  ).toBeVisible();
+  await expectEmpty(
+    page.locator(".orders-empty"),
+    "На складі «Спільний» зараз немає товару в обліку.",
+  );
   await expect(
     page.getByText("Товар у руках, а в списку його немає?"),
   ).toBeVisible();
@@ -381,11 +391,14 @@ test("a search that finds nothing offers the catalogue; without the rights, or f
   await serve(page);
   await openTill(page);
   await page.getByRole("searchbox", { name: "Знайти модель" }).fill("ябко");
+  // The blank tag, the catalogue's way under it (sale P1-2).
+  const empty = page.locator(".orders-empty");
+  await expectEmpty(empty, "За «ябко» на складі «Спільний» нічого немає.");
+  await expect(empty.locator(".t-meta")).toHaveText(
+    "Перевірте назву або очистіть пошук.",
+  );
   await expect(
-    page.getByText("За «ябко» на складі «Спільний» нічого немає."),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Знайти в каталозі" }),
+    empty.getByRole("button", { name: "Знайти в каталозі" }),
   ).toBeVisible();
   // From paper nobody stands at the shelf: no coat in hand is found.
   await fromPaper(page);
@@ -418,9 +431,10 @@ test("a search that finds nothing offers the catalogue; without the rights, or f
   });
   await page.goto("about:blank");
   await openTill(page);
-  await expect(
-    page.getByText("На складі «Спільний» зараз немає товару в обліку."),
-  ).toBeVisible();
+  await expectEmpty(
+    page.locator(".orders-empty"),
+    "На складі «Спільний» зараз немає товару в обліку.",
+  );
   await expect(
     page.getByRole("button", { name: "Знайти в каталозі" }),
   ).toHaveCount(0);

@@ -1,5 +1,6 @@
 import type { JSX } from "react";
 import { money } from "@/orders/types";
+import { Icon } from "@/shared/Icon";
 
 /** A line's price that does not read as money (redesign P0-3). */
 export const priceText =
@@ -27,7 +28,12 @@ export function PriceHint({
   return (
     <>
       {price === "" && (typed.trim() || suggested) ? (
-        <span className="hint price-error">{priceText}</span>
+        <span className="hint price-error">
+          {/* Its sign, never its colour alone (direction §4; audit after
+              stage 2, sale P2-2). */}
+          <Icon name="danger" size={16} />
+          {priceText}
+        </span>
       ) : suggested ? (
         <span className="hint">
           Ціна продажу {money(suggested)}. Домовилися про іншу — змініть.

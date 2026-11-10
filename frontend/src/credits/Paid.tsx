@@ -199,10 +199,11 @@ function PaymentNext({
   return (
     <div className="result-next">
       {/* The main only where Telegram's is not: there, «Відкрити борг»
-          is (audit after stage 2, frame P1-1). */}
+          is, and the way back a quiet one under the stub — one main on
+          the screen (audit after stage 2, frame P1-1, sale P1-5). */}
       <button
         type="button"
-        className={main ? undefined : "primary"}
+        className={main ? "quiet" : "primary"}
         onClick={back}
       >
         {backTo}

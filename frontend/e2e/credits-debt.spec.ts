@@ -7,6 +7,7 @@ import {
   listRow,
   section,
   tillWays,
+  expectEmpty,
 } from "./fixtures";
 import type { Locator, Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
@@ -25,6 +26,7 @@ interface Fixture {
   store_id: string;
   /** «Другий», where «Оля» works too. */
   second_store_id: string;
+  till_location_id: string;
 }
 const fixture = JSON.parse(
   readFileSync(
@@ -908,6 +910,57 @@ for (const [name, theme, scheme] of [
       "color",
       await accentText(page),
     );
+    // How much is paid: a bar of 6 with the sticker's corner 3, its track
+    // the fold with a hairline, filled in the paid's colour — never the
+    // hand's accent (spec §6.24; audit after stage 2, sale P2-2).
+    const bar = page.locator(".debt-bar");
+    const drawn = await bar.evaluate((node) => {
+      const resolve = (value: string): string => {
+        const probe = document.createElement("span");
+        probe.style.color = value;
+        document.body.append(probe);
+        const color = getComputedStyle(probe).color;
+        probe.remove();
+        return color;
+      };
+      const rgb = (value: string): number[] =>
+        (value.match(/[\d.]+/g) ?? []).map(Number);
+      const luminance = ([r, g, b]: number[]): number => {
+        const channel = (c: number): number => {
+          const v = c / 255;
+          return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+        };
+        return (
+          0.2126 * channel(r ?? 0) +
+          0.7152 * channel(g ?? 0) +
+          0.0722 * channel(b ?? 0)
+        );
+      };
+      const track = getComputedStyle(node);
+      const fill = node.querySelector("span");
+      const filled = fill ? getComputedStyle(fill).backgroundColor : "";
+      const a = luminance(rgb(filled));
+      const b = luminance(rgb(track.backgroundColor));
+      return {
+        height: node.getBoundingClientRect().height,
+        radius: track.borderTopLeftRadius,
+        border: `${track.borderTopWidth} ${track.borderTopStyle} ${track.borderTopColor}`,
+        track: track.backgroundColor,
+        filled,
+        // The paid part against the rest of the track: 3:1, as a part one
+        // needs to see (WCAG 1.4.11).
+        ratio: (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05),
+        hairline: resolve("var(--hairline)"),
+        fold: resolve("var(--fold)"),
+        paid: resolve("var(--paid)"),
+      };
+    });
+    expect(drawn.height).toBe(6);
+    expect(drawn.radius).toBe("3px");
+    expect(drawn.border).toBe(`1px solid ${drawn.hairline}`);
+    expect(drawn.track).toBe(drawn.fold);
+    expect(drawn.filled).toBe(drawn.paid);
+    expect(drawn.ratio).toBeGreaterThanOrEqual(3);
     // The ⋯ a 44 target, read as the text is.
     const more = page.getByRole("button", { name: "Дії з боргом" });
     const box = await more.boundingBox();
@@ -1362,6 +1415,53 @@ test.describe("«Продаж» › «Внесок»: a payment on a debt from t
     };
   }
 
+  test("«Внесок»'s field is the till's: where «Знайти модель» stood, 52 high, its name heard, the magnifier, «×» emptying it with the cursor kept (audit after stage 2, sale P1-1)", async ({
+    page,
+  }) => {
+    await serve(page, coat());
+    // The till sells from its one warehouse, which has its goods: its
+    // search stands under the switch, nothing said over it.
+    await page.route("**/api/v1/stock-locations?**", async (route) => {
+      const response = await route.fetch();
+      const rows = (await response.json()) as { id: string }[];
+      await route.fulfill({
+        response,
+        json: rows
+          .filter((row) => row.id === fixture.till_location_id)
+          .map((row) => ({
+            ...row,
+            is_active: true,
+            can_sell: true,
+            awaiting_first_stock: false,
+          })),
+      });
+    });
+    await page.setViewportSize({ width: 360, height: 640 });
+    await page.goto(launch());
+    await openStore(page, "Основний MAIN");
+    await toTill(page);
+    const tillSearch = page.getByRole("searchbox", { name: "Знайти модель" });
+    await expect(tillSearch).toBeVisible();
+    const tillField = await tillSearch.boundingBox();
+    await tillWays(page)
+      .getByRole("button", { name: "Внесок", exact: true })
+      .click();
+    // Switching moves nothing under the finger.
+    const search = page.getByRole("searchbox", { name: "Ім’я або телефон" });
+    await expect(search).toBeVisible();
+    const box = await search.boundingBox();
+    if (!tillField || !box) throw new Error("not laid out");
+    expect(Math.round(box.y)).toBe(Math.round(tillField.y));
+    expect(box.height).toBe(tillField.height);
+    expect(box.height).toBe(52);
+    await expect(search).toHaveAttribute("placeholder", "Ім’я або телефон");
+    await expect(page.locator(".credits .search-field svg.icon")).toBeVisible();
+    await search.fill("Окс");
+    await page.getByRole("button", { name: "Очистити пошук" }).click();
+    await expect(search).toHaveValue("");
+    await expect(search).toBeFocused();
+  });
+
   test("three taps from the till — «Внесок», the row, a way: S21 names the goods, the menu steps aside, the sum is keyed in, and S22's stub says what the customer owes the store in all", async ({
     page,
   }) => {
@@ -1698,12 +1798,11 @@ test.describe("«Продаж» › «Внесок»: a payment on a debt from t
     await page.goto("about:blank");
     await atTheTill(page);
     await page.getByLabel("Ім’я або телефон").fill("067 123 45 67");
-    await expect(
-      page.getByText(
-        "За цим номером у цьому магазині боргів немає. Внесок приймає магазин, де продали.",
-        { exact: true },
-      ),
-    ).toBeVisible();
+    const none = page.locator(".orders-empty");
+    await expectEmpty(none, "За цим номером у цьому магазині боргів немає.");
+    await expect(none.locator(".t-meta")).toHaveText(
+      "Внесок приймає магазин, де продали.",
+    );
     await expect(page.getByText(/Внесок приймає «/)).toHaveCount(0);
     expect(asked).not.toContain(fixture.second_store_id);
   });
