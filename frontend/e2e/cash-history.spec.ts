@@ -160,8 +160,14 @@ function pages(): Record<string, unknown>[] {
   return [shortage, surplus, exact, ...older, first];
 }
 
-async function stub(page: Page): Promise<{ asked: string[] }> {
+async function stub(
+  page: Page,
+  /** Offsets of the closes' pages refused once. */
+  failing: Set<number> = new Set(),
+): Promise<{ asked: string[]; held: Map<number, Promise<void>> }> {
   const asked: string[] = [];
+  /** Offsets of the closes' pages answered only once their gate opens. */
+  const held = new Map<number, Promise<void>>();
   const all = pages();
   await page.route("**/api/v1/cash/drawer?**", async (route) => {
     await route.fulfill({
@@ -205,6 +211,17 @@ async function stub(page: Page): Promise<{ asked: string[] }> {
     asked.push(url.search);
     const offset = Number(url.searchParams.get("offset") ?? "0");
     const limit = Number(url.searchParams.get("limit") ?? "100");
+    // The history's pages alone: «Каса»'s own reads of the closes ask no
+    // offset.
+    const paged = url.searchParams.has("offset");
+    if (paged) await held.get(offset);
+    if (paged && failing.delete(offset)) {
+      await route.fulfill({
+        status: 500,
+        json: { code: "INTERNAL_ERROR", message: "Internal error" },
+      });
+      return;
+    }
     await route.fulfill({
       json: {
         items: all.slice(offset, offset + limit),
@@ -212,7 +229,7 @@ async function stub(page: Page): Promise<{ asked: string[] }> {
       },
     });
   });
-  return { asked };
+  return { asked, held };
 }
 
 async function history(
@@ -455,6 +472,96 @@ test("twenty closes to a page, «Показати ще» for the rest; the first
   ).toBeVisible();
   await expect(page.getByText("Порахували")).toBeVisible();
   await expect(page.getByText(/наступного разу/)).toHaveCount(0);
+});
+
+test("a page of closes that could not be read is one plate where «Показати ще» stood, its «Спробувати ще раз» reading that page, the closes read kept (orders and «Каса» task list after stage 2, P2-6)", async ({
+  page,
+}) => {
+  const failing = new Set([20]);
+  const server = await stub(page, failing);
+  const list = await history(page);
+  const closes = list.locator(".close-row");
+  await expect(closes).toHaveCount(20);
+  await page.getByRole("button", { name: "Показати ще" }).click();
+  const plate = page.locator(".notice.read-failure");
+  const atFoot = async (): Promise<void> => {
+    await expect(plate).toHaveCount(1);
+    await expect(plate).toHaveAttribute("role", "alert");
+    await expect(plate.getByRole("button")).toHaveText(["Спробувати ще раз"]);
+    await expect(page.getByRole("button", { name: "Показати ще" })).toHaveCount(
+      0,
+    );
+    await expect(closes).toHaveCount(20);
+    // Under the closes read, never over them.
+    const [last, under] = await Promise.all([
+      closes.last().boundingBox(),
+      plate.boundingBox(),
+    ]);
+    expect(last && under && under.y >= last.y + last.height).toBe(true);
+  };
+  await atFoot();
+
+  // Read again whole on return to the app meanwhile: the plate stays where
+  // «Показати ще» stood, its retry held till answered, nothing said over
+  // the closes; answered, «Показати ще» is back (review).
+  const firsts = (): number =>
+    server.asked.filter((search) => /limit=20&offset=0(&|$)/.test(search))
+      .length;
+  const before = firsts();
+  let reread = (): void => undefined;
+  server.held.set(
+    0,
+    new Promise<void>((done) => {
+      reread = done;
+    }),
+  );
+  await page.evaluate(() => {
+    window.dispatchEvent(new Event("visibilitychange"));
+  });
+  await expect.poll(firsts).toBeGreaterThan(before);
+  await page.evaluate(
+    () =>
+      new Promise((done) => {
+        setTimeout(done, 800);
+      }),
+  );
+  await atFoot();
+  await expect(
+    plate.getByRole("button", { name: "Спробувати ще раз" }),
+  ).toBeDisabled();
+  server.held.delete(0);
+  reread();
+  await expect(plate).toHaveCount(0);
+
+  failing.add(20);
+  await page.getByRole("button", { name: "Показати ще" }).click();
+  await atFoot();
+  await plate.getByRole("button", { name: "Спробувати ще раз" }).click();
+  await expect(closes).toHaveCount(21);
+  await expect(plate).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Показати ще" })).toHaveCount(
+    0,
+  );
+  expect(
+    server.asked.filter((search) => /limit=20&offset=20/.test(search)),
+  ).toHaveLength(3);
+
+  // The whole list read again and refused: said over the closes, as before;
+  // its retry reads it all again (review).
+  failing.add(0);
+  await page.evaluate(() => {
+    window.dispatchEvent(new Event("visibilitychange"));
+  });
+  await expect(plate).toHaveCount(1);
+  await expect(closes).toHaveCount(21);
+  const [over, first] = await Promise.all([
+    plate.boundingBox(),
+    closes.first().boundingBox(),
+  ]);
+  expect(over && first && over.y + over.height <= first.y).toBe(true);
+  await plate.getByRole("button", { name: "Спробувати ще раз" }).click();
+  await expect(plate).toHaveCount(0);
+  await expect(closes).toHaveCount(21);
 });
 
 /** The WCAG contrast of an element's text against what it is drawn on. */

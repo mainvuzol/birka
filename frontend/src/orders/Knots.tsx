@@ -169,6 +169,48 @@ export function KnotString({ order }: { order: Order }): JSX.Element {
   );
 }
 
+/**
+ * The card's string while its order is read (orders and «Каса» task list
+ * after stage 2, P1-1): the four knots hollow on the thread, each word and
+ * the day under «До відправлення» a grey line of its own size — the words
+ * drawn unseen, so the string is as tall as it will be on any font, and
+ * what comes under it does not move when the order comes. Opened from its
+ * row, its order is known: no day where it has none, and a cancelled or
+ * come back one its sticker's place under the string (review).
+ */
+export function KnotStringPlace({
+  order,
+}: {
+  order?: Order | null | undefined;
+}): JSX.Element {
+  const dated = !order || Boolean(order.created_at);
+  const sticker = order?.status === "CANCELLED" || order?.status === "RETURNED";
+  return (
+    <>
+      <ol className="knots knot-string">
+        {places.map((place) => (
+          <li key={place} className="knot">
+            <span className="knot-dot" />
+            <span className="knot-label skeleton-line">
+              <span>{placeWords[place]}</span>
+            </span>
+            {place === "send" && dated && (
+              <span className="knot-date skeleton-line">
+                <span>00.00</span>
+              </span>
+            )}
+          </li>
+        ))}
+      </ol>
+      {sticker && (
+        <p className="knot-sticker">
+          <span className="skeleton skeleton-pill" />
+        </p>
+      )}
+    </>
+  );
+}
+
 const stickers: Record<Status, { tone: Tone; icon: IconName }> = {
   READY_TO_DISPATCH: { tone: "online", icon: "held" },
   DISPATCHED: { tone: "transit", icon: "sent" },

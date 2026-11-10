@@ -1194,7 +1194,7 @@ test("every place read is its shape in grey, the real element's size and corner:
         ".avatar",
       ),
       lineTag: measure(
-        '<div class="placeholder tags"><div class="tag-row tag-outline"><div class="model-tag-in skeleton-tag-in"><span class="skeleton skeleton-name"></span><span class="skeleton skeleton-meta"></span></div></div></div>',
+        '<div class="placeholder order-tags"><div class="order-tag tag-row tag-outline"><div class="order-tag-body"><span class="skeleton skeleton-name"></span><span class="skeleton skeleton-meta"></span></div></div></div>',
         ".tag-row",
       ),
       store: measure(

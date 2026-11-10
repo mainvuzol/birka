@@ -14,7 +14,13 @@ import { Toast } from "@/shared/Toast";
 import { askPopup, buzz, popupHere, useMainButton } from "@/shared/telegram";
 import { Collected, CollectedLine } from "./Collected";
 import { goesOf } from "./Collect";
-import { KnotString, StatusSticker, dayOf, toneOf } from "./Knots";
+import {
+  KnotString,
+  KnotStringPlace,
+  StatusSticker,
+  dayOf,
+  toneOf,
+} from "./Knots";
 import { sinceDay, tagOf, titleOf } from "./Orders";
 import { Returned, byPlace } from "./Returned";
 import {
@@ -138,28 +144,60 @@ interface CardProps {
   waiting: boolean;
 }
 /**
- * An order's place while it is read (orders task list, P2-2): its pill and
- * two of its lines, in their sizes — its title's is the screen's head's
- * («Усе на бірці» task list, P0-4), its line of context the head's one
- * line (orders and «Каса» task list after stage 2, P2-1); a screen reader
- * hears «Завантажуємо замовлення…».
+ * An order's place while it is read (orders task list, P2-2): its string of
+ * knots, «У посилці» and two of its lines, in their sizes — the string the
+ * card's own, where a pill stood before (orders and «Каса» task list after
+ * stage 2, P1-1); its title's is the screen's head's («Усе на бірці» task
+ * list, P0-4), its line of context the head's one line (P2-1); a screen
+ * reader hears «Завантажуємо замовлення…».
  */
-export function CardPlaceholder(): JSX.Element {
+export function CardPlaceholder({
+  order,
+}: {
+  /** The row it was opened from, while its card is read. */
+  order?: Order | null | undefined;
+}): JSX.Element {
   return (
     <>
       <p role="status" className="visually-hidden">
         Завантажуємо замовлення…
       </p>
       <div className="placeholder order-placeholder" aria-hidden="true">
-        <span className="skeleton skeleton-pill" />
-        {[0, 1].map((n) => (
-          <div className="order-line" key={n}>
-            <span className="skeleton skeleton-name" />
-            <span className="skeleton skeleton-owed" />
-          </div>
-        ))}
+        <KnotStringPlace order={order} />
+        <p className="order-section t-label">
+          <span className="skeleton-line">
+            <span>У посилці</span>
+          </span>
+        </p>
+        <div className="order-lines">
+          {[0, 1].map((n) => (
+            <div className="order-line" key={n}>
+              <span className="skeleton skeleton-name" />
+              <span className="skeleton skeleton-owed" />
+            </div>
+          ))}
+        </div>
       </div>
     </>
+  );
+}
+
+/** The card's line after the store and the person while it is read: when
+ * it was ordered and its number, grey in their own size — the line wraps as
+ * the card's will (orders and «Каса» task list after stage 2, P1-1). */
+export function CardLinePlace({
+  order,
+}: {
+  /** The row it was opened from: no day where it has none (review). */
+  order?: Order | null | undefined;
+}): JSX.Element {
+  return (
+    <span className="skeleton-line" aria-hidden="true">
+      <span>
+        {!order || order.created_at ? "замовлено 00.00 · " : ""}
+        <small className="order-number">№ 00000000</small>
+      </span>
+    </span>
   );
 }
 
@@ -184,14 +222,31 @@ function returnedText(order: Order, places: readonly Location[]): string {
  * One order: its card, and over it the goods come back on a screen of
  * their own (orders task list, P2-4) — the card kept under it with what was
  * typed there, «← Замовлення» back to it with the row that opened it in
- * focus. Where it goes is a sheet over the card (stage 2, orders task list,
- * P1-1). Taken, the card is mounted afresh with what it did.
+ * focus; a task's screen, the menu aside while it is open (orders and
+ * «Каса» task list after stage 2, P1-2). Where it goes is a sheet over the
+ * card (stage 2, orders task list, P1-1). Taken, the card is mounted afresh
+ * with what it did.
  */
-export function OrderDetail(props: CardProps): JSX.Element {
+export function OrderDetail({
+  task,
+  ...props
+}: CardProps & {
+  /** Whether the goods come back is open: the menu steps aside. */
+  task?: ((shown: boolean) => void) | undefined;
+}): JSX.Element {
   const [returning, setReturning] = useState(false);
   const back = (): void => {
     setReturning(false);
   };
+  useEffect(() => {
+    task?.(returning);
+  }, [task, returning]);
+  useEffect(
+    () => () => {
+      task?.(false);
+    },
+    [task],
+  );
   // The card first: its panel's room let go before the step's is kept.
   return (
     <>
@@ -209,6 +264,7 @@ export function OrderDetail(props: CardProps): JSX.Element {
           token={props.token}
           title={titleOf(props.order)}
           blocked={props.blocked}
+          waiting={props.waiting}
           back={back}
           take={(body) => {
             props.action("return", body);

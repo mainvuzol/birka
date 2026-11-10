@@ -517,6 +517,34 @@ test("someone else getting there first is said plainly, and the list is read aga
   await expect(page.getByRole("dialog")).toHaveCount(0);
 });
 
+test("while «Брак» is read, its units' places are the shared row tags 76, heard as «Завантажуємо «Брак»…» (orders and «Каса» task list after stage 2, P1-1)", async ({
+  page,
+}) => {
+  let release = (): void => undefined;
+  const held = new Promise<void>((done) => {
+    release = done;
+  });
+  const shown = [aUnit("Новіша", "M", "AWAITING", 1)];
+  await page.route(
+    `**/api/v1/damaged-units?store_id=${fixture.store_id}`,
+    async (route) => {
+      await held;
+      await route.fulfill({ json: { units: shown } });
+    },
+  );
+  await open(page);
+  await expect(
+    page.getByRole("status").filter({ hasText: "Завантажуємо «Брак»…" }),
+  ).toBeAttached();
+  const placed = page.locator(".placeholder.order-tags > .order-tag");
+  await expect(placed).toHaveCount(2);
+  for (const tag of await placed.all())
+    expect((await tag.boundingBox())?.height).toBe(76);
+  release();
+  await expect(page.locator(".order-tag-title")).toHaveText(["Новіша · M"]);
+  await expect(placed).toHaveCount(0);
+});
+
 test("«Брак» opens on its first segment with something in it, oldest first, each counted; an empty one says so, and an empty «Брак» has no switch; at 360 px nothing goes past the screen, and the confirmed one is «Брак»'s colour in both themes (stage 2, goods task list, P0-4)", async ({
   page,
 }) => {
