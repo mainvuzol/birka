@@ -19,6 +19,7 @@ import { BackToMore } from "@/shared/More";
 import type { MoreBack } from "@/shared/More";
 import { ScreenHeader } from "@/shared/ScreenHeader";
 import { Empty } from "@/shared/Empty";
+import { Sticker } from "@/shared/Sticker";
 
 export { refusalText, returnedText } from "./returnWords";
 
@@ -353,15 +354,12 @@ function ReturnRow({
           {(item.cancelled || counted > 0n) && (
             <span className="sale-marks">
               {item.cancelled && (
-                <span className="sticker tone-offline">
-                  <Icon name="close" size={16} />
+                <Sticker tone="offline" icon="close">
                   Скасовано
-                </span>
+                </Sticker>
               )}
               {counted > 0n && (
-                <span className="sticker">
-                  Зараховано {money(decimal(counted))}
-                </span>
+                <Sticker>Зараховано {money(decimal(counted))}</Sticker>
               )}
             </span>
           )}

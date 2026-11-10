@@ -10,6 +10,7 @@ import { Sum } from "@/shared/Sum";
 import { Back } from "@/shared/Back";
 import { ScreenHeader } from "@/shared/ScreenHeader";
 import { Unread } from "@/shared/Unread";
+import { Sticker } from "@/shared/Sticker";
 import { refusalText } from "./Debt";
 import { goodsOf, sinceText } from "./format";
 import { erasedCustomer, statusLabels } from "./types";
@@ -129,24 +130,22 @@ export function Debts({
                     <span className="sale-meta">
                       {since}
                       {credit.store_id !== here && (
-                        <span className="badge neutral">
+                        <Sticker tone="neutral">
                           Магазин «{visible(credit.store_name)}»
-                        </span>
+                        </Sticker>
                       )}
                     </span>
                   </span>
                   {open ? (
                     <span className="debt-owed">{money(credit.owed)}</span>
                   ) : (
-                    <span
-                      className={
-                        credit.status === "WRITTEN_OFF"
-                          ? "badge neutral"
-                          : "badge paid"
+                    <Sticker
+                      tone={
+                        credit.status === "WRITTEN_OFF" ? "neutral" : "paid"
                       }
                     >
                       {statusLabels[credit.status]}
-                    </span>
+                    </Sticker>
                   )}
                   <Icon name="chevron-right" size={16} className="sale-open" />
                 </button>

@@ -1,6 +1,6 @@
 import type { JSX, ReactNode } from "react";
 import { Eyelet } from "./Eyelet";
-import { Icon } from "./Icon";
+import { Sticker } from "./Sticker";
 import type { IconName } from "./icons";
 import { isTillMethod, methodLabels } from "./payment";
 import type { PaymentMethod, TillMethod } from "./payment";
@@ -69,11 +69,12 @@ export function WaySticker({
   // Nothing to say: no sticker (review).
   if (way === null && words === undefined) return null;
   return (
-    <span className="badge way-pill" aria-hidden={hidden || undefined}>
-      {way !== null && isTillMethod(way) && (
-        <Icon name={wayIcons[way]} size={16} />
-      )}
+    <Sticker
+      className="way-pill"
+      icon={way !== null && isTillMethod(way) ? wayIcons[way] : undefined}
+      hidden={hidden}
+    >
       {words ?? (way === null ? null : methodLabels[way])}
-    </span>
+    </Sticker>
   );
 }

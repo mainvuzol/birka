@@ -41,6 +41,7 @@ import { SendingLine } from "@/shared/Sending";
 import { Back } from "@/shared/Back";
 import { Sheet } from "@/shared/Sheet";
 import { ScreenHeader } from "@/shared/ScreenHeader";
+import { Sticker } from "@/shared/Sticker";
 import {
   PaperBanner,
   PaperFields,
@@ -612,15 +613,13 @@ export function Debt({
               ) : (
                 <div className="debt-closed">
                   <p>
-                    <span
-                      className={
-                        credit.status === "WRITTEN_OFF"
-                          ? "badge neutral"
-                          : "badge paid"
+                    <Sticker
+                      tone={
+                        credit.status === "WRITTEN_OFF" ? "neutral" : "paid"
                       }
                     >
                       {statusLabels[credit.status]}
-                    </span>
+                    </Sticker>
                     {credit.closed_at && ` Закрито ${shortDay(credit.closed_at)}`}
                   </p>
                   <p className="hint">{paidText(credit)}</p>
@@ -850,15 +849,11 @@ export function Debt({
             ) : (
               <div className="debt-closed">
                 <p>
-                  <span
-                    className={
-                      credit.status === "WRITTEN_OFF"
-                        ? "badge neutral"
-                        : "badge paid"
-                    }
+                  <Sticker
+                    tone={credit.status === "WRITTEN_OFF" ? "neutral" : "paid"}
                   >
                     {statusLabels[credit.status]}
-                  </span>
+                  </Sticker>
                   {credit.closed_at && ` Закрито ${shortDay(credit.closed_at)}`}
                 </p>
                 <p className="hint">{paidText(credit)}</p>

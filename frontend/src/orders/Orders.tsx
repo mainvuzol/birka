@@ -16,7 +16,7 @@ import { Placeholder } from "@/shared/Placeholder";
 import { ScreenHeader } from "@/shared/ScreenHeader";
 import { buzz } from "@/shared/telegram";
 import { Toast } from "@/shared/Toast";
-import { KnotFilter, Sticker, placeWords } from "./Knots";
+import { KnotFilter, StatusSticker, placeWords } from "./Knots";
 import type { Place } from "./Knots";
 import { placesKey, shippingText } from "./types";
 import type { Location, Order, OrderItem, Status, Store } from "./types";
@@ -174,7 +174,7 @@ function OrderTag({
               {goesBy(order)}
               {since(order.created_at)}
             </span>
-            {sticker && <Sticker status={order.status} />}
+            {sticker && <StatusSticker status={order.status} />}
           </button>
           {verb && (
             <button

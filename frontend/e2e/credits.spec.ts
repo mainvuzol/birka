@@ -458,7 +458,7 @@ test("a sale paid in parts leaves the rest owed, and «Покупці» takes it
   await expect(
     page.getByRole("heading", { name: "Магазин «Основний»: не винні" }),
   ).toBeVisible();
-  await expect(page.locator(".customer-debt .badge")).toHaveText("Сплачено");
+  await expect(page.locator(".customer-debt .sticker")).toHaveText("Сплачено");
   await expect(
     page.getByRole("button", { name: "Внесок", exact: true }),
   ).toHaveCount(0);
@@ -756,7 +756,7 @@ test("the owner writes a debt off, saying why, and a seller is not offered it", 
     page.getByRole("status").filter({ hasText: "Борг списано: 2 000,00 грн." }),
   ).toBeVisible();
   await expect(sheet).toHaveCount(0);
-  await expect(page.locator(".customer-debt .badge")).toHaveText("Списано");
+  await expect(page.locator(".customer-debt .sticker")).toHaveText("Списано");
   await expect(
     page.getByRole("list", { name: "Історія покупця" }),
   ).toContainText("виїхав за кордон");
@@ -806,7 +806,9 @@ test("a return of a sale paid in parts lowers the debt first, and says what cash
   await sold.getByRole("button", { name: "Оформити повернення" }).click();
   await expect(page.locator(".sale-marks")).toHaveText("Оплата частинами");
   // In the debt's colours (returns task list, P2-4).
-  await expect(page.locator(".sale-marks .badge")).toHaveClass(/\bdebt\b/);
+  await expect(page.locator(".sale-marks .sticker")).toHaveClass(
+    /\btone-debt\b/,
+  );
   await returnUnits(page, { intact: 1 });
   // The till cannot say up front what goes back in cash (owner decision,
   // 2026-10-17, В6 (а)): the goods' worth, and what comes after.
@@ -1432,7 +1434,7 @@ test("one phone is one customer, whatever the name, and the store sees what it i
   await paid.getByRole("button", { name, exact: true }).click();
   await expect(block.locator(".owed-sum")).toHaveText("2 000,00 грн");
   await expect(debts).toHaveCount(2);
-  await expect(debts.locator(".badge.paid")).toHaveText(["Сплачено"]);
+  await expect(debts.locator(".sticker.tone-paid")).toHaveText(["Сплачено"]);
   await page.getByRole("button", { name: "Покупці", exact: true }).click();
   await expect(total.locator(".owed-sum")).toHaveText(hryvnias(before));
   await searchField(page).fill(tel);
@@ -1821,7 +1823,7 @@ test("the network's owner erases a closed debt's customer who asks, and every su
   // Two debts on the card: the paid one chosen.
   await customerRow(page, name).click();
   await page.getByRole("button", { name: /, сплачено$/ }).click();
-  await expect(page.locator(".debt-closed .badge")).toHaveText("Сплачено");
+  await expect(page.locator(".debt-closed .sticker")).toHaveText("Сплачено");
   // «Скасувати» changes nothing.
   let sheet = await eraseSheet(page);
   await sheet.getByRole("button", { name: "Скасувати" }).click();
@@ -1861,7 +1863,7 @@ test("the network's owner erases a closed debt's customer who asks, and every su
   await expect(page.getByText(/^Ім’я й телефон стерто /)).toBeVisible();
   await expect(page.locator('a[href^="tel:"]')).toHaveCount(0);
   await expect(page.locator(".debt-closed")).toContainText("з 3 000,00 грн");
-  await expect(page.locator(".debt-closed .badge")).toHaveText("Сплачено");
+  await expect(page.locator(".debt-closed .sticker")).toHaveText("Сплачено");
   // Nothing left behind its ⋯.
   await expect(page.getByRole("button", { name: "Дії з боргом" })).toHaveCount(
     0,
@@ -1895,7 +1897,7 @@ test("the network's owner erases a closed debt's customer who asks, and every su
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(
     "Покупця стерто",
   );
-  await expect(page.locator(".debt-closed .badge")).toHaveText("Сплачено");
+  await expect(page.locator(".debt-closed .sticker")).toHaveText("Сплачено");
   const erased = await page.request.get(
     `/api/v1/credits/${paidOff.sale.credit.credit_id}`,
     { headers: { Authorization: `Bearer ${paidOff.token}` } },
@@ -1962,7 +1964,7 @@ test("a store's owner erases in that store, and nobody erases an open debt", asy
   });
   await customersOf(page, kept, { status: "Сплачені" });
   await customerRow(page, kept).click();
-  await expect(page.locator(".customer-debt .badge")).toHaveText("Сплачено");
+  await expect(page.locator(".customer-debt .sticker")).toHaveText("Сплачено");
   await expect(page.getByRole("button", { name: "Дії з боргом" })).toHaveCount(
     0,
   );
@@ -2019,7 +2021,7 @@ test("a written-off debt's reason is erased with its customer", async ({
     .getByRole("button", { name: /^Відкрити борг: Покупця стерто, / })
     .filter({ hasText: model });
   await alone.click();
-  await expect(page.locator(".debt-closed .badge")).toHaveText("Списано");
+  await expect(page.locator(".debt-closed .sticker")).toHaveText("Списано");
   const history = page.getByRole("list", { name: "Історія боргу" });
   await expect(history).not.toContainText(name);
   const closed = history.getByRole("listitem").filter({ hasText: "Списано" });

@@ -3,6 +3,7 @@ import { Banner } from "./Banner";
 import { Eyelet, Waiting } from "./Eyelet";
 import { noteChecked, secondsOf, useReach } from "./reach";
 import { Stub } from "./Stub";
+import { Sticker } from "./Sticker";
 
 /**
  * The phone checking what it keeps (spec S12; «Усе на бірці» task list,
@@ -93,7 +94,7 @@ export function Kept({
       <Stub state="kept">
         {/* A sticker, not a line: its words come first. */}
         <div className="stub-head">
-          <span className="badge warn">Ще не підтверджено</span>
+          <Sticker tone="kept">Ще не підтверджено</Sticker>
         </div>
         {body}
       </Stub>

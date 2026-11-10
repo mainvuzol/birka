@@ -21,6 +21,7 @@ import {
   waitsFor,
   tillWays,
   shortage,
+  expectOneSticker,
 } from "./fixtures";
 import type { Locator, Page, Request, Route } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
@@ -1445,6 +1446,7 @@ test("6. a sale typed from paper carries the mark, says who sold and from where,
     way: "Картка",
     say: "Оплату провели під час збою, на терміналі не проводьте ще раз.",
   });
+  await expectOneSticker(page.locator(".stub-head"));
   await expect(page.getByText(/Проведіть на терміналі/)).toHaveCount(0);
 
   // The next paper sale of the series: the mode and who sold stay, the
@@ -2459,7 +2461,7 @@ test.describe("9. what to do with money after the outage", () => {
     const confirmed = page.locator("section.notice", {
       has: page.getByRole("heading", { name: "Внесок записано один раз" }),
     });
-    await expect(confirmed.locator(".badge.warn")).toHaveText(
+    await expect(confirmed.locator(".sticker.tone-warn")).toHaveText(
       "Внесок під час збою",
     );
     await expect(confirmed).toContainText("Уже взяли під час збою");
@@ -5527,7 +5529,8 @@ test.describe("11. the stub «Корінець»: every press says what became o
     await expect(check).toHaveText("Перевіряємо кожні 20 с");
     await page.clock.fastForward("00:10");
     await expect.poll(() => server.readies).toBe(1);
-    const asked = /^Перевіряємо кожні 20 с · остання перевірка \d{2}:\d{2}:\d{2}$/;
+    const asked =
+      /^Перевіряємо кожні 20 с · остання перевірка \d{2}:\d{2}:\d{2}$/;
     await expect(check).toHaveText(asked);
     const first = await check.innerText();
     await page.clock.runFor("00:20");
@@ -5549,9 +5552,9 @@ test.describe("11. the stub «Корінець»: every press says what became o
       .click();
     await expect(kept.locator(".check-line .eyelet-spin")).toHaveCount(1);
     await expect(page.locator(".eyelet-spin")).toHaveCount(1);
-    await expect(page.locator("button.pressed, button.stepped-back")).toHaveCount(
-      0,
-    );
+    await expect(
+      page.locator("button.pressed, button.stepped-back"),
+    ).toHaveCount(0);
     await page.clock.runFor(3_100);
     await expect(page.locator(".sending-line")).toHaveCount(0);
     await expect.poll(() => server.sales.length).toBe(2);
@@ -5621,9 +5624,7 @@ test.describe("11. the stub «Корінець»: every press says what became o
       "animation-name",
       "none",
     );
-    await expect(page.locator(".sending-line")).toHaveText(
-      "Чекаємо на сервер",
-    );
+    await expect(page.locator(".sending-line")).toHaveText("Чекаємо на сервер");
     await expect(page.getByText("Чекаємо на сервер")).toBeVisible();
     release();
     await expect(
@@ -5874,7 +5875,7 @@ test.describe("12. every journal's kept operation is the sale's stub (stage 2, o
         await page.emulateMedia({ colorScheme: scheme });
         for (const part of [
           stub.getByRole("heading"),
-          stub.locator(".stub-head .badge"),
+          stub.locator(".stub-head .sticker"),
           stub.locator("p").first(),
           stub.locator(".check-line").getByText(/^Перевіряємо кожні 20 с/),
           check,

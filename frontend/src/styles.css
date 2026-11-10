@@ -362,14 +362,6 @@ main {
   padding: calc(24px + env(safe-area-inset-top)) 16px
     calc(40px + var(--menu-h, env(safe-area-inset-bottom)));
 }
-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 16px;
-  padding-bottom: 26px;
-  border-bottom: 1px solid var(--line);
-}
 /* The text's roles (direction §4, «Ролі»; spec §5.5). The page's heading is
    the screen's title — a tab's first screen in `title-xl`, one opened from
    another in `title-l` — in the display face; the rest wait for their
@@ -422,11 +414,6 @@ h2,
   font-weight: 600;
   line-height: 22px;
 }
-.t-button {
-  font-size: 17px;
-  font-weight: 700;
-  line-height: 22px;
-}
 .t-meta {
   font-size: 14px;
   font-weight: 500;
@@ -453,9 +440,7 @@ h3 {
    context under it, «{Магазин} · {Ім’я}», 14/500 in pencil, «Змінити
    магазин» at its right. It scrolls away with the page. */
 header.screen-header {
-  display: block;
   padding: 4px 0 0;
-  border-bottom: 0;
 }
 .screen-title {
   display: flex;
@@ -606,22 +591,6 @@ textarea:focus-visible {
 }
 .order-card:hover {
   border-color: var(--accent);
-}
-/* A status as a printed sticker (spec §6.18): 28 high, its corners cut
-   square, a word in its meaning's colours (P0-1; its glyph comes with the
-   stub's task, P0-2). One without a meaning of its own is ink on the fold,
-   in both themes. */
-.badge {
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 18px;
-  background: var(--fold);
-  color: var(--ink);
-  border-radius: var(--r-xs);
-  padding: 5px 8px;
-  align-self: flex-start;
-  width: fit-content;
-  display: inline-block;
 }
 /* What is said under a field or a task (spec §5.5 `meta`, the floor for
    reading text; frame P1-1): 14/500 in pencil. */
@@ -785,12 +754,6 @@ button.active {
   box-shadow: var(--shadow-1);
 }
 @media (max-width: 480px) {
-  header {
-    align-items: flex-start;
-  }
-  header > span {
-    font-size: 12px;
-  }
   .toolbar {
     align-items: flex-start;
     flex-wrap: wrap;
@@ -1067,43 +1030,12 @@ nav:not(.tab-bar, .more-list) {
 /* A block of the screens not yet drawn in the new system. */
 .section-block {
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: var(--r-s);
   padding: 14px 16px;
   margin: 14px 0;
 }
 .section-block h3 {
   margin-top: 0;
-}
-/* Pills by what they mean (returns task list, P2-4): a debt's, a warning's,
-   «Брак»'s, or nothing to do. */
-.badge.debt {
-  background: var(--debt-bg);
-  color: var(--debt);
-}
-.badge.warn {
-  background: var(--warn-bg);
-  color: var(--warn);
-}
-.badge.neutral {
-  background: var(--field);
-  color: var(--text-2);
-}
-/* On its way (orders task list, P2-3): the direction's colour «в пути». */
-.badge.transit {
-  background: var(--transit-bg);
-  color: var(--transit);
-}
-/* Done with: «Клієнт забрав» and «Сплачено» in the accent's green, the
-   design's paid (owner decisions В5 and 2026-10-18; spec §6.18). */
-.badge.paid {
-  background: var(--paid-bg);
-  color: var(--paid);
-}
-/* The drawer to the kopeck, the accent's (owner decision В4 (а)): the
-   design's match, the thread on ink (spec §6.18). */
-.badge.match {
-  background: var(--match-bg);
-  color: var(--match-fg);
 }
 .nights,
 .troubles {
@@ -1252,14 +1184,6 @@ section.backups {
   margin: 0;
   color: var(--pencil);
 }
-/* A list line's size and its count: the size takes two shares, so its
-   choice reads whole on a phone («Оберіть розмір», «Розмір невідомий»). */
-.fields.size-count label {
-  flex: 1 1 0;
-}
-.fields.size-count label:first-child {
-  flex: 2 1 0;
-}
 
 /* A unit in «Брак» a row tag (spec §6.9; stage 2, goods task list, P0-4):
    its eyelet dashed while it waits, a ring while someone looks at it,
@@ -1274,9 +1198,6 @@ section.backups {
 .damaged .mode-switch {
   grid-auto-columns: auto;
   margin-bottom: 12px;
-}
-.damaged .mode-switch button {
-  font-size: 15px;
 }
 .damaged .order-tags {
   margin: 0;
@@ -1352,7 +1273,7 @@ section.backups {
   padding: 12px 12px calc(12px + env(safe-area-inset-bottom));
   background: var(--surface);
   border: 1px solid var(--line-strong);
-  border-radius: 16px;
+  border-radius: var(--r-sheet);
   box-shadow: var(--shadow-2);
 }
 /* The panel's height, kept clear wherever the page scrolls to
@@ -1519,7 +1440,7 @@ html {
 .sheet-handle {
   width: 36px;
   height: 4px;
-  border-radius: 2px;
+  border-radius: var(--r-round);
   background: var(--edge);
 }
 .sheet-title {
@@ -1607,7 +1528,7 @@ html {
 .pay-ways button {
   min-height: 54px;
   padding: 10px 6px;
-  border-radius: 15px;
+  border-radius: var(--r-l);
 }
 .pay-seller {
   margin: 10px 0 0;
@@ -1630,7 +1551,7 @@ html {
 }
 .till-search input {
   min-height: 52px;
-  border-radius: 14px;
+  border-radius: var(--r-l);
 }
 /* The search field (spec §6.6; «Усе на бірці» task list, P0-5): 52 high,
    card on the page, the magnifier left and «×» right, 44 to the touch. */
@@ -1889,7 +1810,7 @@ html {
   min-height: 52px;
   padding: 8px 14px;
   border-color: transparent;
-  border-radius: 14px;
+  border-radius: var(--r-l);
   background: var(--accent-soft);
   color: var(--accent-text);
 }
@@ -1919,7 +1840,7 @@ html {
   min-width: 48px;
   padding: 0;
   font-size: 22px;
-  border-radius: 14px;
+  border-radius: var(--r-l);
 }
 .stepper output {
   min-width: 32px;
@@ -2041,12 +1962,6 @@ span.tray-open {
   gap: 6px;
   margin: 0 0 8px;
 }
-/* Each sticker its glyph and its word (spec §6.18). */
-.sale-marks .badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
 /* «Цілі» and «Пошкоджені» in one row, each its name over «− N +», the
    buttons 44 (stage 2, orders task list, P0-6): two fit at 360 px. */
 .return-steps {
@@ -2061,7 +1976,7 @@ span.tray-open {
   align-items: stretch;
   gap: 2px;
   padding: 6px 4px 4px;
-  border-radius: 14px;
+  border-radius: var(--r-s);
   background: var(--field);
 }
 .return-step-name {
@@ -2079,7 +1994,7 @@ span.tray-open {
   min-height: 44px;
   padding: 0;
   font-size: 22px;
-  border-radius: 12px;
+  border-radius: var(--r-l);
 }
 .return-step.damaged {
   background: var(--damaged-bg);
@@ -2127,7 +2042,7 @@ span.tray-open {
 .owed-card {
   margin: 12px 0 16px;
   padding: 14px 16px;
-  border-radius: 20px;
+  border-radius: var(--r-s);
   background: var(--surface);
   border: 1px solid var(--line);
 }
@@ -2168,7 +2083,7 @@ span.tray-open {
   justify-content: center;
   width: 40px;
   height: 40px;
-  border-radius: 999px;
+  border-radius: var(--r-round);
   background: var(--fold);
   color: var(--ink);
   font-family: var(--font-display);
@@ -2192,8 +2107,7 @@ span.tray-open {
   font-variant-numeric: tabular-nums;
   color: var(--debt);
 }
-.elsewhere-ask,
-.owed-mode {
+.elsewhere-ask {
   margin-top: 12px;
 }
 /* One debt (credits task list, P0-3, P0-4): who and what in one line, what
@@ -2206,7 +2120,7 @@ span.tray-open {
 .debt-bar {
   height: 6px;
   margin: 10px 0 0;
-  border-radius: 999px;
+  border-radius: var(--r-round);
   background: var(--field);
   overflow: hidden;
 }
@@ -2369,27 +2283,6 @@ span.tray-open {
   padding: 0;
   border: 0;
 }
-.pay-amount {
-  display: flex;
-  align-items: flex-end;
-  gap: 10px;
-}
-.pay-amount label {
-  flex: 1;
-  margin: 0;
-}
-.pay-amount input {
-  min-height: 52px;
-  border-radius: 14px;
-}
-.pay-amount input::placeholder {
-  color: var(--text-2);
-  opacity: 1;
-}
-.pay-amount button {
-  min-height: 52px;
-  white-space: nowrap;
-}
 .history {
   margin: 0;
   padding: 0;
@@ -2461,10 +2354,11 @@ span.tray-open {
   grid-area: meta;
 }
 .debt-row > .debt-owed,
-.debt-row > .badge,
+.debt-row > .sticker,
 .debt-row > .skeleton-owed {
   grid-area: owed;
   justify-self: end;
+  align-self: start;
 }
 .debt-row > .sale-open {
   grid-area: open;
@@ -2689,7 +2583,7 @@ section.credits.customer-card {
   width: 8px;
   height: 8px;
   margin-top: 8px;
-  border-radius: 999px;
+  border-radius: var(--r-round);
   background: var(--success);
 }
 .timeline-node.knot {
@@ -2825,8 +2719,9 @@ section.credits.customer-card {
   margin: 18px 0 8px;
   font-size: 14px;
 }
-/* A warning pill on a warning's notice keeps its edge. */
-.notice .badge.warn {
+/* A warning's sticker on a warning's notice keeps its edge. */
+.notice .sticker.tone-warn,
+.notice .sticker.tone-kept {
   box-shadow: inset 0 0 0 1px var(--warn-line);
 }
 .skeleton-meta {
@@ -2845,10 +2740,10 @@ section.credits.customer-card {
   height: 1.2em;
 }
 .debt-mark.skeleton {
-  border-radius: 999px;
+  border-radius: var(--r-round);
 }
 .skeleton-line {
-  border-radius: 10px;
+  border-radius: var(--r-tg);
 }
 .skeleton-line > span {
   visibility: hidden;
@@ -2887,14 +2782,63 @@ section.credits.customer-card {
   font-size: 14px;
   color: var(--text-2);
 }
+/* The mode switch, one look for both its kinds — a section's ways as
+   buttons (`ModeSwitch`), a choice as radios (`.way-switch`) — as spec §6.7
+   draws it (audit after stage 2, frame P1-1, part 2): 44 high, the fold's
+   track 8 round with 3 around, equal segments 6 round; the one open the
+   card with its edge, 15/600 in ink, the others 15/500 in pencil. A segment
+   is drawn 38 high, its tap the track's whole 44. A mode, never an
+   action's colour. */
+.mode-switch,
 .way-switch {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 4px;
-  margin: 0 0 8px;
+  margin: 0 0 12px;
+  padding: 3px;
+  border-radius: var(--r-l);
+  background: var(--fold);
+}
+.way-switch {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-bottom: 8px;
+}
+.mode-switch {
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+}
+.mode-switch button,
+.way-switch span {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  box-sizing: border-box;
+  min-height: 38px;
   padding: 4px;
-  border-radius: 14px;
-  background: var(--field);
+  border: 0;
+  border-radius: var(--r-m);
+  background: transparent;
+  color: var(--pencil);
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 20px;
+  text-align: center;
+}
+/* The tap reaches over the track's 3 to its edge, above and below. */
+.mode-switch button {
+  position: relative;
+}
+.mode-switch button::after {
+  content: "";
+  position: absolute;
+  inset: -3px 0;
+}
+.mode-switch button[aria-current="page"],
+.mode-switch button[aria-pressed="true"],
+.way-switch input:checked + span {
+  background: var(--card);
+  color: var(--ink);
+  font-weight: 600;
+  box-shadow: inset 0 0 0 1px var(--edge);
 }
 .way-switch label {
   position: relative;
@@ -2902,23 +2846,12 @@ section.credits.customer-card {
   margin: 0;
   cursor: pointer;
 }
-.way-switch span {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  min-height: 44px;
-  padding: 6px 4px;
-  border-radius: 11px;
-  text-align: center;
-  color: var(--pencil);
-  font-weight: 600;
-}
-/* The whole segment is the radio's target. */
+/* The radio its whole segment and the track's 3 above and below it. */
 .way-switch input {
   position: absolute;
-  inset: 0;
+  inset: -3px 0;
   width: 100%;
-  height: 100%;
+  height: calc(100% + 6px);
   min-height: 0;
   margin: 0;
   padding: 0;
@@ -2928,13 +2861,6 @@ section.credits.customer-card {
 }
 /* Drawn on the label's text, which follows its radio: no `:has()`, which
    older web views lack (review, 2026-10-17). */
-/* The way chosen as spec §6.7's segment: the card on the fold, its edge,
-   ink; the others pencil. A choice, never an action's colour (P0-1). */
-.way-switch input:checked + span {
-  background: var(--card);
-  color: var(--ink);
-  box-shadow: inset 0 0 0 1px var(--edge);
-}
 .way-switch input:focus-visible + span {
   outline: 2px solid var(--focus);
   outline-offset: 2px;
@@ -2946,31 +2872,6 @@ section.credits.customer-card {
 .way-switch:disabled input {
   cursor: not-allowed;
 }
-/* A section's two ways (redesign direction §5, «Переключатель режима»;
-   navigation task list, P0-1): segments on a grey field, as the way's
-   switch, the way open marked. Under the screen's heading, on one line at
-   360 px. */
-/* As many equal ways as are open: «Продати · Повернути · Внесок» (spec
-   §6.7; «Усе на бірці» task list, P0-3). */
-.mode-switch {
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(0, 1fr);
-  gap: 4px;
-  margin: 0 0 12px;
-  padding: 4px;
-  border-radius: 14px;
-  background: var(--field);
-}
-.mode-switch button {
-  min-height: 44px;
-  padding: 6px 4px;
-  border: 0;
-  border-radius: 11px;
-  background: transparent;
-  color: var(--pencil);
-  font-weight: 600;
-}
 /* The price's two (stage 2, admin task list, P1-2): one row at 360 px, a
    long store's name cut short with «…»; its whole name is still read. At
    15, as «Гроші»'s four, «Для всіх магазинів» always whole and the store's
@@ -2979,39 +2880,26 @@ section.credits.customer-card {
 .price-scope {
   grid-template-columns: max-content minmax(0, 1fr);
 }
-.price-scope button {
+.price-scope button > span,
+.report-stores button > span {
+  min-width: 0;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  font-size: 15px;
-}
-.mode-switch button[aria-current="page"],
-.mode-switch button[aria-pressed="true"] {
-  background: var(--card);
-  color: var(--ink);
-  box-shadow: inset 0 0 0 1px var(--edge);
 }
 .return-go {
   width: 100%;
   min-height: 54px;
-  border-radius: 15px;
+  border-radius: var(--r-l);
 }
 /* A return's result (P0-5): what to hand back, large, the way a pill over
    it, then where the goods went. */
 .hand-back {
   margin: 18px 0;
 }
-.hand-back .badge,
+.hand-back .sticker,
 .hand-back-what {
   margin: 0 0 6px;
-}
-/* Its glyph beside its words, centred on them, wherever it stands — not
-   only in a stub's head (stage 2, money task list, P2-1; review). */
-.way-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 14px;
 }
 .hand-back-what {
   font-size: 14px;
@@ -3061,7 +2949,7 @@ section.credits.customer-card {
    in their sizes, so nothing moves when they come. */
 .skeleton {
   display: block;
-  border-radius: 10px;
+  border-radius: var(--r-tg);
 }
 /* Every place of what is read, in the skeleton's grey with a lighter sweep
    across it every 1.2 s (spec §6.27; P0-1): moved, never repainted, and
@@ -3114,7 +3002,7 @@ section.credits.customer-card {
    round — and the grey, never the mark's fold. */
 .chip.skeleton {
   width: 72px;
-  border-radius: 14px;
+  border-radius: var(--r-l);
 }
 .size-cell.skeleton {
   border-radius: var(--r-m);
@@ -3182,7 +3070,7 @@ section.credits.customer-card {
   place-items: center;
   width: var(--avatar);
   height: var(--avatar);
-  border-radius: 999px;
+  border-radius: var(--r-round);
   background: var(--fold);
   color: var(--ink);
   font-family: var(--font-display);
@@ -3209,7 +3097,7 @@ section.credits.customer-card {
   width: var(--eyelet-hero);
   height: var(--eyelet-hero);
   border: 1.5px dashed var(--edge);
-  border-radius: 999px;
+  border-radius: var(--r-round);
   background: var(--paper);
 }
 .blank-tag h1 {
@@ -3351,7 +3239,7 @@ section.credits.customer-card {
   width: var(--eyelet-hero);
   height: var(--eyelet-hero);
   border: 1.5px solid var(--edge);
-  border-radius: 999px;
+  border-radius: var(--r-round);
   background: var(--paper);
 }
 .store-tag-name {
@@ -3513,7 +3401,7 @@ section.cash {
   width: var(--eyelet);
   height: var(--eyelet);
   border: 1.5px solid var(--inverse-pencil);
-  border-radius: 999px;
+  border-radius: var(--r-round);
 }
 .cash-card-hint {
   font-size: 14px;
@@ -3567,7 +3455,7 @@ section.cash {
   gap: 8px;
   padding: 0 16px;
   border: 1px solid var(--line-strong);
-  border-radius: 16px;
+  border-radius: var(--r-l);
   background: var(--field);
 }
 .count-field input {
@@ -3652,11 +3540,6 @@ section.cash-count {
 .count-foot .quiet {
   min-height: var(--touch);
 }
-.pay-confirm {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px;
-}
 /* One under another, as in the notebook: a column of three figures. */
 .cash-figure + .cash-figure {
   margin-top: 10px;
@@ -3671,19 +3554,20 @@ section.cash-count {
   font-weight: 800;
   letter-spacing: -0.6px;
 }
-.cash-difference {
+/* Said in a line where the close is an old one; on its stub, a sticker. */
+p.cash-difference {
   font-weight: 700;
 }
-.cash-figures .cash-difference {
+.cash-figures p.cash-difference {
   margin-top: 8px;
   font-size: 20px;
 }
 /* A shortage or a surplus, a warning's colour; to the kopeck, the accent's
    (owner decision, 2026-10-21, В4 (а)). */
-.cash-difference.warn {
+p.cash-difference.warn {
   color: var(--warn);
 }
-.cash-difference.match {
+p.cash-difference.match {
   color: var(--paid);
 }
 .cash-slip {
@@ -3703,18 +3587,6 @@ section.cash-count {
 }
 .cash-sticker {
   margin: 10px 0 0;
-}
-.stub .cash-figures .sticker {
-  min-height: 32px;
-  line-height: 24px;
-}
-.sticker.cash-difference.warn {
-  --tone: var(--warning);
-  --tone-bg: var(--warning-bg);
-}
-.sticker.cash-difference.match {
-  --tone: var(--paid);
-  --tone-bg: var(--paid-bg);
 }
 .stub .cash-slip {
   margin: 0;
@@ -3879,9 +3751,6 @@ section.cash-count {
 /* A close's sticker under its day, its sign before the words; its knot at
    the row's left by the title's first line: tied, or a ring while its
    reason waits (stage 2, money task list, P1-2). */
-.close-pill {
-  font-size: 13px;
-}
 .close-row {
   align-items: flex-start;
 }
@@ -3921,7 +3790,7 @@ section.cash-count {
 .skeleton-pill {
   width: 8em;
   height: 28px;
-  border-radius: 20px;
+  border-radius: var(--r-xs);
 }
 .skeleton-way {
   height: 54px;
@@ -3976,9 +3845,6 @@ section.cash-count {
 .correct-row .history-sum {
   white-space: nowrap;
 }
-.correct-row .badge {
-  font-size: 13px;
-}
 .correct-row:disabled {
   opacity: 1;
 }
@@ -4027,9 +3893,6 @@ section.cash-count {
   margin: 0;
   padding: 0;
   list-style: none;
-}
-.order-row .badge {
-  font-size: 13px;
 }
 /* A waybill or a note pasted whole breaks where it must (review,
    2026-10-23). */
@@ -4098,12 +3961,6 @@ section.cash-count {
   color: var(--text-2);
   overflow-wrap: anywhere;
 }
-.order-status {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: 0;
-}
 .order-number {
   font-size: 12px;
   color: var(--text-2);
@@ -4141,9 +3998,6 @@ section.cash-count {
 .order-rare {
   display: block;
   margin-top: 16px;
-}
-.order-sent-with {
-  margin-top: 8px;
 }
 /* What is said under a field or a step, 14 px on every screen of
    «Замовлення» (orders task list, P2-3), as «Каса»'s. */
@@ -4303,7 +4157,7 @@ section.cash-count {
   width: 14px;
   height: 14px;
   border: 1.5px solid var(--edge);
-  border-radius: 999px;
+  border-radius: var(--r-round);
   background: var(--paper);
 }
 .knot-label {
@@ -4371,8 +4225,11 @@ section.cash-count {
 .knot-sticker {
   margin: 8px 0 0;
 }
-/* An order's status as a printed sticker (spec §6.18): 28 high, its glyph
-   and its word in its colour, on its colour's ground. */
+/* A status as a printed label, the app's one (spec §6.18; `shared/Sticker`;
+   audit after stage 2, frame P1-5): 28 high, the sticker's corner 3, a
+   glyph of 16 and a word of 14/600 in its meaning's colour on its ground,
+   wherever it stands — never shrunk. One without a meaning of its own is
+   ink on the fold, in both themes. */
 .sticker {
   --tone: var(--ink);
   --tone-bg: var(--fold);
@@ -4382,13 +4239,28 @@ section.cash-count {
   box-sizing: border-box;
   width: fit-content;
   min-height: 28px;
-  padding: 0 8px;
+  padding: 5px 8px;
   border-radius: var(--r-xs);
   background: var(--tone-bg);
   color: var(--tone);
   font-size: 14px;
   font-weight: 600;
   line-height: 18px;
+  vertical-align: middle;
+}
+.sticker.tone-debt {
+  --tone: var(--owed);
+  --tone-bg: var(--owed-bg);
+}
+/* A warning, paper, and a kept operation not yet confirmed. */
+.sticker.tone-warn,
+.sticker.tone-kept {
+  --tone: var(--warning);
+  --tone-bg: var(--warning-bg);
+}
+/* Said by the way, in pencil. */
+.sticker.tone-neutral {
+  --tone: var(--pencil);
 }
 .sticker.tone-online {
   --tone: var(--online);
@@ -4446,7 +4318,7 @@ section.cash-count {
   box-sizing: border-box;
   width: var(--eyelet);
   height: var(--eyelet);
-  border-radius: 999px;
+  border-radius: var(--r-round);
 }
 .order-tag.filled .order-tag-eyelet {
   background: var(--tone);
@@ -4881,7 +4753,7 @@ section.cash-count {
   flex: none;
   width: 8px;
   height: 8px;
-  border-radius: 999px;
+  border-radius: var(--r-round);
   background: var(--warning);
 }
 /* Under the groups: who is signed in, and until when. */
@@ -4898,7 +4770,7 @@ section.cash-count {
   width: 44px;
   height: 26px;
   padding: 3px;
-  border-radius: 13px;
+  border-radius: var(--r-round);
   background: var(--hairline);
   transition: background-color 120ms ease-out;
 }
@@ -4906,7 +4778,7 @@ section.cash-count {
   display: block;
   width: 20px;
   height: 20px;
-  border-radius: 50%;
+  border-radius: var(--r-round);
   background: var(--card);
   box-shadow: var(--shadow-1, 0 1px 2px rgb(0 0 0 / 20%));
   transition: transform 120ms ease-out;
@@ -4982,7 +4854,7 @@ section.cash-count {
   box-sizing: border-box;
   width: 12px;
   height: 12px;
-  border-radius: 999px;
+  border-radius: var(--r-round);
   vertical-align: middle;
 }
 .eyelet-8 {
@@ -5115,7 +4987,7 @@ section.cash-count {
   top: -6px;
   width: 12px;
   height: 12px;
-  border-radius: 999px;
+  border-radius: var(--r-round);
   background: var(--paper);
 }
 .stub-kept::before {
@@ -5199,10 +5071,7 @@ section.cash-count {
   gap: 6px;
   margin: 0 32px 10px 0;
 }
-.stub-head .badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
+.stub-head .sticker {
   margin: 0;
 }
 .stub-say {
@@ -5423,7 +5292,7 @@ button.stepped-back:disabled {
   padding: 12px 12px calc(12px + env(safe-area-inset-bottom));
   background: var(--card);
   border: 1px solid var(--edge);
-  border-radius: 16px;
+  border-radius: var(--r-sheet);
   box-shadow: var(--shadow-2);
 }
 .result-dock button {
@@ -5433,16 +5302,17 @@ button.stepped-back:disabled {
 .stub .hand-back {
   margin: 0;
 }
-.stub .hand-back .badge {
+.stub .hand-back .sticker {
   margin: 0;
 }
 .stub .return-goods p {
   margin: 4px 0;
 }
 
-/* The bottom menu («Усе на бірці» task list, P0-4; spec §6.2): 64 px over
+/* The bottom menu («Усе на бірці» task list, P0-4; spec §6.3): 64 px over
    the home indicator, on the card; a glyph of 24 over a 13 px word, the
-   open tab's glyph on a 56 × 30 pill. Its height is every dock's floor
+   open tab's glyph on a 56 × 30 pill 8 round, its word 700 (audit after
+   stage 2, frame P1-1, part 2). Its height is every dock's floor
    (`--menu-h`), the home indicator its own (`--dock-safe`); its layer is
    over whatever sticks, the till's search among them (§5.7). */
 nav.tab-bar {
@@ -5483,20 +5353,21 @@ nav.tab-bar {
   place-items: center;
   width: 56px;
   height: 30px;
-  border-radius: 15px;
+  border-radius: var(--r-l);
 }
 .tab-pill .icon {
   width: 24px;
   height: 24px;
 }
+/* Its word in the tab's role, 13/600; the open tab's 700 (spec §6.3). */
 .tab-label {
-  font-size: 13px;
-  font-weight: 600;
-  line-height: 16px;
   white-space: nowrap;
 }
 .tab[aria-current] {
   color: var(--ink);
+}
+.tab[aria-current] .tab-label {
+  font-weight: 700;
 }
 .tab[aria-current] .tab-pill {
   background: var(--primary);
@@ -5550,7 +5421,7 @@ nav.tab-bar {
   width: var(--eyelet-hero);
   height: var(--eyelet-hero);
   border: 1.5px solid var(--edge);
-  border-radius: 999px;
+  border-radius: var(--r-round);
   background: var(--paper);
 }
 .day-head {
@@ -5579,7 +5450,7 @@ nav.tab-bar {
 .live-dot {
   width: 6px;
   height: 6px;
-  border-radius: 999px;
+  border-radius: var(--r-round);
   background: var(--paid);
 }
 .day-total {
@@ -5720,7 +5591,7 @@ button.day-online {
   height: 13px;
   max-width: 100%;
   vertical-align: middle;
-  border-radius: 4px;
+  border-radius: var(--r-s);
 }
 .day-total-wait {
   display: grid;
@@ -5818,7 +5689,7 @@ button.day-folded {
   left: 14px;
   width: var(--eyelet);
   height: var(--eyelet);
-  border-radius: 999px;
+  border-radius: var(--r-round);
   background: var(--tone);
 }
 .today-tag {
@@ -5913,7 +5784,7 @@ button.day-folded {
   min-width: 18px;
   height: 18px;
   padding: 0 5px;
-  border-radius: 999px;
+  border-radius: var(--r-round);
   background: var(--primary);
   box-shadow: 0 0 0 2px var(--card);
   color: var(--on-primary);
@@ -5932,7 +5803,7 @@ button.day-folded {
   left: calc(50% + 6px);
   width: 10px;
   height: 10px;
-  border-radius: 999px;
+  border-radius: var(--r-round);
   background: var(--warning);
   box-shadow: 0 0 0 2px var(--card);
 }
@@ -6071,10 +5942,6 @@ button.day-folded {
 .money {
   margin: 12px 0 18px;
 }
-/* Four periods across 328: at 15, «Сьогодні» whole in its way. */
-.money-in .mode-switch button {
-  font-size: 15px;
-}
 .money-head {
   display: flex;
   flex-wrap: wrap;
@@ -6138,10 +6005,6 @@ button.money-place-open {
 }
 .money-store {
   font-weight: 600;
-}
-.money-store .badge {
-  padding: 0 6px;
-  font-size: 13px;
 }
 .money-note,
 .money-subhead,
@@ -6262,7 +6125,7 @@ button.money-place-open {
   width: var(--eyelet-hero);
   height: var(--eyelet-hero);
   border: 1.5px solid var(--edge);
-  border-radius: 999px;
+  border-radius: var(--r-round);
   background: var(--paper);
 }
 .model-hero-head {
@@ -6480,7 +6343,7 @@ section.receive-list {
   height: 44px;
   min-height: 44px;
   padding: 0;
-  border-radius: 12px;
+  border-radius: var(--r-l);
   font-size: 22px;
 }
 /* Held at 0 or at the most, not disabled: the cursor stays on it. */
@@ -6896,7 +6759,7 @@ section.receive-list {
   min-width: 48px;
   padding: 0;
   font-size: 22px;
-  border-radius: 12px;
+  border-radius: var(--r-l);
 }
 .lot-count .stepper button[aria-disabled="true"] {
   opacity: 0.45;
@@ -7087,7 +6950,7 @@ section.receive-list {
   width: var(--eyelet-hero);
   height: var(--eyelet-hero);
   border: 1.5px solid var(--edge);
-  border-radius: 999px;
+  border-radius: var(--r-round);
   background: var(--paper);
 }
 .opening-hero-in:focus-visible {
@@ -7102,7 +6965,6 @@ section.receive-list {
 }
 .openings .opening-state {
   margin: 2px 0 4px;
-  padding: 2px 8px;
 }
 .opening-hero-in .t-meta {
   margin: 0;
@@ -7127,14 +6989,14 @@ section.receive-list {
   position: relative;
   height: 6px;
   overflow: hidden;
-  border-radius: 3px;
+  border-radius: var(--r-xs);
   background: var(--fold);
   box-shadow: inset 0 0 0 1px var(--hairline);
 }
 .progress > span {
   display: block;
   height: 100%;
-  border-radius: 3px;
+  border-radius: var(--r-xs);
   background: var(--paid);
 }
 /* The switch's three, each word allowed two lines at 360 px, and ⋯ for
@@ -7149,17 +7011,21 @@ section.receive-list {
 .opening-modes .mode-switch {
   margin: 0;
 }
+/* Three counts at 14 in two lines where they must, until the list's own
+   screen is drawn anew (goods task list after stage 2, P0-1); ⋯ as high as
+   the switch beside it. */
 .opening-modes .mode-switch button {
   font-size: 14px;
   line-height: 17px;
   overflow-wrap: anywhere;
 }
 .opening-others {
+  align-self: stretch;
   min-width: var(--touch);
-  min-height: 52px;
+  min-height: var(--touch);
   padding: 0 12px;
   border: 1px solid var(--edge);
-  border-radius: 14px;
+  border-radius: var(--r-l);
   font-weight: 600;
 }
 .opening-others[aria-pressed="true"] {
@@ -7530,12 +7396,6 @@ nav.report-ways {
 .report-screen > .mode-switch,
 .report-screen > .chips {
   margin: 0 0 8px;
-}
-.report-stores button {
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  font-size: 15px;
 }
 /* Four stores or more: one row of chips that scrolls alone. */
 .report-chips {

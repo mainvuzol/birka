@@ -1,9 +1,4 @@
-import {
-  test,
-  expect,
-  openStore,
-  section,
-} from "./fixtures";
+import { test, expect, openStore, section, expectOneSticker } from "./fixtures";
 import type { Locator, Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -250,7 +245,7 @@ test("«Закриття»: a row a close — its day and who, what was counted 
     /^\d{2}:\d{2} · порахували 2\s000,00 · мало бути 2\s050,00 · причину не вказано$/,
   );
   await expect(short.locator(".close-pill")).toHaveText("Нестача 50,00 грн");
-  await expect(short.locator(".close-pill")).toHaveClass(/\bwarn\b/);
+  await expect(short.locator(".close-pill")).toHaveClass(/\btone-warn\b/);
   // Each sticker with its sign but the neutral ones; a ring at the row's
   // left only while a reason waits, a knot on every other close (stage 2,
   // money task list, P1-2).
@@ -273,17 +268,18 @@ test("«Закриття»: a row a close — its day and who, what was counted 
     /^\d{2}:\d{2} · порахували 2\s350,00 · мало бути 2\s000,00 · пояснено \+50,00$/,
   );
   await expect(over.locator(".close-pill")).toHaveText("Надлишок 350,00 грн");
-  await expect(over.locator(".close-pill")).toHaveClass(/\bwarn\b/);
+  await expect(over.locator(".close-pill")).toHaveClass(/\btone-warn\b/);
   await expect(over.locator(".close-pill svg.icon")).toHaveCount(1);
   await expect(over.locator(".close-node .eyelet-knot")).toHaveCount(1);
   await expect(over.locator(".close-node .close-ring")).toHaveCount(0);
+  await expectOneSticker(list);
   const same = row(list, "16.10");
   await expect(same.locator(".sale-meta")).toHaveText(
     /^\d{2}:\d{2} · порахували 2\s000,00 · мало бути 2\s000,00$/,
   );
   await expect(same.locator(".close-pill")).toHaveText("Збіглося");
   await expect(same.locator(".close-pill")).toHaveClass(
-    "sticker close-pill cash-difference match",
+    "sticker tone-paid close-pill",
   );
   await expect(same.locator(".close-pill svg.icon")).toHaveCount(1);
   await expect(same.locator(".close-node .eyelet-knot")).toHaveCount(1);

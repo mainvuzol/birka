@@ -37,6 +37,7 @@ import { Back } from "@/shared/Back";
 import { ScreenHeader } from "@/shared/ScreenHeader";
 import { SearchField } from "@/shared/SearchField";
 import { Empty } from "@/shared/Empty";
+import { Sticker } from "@/shared/Sticker";
 import { useSettled } from "@/sales/StockSearch";
 import { submitReturn, useReturnCommand } from "./commands";
 import { SaleRow, byDay, dayOf, dayTitle } from "./SaleRow";
@@ -759,18 +760,14 @@ function ReturnForm({
           // alone (spec §6.18; stage 2, orders task list, P0-6).
           <p className="sale-marks">
             {sale.paid_in_parts && (
-              <span className="badge debt">
-                <Icon name="owed" size={16} />
-                Оплата частинами
-              </span>
+              <Sticker tone="debt">Оплата частинами</Sticker>
             )}
             {sale.outage && (
-              <span className="badge warn">
-                <Icon name="warning" size={16} />
+              <Sticker tone="warn">
                 {sale.outage.first_days === true
                   ? "Продано з паперу"
                   : "Продано під час збою"}
-              </span>
+              </Sticker>
             )}
           </p>
         )}

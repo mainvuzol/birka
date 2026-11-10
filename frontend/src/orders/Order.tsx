@@ -14,7 +14,7 @@ import { Toast } from "@/shared/Toast";
 import { askPopup, buzz, popupHere, useMainButton } from "@/shared/telegram";
 import { Collected, CollectedLine } from "./Collected";
 import { goesOf } from "./Collect";
-import { KnotString, Sticker, dayOf, toneOf } from "./Knots";
+import { KnotString, StatusSticker, dayOf, toneOf } from "./Knots";
 import { sinceDay, tagOf, titleOf } from "./Orders";
 import { Returned, byPlace } from "./Returned";
 import {
@@ -416,7 +416,7 @@ function Card({
           <div role="status" ref={said} tabIndex={-1} className="order-done">
             {done.stub ? (
               <Stub state="recorded">
-                <Sticker status="READY_TO_DISPATCH" />
+                <StatusSticker status="READY_TO_DISPATCH" />
                 {order.items.map((item) => {
                   const from = names.get(item.source_location_id);
                   return (
@@ -537,7 +537,7 @@ function Card({
                           {sinceDay(other.created_at)}
                         </span>
                       )}
-                      <Sticker status={other.status} />
+                      <StatusSticker status={other.status} />
                     </span>
                     <span className="sale-open" aria-hidden="true">
                       ›

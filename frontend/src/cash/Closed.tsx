@@ -2,7 +2,6 @@ import { useEffect, useId, useRef, useState } from "react";
 import type { JSX, ReactNode } from "react";
 import { money } from "@/orders/types";
 import { RecordedMark } from "@/shared/Eyelet";
-import { Icon } from "@/shared/Icon";
 import { NoCustomerData } from "@/shared/NoCustomerData";
 import { usePanelRoom } from "@/shared/panel";
 import { methodLabels } from "@/shared/payment";
@@ -13,6 +12,7 @@ import { visible } from "@/shared/visible";
 import { Back } from "@/shared/Back";
 import { ScreenHeader } from "@/shared/ScreenHeader";
 import { Unread } from "@/shared/Unread";
+import { Sticker } from "@/shared/Sticker";
 import { dayOf } from "./errors";
 import {
   cardParts,
@@ -92,15 +92,16 @@ function Figures({
       </div>
       {now ? (
         <p className="cash-sticker">
-          <span
-            className={`sticker cash-difference ${difference.match ? "match" : "warn"}`}
+          {/* To the kopeck in the paid's green with its knot until the
+              till's own match colour comes (orders and «Каса» task list,
+              P1-4). */}
+          <Sticker
+            tone={difference.match ? "paid" : "warn"}
+            icon={difference.match ? "eyelet-knot" : undefined}
+            className={`cash-difference ${difference.match ? "match" : "warn"}`}
           >
-            <Icon
-              name={difference.match ? "eyelet-knot" : "warning"}
-              size={16}
-            />
             {difference.text}
-          </span>
+          </Sticker>
         </p>
       ) : (
         <p className={`cash-difference ${difference.match ? "match" : "warn"}`}>

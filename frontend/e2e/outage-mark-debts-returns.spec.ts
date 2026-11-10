@@ -247,7 +247,7 @@ test("a return typed from paper by «Ліда» naming «Ганна» says not t
   ).toBeVisible();
   await expect(done).toContainText(mark);
   // The paper's mark as a warning (returns task list, P2-4).
-  await expect(done.locator(".badge").first()).toHaveClass(/\bwarn\b/);
+  await expect(done.locator(".sticker").first()).toHaveClass(/\btone-warn\b/);
   await expect(done.locator(".hand-back-what")).toHaveText(
     "Уже повернули під час збою",
   );
@@ -334,7 +334,7 @@ test("a card payment typed from paper never says to charge the card, and the deb
   // (credits task list, P0-5).
   const paid = page.locator(".paid-result");
   // The paper's mark as the history says it (review, 2026-10-18).
-  await expect(paid.locator(".badge.warn")).toHaveText(
+  await expect(paid.locator(".sticker.tone-warn")).toHaveText(
     "Внесок під час збою · хто прийняв: Ганна",
   );
   await expect(paid).toContainText("Уже взяли під час збою");
@@ -539,7 +539,7 @@ test("the first days' paper: a return and a payment typed from it are «з па�
       "Внесок 300,00 грн з паперу записано: карткою — оплату вже провели, на терміналі не проводьте ще раз. Залишок боргу 1 700,00 грн.",
     ),
   ).toBeVisible();
-  await expect(page.locator(".paid-result .badge.warn")).toHaveText(
+  await expect(page.locator(".paid-result .sticker.tone-warn")).toHaveText(
     "Внесок з паперу",
   );
   await expect(page.locator(".paid-result")).toContainText("Уже взяли раніше");

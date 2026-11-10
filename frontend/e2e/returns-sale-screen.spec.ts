@@ -379,10 +379,14 @@ test("a sale's return is a task's screen: the menu aside, Telegram's «Наза�
   await expect.poll(async () => (await heard()).backs.at(-1)).toBe(true);
   // Each sticker its glyph beside its words: never a colour alone.
   const marks = page.locator(".sale-marks");
-  await expect(marks.locator(".badge.debt")).toHaveText("Оплата частинами");
-  await expectGlyphBeside(marks.locator(".badge.debt"));
-  await expect(marks.locator(".badge.warn")).toHaveText("Продано під час збою");
-  await expectGlyphBeside(marks.locator(".badge.warn"));
+  await expect(marks.locator(".sticker.tone-debt")).toHaveText(
+    "Оплата частинами",
+  );
+  await expectGlyphBeside(marks.locator(".sticker.tone-debt"));
+  await expect(marks.locator(".sticker.tone-warn")).toHaveText(
+    "Продано під час збою",
+  );
+  await expectGlyphBeside(marks.locator(".sticker.tone-warn"));
   // «Цілі» and «Пошкоджені» side by side, «Пошкоджені» with «Брак»'s torn
   // tag, each «−» and «+» at least 44 square.
   const intact = page.locator(".return-step").first();
@@ -447,13 +451,13 @@ for (const [name, theme] of [
     expect(
       await page.evaluate(() => document.documentElement.dataset.theme),
     ).toBe(name);
-    await expect(page.locator(".sale-marks .badge.warn")).toHaveText(
+    await expect(page.locator(".sale-marks .sticker.tone-warn")).toHaveText(
       "Продано з паперу",
     );
     await page.getByRole("button", { name: "Пошкоджені: більше" }).click();
     for (const part of [
-      page.locator(".sale-marks .badge.debt"),
-      page.locator(".sale-marks .badge.warn"),
+      page.locator(".sale-marks .sticker.tone-debt"),
+      page.locator(".sale-marks .sticker.tone-warn"),
       page.locator(".line-return h3"),
       page.locator(".line-return-meta"),
       page.locator(".return-step").first().locator(".return-step-name"),

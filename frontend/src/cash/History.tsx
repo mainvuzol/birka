@@ -6,11 +6,11 @@ import type { Store } from "@/orders/types";
 import { api } from "@/shared/api";
 import { Unread } from "@/shared/Unread";
 import { Eyelet } from "@/shared/Eyelet";
-import { Icon } from "@/shared/Icon";
 import { Placeholder } from "@/shared/Placeholder";
 import { visible } from "@/shared/visible";
 import { Back } from "@/shared/Back";
 import { ScreenHeader } from "@/shared/ScreenHeader";
+import { Sticker } from "@/shared/Sticker";
 import { CloseBody, differenceOf, isOpening } from "./Closed";
 import { dayOf, timeOf } from "./errors";
 import { daysAgo, isoDay, moved, nothing } from "./format";
@@ -33,18 +33,16 @@ function bare(value: string): string {
  * list, P1-2). */
 function Pill({ close }: { close: Close }): JSX.Element {
   if (isOpening(close))
-    return <span className="sticker close-pill">Перший підрахунок</span>;
+    return <Sticker className="close-pill">Перший підрахунок</Sticker>;
   const difference = differenceOf(close.difference ?? "0.00");
   return difference.match ? (
-    <span className="sticker close-pill cash-difference match">
-      <Icon name="eyelet-knot" size={16} />
+    <Sticker tone="paid" icon="eyelet-knot" className="close-pill">
       Збіглося
-    </span>
+    </Sticker>
   ) : (
-    <span className="sticker close-pill cash-difference warn">
-      <Icon name="warning" size={16} />
+    <Sticker tone="warn" className="close-pill">
       {difference.text}
-    </span>
+    </Sticker>
   );
 }
 
@@ -309,7 +307,7 @@ function HistoryRow({
           <span className="close-node" aria-hidden="true" />
           <span className="close-head">
             <span className="cash-row-title">{dayOf(day)}</span>
-            <span className="sticker close-pill">Не закрито</span>
+            <Sticker className="close-pill">Не закрито</Sticker>
           </span>
         </li>
       ))}

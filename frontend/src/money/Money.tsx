@@ -18,6 +18,7 @@ import { ModeSwitch } from "@/shared/ModeSwitch";
 import { methodLabels, notStated } from "@/shared/payment";
 import { ScreenHeader } from "@/shared/ScreenHeader";
 import { visible } from "@/shared/visible";
+import { Sticker } from "@/shared/Sticker";
 import type { SupplierDebts } from "@/suppliers/types";
 import { Stamp, Waiting, dayLine, staleOf, useNow } from "@/today/age";
 import {
@@ -70,7 +71,7 @@ export function StoreName({
       {state !== "ACTIVE" && (
         <>
           {" "}
-          <span className="badge">{stateWords[state]}</span>
+          <Sticker>{stateWords[state]}</Sticker>
         </>
       )}
     </span>

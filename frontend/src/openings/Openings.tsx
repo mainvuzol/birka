@@ -52,6 +52,7 @@ import { ScreenHeader } from "@/shared/ScreenHeader";
 import { Sheet } from "@/shared/Sheet";
 import { Stub } from "@/shared/Stub";
 import { buzz, useMainButton } from "@/shared/telegram";
+import { Sticker } from "@/shared/Sticker";
 
 /**
  * «Початкові залишки»: the goods already in a shop, entered as a list.
@@ -338,7 +339,7 @@ function ListTag({
           </p>
         )}
         <div className="opening-tag-foot">
-          <span className="badge">{listStatusLabels[list.status]}</span>
+          <Sticker>{listStatusLabels[list.status]}</Sticker>
           <button
             type="button"
             className="tag-verb"
@@ -1256,9 +1257,9 @@ function ListView({
         <div className="tag-hero tag-outline opening-hero">
           <div className="opening-hero-in" ref={tag} tabIndex={-1}>
             <p className="opening-hero-place">Склад «{warehouse}»</p>
-            <p className="badge opening-state">
+            <Sticker className="opening-state" as="p">
               {listStatusLabels[list.status]}
-            </p>
+            </Sticker>
             {(list.captured_at || list.store_id !== store.id) && (
               <p className="t-meta">
                 {[

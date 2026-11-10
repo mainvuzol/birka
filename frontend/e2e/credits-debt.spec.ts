@@ -466,8 +466,10 @@ test("nothing written off or returned is said unless it is, and what is written 
   );
   await page.goto("about:blank");
   await opened(page);
-  await expect(page.locator(".debt-closed .badge")).toHaveText("Списано");
-  await expect(page.locator(".debt-closed .badge")).toHaveClass(/\bneutral\b/);
+  await expect(page.locator(".debt-closed .sticker")).toHaveText("Списано");
+  await expect(page.locator(".debt-closed .sticker")).toHaveClass(
+    /\btone-neutral\b/,
+  );
   await expect(page.locator(".debt-closed")).toContainText(
     "Сплачено 1 000,00 грн з 3 000,00 грн · списано 2 000,00 грн",
   );
@@ -802,8 +804,8 @@ test("a closed debt says how it closed and when, and takes no payment", async ({
   );
   await opened(page);
   const closed = page.locator(".debt-closed");
-  await expect(closed.locator(".badge")).toHaveText("Сплачено");
-  await expect(closed.locator(".badge")).toHaveClass("badge paid");
+  await expect(closed.locator(".sticker")).toHaveText("Сплачено");
+  await expect(closed.locator(".sticker")).toHaveClass("sticker tone-paid");
   await expect(closed).toContainText("Закрито 14.10");
   await expect(closed).toContainText("Сплачено 2 500,00 грн з 3 000,00 грн");
   await expect(page.getByRole("group", { name: "Скільки винні" })).toHaveCount(
@@ -1240,7 +1242,7 @@ test("written off on her card, «Внесок» waits while the card is read aga
   await expect(pay).toBeDisabled();
   release();
   await expect(pay).toHaveCount(0);
-  await expect(page.locator(".customer-debt .badge")).toHaveText("Списано");
+  await expect(page.locator(".customer-debt .sticker")).toHaveText("Списано");
 });
 
 test("the owner's ⋯ open on her card when it is read again into two debts: the sheet goes with it, and Telegram's «Внесок» comes back (review, 2026-11-01)", async ({
