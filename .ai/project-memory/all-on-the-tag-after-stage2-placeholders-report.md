@@ -207,6 +207,10 @@ ESLint over `src/`.
   minutes — `go-b4-full.log`. The one: `backups.spec.ts:93`, «the owner is
   shown last night's failed copy…» — this Mac's backups' history, failing
   alike on the last baselines; GitHub's run is the proof.
+- **GitHub's first run,** at `cbde83e7`: 1026 of 1027. The one,
+  `today.spec.ts:2548` (since #158), looked for «120» in what is kept for
+  «Бачу» — a moment's digits too, and that day's noon held them. It reads
+  the keys for words and the values for numbers now.
 - **The affected specs while building,** each on a fresh seed:
   - the 16 specs this batch touches — 20 failed at first, most the shared
     seed's state (the catalog's «Лоран», the openings, the stocktake) and

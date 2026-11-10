@@ -2570,8 +2570,15 @@ test("what was seen is kept on this phone a week, by its id alone, under the org
   const seenOnce = await kept(page);
   const id = "close:00000000-0000-4000-8000-700000000000";
   expect(seenOnce.map((seen) => Object.keys(seen))).toEqual([[id]]);
-  // Its id and when, never what it said.
-  expect(JSON.stringify(seenOnce)).not.toMatch(/Центр|нестача|120/);
+  // Its id and when, never what it said: the key its id alone, the value a
+  // moment — a number, whose digits are no words (a moment's digits held
+  // «120» on 2026-11-10).
+  expect(JSON.stringify(seenOnce.map((seen) => Object.keys(seen)))).not.toMatch(
+    /Центр|нестача|120/,
+  );
+  expect(
+    seenOnce.flatMap((seen) => Object.values(seen).map((when) => typeof when)),
+  ).toEqual(["number"]);
   // One seen six days ago, one seven: the seventh day's is forgotten as
   // Бірка opens again. The drawer's, seen just before midnight: still
   // gone, but not done today.
