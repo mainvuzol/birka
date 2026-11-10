@@ -39,6 +39,7 @@ import {
 import { loadPending, submitPending, useCommand } from "@/orders/commands";
 import type { Pending } from "@/orders/commands";
 import {
+  CardLinePlace,
   CardPlaceholder,
   OrderDetail,
   actionLabels,
@@ -1141,6 +1142,9 @@ function Workspace({
   const [supplierTask, setSupplierTask] = useState(false);
   // And while a sale's return is made (stage 2, orders task list, P0-6).
   const [returnTask, setReturnTask] = useState(false);
+  // And while an order's goods come back to the warehouse (orders and
+  // «Каса» task list after stage 2, P1-2).
+  const [orderReturnTask, setOrderReturnTask] = useState(false);
   // And while a warehouse is counted (stage 2, goods task list, P0-3).
   const [stocktakeTask, setStocktakeTask] = useState(false);
   // And while a list's line is answered (stage 2, goods task list, P0-5).
@@ -1154,6 +1158,7 @@ function Workspace({
     (tab === "invoices" && invoiceTask) ||
     (tab === "suppliers" && supplierTask) ||
     (tab === "returns" && returnTask) ||
+    (tab === "list" && orderReturnTask) ||
     (tab === "stocktaking" && stocktakeTask) ||
     (tab === "openings" && openingsTask) ||
     // And while a new order is made (stage 2, orders task list, P0-5).
@@ -4012,6 +4017,13 @@ function Workspace({
             <ScreenHeader
               pushed
               waiting={detail.isPending}
+              after={
+                detail.isPending ? (
+                  <CardLinePlace
+                    order={opening?.id === selectedId ? opening : null}
+                  />
+                ) : undefined
+              }
               back={
                 <Back
                   go={() => {
@@ -4027,7 +4039,9 @@ function Workspace({
             />
             <section className="order">
               {detail.isPending ? (
-                <CardPlaceholder />
+                <CardPlaceholder
+                  order={opening?.id === selectedId ? opening : null}
+                />
               ) : (
                 <Unread
                   error={detail.error}
@@ -4061,6 +4075,7 @@ function Workspace({
                 detail.data.shipping_history?.length ?? 0,
               )}:${String(orderEpoch)}`}
               order={detail.data}
+              task={setOrderReturnTask}
               done={orderDone?.id === detail.data.id ? orderDone : null}
               collected={
                 collected?.id === detail.data.id

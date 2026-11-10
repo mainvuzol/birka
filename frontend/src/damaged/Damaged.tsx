@@ -375,21 +375,9 @@ export function Damaged({
         {problem && sheetUnit === undefined && <p role="alert">{problem}</p>}
         {units.data === undefined ? (
           units.isPending ? (
-            <>
-              <p role="status" className="visually-hidden">
-                Завантажуємо «Брак»…
-              </p>
-              <div className="placeholder order-tags" aria-hidden="true">
-                {[0, 1].map((n) => (
-                  <div className="order-tag tag-row tag-outline" key={n}>
-                    <div className="order-tag-body">
-                      <span className="skeleton skeleton-name" />
-                      <span className="skeleton skeleton-meta" />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </>
+            // The units' row tags, the shared place's (orders and «Каса»
+            // task list after stage 2, P1-1).
+            <Placeholder said="Завантажуємо «Брак»…" lineTags={2} />
           ) : (
             <Unread
               error={units.error}

@@ -8,7 +8,9 @@ import { NoCustomerData } from "@/shared/NoCustomerData";
 import { Placeholder } from "@/shared/Placeholder";
 import { CARRIED_TAP, usePanelRoom } from "@/shared/panel";
 import { Back } from "@/shared/Back";
+import { Eyelet } from "@/shared/Eyelet";
 import { ScreenHeader } from "@/shared/ScreenHeader";
+import { useMainButton } from "@/shared/telegram";
 import { tagOf } from "./Orders";
 import { placesKey } from "./types";
 import type { Location, Order, OrderItem, Store } from "./types";
@@ -42,6 +44,13 @@ export function byPlace(order: Order): [string, OrderItem[]][] {
  * from — then the reason, never a customer's name, the units confirmed in
  * hand, and «Прийняти повернення» under the thumb. A warehouse not read is
  * said as before, unnamed.
+ *
+ * A task's screen of stage 2 (orders and «Каса» task list after stage 2,
+ * P1-2; В-ЗП6 (а)): the menu steps aside while it is open, the order's goods
+ * are the line under its title — «{магазин} · {товар}» — and «Прийняти
+ * повернення» is Telegram's MainButton, held until the reason and the tick,
+ * turning while the server answers; outside Telegram, the dock's one
+ * button, as the card's.
  */
 export function Returned({
   order,
@@ -49,6 +58,7 @@ export function Returned({
   token,
   title,
   blocked,
+  waiting,
   back,
   take,
 }: {
@@ -58,6 +68,8 @@ export function Returned({
   /** The order as its card's title says it. */
   title: string;
   blocked: boolean;
+  /** The return asked and not answered yet. */
+  waiting: boolean;
   /** «← Замовлення». */
   back: () => void;
   take: (body: Record<string, unknown>) => void;
@@ -65,8 +77,6 @@ export function Returned({
   const hint = useId();
   const [reason, setReason] = useState("");
   const [received, setReceived] = useState(false);
-  const panel = useRef<HTMLDivElement>(null);
-  usePanelRoom(panel, true);
   // What comes back where is read first; the keyboard only once the reason
   // is tapped.
   const heading = useRef<HTMLHeadingElement>(null);
@@ -94,14 +104,29 @@ export function Returned({
   // tapped: what is ticked says the goods are in hand, so a second tap
   // landing on it is let go (review, 2026-10-25).
   const [shownAt] = useState(() => performance.now());
+  // Held until the reason and the tick: no tap carried from the row can
+  // take it.
+  const ready = !blocked && received && reason.trim() !== "";
+  const press = (): void => {
+    if (ready) take({ reason: reason.trim(), physically_received: true });
+  };
+  const main = useMainButton("Прийняти повернення", press, {
+    progress: waiting,
+    active: ready,
+  });
+  const panel = useRef<HTMLDivElement>(null);
+  usePanelRoom(panel, !main);
   return (
     <>
       <ScreenHeader
         ref={heading}
         focusable
         title="Товар повернувся на склад"
+        context={`${visible(store.name)} · ${title}`}
         back={
-          <Back go={back}>
+          // Held while the return is asked: the screen and what was typed
+          // stay until the answer (review).
+          <Back go={back} held={waiting}>
             <span aria-hidden="true">← </span>Замовлення
           </Back>
         }
@@ -151,21 +176,27 @@ export function Returned({
             Усі товари фізично отримані на складах відправлення
           </label>
         </fieldset>
-        <div className="pay-panel order-panel" ref={panel}>
-          <p className="pay-what">{title}</p>
-          <button
-            type="button"
-            className="primary"
-            disabled={blocked || !received || !reason.trim()}
-            // Held until the reason and the tick: no tap carried from the
-            // row can take it.
-            onClick={() => {
-              take({ reason: reason.trim(), physically_received: true });
-            }}
-          >
-            Прийняти повернення
-          </button>
-        </div>
+        {!main && (
+          // Outside Telegram, its MainButton as the dock's one button.
+          <div className="pay-panel order-panel order-dock" ref={panel}>
+            <button
+              type="button"
+              className="main-mimic"
+              disabled={!ready && !waiting}
+              aria-disabled={waiting || undefined}
+              onClick={press}
+            >
+              {waiting ? (
+                <>
+                  <Eyelet state="spin" size={20} />
+                  <span className="visually-hidden">Прийняти повернення</span>
+                </>
+              ) : (
+                "Прийняти повернення"
+              )}
+            </button>
+          </div>
+        )}
       </section>
     </>
   );

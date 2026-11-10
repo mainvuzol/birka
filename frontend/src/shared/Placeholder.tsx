@@ -8,7 +8,8 @@ import type { JSX, ReactNode } from "react";
  *
  * One shape a place, each the real element's size and corner (spec §5's
  * skeleton, §6.27; audit after stage 2, frame P1-4): a list's rows 64, with
- * a mark 40 or without; a tag 76 of a line and its meta; a store's tag 96;
+ * a mark 40 or without; a row tag 76 of a line and its meta, as an order's
+ * list draws it; a store's tag 96;
  * a field 52 under its label; a row of size cells 60; a row of choices;
  * and the model tags with their cells, as before.
  */
@@ -50,8 +51,9 @@ export function Placeholder({
   /** What stands under the search field, over the tags, in its own place:
    * the till's paper switch («Усе на бірці» task list, P0-5). */
   under?: ReactNode;
-  /** Tags 76 of a line and its meta, no cells: an order's, a delivery's
-   * (spec §6.9). */
+  /** Row tags 76 of a line and its meta, no cells, in the order tags' own
+   * list: an order's, a unit's of «Брак» (spec §6.9; orders and «Каса» task
+   * list after stage 2, P1-1). */
   lineTags?: number;
   /** Stores' tags 96, the eyelet on top (spec §6.10): «Магазини». */
   stores?: number;
@@ -113,10 +115,10 @@ export function Placeholder({
     return (
       <>
         {status}
-        <div className="placeholder tags" aria-hidden="true">
+        <div className="placeholder order-tags" aria-hidden="true">
           {Array.from({ length: lineTags }, (_, n) => (
-            <div className="tag-row tag-outline" key={n}>
-              <div className="model-tag-in skeleton-tag-in">
+            <div className="order-tag tag-row tag-outline" key={n}>
+              <div className="order-tag-body">
                 <span className="skeleton skeleton-name" />
                 <span className="skeleton skeleton-meta" />
               </div>

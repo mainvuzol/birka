@@ -5,6 +5,7 @@ import {
   openStore,
   section,
   shippedFace,
+  expectEmpty,
   expectOneSticker,
 } from "./fixtures";
 import type { Locator, Page } from "@playwright/test";
@@ -145,6 +146,13 @@ interface Server {
   places?: Record<string, unknown>[];
   /** The warehouses answered only once this opens. */
   placesHeld?: Promise<void>;
+  /** The warehouses' read refused. */
+  placesRefused?: boolean;
+  /** How many times the warehouses were asked. */
+  placesAsked?: number;
+  /** Pages refused once, by what was asked: «open||100», «closed||50»,
+   * «|2045|50». */
+  pageFails?: Set<string>;
   /** An order's own read answered only once this opens. */
   detailHeld?: Promise<void>;
 }
@@ -158,7 +166,15 @@ async function stub(page: Page, server: Server): Promise<void> {
       const waybill = params.get("waybill");
       const limit = Number(params.get("limit") ?? "50");
       const offset = Number(params.get("offset") ?? "0");
-      server.asked.push(`${status ?? ""}|${waybill ?? ""}|${String(offset)}`);
+      const asked = `${status ?? ""}|${waybill ?? ""}|${String(offset)}`;
+      server.asked.push(asked);
+      if (server.pageFails?.delete(asked)) {
+        await route.fulfill({
+          status: 500,
+          json: { code: "INTERNAL_ERROR", message: "Internal error" },
+        });
+        return;
+      }
       if (waybill !== null && waybill === server.heldFor) await server.gate;
       if (status === "open" && server.openHeld) await server.openHeld;
       if (status === "open" && server.openFails) {
@@ -242,13 +258,20 @@ async function stub(page: Page, server: Server): Promise<void> {
       }
       await route.fulfill({ json: found });
     });
-  if (server.places) {
-    const places = server.places;
+  // Read as asked: the warehouses may be renamed between entries.
+  if (server.places)
     await page.route("**/api/v1/stock-locations?**", async (route) => {
+      server.placesAsked = (server.placesAsked ?? 0) + 1;
       if (server.placesHeld) await server.placesHeld;
-      await route.fulfill({ json: places });
+      if (server.placesRefused) {
+        await route.fulfill({
+          status: 403,
+          json: { code: "FORBIDDEN", message: "Forbidden" },
+        });
+        return;
+      }
+      await route.fulfill({ json: server.places ?? [] });
     });
-  }
 }
 
 function server(over: Partial<Server> = {}): Server {
@@ -625,17 +648,39 @@ test("those to be sent by their warehouse: «Склад «Основний» · 
   ]);
   await expect(page.locator(".order-row")).toHaveCount(4);
 
-  // The warehouses read after the list: a tap as the rows go under them is
-  // let go (review, 2026-11-01).
+  // The warehouses read after the list: the rows' places, a label's over
+  // them, never one list the labels come over later — the rows come under
+  // their labels where their places stood, and none moves once shown
+  // (orders and «Каса» task list after stage 2, P1-1); a tap as they come
+  // is let go (review, 2026-11-01).
   let release = (): void => undefined;
   grouped.placesHeld = new Promise<void>((done) => {
     release = done;
   });
   await enter(page);
-  await expect(rows(page, "До відправлення")).toHaveCount(4);
+  const placed = page.locator(".placeholder .order-tag");
+  await expect(placed).toHaveCount(3);
+  await expect(page.locator(".order-row")).toHaveCount(0);
+  await expect(
+    page.getByRole("status").filter({ hasText: "Завантажуємо склади…" }),
+  ).toBeAttached();
   await settle(page);
+  const firstPlace = await placed.first().boundingBox();
+  const labelPlace = await page.locator(".skeleton-place-label").boundingBox();
   release();
-  await expect(page.locator(".order-place-label")).toHaveCount(3);
+  await expect(page.locator("h3.order-place-label")).toHaveCount(3);
+  await expect(placed).toHaveCount(0);
+  const firstRow = page.locator("article.order-tag").first();
+  const came = await firstRow.boundingBox();
+  expect(Math.abs((came?.y ?? 0) - (firstPlace?.y ?? 0))).toBeLessThanOrEqual(
+    1,
+  );
+  expect(
+    Math.abs(
+      ((await page.locator("h3.order-place-label").first().boundingBox())?.y ??
+        0) - (labelPlace?.y ?? 0),
+    ),
+  ).toBeLessThanOrEqual(1);
   const verb = page
     .getByRole("list", { name: "Склад «Основний»", exact: true })
     .getByRole("button", { name: "Відправити" })
@@ -643,9 +688,77 @@ test("those to be sent by their warehouse: «Склад «Основний» · 
   await verb.click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await settle(page);
+  // Shown, no row moved under the finger.
+  expect((await firstRow.boundingBox())?.y).toBe(came?.y);
   await verb.click();
   await expect(page.getByRole("dialog", { name: "Відправити" })).toBeVisible();
   delete grouped.placesHeld;
+
+  // The warehouses refused: one list, as before — its rows come where
+  // their places stood, and a tap as they do is let go (review).
+  grouped.placesRefused = true;
+  let refuse = (): void => undefined;
+  grouped.placesHeld = new Promise<void>((done) => {
+    refuse = done;
+  });
+  await enter(page);
+  await expect(placed).toHaveCount(3);
+  await settle(page);
+  refuse();
+  await expect(rows(page, "До відправлення")).toHaveCount(4);
+  const send = page
+    .getByRole("list", { name: "До відправлення", exact: true })
+    .getByRole("button", { name: "Відправити" })
+    .first();
+  await send.click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await settle(page);
+  await send.click();
+  await expect(page.getByRole("dialog", { name: "Відправити" })).toBeVisible();
+  delete grouped.placesHeld;
+  await enter(page);
+  await expect(rows(page, "До відправлення")).toHaveCount(4);
+  await expect(page.locator(".order-place-label")).toHaveCount(0);
+  // Read again on return to the app, its answer not come yet: the rows
+  // shown stay, no places come over them (review).
+  const askedBefore = grouped.placesAsked ?? 0;
+  let answer = (): void => undefined;
+  grouped.placesHeld = new Promise<void>((done) => {
+    answer = done;
+  });
+  await page.evaluate(() => {
+    window.dispatchEvent(new Event("visibilitychange"));
+  });
+  await expect
+    .poll(() => grouped.placesAsked ?? 0)
+    .toBeGreaterThan(askedBefore);
+  await settle(page);
+  await expect(rows(page, "До відправлення")).toHaveCount(4);
+  await expect(page.locator(".placeholder")).toHaveCount(0);
+  answer();
+  await expect(page.locator(".order-place-label")).toHaveCount(0);
+  await settle(page);
+  delete grouped.placesHeld;
+  delete grouped.placesRefused;
+
+  // A warehouse named longer than the phone, in one word: its label breaks,
+  // never past the screen's edge (P1-1).
+  await page.setViewportSize({ width: 360, height: 640 });
+  grouped.places = [
+    warehouse(main, "СкладМагазинНаЦентральномуРинкуБіляЗалізничногоВокзалу"),
+    warehouse(own, "Свій"),
+  ];
+  await enter(page);
+  const long = page.locator(".order-place-label").first();
+  await expect(long).toHaveText(
+    "Склад «СкладМагазинНаЦентральномуРинкуБіляЗалізничногоВокзалу» · 2",
+  );
+  expect(
+    await long.evaluate((node) => node.scrollWidth <= node.clientWidth),
+  ).toBe(true);
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(360);
 
   // A line from a warehouse not read: no labels, one list, each order in it.
   grouped.open = [
@@ -970,7 +1083,7 @@ test("whoever reads the orders but takes no step has no verb on any row, and no 
   ).toHaveCount(0);
 });
 
-test("a waybill is found as it is typed, from two characters, Enter at once; kept while an order is opened; nothing found is said of what was typed only, and «Очистити» brings the list back (orders task list, P0-1)", async ({
+test("a waybill is found as it is typed, from two characters, Enter at once, in the shared field — its name heard, «Номер ТТН» its hint, the magnifier, «×» — kept while an order is opened; nothing found is the blank tag, said of what was typed only, and «Очистити» or «×» brings the list back (orders task list, P0-1; orders and «Каса» task list after stage 2, P1-1)", async ({
   page,
 }) => {
   const orders = server({
@@ -994,9 +1107,21 @@ test("a waybill is found as it is typed, from two characters, Enter at once; kep
         host.slowPause && delay === 300 ? 600_000 : delay,
       )) as typeof setTimeout;
   });
+  await page.setViewportSize({ width: 360, height: 640 });
   await enter(page);
   await expect(knot(page, "До відправлення 1")).toBeVisible();
   const field = page.getByLabel("Номер ТТН");
+  // The shared field (spec §6.6): 52, the magnifier, «Номер ТТН» its hint —
+  // no line over it naming it.
+  const search = page.getByRole("search");
+  await expect(search.locator(".search-field svg.icon")).toBeVisible();
+  await expect(field).toHaveAttribute("placeholder", "Номер ТТН");
+  expect((await field.boundingBox())?.height).toBe(52);
+  await expect(field).toHaveCSS("border-top-left-radius", "8px");
+  await expect(search.locator("label")).toHaveText("Номер ТТН");
+  await expect(search.locator("label .visually-hidden")).toHaveText(
+    "Номер ТТН",
+  );
   await field.fill("2");
   // One character asks nothing.
   await page.evaluate(
@@ -1029,6 +1154,13 @@ test("a waybill is found as it is typed, from two characters, Enter at once; kep
   );
   await field.fill("9999");
   await expect(none).toBeVisible();
+  // The blank tag, «Очистити» its one button (spec §6.28).
+  const blank = page.locator(".orders-empty");
+  await expectEmpty(
+    blank,
+    "За «9999» замовлень не знайдено. Перевірте номер ТТН.",
+  );
+  await expect(blank.getByRole("button")).toHaveText(["Очистити"]);
   // Another typed after nothing found: «not found» is never said of it
   // before its answer (review, 2026-10-23).
   let open = (): void => undefined;
@@ -1042,7 +1174,7 @@ test("a waybill is found as it is typed, from two characters, Enter at once; kep
   await expect(
     page.getByRole("status").filter({ hasText: "Шукаємо…" }),
   ).toBeAttached();
-  await expect(page.locator(".placeholder .sale-row")).toHaveCount(3);
+  await expect(page.locator(".placeholder .order-tag")).toHaveCount(3);
   await expect(page.getByText(/замовлень не знайдено/)).toHaveCount(0);
   open();
   await expect(found).toHaveCount(1);
@@ -1059,10 +1191,18 @@ test("a waybill is found as it is typed, from two characters, Enter at once; kep
   ).toBeVisible();
   expect(searched()).toContain("99999");
   await slow(false);
-  await page.getByRole("button", { name: "Очистити" }).click();
+  await page.getByRole("button", { name: "Очистити", exact: true }).click();
   await expect(field).toHaveValue("");
   await expect(field).toBeFocused();
   await expect(knot(page, "До відправлення 1")).toBeVisible();
+  // «×» is «Очистити»: the field emptied, the cursor in it, the list back.
+  await field.fill("2045");
+  await expect(found).toHaveCount(2);
+  await page.getByRole("button", { name: "Очистити пошук" }).click();
+  await expect(field).toHaveValue("");
+  await expect(field).toBeFocused();
+  await expect(knot(page, "До відправлення 1")).toBeVisible();
+  await expect(found).toHaveCount(0);
 });
 
 test("more than a hundred open: «Показати ще» reads the rest, a row read twice shown once, the places counted once all are read; the collected fifty at a time (orders task list, P0-1)", async ({
@@ -1122,6 +1262,101 @@ test("more than a hundred open: «Показати ще» reads the rest, a row 
   await expect(closedRows).toHaveCount(55);
 });
 
+/** The one plate where «Показати ще» stood: under the last row, no second
+ * one over the rows, «Показати ще» gone meanwhile. */
+async function pageFailed(page: Page, last: Locator): Promise<Locator> {
+  const plate = page.locator(".notice.read-failure");
+  await expect(plate).toHaveCount(1);
+  await expect(plate).toHaveAttribute("role", "alert");
+  await expect(plate.getByRole("button")).toHaveText(["Спробувати ще раз"]);
+  await expect(page.getByRole("button", { name: "Показати ще" })).toHaveCount(
+    0,
+  );
+  const [row, under] = await Promise.all([
+    last.boundingBox(),
+    plate.boundingBox(),
+  ]);
+  expect(row && under && under.y >= row.y + row.height).toBe(true);
+  return plate;
+}
+
+test("a next page that could not be read is one plate where «Показати ще» stood, its «Спробувати ще раз» reading that page, the rows read kept — to be sent, collected and found (orders and «Каса» task list after stage 2, P2-6)", async ({
+  page,
+}) => {
+  const main = randomUUID();
+  const many = Array.from({ length: 105 }, (_, index) =>
+    order({
+      created_at: ago(index / 10),
+      items: [item("Лоран шоколад", "M", 1, main)],
+    }),
+  );
+  const done = Array.from({ length: 55 }, (_, index) =>
+    order({ status: "COLLECTED", created_at: ago(40 + index / 10) }),
+  );
+  const orders = server({
+    open: many,
+    closed: done,
+    found: { "2045": done },
+    places: [warehouse(main, "Основний")],
+    pageFails: new Set(["open||100", "closed||50", "|2045|50"]),
+  });
+  await stub(page, orders);
+  await enter(page);
+  const ready = rows(page, "Склад «Основний»");
+  await expect(ready).toHaveCount(100);
+  await page.getByRole("button", { name: "Показати ще" }).click();
+  const plate = await pageFailed(page, ready.last());
+  await expect(ready).toHaveCount(100);
+  await plate.getByRole("button", { name: "Спробувати ще раз" }).click();
+  await expect(ready).toHaveCount(105);
+  await expect(plate).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Показати ще" })).toHaveCount(
+    0,
+  );
+  expect(orders.asked.filter((asked) => asked === "open||100")).toHaveLength(2);
+
+  await knot(page, "Клієнт забрав").click();
+  const closedRows = rows(page, "Клієнт забрав");
+  await expect(closedRows).toHaveCount(50);
+  await page.getByRole("button", { name: "Показати ще" }).click();
+  await pageFailed(page, closedRows.last());
+  await plate.getByRole("button", { name: "Спробувати ще раз" }).click();
+  await expect(closedRows).toHaveCount(55);
+  await expect(plate).toHaveCount(0);
+
+  await page.getByLabel("Номер ТТН").fill("2045");
+  const found = rows(page, "Знайдені замовлення");
+  await expect(found).toHaveCount(50);
+  await page.getByRole("button", { name: "Показати ще" }).click();
+  await pageFailed(page, found.last());
+  // Read again whole on return to the app while that page is said: the
+  // plate stays where «Показати ще» stood, its retry held till answered,
+  // nothing said over the rows; answered, «Показати ще» is back (review).
+  let reread = (): void => undefined;
+  orders.heldFor = "2045";
+  orders.gate = new Promise<void>((done) => {
+    reread = done;
+  });
+  const whole = orders.asked.length;
+  await page.evaluate(() => {
+    window.dispatchEvent(new Event("visibilitychange"));
+  });
+  await expect
+    .poll(() => orders.asked.slice(whole).includes("|2045|0"))
+    .toBe(true);
+  await settle(page);
+  await pageFailed(page, found.last());
+  await expect(
+    plate.getByRole("button", { name: "Спробувати ще раз" }),
+  ).toBeDisabled();
+  reread();
+  delete orders.heldFor;
+  await expect(plate).toHaveCount(0);
+  await page.getByRole("button", { name: "Показати ще" }).click();
+  await expect(found).toHaveCount(55);
+  await expect(plate).toHaveCount(0);
+});
+
 test("no order yet says what an order does, with «Нове замовлення»; none open, but collected ones, says nothing is to be sent, and an empty place «Тут посилок немає.» (orders task list, P0-1)", async ({
   page,
 }) => {
@@ -1150,8 +1385,24 @@ test("no order yet says what an order does, with «Нове замовлення
   await expect(
     page.getByText("Зараз нічого не треба відправляти."),
   ).toBeVisible();
+  // Each the blank tag, the words as before, in both themes (spec §6.28;
+  // orders and «Каса» task list after stage 2, P1-1).
+  await expectEmpty(
+    page.locator(".orders-empty"),
+    "Зараз нічого не треба відправляти.",
+  );
+  await page.emulateMedia({ colorScheme: "dark" });
+  await expectEmpty(
+    page.locator(".orders-empty"),
+    "Зараз нічого не треба відправляти.",
+  );
+  await page.emulateMedia({ colorScheme: "light" });
   await knot(page, "Відправлено 0").click();
   await expect(page.getByText("Тут посилок немає.")).toBeVisible();
+  await expectEmpty(page.locator(".orders-empty"), "Тут посилок немає.");
+  await page.emulateMedia({ colorScheme: "dark" });
+  await expectEmpty(page.locator(".orders-empty"), "Тут посилок немає.");
+  await page.emulateMedia({ colorScheme: "light" });
   await knot(page, "Клієнт забрав").click();
   await expect(rows(page, "Клієнт забрав")).toHaveCount(1);
   await expect(
@@ -1251,13 +1502,21 @@ test("in the device's face «Нове замовлення» goes under «Зам
   expect(await titleLine(page, 320)).toBe("under");
 });
 
-test("while the open orders are read, the string not counted and three rows hold their places: the field and the first row stand where they will, heard as «Завантажуємо замовлення…» (orders task list, P2-2)", async ({
+test("while the open orders are read, the string not counted and three row tags hold their places, a warehouse's label's over them: the field, the label and the first row stand where they will, heard as «Завантажуємо замовлення…» (orders task list, P2-2; orders and «Каса» task list after stage 2, P1-1)", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 360, height: 640 });
   let release = (): void => undefined;
+  const main = randomUUID();
   const orders = server({
-    open: [toSend, sent],
+    open: [
+      order({
+        created_at: ago(3),
+        items: [item("Лоран шоколад", "M", 2, main)],
+      }),
+      sent,
+    ],
+    places: [warehouse(main, "Основний")],
     openHeld: new Promise((done) => {
       release = done;
     }),
@@ -1267,7 +1526,12 @@ test("while the open orders are read, the string not counted and three rows hold
   await expect(
     page.getByRole("status").filter({ hasText: "Завантажуємо замовлення…" }),
   ).toBeAttached();
-  await expect(page.locator(".placeholder .sale-row")).toHaveCount(3);
+  // Row tags, as the rows' own (P1-1), never a list's rows.
+  const placed = page.locator(".placeholder .order-tag");
+  await expect(placed).toHaveCount(3);
+  await expect(page.locator(".placeholder .sale-row")).toHaveCount(0);
+  for (const tag of await placed.all())
+    expect((await tag.boundingBox())?.height).toBe(76);
   await expect(knots(page).getByRole("button")).toHaveText([
     "До відправлення",
     "Відправлено",
@@ -1276,16 +1540,16 @@ test("while the open orders are read, the string not counted and three rows hold
   ]);
   const field = await page.getByLabel("Номер ТТН").boundingBox();
   const string = await knots(page).boundingBox();
-  const place = await page
-    .locator(".placeholder .sale-row")
-    .first()
-    .boundingBox();
+  const place = await placed.first().boundingBox();
+  const label = await page.locator(".skeleton-place-label").boundingBox();
   release();
   await expect(knot(page, "До відправлення 1")).toBeVisible();
   const first = page.locator("article.order-tag").first();
   await expect(first).toBeVisible();
   const row = await first.boundingBox();
   expect(Math.abs((row?.y ?? 0) - (place?.y ?? 0))).toBeLessThanOrEqual(1);
+  const heading = await page.locator("h3.order-place-label").boundingBox();
+  expect(Math.abs((heading?.y ?? 0) - (label?.y ?? 0))).toBeLessThanOrEqual(1);
   expect((await page.getByLabel("Номер ТТН").boundingBox())?.y).toBe(field?.y);
   expect((await knots(page).boundingBox())?.height).toBe(string?.height);
 });

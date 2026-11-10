@@ -8161,3 +8161,86 @@ money's sums, signs and blind count are as they were.
   - The rows of «Закриття», «Змінити спосіб оплати» and the same waybill,
     and the new order's tray, have the set's chevron 16 in pencil, never a
     «›».
+
+## Chosen in chat — 2026-11-10 (audit after stage 2, batch 7: «Замовлення»'s pack — the shared search field, the rows' places as tags, those to be sent under their warehouses at once, the blank tag; the goods come back a task's screen with Telegram's MainButton; a next page that failed one retry; orders-cash P1-1, P1-2, P2-6)
+
+Chosen in chat on 2026-11-10 («merged go next»), after batch 6 (#188) was
+merged. No right, no server rule, no field, no word changes: what a return
+sends (`reason`, `physically_received: true`), the warehouse each coat goes
+back to, the grouping by warehouse and what each group holds are as they
+were. The orders and «Каса» task list after stage 2 is built whole with
+this batch.
+
+- **The search field** (P1-1; spec §6.6): «Замовлення»'s waybill field is
+  the shared `SearchField` — its name «Номер ТТН» heard, not a line over
+  it; «Номер ТТН» its hint (the server searches the waybill alone, not an
+  order's number: S16's «ТТН або номер замовлення» is not taken); the
+  magnifier; «×», which does what «Очистити» does — the field emptied, the
+  cursor kept in it, the list back. From two characters, Enter at once, as
+  before.
+- **The rows' places are row tags** (P1-1; spec §6.27): while the open,
+  the closed or the found orders are read, three grey row tags 76 in the
+  order tags' own list, where the rows come — the shared `Placeholder`'s
+  line tags, now the order tag's own shape (`order-tag tag-row
+  tag-outline`, as «Брак» drew its places by hand; «Брак» takes it).
+  - **Decided here:** to be sent, for whoever reads the stock, a grey
+    label's place over them, as tall as «Склад «…» · N»: the first row
+    comes under its label where its place stood.
+- **Those to be sent under their warehouses at once** (P1-1): while the
+  warehouses are read, the rows' places, never one list the labels come
+  over later — no row moves once shown. The warehouses refused, or a line
+  from one not read: one list, as before (the rule of 2026-11-01).
+  - Read again after a refusal — the app come back, a step recorded — the
+    rows shown stay: the places stand only until the warehouses are first
+    answered (review).
+  - A tap as the places give way to the rows is let go, as a tap as the
+    labels came (review).
+  - A long warehouse's name in its label breaks, never past the screen.
+- **The blank tag** (P1-1; spec §6.28): «Тут посилок немає.», «Зараз
+  нічого не треба відправляти.» and «За «…» замовлень не знайдено.
+  Перевірте номер ТТН.» are the shared `Empty` — the blank tag 64 in the
+  edge, the words as before; «Очистити» the found's one button. «Посилок до
+  відправлення немає. Вставте повідомлення з чату…» (spec §6.28) waits for
+  Q-4.
+- **The card's place while it is read** (P1-1): the string of knots — the
+  four hollow on the thread, each word and the day under «До
+  відправлення» a grey line of its own size, the words drawn unseen — then
+  «У посилці»'s place and two lines, in the card's own flow: what comes
+  under the string stands where its place stood. The pill's place is gone
+  (the card has none).
+  - **Decided here:** the line under the title holds «замовлено … · № …»
+    grey, so it wraps as the card's at 360.
+  - Opened from its row, the order is known (review): a cancelled or come
+    back one holds its sticker's place under the string, and one the server
+    keeps no day for has no day's place, neither under «До відправлення»
+    nor «замовлено» in the line. Opened another way (the same waybill's
+    other order, from its plate), the places as for an order to be sent.
+- **The goods come back, a task's screen** (P1-2; В-ЗП6 (а)): while
+  «Товар повернувся на склад» is open the menu steps aside (as on every
+  task screen of stage 2) and «Змінити магазин» is held; the line under
+  its title is «{магазин} · {товар, as the card's title}»; the window that
+  repeated the goods over the button is gone.
+  - «Прийняти повернення» is Telegram's MainButton, held until the reason
+    and the tick, turning while the server answers; the card's MainButton
+    is put away while the step is open. Outside Telegram, the dock's one
+    button — the MainButton's place, 50 with Telegram's corner 10 (spec
+    §6.4), as the card's — its eyelet turning while it is answered.
+  - Telegram's «Назад» is «← Замовлення», as before; while the return is
+    answered it is hidden and the app's «← Замовлення» held, so the screen
+    and what was typed stay until the answer (review). The order of the
+    rest, the focus on the title, the keyboard only at the reason's tap —
+    as before.
+  - The line at 360: two lines where it has the width; beside «Змінити
+    магазин», kept at its right as on every screen, a long product takes a
+    third, as batch 6 decided for the order's line (review).
+- **A next page that failed** (P2-6): on «Замовлення» (to be sent and the
+  other open places, «Клієнт забрав», the cancelled and come back, and a
+  waybill's search) and on «Закриття», the next page that could not be
+  read is one warning plate where «Показати ще» stood, its «Спробувати ще
+  раз» reading that page; the rows read stay. A whole list read again and
+  refused is said over its rows, as before.
+  - The page's failure is kept until the list is read with no error
+    (review): a whole read again meanwhile — the app come back, a step
+    recorded — still says it at the foot, its retry held until answered,
+    never over the rows; answered, «Показати ще» is back. One hook,
+    `shared/nextPage`, for «Замовлення»'s lists and «Закриття».

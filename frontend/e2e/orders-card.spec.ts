@@ -473,7 +473,7 @@ test("an order to send fits the phone: its goods as its title, when it was order
   // магазин», kept at its right (spec §6.2), a store named as long as
   // «Основний» takes a third (orders and «Каса» task list after stage 2,
   // P2-1; decided here).
-  const line = page.locator(".store-line p");
+  const line = page.locator(".store-line p:visible");
   await expect(line).toHaveText(
     new RegExp(
       ` · замовлено ${short(ready.created_at as string)} · № ${ready.id.slice(0, 8)}$`,
@@ -2302,26 +2302,13 @@ function cameBack(): Stubbed {
   });
 }
 
-test("goods come back as their own step: each warehouse they go back to named, seven taps from the menu with the typing — «Відправлено» among them — the result a sentence a warehouse with a buzz (orders task list, P2-4; «Усе на бірці» task list, P0-4; sections task list, P0-1)", async ({
+test("goods come back as their own step: each warehouse they go back to named, seven taps from the menu with the typing — «Відправлено» among them, the last Telegram's MainButton — the result a sentence a warehouse with a buzz (orders task list, P2-4; «Усе на бірці» task list, P0-4; sections task list, P0-1; orders and «Каса» task list after stage 2, P1-2)", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 360, height: 640 });
   const server: Server = { order: cameBack(), sent: [] };
   await warehouses(page);
-  await page.addInitScript(() => {
-    const host = window as unknown as {
-      TelegramWebviewProxy: {
-        postEvent: (event: string, data: string) => void;
-      };
-      buzzes: string[];
-    };
-    host.buzzes = [];
-    host.TelegramWebviewProxy = {
-      postEvent: (event, data) => {
-        if (event === "web_app_trigger_haptic_feedback") host.buzzes.push(data);
-      },
-    };
-  });
+  await hear(page);
   await stub(page, server);
   await page.goto("about:blank");
   await page.goto(launch());
@@ -2351,9 +2338,12 @@ test("goods come back as their own step: each warehouse they go back to named, s
     "Повернеться на склад «Свій»: Лоран шоколад · M × 2",
     "Повернеться на склад «Сусідній»: Ріо графіт · L",
   ]);
-  await expect(panel(page).locator(".pay-what")).toHaveText(
-    "Лоран шоколад · M × 2 + ще 1",
+  // The order's goods the line under the title, no window repeating them
+  // over the button (P1-2).
+  await expect(page.locator(".store-line p:visible")).toHaveText(
+    "Основний · Лоран шоколад · M × 2 + ще 1",
   );
+  await expect(page.locator(".pay-what")).toHaveCount(0);
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth),
   ).toBeLessThanOrEqual(360);
@@ -2363,18 +2353,17 @@ test("goods come back as their own step: each warehouse they go back to named, s
   await page
     .getByLabel("Усі товари фізично отримані на складах відправлення")
     .check();
-  await panel(page)
-    .getByRole("button", { name: "Прийняти повернення" })
-    .click();
+  await pressMain(page, "Прийняти повернення");
   await expect(
     page.getByRole("status").filter({
       hasText:
         /^Повернено на склад «Свій»: 2 шт\. Повернено на склад «Сусідній»: 1 шт\.$/,
     }),
   ).toBeVisible();
+  // Six taps in the app; the seventh Telegram's MainButton.
   expect(
     await page.evaluate(() => (window as unknown as { taps: number }).taps),
-  ).toBe(7);
+  ).toBe(6);
   expect(await buzzes(page)).toEqual([
     { type: "notification", notification_type: "success" },
   ]);
@@ -2395,7 +2384,8 @@ test("goods come back to whoever may not see the store's warehouses: said as bef
 }) => {
   const server: Server = { order: cameBack(), sent: [] };
   await warehouses(page, "refused");
-  await open(page, server);
+  // Outside Telegram: the dock's one button (P1-2).
+  await open(page, server, undefined, null);
   const row = page.getByRole("button", { name: "Товар повернувся на склад" });
   // Back without taking it: nothing sent, the row in focus.
   await row.click();
@@ -2453,6 +2443,198 @@ for (const as of ["unknown", "paused", "not receiving"] as const)
     await expect(page.getByText(/Повернеться на склад/)).toHaveCount(0);
   });
 
+test("goods come back on a task's screen: the menu aside, the order's goods the line under its title, «Прийняти повернення» Telegram's MainButton held until the reason and the tick and turning while answered; Telegram's «Назад» back to the card (orders and «Каса» task list after stage 2, P1-2; В-ЗП6 (а))", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  const server: Server = { order: cameBack(), sent: [] };
+  await warehouses(page);
+  await open(page, server);
+  const sections = page.getByRole("navigation", { name: "Розділи" });
+  await expect(sections).toBeVisible();
+  await expect
+    .poll(() => main(page))
+    .toMatchObject({ is_visible: true, text: "Прибув на пошту" });
+  const row = page.getByRole("button", { name: "Товар повернувся на склад" });
+  await row.click();
+  await expect(
+    page.getByRole("heading", { name: "Товар повернувся на склад" }),
+  ).toBeFocused();
+  // A task's screen: the menu steps aside, «Змінити магазин» held.
+  await expect(sections).toHaveCount(0);
+  await expect(
+    page
+      .locator(".store-line")
+      .getByRole("button", { name: "Змінити магазин" }),
+  ).toBeDisabled();
+  // Its one line: the store and the goods, two lines at most at 360.
+  const line = page.locator(".store-line p:visible");
+  await expect(line).toHaveText("Основний · Лоран шоколад · M × 2 + ще 1");
+  expect(
+    await line.evaluate(
+      (node) =>
+        node.getBoundingClientRect().height /
+        parseFloat(getComputedStyle(node).lineHeight),
+    ),
+  ).toBeLessThanOrEqual(2.1);
+  // Telegram's MainButton, the card's put away; no button of the app's.
+  await expect(page.locator(".order-dock")).toHaveCount(0);
+  await expect(page.locator(".order-returned button")).toHaveCount(0);
+  await expect
+    .poll(() => main(page))
+    .toMatchObject({
+      is_visible: true,
+      is_active: false,
+      text: "Прийняти повернення",
+    });
+  // Telegram's «Назад» is «← Замовлення»: the card, its row in focus, the
+  // menu back, its own MainButton again.
+  await page.evaluate(() => {
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        data: JSON.stringify({ eventType: "back_button_pressed" }),
+        source: window.parent,
+      }),
+    );
+  });
+  await expect(row).toBeFocused();
+  await expect(sections).toBeVisible();
+  await expect
+    .poll(() => main(page))
+    .toMatchObject({ is_visible: true, text: "Прибув на пошту" });
+  // Again: held while the reason or the tick is missing — a press then
+  // sends nothing.
+  await row.click();
+  const pressed = (): Promise<void> =>
+    page.evaluate(() => {
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          data: JSON.stringify({ eventType: "main_button_pressed" }),
+          source: window.parent,
+        }),
+      );
+    });
+  await page.getByLabel("Причина повернення").fill("Не забрали з пошти");
+  await readTheAnswer(page);
+  await expect
+    .poll(() => main(page))
+    .toMatchObject({ is_active: false, text: "Прийняти повернення" });
+  await pressed();
+  await page
+    .getByLabel("Усі товари фізично отримані на складах відправлення")
+    .check();
+  await page.getByLabel("Причина повернення").fill("   ");
+  await expect
+    .poll(() => main(page))
+    .toMatchObject({ is_active: false, text: "Прийняти повернення" });
+  await pressed();
+  await readTheAnswer(page);
+  expect(server.sent).toEqual([]);
+  await page.getByLabel("Причина повернення").fill("Не забрали з пошти");
+  // Answered late: Telegram's button turns, its words kept.
+  let release = (): void => undefined;
+  server.hold = new Promise<void>((done) => {
+    release = done;
+  });
+  await pressMain(page, "Прийняти повернення");
+  await expect
+    .poll(() => main(page))
+    .toMatchObject({
+      is_visible: true,
+      is_active: false,
+      is_progress_visible: true,
+      text: "Прийняти повернення",
+    });
+  // No way out while it is answered: Telegram's «Назад» hidden, and pressed
+  // anyway, the screen and what was typed stay (review).
+  const backs = (): Promise<unknown[]> =>
+    page.evaluate(() =>
+      (window as unknown as { told: [string, unknown][] }).told
+        .filter(([event]) => event === "web_app_setup_back_button")
+        .map(([, data]) => data),
+    );
+  await expect
+    .poll(async () => (await backs()).at(-1))
+    .toEqual({ is_visible: false });
+  await page.evaluate(() => {
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        data: JSON.stringify({ eventType: "back_button_pressed" }),
+        source: window.parent,
+      }),
+    );
+  });
+  await readTheAnswer(page);
+  await expect(
+    page.getByRole("heading", { name: "Товар повернувся на склад" }),
+  ).toBeVisible();
+  await expect(page.getByLabel("Причина повернення")).toHaveValue(
+    "Не забрали з пошти",
+  );
+  await expect(sections).toHaveCount(0);
+  release();
+  await expect(
+    page.getByRole("status").filter({
+      hasText:
+        /^Повернено на склад «Свій»: 2 шт\. Повернено на склад «Сусідній»: 1 шт\.$/,
+    }),
+  ).toBeVisible();
+  // Taken: the card, the menu back.
+  await expect(sections).toBeVisible();
+  expect(server.sent).toHaveLength(1);
+});
+
+test("a long product's line under «Товар повернувся на склад» is three lines at most at 360 beside «Змінити магазин», two without it, never past the screen (orders and «Каса» task list after stage 2, P1-2; review)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  const server: Server = {
+    order: order({
+      status: "DISPATCHED",
+      waybill: "20451234",
+      items: [
+        {
+          ...item("Пальто вовняне подовжене з поясом", "XXL"),
+          source_location_id: OWN[0],
+        },
+        { ...item("Ріо графіт", "L"), source_location_id: NEXT[0] },
+        { ...item("Кокон графіт", "M"), source_location_id: NEXT[0] },
+      ],
+    }),
+    sent: [],
+  };
+  await warehouses(page);
+  await open(page, server);
+  await page.getByRole("button", { name: "Товар повернувся на склад" }).click();
+  const line = page.locator(".store-line p:visible");
+  await expect(line).toHaveText(
+    "Основний · Пальто вовняне подовжене з поясом · XXL + ще 2",
+  );
+  const lines = (): Promise<number> =>
+    line.evaluate((node) =>
+      Math.round(
+        node.getBoundingClientRect().height /
+          parseFloat(getComputedStyle(node).lineHeight),
+      ),
+    );
+  // The screen's own, not the card's hidden under it.
+  const change = page
+    .locator(".store-line:visible")
+    .locator("button", { hasText: "Змінити магазин" });
+  await expect(change).toBeVisible();
+  expect(await lines()).toBeLessThanOrEqual(3);
+  await change.evaluate((node) => {
+    (node as HTMLElement).style.display = "none";
+  });
+  expect(await lines()).toBeLessThanOrEqual(2);
+  await change.evaluate((node) => {
+    (node as HTMLElement).style.display = "";
+  });
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(360);
+});
+
 /** On «Товар повернувся на склад», a reason typed and the goods ticked in
  * hand. */
 async function readyToTake(page: Page): Promise<void> {
@@ -2469,7 +2651,7 @@ test("a return refused as changed keeps its screen, the reason and the tick; one
 }) => {
   const server: Server = { order: cameBack(), sent: [] };
   await warehouses(page);
-  await open(page, server);
+  await open(page, server, undefined, null);
   await readyToTake(page);
   server.answer = {
     status: 409,
@@ -2480,10 +2662,11 @@ test("a return refused as changed keeps its screen, the reason and the tick; one
     },
   };
   const take = panel(page).getByRole("button", { name: "Прийняти повернення" });
-  // The screen's main button: 52 and corner 8 (orders and «Каса» task list
-  // after stage 2, P2-4).
-  expect((await take.boundingBox())?.height).toBe(52);
-  await expect(take).toHaveCSS("border-top-left-radius", "8px");
+  // Outside Telegram, the MainButton's own place: 50, Telegram's corner 10
+  // (spec §6.4; orders and «Каса» task list after stage 2, P1-2).
+  await expect(take).toHaveClass("main-mimic");
+  expect((await take.boundingBox())?.height).toBe(50);
+  await expect(take).toHaveCSS("border-top-left-radius", "10px");
   await take.click();
   await expect(page.getByRole("alert")).toBeVisible();
   await expect(
@@ -2523,9 +2706,7 @@ test("a return whose answer never came names its step and its order; checked aga
   await warehouses(page);
   await open(page, server);
   await readyToTake(page);
-  await panel(page)
-    .getByRole("button", { name: "Прийняти повернення" })
-    .click();
+  await pressMain(page, "Прийняти повернення");
   const again = page.getByRole("button", {
     name: "Перевірити результат замовлення",
   });
@@ -2560,7 +2741,7 @@ test("the right to see the warehouses gone while goods come back: read again on 
 }) => {
   const after = { refused: false };
   await warehouses(page, "both", after);
-  await open(page, { order: cameBack(), sent: [] });
+  await open(page, { order: cameBack(), sent: [] }, undefined, null);
   await readyToTake(page);
   await expect(page.getByText(/^Повернеться на склад «Свій»/)).toBeVisible();
   after.refused = true;
@@ -2599,7 +2780,7 @@ test("a tap carried from «Товар повернувся на склад» ont
   await expect(tick).toBeChecked();
 });
 
-test("while an order is read, its title, context, pill and two lines hold their places, heard as «Завантажуємо замовлення…»; one that could not be read says so on a warning's plate (orders task list, P2-2, P2-3)", async ({
+test("while an order is read, its title, context, string of knots, «У посилці» and two lines hold their places, heard as «Завантажуємо замовлення…»; one that could not be read says so on a warning's plate (orders task list, P2-2, P2-3; orders and «Каса» task list after stage 2, P1-1)", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 360, height: 640 });
@@ -2618,10 +2799,21 @@ test("while an order is read, its title, context, pill and two lines hold their 
   await expect(page.locator(".order-placeholder")).toBeVisible();
   // Its line of context the head's one line: no grey line of its own under
   // it (orders and «Каса» task list after stage 2, P2-1; review).
-  await expect(page.locator(".store-line p")).toBeVisible();
+  await expect(page.locator(".store-line p:visible")).toBeVisible();
   await expect(page.locator(".order-placeholder .skeleton-meta")).toHaveCount(
     0,
   );
+  // The string's place, where a pill stood: its four knots, «У посилці»'s
+  // place under it (orders and «Каса» task list after stage 2, P1-1).
+  const stringPlace = page.locator(".order-placeholder .knots");
+  await expect(stringPlace.locator(".knot")).toHaveCount(4);
+  await expect(page.locator(".order-placeholder .skeleton-pill")).toHaveCount(
+    0,
+  );
+  const [knotsAt, sectionAt] = await Promise.all([
+    stringPlace.boundingBox(),
+    page.locator(".order-placeholder .order-section").boundingBox(),
+  ]);
   const back = page.getByRole("button", { name: "До замовлень", exact: true });
   const before = await back.boundingBox();
   const place = await page.locator(".skeleton-title").boundingBox();
@@ -2635,6 +2827,18 @@ test("while an order is read, its title, context, pill and two lines hold their 
   expect(
     Math.abs(((await title.boundingBox())?.y ?? 0) - (place?.y ?? 0)),
   ).toBeLessThanOrEqual(1);
+  // The string where its place stood, as tall; «У посилці» unmoved.
+  const string = await page.locator("ol.knot-string").boundingBox();
+  expect(Math.abs((string?.y ?? 0) - (knotsAt?.y ?? 0))).toBeLessThanOrEqual(1);
+  expect(
+    Math.abs((string?.height ?? 0) - (knotsAt?.height ?? 0)),
+  ).toBeLessThanOrEqual(1);
+  const section = await page
+    .getByRole("heading", { name: "У посилці" })
+    .boundingBox();
+  expect(Math.abs((section?.y ?? 0) - (sectionAt?.y ?? 0))).toBeLessThanOrEqual(
+    1,
+  );
   // What is said under a step, 14 px (P2-3).
   expect(
     await page
@@ -2660,6 +2864,81 @@ test("while an order is read, its title, context, pill and two lines hold their 
     return { plate: getComputedStyle(node).backgroundColor, notice };
   });
   expect(colours.plate).toBe(colours.notice);
+});
+
+test("opened from its row, a cancelled order read holds its sticker's place under the string, and one with no day no day's place: the sticker and «У посилці» stand where their places stood (orders and «Каса» task list after stage 2, P1-1; review)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  let release = (): void => undefined;
+  const server: Server = {
+    order: order({ status: "CANCELLED" }),
+    sent: [],
+    readHeld: new Promise((done) => {
+      release = done;
+    }),
+  };
+  await open(page, server);
+  const pill = page.locator(".order-placeholder .knot-sticker .skeleton-pill");
+  await expect(pill).toBeVisible();
+  const [pillAt, sectionAt] = await Promise.all([
+    page.locator(".order-placeholder .knot-sticker").boundingBox(),
+    page.locator(".order-placeholder .order-section").boundingBox(),
+  ]);
+  release();
+  const sticker = page.locator(".knot-sticker");
+  await expect(sticker.locator(".sticker")).toHaveText("Скасовано");
+  const [came, section] = await Promise.all([
+    sticker.boundingBox(),
+    page.getByRole("heading", { name: "У посилці" }).boundingBox(),
+  ]);
+  expect(Math.abs((came?.y ?? 0) - (pillAt?.y ?? 0))).toBeLessThanOrEqual(1);
+  expect(
+    Math.abs((came?.height ?? 0) - (pillAt?.height ?? 0)),
+  ).toBeLessThanOrEqual(1);
+  expect(Math.abs((section?.y ?? 0) - (sectionAt?.y ?? 0))).toBeLessThanOrEqual(
+    1,
+  );
+
+  // No day kept: none under «До відправлення», no «замовлено» in the line.
+  let again = (): void => undefined;
+  server.order = order({ created_at: null });
+  server.readHeld = new Promise((done) => {
+    again = done;
+  });
+  await page.goto("about:blank");
+  await page.goto(launch());
+  await openStore(page, "Основний MAIN");
+  await toOrder(page, "READY_TO_DISPATCH");
+  await expect(page.locator(".order-placeholder .knot")).toHaveCount(4);
+  await expect(page.locator(".order-placeholder .knot-date")).toHaveCount(0);
+  await expect(page.locator(".order-placeholder .skeleton-pill")).toHaveCount(
+    0,
+  );
+  const [lineAt, stringAt, placeAt] = await Promise.all([
+    page.locator(".store-line p:visible").boundingBox(),
+    page.locator(".order-placeholder .knots").boundingBox(),
+    page.locator(".order-placeholder .order-section").boundingBox(),
+  ]);
+  again();
+  await expect(
+    page.getByRole("heading", { name: "Лоран шоколад · M", exact: true }),
+  ).toBeVisible();
+  await expect(page.locator(".knot-string .knot-date")).toHaveCount(0);
+  const [line, string, inParcel] = await Promise.all([
+    page.locator(".store-line p:visible").boundingBox(),
+    page.locator("ol.knot-string").boundingBox(),
+    page.getByRole("heading", { name: "У посилці" }).boundingBox(),
+  ]);
+  expect(
+    Math.abs((line?.height ?? 0) - (lineAt?.height ?? 0)),
+  ).toBeLessThanOrEqual(1);
+  expect(
+    Math.abs((string?.height ?? 0) - (stringAt?.height ?? 0)),
+  ).toBeLessThanOrEqual(1);
+  expect(Math.abs((inParcel?.y ?? 0) - (placeAt?.y ?? 0))).toBeLessThanOrEqual(
+    1,
+  );
 });
 
 test("«Замовлення» pressed again on an order's card brings the orders' first screen (navigation task list, P0-2; «Усе на бірці» task list, P0-4)", async ({
@@ -2757,7 +3036,7 @@ for (const [name, theme] of [
     await apart(page);
     for (const part of [
       page.locator(".order-title"),
-      page.locator(".store-line p"),
+      page.locator(".store-line p:visible"),
       page.locator(".order-number"),
       page.locator(".knot-string .knot-label").first(),
       page.locator(".knot-string .knot-label").last(),
@@ -3152,7 +3431,8 @@ for (const [name, theme] of [
   }) => {
     await page.setViewportSize({ width: 360, height: 640 });
     await warehouses(page);
-    await open(page, { order: cameBack(), sent: [] }, theme);
+    // Outside Telegram, the dock's one button read too.
+    await open(page, { order: cameBack(), sent: [] }, theme, null);
     await page
       .getByRole("button", { name: "Товар повернувся на склад" })
       .click();
@@ -3168,7 +3448,7 @@ for (const [name, theme] of [
       page.locator(".returned-places li").first(),
       page.locator(".order-returned label").first(),
       page.locator(".order-returned .check"),
-      panel(page).locator(".pay-what"),
+      page.locator(".store-line p:visible"),
       panel(page).getByRole("button"),
     ])
       expect(await contrast(part)).toBeGreaterThanOrEqual(4.5);

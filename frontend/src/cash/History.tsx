@@ -5,6 +5,7 @@ import { money } from "@/orders/types";
 import type { Store } from "@/orders/types";
 import { api } from "@/shared/api";
 import { Unread } from "@/shared/Unread";
+import { useNextPageFailed } from "@/shared/nextPage";
 import { Eyelet } from "@/shared/Eyelet";
 import { Empty } from "@/shared/Empty";
 import { Icon } from "@/shared/Icon";
@@ -128,6 +129,9 @@ export function History({
       last.has_more ? pages.length * pageSize : undefined,
     retry: false,
   });
+  // A page that failed, said where «Показати ще» stood until the list is
+  // read with no error (P2-6; review).
+  const nextFailed = useNextPageFailed(closes);
   // A close made between two pages moves the older ones down by one: each
   // close is shown once.
   const items = [
@@ -226,6 +230,17 @@ export function History({
           <Empty title="Касу цього магазину ще не закривали." />
         ) : (
           <>
+            {closes.error && !nextFailed && (
+              // Read again and refused: the closes below as they were read,
+              // and that said over them.
+              <Unread
+                error={closes.error}
+                held={closes.isFetching}
+                retry={() => {
+                  void closes.refetch();
+                }}
+              />
+            )}
             <ul className="history close-list" aria-label="Закриття каси">
               {items.map((close) => (
                 <HistoryRow
@@ -239,27 +254,29 @@ export function History({
                 />
               ))}
             </ul>
-            {/* A page that failed keeps the closes already read. */}
-            {closes.error && (
+            {/* A page that failed keeps the closes already read: one plate
+                where «Показати ще» stood, its retry reading that page
+                (orders and «Каса» task list after stage 2, P2-6). */}
+            {nextFailed ? (
               <Unread
                 error={closes.error}
+                held={closes.isFetching}
                 retry={() => {
-                  void (closes.isFetchNextPageError
-                    ? closes.fetchNextPage()
-                    : closes.refetch());
-                }}
-              />
-            )}
-            {closes.hasNextPage && (
-              <button
-                className="quiet"
-                disabled={closes.isFetching}
-                onClick={() => {
                   void closes.fetchNextPage();
                 }}
-              >
-                Показати ще
-              </button>
+              />
+            ) : (
+              closes.hasNextPage && (
+                <button
+                  className="quiet"
+                  disabled={closes.isFetching}
+                  onClick={() => {
+                    void closes.fetchNextPage();
+                  }}
+                >
+                  Показати ще
+                </button>
+              )
             )}
           </>
         )}

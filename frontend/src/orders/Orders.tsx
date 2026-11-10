@@ -14,6 +14,8 @@ import { Icon } from "@/shared/Icon";
 import { CARRIED_TAP } from "@/shared/panel";
 import { Placeholder } from "@/shared/Placeholder";
 import { ScreenHeader } from "@/shared/ScreenHeader";
+import { SearchField } from "@/shared/SearchField";
+import { useNextPageFailed } from "@/shared/nextPage";
 import { buzz } from "@/shared/telegram";
 import { Toast } from "@/shared/Toast";
 import { KnotFilter, StatusSticker, placeWords } from "./Knots";
@@ -347,7 +349,13 @@ export function Orders({
   const collected = closed.orders.filter(
     (order) => order.status === "COLLECTED",
   );
-  // Those to be sent by their warehouse, for whoever reads the stock.
+  // Those to be sent by their warehouse, for whoever reads the stock: until
+  // the warehouses are first read, the rows' places — never one list the
+  // labels come over later (orders and «Каса» task list after stage 2,
+  // P1-1). Refused, one list, as before — and read again after a refusal,
+  // the rows shown stay (review).
+  const waitingForPlaces =
+    mayStock && warehouses.isPending && !warehouses.isFetched;
   const groups = mayStock
     ? byWarehouse(
         lists.send,
@@ -368,8 +376,8 @@ export function Orders({
       : null;
 
   // A tap carried from the list before onto the row that took its place —
-  // a place chosen, a row gone to its next, the rows put under their
-  // warehouses — is let go (orders task list, P0-2; review, 2026-10-24,
+  // a place chosen, a row gone to its next, the rows come where their
+  // places stood — is let go (orders task list, P0-2; review, 2026-10-24,
   // 2026-11-01). A key's press is never one.
   const ids = (orders: readonly Order[]): string[] =>
     orders.map((order) => order.id);
@@ -377,6 +385,9 @@ export function Orders({
     search,
     place,
     String(gone),
+    // The rows come where their places stood: a tap as they do is let go
+    // (review).
+    String(waitingForPlaces),
     ...(search !== ""
       ? ids(found.orders)
       : place === "collected"
@@ -468,9 +479,30 @@ export function Orders({
     );
   }
 
+  // Whether what each list holds is its next page's failure (P2-6).
+  const nextFailed = {
+    found: useNextPageFailed(found.pages),
+    opened: useNextPageFailed(opened.pages),
+    closed: useNextPageFailed(closed.pages),
+  };
+
+  /** «Показати ще» under the rows read; the next page that could not be
+   * read, one plate in its place, its retry reading that page — those read
+   * stay (orders and «Каса» task list after stage 2, P2-6). */
   function more(
     pages: ReturnType<typeof useOrders>["pages"],
+    failed: boolean,
   ): JSX.Element | null {
+    if (failed)
+      return (
+        <Unread
+          error={pages.error}
+          held={pages.isFetching}
+          retry={() => {
+            void pages.fetchNextPage();
+          }}
+        />
+      );
     return pages.hasNextPage ? (
       <button
         type="button"
@@ -485,14 +517,36 @@ export function Orders({
     ) : null;
   }
 
+  /** The rows' places while they are read: row tags, as the rows' own
+   * (orders and «Каса» task list after stage 2, P1-1). To be sent, for
+   * whoever reads the stock, in a warehouse's own section, its label's
+   * place over them. */
+  function places(said: string, labelled = false): JSX.Element {
+    const tags = <Placeholder said={said} lineTags={3} />;
+    return labelled ? (
+      <section className="order-place">
+        <span
+          className="order-place-label t-meta skeleton-line skeleton-place-label"
+          aria-hidden="true"
+        >
+          <span>Склад «Основний»</span>
+        </span>
+        {tags}
+      </section>
+    ) : (
+      tags
+    );
+  }
+
   /** The closed read's state over its rows: its places while it is read,
-   * what failed. */
+   * what failed — a next page's failure is said where «Показати ще» was. */
   function closedRead(): JSX.Element | null {
     return closed.pages.isPending ? (
-      <Placeholder said="Завантажуємо замовлення…" rows={3} day={false} />
-    ) : closed.pages.error ? (
+      places("Завантажуємо замовлення…")
+    ) : closed.pages.error && !nextFailed.closed ? (
       <Unread
         error={closed.pages.error}
+        held={closed.pages.isFetching}
         retry={() => {
           void closed.pages.refetch();
         }}
@@ -500,7 +554,9 @@ export function Orders({
     ) : null;
   }
 
-  const empty = <p className="orders-none">Тут посилок немає.</p>;
+  // Nothing here (spec §6.28): the blank tag, the words as before (orders
+  // and «Каса» task list after stage 2, P1-1).
+  const empty = <Empty title="Тут посилок немає." />;
 
   function placeList(): JSX.Element {
     if (place === "collected")
@@ -511,7 +567,7 @@ export function Orders({
             (collected.length > 0
               ? rows(collected, placeWords.collected, true)
               : !closed.pages.hasNextPage && empty)}
-          {more(closed.pages)}
+          {more(closed.pages, nextFailed.closed)}
           {closed.pages.data !== undefined &&
             (cancelled.length > 0 || closed.pages.hasNextPage) && (
               <button
@@ -534,10 +590,12 @@ export function Orders({
         {orders.length === 0 ? (
           // Nothing here yet of what is read: the rest may hold some.
           opened.pages.hasNextPage ? null : place === "send" ? (
-            <p className="orders-none">Зараз нічого не треба відправляти.</p>
+            <Empty title="Зараз нічого не треба відправляти." />
           ) : (
             empty
           )
+        ) : place === "send" && waitingForPlaces ? (
+          places("Завантажуємо склади…", true)
         ) : under === null ? (
           rows(orders, placeWords[place], false)
         ) : (
@@ -552,7 +610,7 @@ export function Orders({
             </section>
           ))
         )}
-        {more(opened.pages)}
+        {more(opened.pages, nextFailed.opened)}
       </>
     );
   }
@@ -592,7 +650,7 @@ export function Orders({
             (cancelled.length > 0
               ? rows(cancelled, "Скасовані й повернені на склад", true)
               : !closed.pages.hasNextPage && empty)}
-          {more(closed.pages)}
+          {more(closed.pages, nextFailed.closed)}
         </section>
       </>
     );
@@ -623,8 +681,12 @@ export function Orders({
             is said of the rule. */}
         {!mayRead ? null : (
           <>
+            {/* The shared field (spec §6.6; orders and «Каса» task list
+                after stage 2, P1-1): its name heard, «Номер ТТН» its hint —
+                the server searches the waybill alone — the magnifier and
+                «×», which is «Очистити». */}
             <form
-              className="search"
+              className="find"
               role="search"
               onSubmit={(event) => {
                 event.preventDefault();
@@ -634,43 +696,42 @@ export function Orders({
                 });
               }}
             >
-              <label className="till-search">
-                Номер ТТН
-                <input
-                  type="search"
-                  enterKeyHint="search"
-                  autoComplete="off"
-                  ref={field}
-                  maxLength={64}
-                  value={query}
-                  onChange={(event) => {
-                    change({ ...view, query: event.target.value });
-                  }}
-                />
-              </label>
+              <SearchField
+                label="Номер ТТН"
+                placeholder="Номер ТТН"
+                maxLength={64}
+                value={query}
+                change={(text) => {
+                  // An Enter is for what was typed then: its «×» or a
+                  // letter more, and the search waits for the pause again.
+                  change({ ...view, query: text, pressed: "" });
+                }}
+                inputRef={field}
+              />
             </form>
             {search !== "" ? (
               // What was typed before stands until the answer: «not found» is
               // said of this search only (review, 2026-10-23).
               found.pages.isPending ||
               (found.pages.isPlaceholderData && found.orders.length === 0) ? (
-                <Placeholder said="Шукаємо…" rows={3} day={false} />
+                places("Шукаємо…")
               ) : (
                 <>
-                  {found.pages.error && (
+                  {found.pages.error && !nextFailed.found && (
                     <Unread
                       error={found.pages.error}
+                      held={found.pages.isFetching}
                       retry={() => {
                         void found.pages.refetch();
                       }}
                     />
                   )}
                   {found.pages.data && found.orders.length === 0 ? (
-                    <div className="orders-empty">
-                      <p>
-                        За «{visible(search)}» замовлень не знайдено. Перевірте
-                        номер ТТН.
-                      </p>
+                    // The blank tag, «Очистити» its one button (spec §6.28;
+                    // orders and «Каса» task list after stage 2, P1-1).
+                    <Empty
+                      title={`За «${visible(search)}» замовлень не знайдено. Перевірте номер ТТН.`}
+                    >
                       <button
                         type="button"
                         className="quiet"
@@ -681,12 +742,12 @@ export function Orders({
                       >
                         Очистити
                       </button>
-                    </div>
+                    </Empty>
                   ) : (
                     // No place says where they are: a sticker each.
                     rows(found.orders, "Знайдені замовлення", true)
                   )}
-                  {more(found.pages)}
+                  {more(found.pages, nextFailed.found)}
                 </>
               )
             ) : opened.pages.data === undefined ? (
@@ -701,11 +762,10 @@ export function Orders({
                       change({ ...view, place: chosen });
                     }}
                   />
-                  <Placeholder
-                    said="Завантажуємо замовлення…"
-                    rows={3}
-                    day={false}
-                  />
+                  {places(
+                    "Завантажуємо замовлення…",
+                    place === "send" && mayStock,
+                  )}
                 </>
               ) : (
                 <Unread
@@ -722,7 +782,7 @@ export function Orders({
               // Whether there was ever an order: until it is known, the
               // places; never one, the words that teach what an order is.
               closed.pages.isPending ? (
-                <Placeholder said="Завантажуємо замовлення…" rows={3} />
+                places("Завантажуємо замовлення…")
               ) : (
                 // Nothing yet (spec §6.28): a blank tag drawn, the words
                 // under it, «Нове замовлення» a second button (stage 2,
@@ -745,9 +805,10 @@ export function Orders({
               )
             ) : (
               <>
-                {opened.pages.error && (
+                {opened.pages.error && !nextFailed.opened && (
                   <Unread
                     error={opened.pages.error}
+                    held={opened.pages.isFetching}
                     retry={() => {
                       void opened.pages.refetch();
                     }}

@@ -3005,16 +3005,6 @@ section.credits.customer-card {
   display: block;
   background: var(--skeleton);
 }
-/* A tag 76 of a line and its meta, no cells: an order's, a delivery's
-   (spec §6.9). */
-.skeleton-tag-in {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 8px;
-  box-sizing: border-box;
-  min-height: calc(var(--h-tag) - 2px);
-}
 /* A store's name in its own line's height (spec §6.10). */
 .store-tag-in > .skeleton-name {
   width: 45%;
@@ -4020,13 +4010,6 @@ span.cash-difference > .difference-sign {
   margin: 6px 0;
   line-height: 1.4;
 }
-/* An order's place while it is read (P2-2): its title, its context, its
-   pill and two lines, in their sizes. */
-.order-placeholder {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
 .skeleton-title {
   width: 70%;
   height: 28px;
@@ -4376,14 +4359,20 @@ span.cash-difference > .difference-sign {
   z-index: 1;
 }
 /* Those to be sent by the warehouse they are taken from (S16): a label
-   in `meta` 600 over each. */
+   in `meta` 600 over each; a long name breaks, never past the screen
+   (orders and «Каса» task list after stage 2, P1-1). */
 .order-place-label {
   margin: 14px 0 6px;
   font-weight: 600;
   color: var(--pencil);
+  overflow-wrap: anywhere;
 }
-.orders-none {
-  margin: 16px 0;
+/* While the warehouses are read, a label's place over the rows' places,
+   as tall as the label: the first row comes where its place stood (orders
+   and «Каса» task list after stage 2, P1-1). */
+.skeleton-place-label {
+  display: block;
+  width: fit-content;
 }
 /* The card's two sections, «У посилці» and «Доставка» (S17): a label
    over each; the waybill as written, «Скопіювати ТТН» beside it, 44. */
