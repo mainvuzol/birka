@@ -3,7 +3,8 @@ import { BackToMore } from "@/shared/More";
 import type { MoreBack } from "@/shared/More";
 import type { JSX } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { api, errorText, inOwnWords, readText } from "@/shared/api";
+import { api, errorText, inOwnWords } from "@/shared/api";
+import { Unread } from "@/shared/Unread";
 import { Eyelet, RecordedMark } from "@/shared/Eyelet";
 import { Icon } from "@/shared/Icon";
 import { usePanelRoom } from "@/shared/panel";
@@ -478,7 +479,7 @@ export function Receive({
           {locations.isPending ? (
             <p role="status">Завантажуємо склади…</p>
           ) : locations.data === undefined ? (
-            <Failure
+            <Unread
               error={locations.error}
               retry={() => {
                 void locations.refetch();
@@ -561,7 +562,7 @@ export function Receive({
               {sizes.isPending ? (
                 <p role="status">Завантажуємо розміри…</p>
               ) : sizes.data === undefined ? (
-                <Failure
+                <Unread
                   error={sizes.error}
                   retry={() => {
                     void sizes.refetch();
@@ -847,23 +848,5 @@ function purchaseValue(
         ? sum
         : sum + (kopecks(line.unit_cost) ?? 0n) * BigInt(line.quantity),
     0n,
-  );
-}
-
-function Failure({
-  error,
-  retry,
-}: {
-  error: unknown;
-  retry: () => void;
-}): JSX.Element {
-  return (
-    // eslint-disable-next-line no-restricted-syntax -- goods P1-1 moves it onto Unread
-    <div role="alert">
-      <p>{readText(error)}</p>
-      <button type="button" onClick={retry}>
-        Спробувати ще раз
-      </button>
-    </div>
   );
 }

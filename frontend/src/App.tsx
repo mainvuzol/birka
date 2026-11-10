@@ -4117,13 +4117,13 @@ function Workspace({
                   shown: stepShown(detail.data, extra),
                 });
               }}
-              // The same waybill's other order, opened at its top.
+              // The same waybill's other order, opened at its top — its
+              // header's (audit after stage 2, frame P1-3).
               openOther={(id) => {
                 setSelectedId(id);
                 setOrderSheet(null);
                 setOrderDone(null);
                 setCollected(null);
-                window.scrollTo(0, 0);
               }}
             />
           </>

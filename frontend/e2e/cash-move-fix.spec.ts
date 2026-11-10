@@ -741,6 +741,28 @@ test("cash taken out and unanswered, its sheet closed while its row waits for th
   ).toBeFocused();
 });
 
+test("at 360 × 400, «Змінити спосіб оплати»'s list scrolled to its foot, an operation tapped opens its card at the top, under the same title (audit after stage 2, frame P1-3; review)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 400 });
+  await record(page);
+  await stub(page, { now: drawer(), method: { ...sale } });
+  await open(page);
+  await cash(page);
+  await page
+    .getByRole("button", { name: "Змінити спосіб оплати", exact: true })
+    .click();
+  const rows = page.getByRole("list", { name: "Ваші операції" });
+  await expect(rows.getByRole("listitem")).toHaveCount(3);
+  await page.evaluate(() => {
+    window.scrollTo(0, document.documentElement.scrollHeight);
+  });
+  expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+  await rows.getByRole("button").first().click();
+  await expect(page.locator(".fix-sum")).toHaveText("700,00 грн");
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
+});
+
 test("«Змінити спосіб оплати»: the seller's operations as rows by time, kind and goods, never a sum or a way; one operation's sum large, its way a pill, the ways as buttons — five taps (cash task list, P1-3)", async ({
   page,
 }) => {

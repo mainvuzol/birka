@@ -3102,14 +3102,42 @@ section.credits.customer-card {
 }
 .skeleton-field {
   height: 52px;
-  border-radius: 14px;
+  /* A field's corner (spec §6.6; audit after stage 2, frame P1-4). */
+  border-radius: var(--r-l);
 }
 .skeleton-name {
   width: 55%;
   height: 1.2em;
 }
+/* Each shape the real element's corner, never the grey's own 10 (audit
+   after stage 2, frame P1-4): a chip's 14, a size cell's 6, a mark's
+   round — and the grey, never the mark's fold. */
 .chip.skeleton {
   width: 72px;
+  border-radius: 14px;
+}
+.size-cell.skeleton {
+  border-radius: var(--r-m);
+}
+/* Round by the mark's own rule; the grey over its fold. */
+.avatar.skeleton {
+  display: block;
+  background: var(--skeleton);
+}
+/* A tag 76 of a line and its meta, no cells: an order's, a delivery's
+   (spec §6.9). */
+.skeleton-tag-in {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+  box-sizing: border-box;
+  min-height: calc(var(--h-tag) - 2px);
+}
+/* A store's name in its own line's height (spec §6.10). */
+.store-tag-in > .skeleton-name {
+  width: 45%;
+  height: 26px;
 }
 @keyframes skeleton-sweep {
   to {

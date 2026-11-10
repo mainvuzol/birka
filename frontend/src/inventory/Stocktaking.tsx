@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import type { JSX } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, readText } from "@/shared/api";
+import { api } from "@/shared/api";
+import { Unread } from "@/shared/Unread";
 import { BackToMore } from "@/shared/More";
 import type { MoreBack } from "@/shared/More";
 import { ScreenHeader } from "@/shared/ScreenHeader";
@@ -158,7 +159,7 @@ export function Stocktaking({
         {locations.isPending ? (
           <p role="status">Завантажуємо склади…</p>
         ) : locations.error ? (
-          <Failure
+          <Unread
             error={locations.error}
             retry={() => {
               void locations.refetch();
@@ -335,7 +336,7 @@ function FoundGoods({
         </select>
       </label>
       {sizes.error && (
-        <Failure
+        <Unread
           error={sizes.error}
           retry={() => {
             void sizes.refetch();
@@ -368,21 +369,5 @@ function FoundGoods({
         </button>
       )}
     </section>
-  );
-}
-
-function Failure({
-  error,
-  retry,
-}: {
-  error: unknown;
-  retry: () => void;
-}): JSX.Element {
-  return (
-    // eslint-disable-next-line no-restricted-syntax -- goods P1-1 moves it onto Unread
-    <div role="alert">
-      <p>{readText(error)}</p>
-      <button onClick={retry}>Спробувати ще раз</button>
-    </div>
   );
 }

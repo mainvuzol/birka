@@ -1499,6 +1499,46 @@ test("each verb opens its section, and its «←» comes back to «Сьогод�
   await expect(tab(page, "Замовлення")).toBeFocused();
 });
 
+test("at 360 × 640, «Сьогодні» scrolled to its foot, a tag's verb opens its screen at the top, its heading whole in view; «←» brings «Сьогодні» back at its top (audit after stage 2, frame P1-3)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  await twoStores(page);
+  await failedBackups(page);
+  for (const store of [centre, market]) {
+    await parcels(page, store, [[["Лоран шоколад", "M", 1]]]);
+    await damaged(page, store, [["Кокон графіт", "M"]]);
+  }
+  await lists(page, centre, [5]);
+  await onToday(page);
+  const top = (): Promise<number> => page.evaluate(() => window.scrollY);
+  const back = page.getByRole("button", { name: "Назад до «Сьогодні»" });
+  for (const [verb, heading] of [
+    ["Оглянути", "Брак"],
+    ["Переглянути", "Резервні копії"],
+  ] as const) {
+    await expect(
+      waiting(page).getByRole("button", { name: verb, exact: true }),
+    ).toBeVisible();
+    await page.evaluate(() => {
+      window.scrollTo(0, document.documentElement.scrollHeight);
+    });
+    expect(await top()).toBeGreaterThan(0);
+    await waiting(page)
+      .getByRole("button", { name: verb, exact: true })
+      .click();
+    await expect(
+      page.getByRole("heading", { level: 1, name: heading, exact: true }),
+    ).toBeInViewport({ ratio: 1 });
+    expect(await top()).toBe(0);
+    await back.click();
+    await expect(
+      page.getByRole("heading", { name: "Сьогодні", exact: true }),
+    ).toBeInViewport({ ratio: 1 });
+    expect(await top()).toBe(0);
+  }
+});
+
 test("a list ready to approve is three taps from «Сьогодні», with no scrolling: the tag's verb, «Затвердити · 5 шт.», «Так, затвердити» (stage 2, goods task list, P0-6)", async ({
   page,
 }) => {
@@ -2530,8 +2570,15 @@ test("what was seen is kept on this phone a week, by its id alone, under the org
   const seenOnce = await kept(page);
   const id = "close:00000000-0000-4000-8000-700000000000";
   expect(seenOnce.map((seen) => Object.keys(seen))).toEqual([[id]]);
-  // Its id and when, never what it said.
-  expect(JSON.stringify(seenOnce)).not.toMatch(/Центр|нестача|120/);
+  // Its id and when, never what it said: the key its id alone, the value a
+  // moment — a number, whose digits are no words (a moment's digits held
+  // «120» on 2026-11-10).
+  expect(JSON.stringify(seenOnce.map((seen) => Object.keys(seen)))).not.toMatch(
+    /Центр|нестача|120/,
+  );
+  expect(
+    seenOnce.flatMap((seen) => Object.values(seen).map((when) => typeof when)),
+  ).toEqual(["number"]);
   // One seen six days ago, one seven: the seventh day's is forgotten as
   // Бірка opens again. The drawer's, seen just before midnight: still
   // gone, but not done today.

@@ -362,14 +362,24 @@ test("a close tapped shows all of it as its result did — the figures, the slip
 test("twenty closes to a page, «Показати ще» for the rest; the first count's pill says so (cash task list, P1-4)", async ({
   page,
 }) => {
+  await page.setViewportSize({ width: 360, height: 640 });
   const server = await stub(page);
   const list = await history(page);
   await expect(list.locator(".close-row")).toHaveCount(20);
   expect(server.asked.some((search) => /limit=20&offset=0/.test(search))).toBe(
     true,
   );
-  await page.getByRole("button", { name: "Показати ще" }).click();
+  // «Показати ще» keeps the list where it was read to, never back at its
+  // start (audit after stage 2, frame P1-3).
+  const showMore = page.getByRole("button", { name: "Показати ще" });
+  await showMore.scrollIntoViewIfNeeded();
+  const at = await page.evaluate(() => window.scrollY);
+  expect(at).toBeGreaterThan(0);
+  await showMore.click();
   await expect(list.locator(".close-row")).toHaveCount(21);
+  expect(
+    Math.abs((await page.evaluate(() => window.scrollY)) - at),
+  ).toBeLessThanOrEqual(4);
   const opening = row(list, "11.09");
   await expect(opening.locator(".sale-meta")).toHaveText(
     /^\d{2}:\d{2} · порахували 1\s000,00$/,

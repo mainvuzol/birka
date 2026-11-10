@@ -1244,6 +1244,70 @@ test("«Продажі й повернення»: a thread by day, the newest fi
   ).toHaveCount(1);
 });
 
+test("at 360 × 400, the report scrolled to its foot, «Моделі» read before opens again at its top, the heading whole in view — the same header, its title another; back, the report where it was left (audit after stage 2, frame P1-3)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 400 });
+  await stubReport(page, ["Центр", "Ринок"]);
+  // Enough models to make the screen longer than the report was scrolled.
+  await page.route(
+    /\/api\/v1\/reports\/sales\/models(\?.*)?$/,
+    async (route: Route) => {
+      await route.fulfill({
+        json: {
+          date_from: "2026-11-05",
+          date_to: "2026-11-05",
+          today: "2026-11-05",
+          models: Array.from({ length: 20 }, (_, at) => ({
+            product_variant_id: `00000000-0000-4000-8000-${String(
+              200 + at,
+            ).padStart(12, "0")}`,
+            display_name: `Модель ${String(at + 1)}`,
+            units: 20 - at,
+            sold: `${String((20 - at) * 1000)}.00`,
+            returned_units: 0,
+            returned: "0.00",
+          })),
+        },
+      });
+    },
+  );
+  await ownReport(page);
+  const models = page.getByRole("list", { name: "Моделі" });
+  // Read once: on coming again it is drawn whole at once.
+  await toScreen(page, "Моделі");
+  await expect(models.getByRole("listitem")).toHaveCount(20);
+  await backToReport(page);
+  await page.evaluate(() => {
+    window.scrollTo(0, document.documentElement.scrollHeight);
+  });
+  const place = await page.evaluate(() => window.scrollY);
+  expect(place).toBeGreaterThan(0);
+  await toScreen(page, "Моделі");
+  await expect(models.getByRole("listitem")).toHaveCount(20);
+  // Long enough to have stayed where the report was: put at its top.
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollHeight - window.innerHeight,
+    ),
+  ).toBeGreaterThan(place);
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
+  await expect(
+    page.getByRole("button", { name: "Назад до «Звіт про продажі»" }),
+  ).toBeInViewport({ ratio: 1 });
+  await expect(
+    page.getByRole("heading", { name: "Моделі", exact: true }),
+  ).toBeInViewport({ ratio: 1 });
+  // Back: the report where it was left, «Моделі»'s row in hand.
+  await backToReport(page);
+  expect(
+    Math.abs((await page.evaluate(() => window.scrollY)) - place),
+  ).toBeLessThanOrEqual(1);
+  await expect(
+    page.getByRole("button", { name: "Моделі", exact: true }),
+  ).toBeFocused();
+});
+
 /** Every read of the report answered — «Оновити» free again: none comes
  * after the clock moves. */
 async function settled(page: Page): Promise<void> {

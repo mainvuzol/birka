@@ -9,6 +9,7 @@ import {
   inOwnWords,
   unreachable,
 } from "@/shared/api";
+import { Placeholder } from "@/shared/Placeholder";
 import { Unread } from "@/shared/Unread";
 import { NoCustomerData } from "@/shared/NoCustomerData";
 import type { Location, Store } from "@/orders/types";
@@ -860,7 +861,13 @@ function UnitSheet({
               </p>
               {places.data === undefined ? (
                 places.isPending ? (
-                  <p role="status">Завантажуємо склади…</p>
+                  // Grey choices where the warehouses come (audit after
+                  // stage 2, frame P1-4).
+                  <Placeholder
+                    said="Завантажуємо склади…"
+                    chips={2}
+                    className="damaged-place"
+                  />
                 ) : (
                   <Unread
                     error={places.error}

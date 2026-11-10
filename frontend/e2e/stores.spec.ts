@@ -1221,6 +1221,41 @@ for (const [name, theme] of [
     }
   });
 
+test("«Магазини» read slowly: two stores' tags in grey, 96 high, where the list comes, «Завантажуємо магазини…» said to a reader alone; come, the first tag no more than 4 px from where its grey one stood (audit after stage 2, frame P1-4)", async ({
+  page,
+}) => {
+  await openAs(page, owner);
+  await openStore(page, "Центр CENTRE");
+  let answer = (): void => undefined;
+  // Let go by itself in ten seconds, should the journey fail before it
+  // answers: no read is left hanging as it ends.
+  const held = new Promise<void>((resolve) => {
+    answer = resolve;
+    setTimeout(resolve, 10_000);
+  });
+  await page.route("**/api/v1/stores", async (route) => {
+    await held;
+    await route.fallback();
+  });
+  await section(page, "Магазини");
+  const grey = page.locator(".placeholder.stores-list > .store-tag");
+  await expect(grey).toHaveCount(2);
+  const before = await grey.first().boundingBox();
+  expect(Math.round(before?.height ?? 0)).toBe(96);
+  await expect(
+    page.getByRole("status").filter({ hasText: "Завантажуємо магазини…" }),
+  ).toHaveClass(/\bvisually-hidden\b/);
+  answer();
+  const first = page.locator(".stores-list:not(.placeholder) > .store-tag");
+  await expect(first.first()).toBeVisible();
+  await expect(grey).toHaveCount(0);
+  const after = await first.first().boundingBox();
+  expect(Math.abs((after?.y ?? 0) - (before?.y ?? 0))).toBeLessThanOrEqual(4);
+  expect(
+    Math.abs((after?.height ?? 0) - (before?.height ?? 0)),
+  ).toBeLessThanOrEqual(4);
+});
+
 test("no store to choose: one blank tag, the owner the one to ask, never an administrator (stage 2, admin task list, P2-3)", async ({
   page,
 }) => {

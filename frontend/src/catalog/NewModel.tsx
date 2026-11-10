@@ -8,6 +8,7 @@ import { ModeSwitch } from "@/shared/ModeSwitch";
 import { Sheet } from "@/shared/Sheet";
 import { buzz, useMainButton } from "@/shared/telegram";
 import { visible } from "@/shared/visible";
+import { Placeholder } from "@/shared/Placeholder";
 import { Unread } from "@/shared/Unread";
 import type { Store } from "@/orders/types";
 import type { ReceivableVariant, SizeOption } from "@/inventory/receiptTypes";
@@ -581,37 +582,49 @@ export function NewModel({
               />
             </label>
             <div className="new-model-sizes">
-              {!readsSizes ? null : sizes.isPending ? (
-                <p role="status">Завантажуємо розміри…</p>
-              ) : sizes.error ? (
+              {readsSizes && sizes.error && (
                 <Unread
                   error={sizes.error}
                   retry={() => {
                     void sizes.refetch();
                   }}
                 />
-              ) : null}
-              <div className="cells" role="group" aria-label="Розміри">
-                {cellsOf.map((size) => {
-                  const on = picked.some(
-                    (p) => p.system === size.system && p.code === size.code,
-                  );
-                  return (
-                    <button
-                      type="button"
-                      key={size.size_id}
-                      className={on ? "size-cell chosen" : "size-cell"}
-                      aria-pressed={on}
-                      disabled={blocked}
-                      onClick={() => {
-                        toggle({ system: size.system, code: size.code });
-                      }}
-                    >
-                      <span className="size-letter">{visible(size.code)}</span>
-                    </button>
-                  );
-                })}
-              </div>
+              )}
+              {/* A row of grey cells where the sizes come (audit after
+                  stage 2, frame P1-4) — unless sizes typed by hand stand
+                  there already. */}
+              {readsSizes && sizes.isPending && cellsOf.length === 0 ? (
+                <Placeholder said="Завантажуємо розміри…" cells={4} />
+              ) : (
+                <div className="cells" role="group" aria-label="Розміри">
+                  {cellsOf.map((size) => {
+                    const on = picked.some(
+                      (p) => p.system === size.system && p.code === size.code,
+                    );
+                    return (
+                      <button
+                        type="button"
+                        key={size.size_id}
+                        className={on ? "size-cell chosen" : "size-cell"}
+                        aria-pressed={on}
+                        disabled={blocked}
+                        onClick={() => {
+                          toggle({ system: size.system, code: size.code });
+                        }}
+                      >
+                        <span className="size-letter">
+                          {visible(size.code)}
+                        </span>
+                      </button>
+                    );
+                  })}
+                  {readsSizes && sizes.isPending && (
+                    <span role="status" className="visually-hidden">
+                      Завантажуємо розміри…
+                    </span>
+                  )}
+                </div>
+              )}
               <div className="new-model-typed">
                 <label>
                   Іншого розміру немає — впишіть

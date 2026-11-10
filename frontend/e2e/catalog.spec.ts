@@ -875,6 +875,14 @@ test("family search empty and failure states keep the manual draft", async ({
     .getByRole("button", { name: "Знайти модель", exact: true })
     .click();
   await expect(sheet.getByRole("alert")).toContainText("Немає доступу");
+  // The warning's plate, «Спробувати ще раз» — never «Повторити пошук»
+  // (audit after stage 2, goods P1-1).
+  const plate = sheet.locator(".read-failure");
+  await expect(plate).toContainText("Немає доступу");
+  await expect(plate.getByRole("button")).toHaveText(["Спробувати ще раз"]);
+  await expect(
+    sheet.getByRole("button", { name: "Повторити пошук" }),
+  ).toHaveCount(0);
   await expect(sheet.getByText(/^Модель: /)).toHaveCount(0);
   // Back to a new model: the name typed is where it was.
   await kind.getByRole("button", { name: "Нова модель" }).click();
@@ -963,6 +971,58 @@ test("at 360 px a proposal is its own screen: its words large, the models offere
     window.scrollTo(0, 0);
   });
   await expect(confirmAs(page)).toBeInViewport({ ratio: 1 });
+});
+
+test("a new model's sizes read slowly: a row of four cells in grey, 60 × 60 and the cell's corner, «Завантажуємо розміри…» said to a reader alone; come, the cells where they stood (audit after stage 2, frame P1-4)", async ({
+  page,
+}) => {
+  let answer = (): void => undefined;
+  // Let go by itself in ten seconds, should the journey fail before it
+  // answers: no read is left hanging as it ends.
+  const held = new Promise<void>((resolve) => {
+    answer = resolve;
+    setTimeout(resolve, 10_000);
+  });
+  await page.route("**/api/v1/catalog/sizes?*", async (route) => {
+    await held;
+    await route.fallback();
+  });
+  await enter(page);
+  const sheet = await create(
+    page,
+    `Повільні розміри ${randomUUID().slice(0, 8)}`,
+  );
+  await sheet.getByRole("button", { name: "Ні, це нова модель" }).click();
+  const grey = sheet.locator(
+    ".new-model-sizes .placeholder.cells > .size-cell",
+  );
+  await expect(grey).toHaveCount(4);
+  // Where a cell stands in the sizes' place: the sheet itself grows with
+  // the rows that come.
+  const place = sheet.locator(".new-model-sizes");
+  const from = (await place.boundingBox())?.y ?? 0;
+  const before = await grey.first().boundingBox();
+  expect([before?.width ?? 0, before?.height ?? 0].map(Math.round)).toEqual([
+    60, 60,
+  ]);
+  await expect(grey.first()).toHaveCSS("border-top-left-radius", "6px");
+  await expect(
+    sheet.getByRole("status").filter({ hasText: "Завантажуємо розміри…" }),
+  ).toHaveClass(/\bvisually-hidden\b/);
+  answer();
+  const cells = sheet.getByRole("group", { name: "Розміри" });
+  await expect(cells.locator(".size-cell").first()).toBeVisible();
+  await expect(grey).toHaveCount(0);
+  await expect(cells.locator(".size-cell").first()).toHaveCSS(
+    "border-top-left-radius",
+    "6px",
+  );
+  const after = await cells.locator(".size-cell").first().boundingBox();
+  const to = (await place.boundingBox())?.y ?? 0;
+  expect(
+    Math.abs((after?.y ?? 0) - to - ((before?.y ?? 0) - from)),
+  ).toBeLessThanOrEqual(4);
+  await leave(page);
 });
 
 test("without the right to receive, a new model's sizes are typed: the organisation's are not asked, and nothing is refused (stage 2, goods task list, P1-1; review)", async ({

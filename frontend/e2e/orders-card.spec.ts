@@ -1939,6 +1939,25 @@ test("the same waybill's other orders: each its row — its goods as its card's 
     `№ ${first.slice(0, 8)}`,
   );
   expect(await page.evaluate(() => window.scrollY)).toBe(0);
+  // Read anew — the phone back from the carrier's app — and moved on
+  // meanwhile: the same order's card drawn again keeps where it was read
+  // to, never back at its top (audit after stage 2, frame P1-3; review).
+  await page.evaluate(() => {
+    window.scrollTo(0, document.documentElement.scrollHeight);
+  });
+  expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+  server.order = { ...server.order, status: "ARRIVED" };
+  // A read still on its way from the card's opening answers the first
+  // return: back again until the new answer is drawn.
+  await expect(async () => {
+    await page.evaluate(() => {
+      window.dispatchEvent(new Event("visibilitychange"));
+    });
+    await expect(standing(page)).toHaveText("Прибув на пошту", {
+      timeout: 1_000,
+    });
+  }).toPass();
+  expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
 });
 
 test("a save refused for its waybill keeps where it goes and what was typed; the card read again and failed says so over it (review, 2026-10-25)", async ({

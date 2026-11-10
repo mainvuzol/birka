@@ -309,6 +309,91 @@ test("«Ще» says what waits under each row, its count the row's one colour, a
   await expect(page.locator("body")).not.toContainText("⚠");
 });
 
+test("at 360 × 640, «Ще» scrolled to its foot, every row of the owner's opens its screen at the top, its heading whole in view, and «←» brings «Ще» back at its top; «Товар і каталог»'s rows too (audit after stage 2, frame P1-3)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  await page.goto(launch(fixture.owner_telegram_user_id));
+  await openStore(page, "Основний MAIN");
+  await more(page);
+  const labels = (list: string): Promise<string[]> =>
+    page
+      .getByRole("navigation", { name: list, exact: true })
+      .locator("button.more-row:not(.more-switch):not(:disabled) .more-label")
+      .evaluateAll((all) =>
+        all.map((label) => label.firstChild?.textContent?.trim() ?? ""),
+      );
+  const top = (): Promise<number> => page.evaluate(() => window.scrollY);
+  const opened: string[] = [];
+  const each = async (list: string): Promise<void> => {
+    for (const label of await labels(list)) {
+      // The store's own change is a sheet's; a group's list is the next.
+      if (label === "Змінити магазин" || label === "Товар і каталог") continue;
+      await page.evaluate(() => {
+        window.scrollTo(0, document.documentElement.scrollHeight);
+      });
+      const tall = await page.evaluate(
+        () => document.documentElement.scrollHeight > window.innerHeight,
+      );
+      if (tall) expect(await top()).toBeGreaterThan(0);
+      await page
+        .getByRole("navigation", { name: list, exact: true })
+        .getByRole("button", { name: rowNamed(label) })
+        .click();
+      await expect(
+        page.getByRole("heading", { level: 1, name: list, exact: true }),
+      ).toHaveCount(0);
+      await expect(
+        page.locator("h1").filter({ visible: true }).first(),
+      ).toBeInViewport({ ratio: 1 });
+      expect(await top()).toBe(0);
+      opened.push(label);
+      // «←», whichever list it names: the screen it names at its top too.
+      await page
+        .getByRole("button", { name: /^Назад до «/ })
+        .filter({ visible: true })
+        .first()
+        .click();
+      await expect(
+        page
+          .getByRole("heading", { level: 1 })
+          .filter({ visible: true })
+          .first(),
+      ).toBeInViewport({ ratio: 1 });
+      expect(await top()).toBe(0);
+      if (
+        !(await page
+          .getByRole("heading", { name: list, exact: true })
+          .isVisible())
+      ) {
+        await more(page);
+        await row(page, list).click();
+      }
+      await expect(
+        page.getByRole("heading", { name: list, exact: true }),
+      ).toBeVisible();
+    }
+  };
+  await each("Ще");
+  expect(opened.length).toBeGreaterThanOrEqual(8);
+  await page.evaluate(() => {
+    window.scrollTo(0, document.documentElement.scrollHeight);
+  });
+  await row(page, "Товар і каталог").click();
+  await expect(
+    page.getByRole("heading", { name: "Товар і каталог", exact: true }),
+  ).toBeInViewport({ ratio: 1 });
+  expect(await top()).toBe(0);
+  await each("Товар і каталог");
+  expect(opened).toEqual(
+    expect.arrayContaining([
+      "Перевірка каталогу",
+      "Моделі",
+      "Початкові залишки",
+    ]),
+  );
+});
+
 test("a list still to finish is counted apart from those to approve: «1 на затвердження · 1 доробити», each the row's colour (stage 2, admin task list, P0-1)", async ({
   page,
 }) => {
