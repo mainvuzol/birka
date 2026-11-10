@@ -7,6 +7,7 @@ import {
   openStore,
   toTill,
   shortage,
+  expectEmpty,
 } from "./fixtures";
 import type { Page, Request } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
@@ -277,11 +278,12 @@ test("both waiting, the till says to sell on paper, and lists nothing", async ({
   await twoWarehouses(page, { own: true, shared: true });
   await goods(page, asked);
   await onTheTill(page);
-  await expect(
-    page.getByText(
-      "На складах магазину зараз немає товару в обліку. Поки власник не затвердить початкові залишки, продавайте на папері.",
-    ),
-  ).toBeVisible();
+  // The blank tag (audit after stage 2, sale P1-2).
+  const empty = page.locator(".orders-empty");
+  await expectEmpty(empty, "На складах магазину зараз немає товару в обліку.");
+  await expect(empty.locator(".t-meta")).toHaveText(
+    "Поки власник не затвердить початкові залишки, продавайте на папері.",
+  );
   await expect(
     page.getByRole("searchbox", { name: "Знайти модель" }),
   ).toHaveCount(0);
@@ -333,9 +335,10 @@ test("a coat in hand from the catalogue is asked its warehouse, and leaves from 
     await route.fulfill({ status: 503, json: { code: "UNAVAILABLE" } });
   });
   await onTheTill(page);
-  await expect(
-    page.getByText("На складах магазину зараз немає товару в обліку."),
-  ).toBeVisible();
+  await expectEmpty(
+    page.locator(".orders-empty"),
+    "На складах магазину зараз немає товару в обліку.",
+  );
   await page.getByRole("button", { name: "Знайти в каталозі" }).click();
   const from = page.getByLabel("З якого складу віддаєте?");
   await expect(from).toHaveValue("");

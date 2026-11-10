@@ -8244,3 +8244,90 @@ this batch.
     recorded — still says it at the foot, its retry held until answered,
     never over the rows; answered, «Показати ще» is back. One hook,
     `shared/nextPage`, for «Замовлення»'s lists and «Закриття».
+
+## Chosen in chat — 2026-11-10 (audit after stage 2, batch 8: «Внесок»'s and «Покупці»' search the shared field; the till's and the debts' empty places the blank tag, a block's «Не вдалося прочитати» a warning's line; S22's way back quiet under Telegram's MainButton; Telegram asks before closing for a return counted or kept and a payment kept; the paid bar and the price's error in their meanings' colours; sale P1-1, P1-2, P1-5, P2-1, P2-2)
+
+Chosen in chat on 2026-11-10 («merged go next»), after batch 7 (#189) was
+merged. No right, no server rule, no field changes; no word changes but
+where a sentence of two is split into a line and its meta. Sale P2-4
+(«{Ім’я} · винні всього {сума}» in a sheet) waits for its words'
+approval; P1-3, P1-4, P2-3 and P2-5 are later batches.
+
+- **The search field** (P1-1; spec §6.6): «Внесок» and «Покупці» search
+  with the shared `SearchField`, as the till and «Повернути» do — «Ім’я
+  або телефон» its name heard and its hint, no line over it; the
+  magnifier; «×», the field emptied and the cursor kept in it. Inside the
+  same `form role="search"`: from two characters after the pause, Enter at
+  once, as before. In «Магазини, що не працюють» the field takes a
+  number's keys (`inputmode="tel"`), the only search there being a whole
+  number.
+  - A letter more, or «×», forgets an Enter, as «Очистити» does: the same
+    letters typed again wait for the pause — the return's and the orders'
+    rule (review).
+  - At the till, «Внесок»'s field stands where «Знайти модель» and «Що
+    повертають?» stand: switching the segment moves nothing under the
+    finger (review).
+  - «Магазини, що не працюють» is the section's caption (`t-label`, 13/700
+    in capitals) with the quiet «← У цьому магазині», as the return's.
+  - The old form's `.search` rules and `.till-search input` are gone; a
+    journey holds that nothing of them is back.
+- **The blank tag** (P1-2; spec §6.28): the shared `Empty` — the tag 64
+  in the edge, a line 17/600, at most one line of meta — stands for
+  - the till with no warehouse («Доступних складів немає.» / «Зверніться
+    до менеджера.»), with no goods on one warehouse or on all («На складі
+    «…» зараз немає товару в обліку.» / «Поки власник не затвердить
+    початкові залишки, продавайте на папері.»);
+  - the till's search found nothing («За «…» {де} нічого немає.» /
+    «Перевірте назву або очистіть пошук.», with «Очистити») or has no goods
+    («{Де} зараз немає товару в обліку.»); «Товар у руках, а в списку його
+    немає? Знайти в каталозі» stays under the tag;
+  - «Внесок»'s and a single store's «Покупці»' found nothing («За «…»
+    боргів не знайдено.» / «Перевірте ім’я або введіть номер телефону.»;
+    a whole number: «За цим номером у цьому магазині боргів немає.», and
+    to the seller «Внесок приймає магазин, де продали.»), and the closed
+    stores' found nothing;
+  - «Зараз ніхто не винен.» / «Борг з’являється, коли продають
+    частинами.», its «Новий продаж» as before; to whoever only reads, «Зараз
+    ніхто не винен цьому магазину.».
+  - **Decided here:** «Очистити» is quiet, as on «Повернути» and
+    «Замовлення»: the TZ's «вторинна кнопка» read as the tag's one button,
+    not the filled secondary — beside it nothing else is pressed.
+  - **Decided here:** a sentence of two is split at its full stop, the
+    first the line, the second the meta; no word changes.
+  - «Борг магазину, що зараз не працює? Шукати за цим номером» under the
+    tag stands centred with it, as the return's offer (review).
+  - In a network's «Покупці» each store's block keeps its lines («Нікого
+    не знайдено.», «Сплачених боргів тут немає.», «Списаних боргів тут
+    немає.») and its first weeks' words: the tag is for the whole list
+    (the rule of 2026-11-01). The first weeks' words are one copy, drawn
+    as the block's line or as the tag (review).
+- **A block that could not be read** (P1-2; spec §4): «Не вдалося
+  прочитати» in a store's block header is a warning's line in its place —
+  the triangle 16, the warning's colour, no plate and no crossed circle —
+  never the danger's: what is owed is not wrong, only not read. Its retry
+  as before.
+- **S22 inside Telegram** (P1-5): while «Відкрити борг» is Telegram's
+  MainButton, the way back (`{backTo}`) is quiet under the stub, so the
+  screen has one main; outside Telegram the way back is the one primary,
+  «Відкрити борг» quiet, as before. Frame P1-1 had already made it the
+  secondary; now quiet. The MainButton's word waits on its reading
+  («Відкрити борг» against the spec's «Готово»), as before.
+- **Before closing** (P2-1; В-Т7 (а)): Telegram asks before Бірка closes
+  - while units are counted on a return («Цілі» or «Пошкоджені» above
+    none), the first send included, until the result shows;
+  - while a return or a payment whose answer was lost is kept on the
+    phone — after a reload too, the form gone — until it is checked.
+  None counted and nothing kept, it lets go.
+- **The meanings' colours** (P2-2; spec §6.24, §4):
+  - the paid bar «Сплачено X з Y» on S20, S21 and a debt's detail: 6 high
+    with the sticker's corner 3, its track the fold with a 1 px hairline,
+    filled in the paid's colour — never the hand's accent. The supplier's
+    invoice draws the same bar (it shares the class); its own fill rule,
+    the same colour, is gone (review).
+  - **Decided here:** the hairline goes round the whole bar and the fill
+    stands inside it, 4 of the 6: §6.24's «track `fold` with 1 px
+    `hairline`» read as the track's edge (review: seen, kept).
+  - «Впишіть ціну: гривні й копійки, напр. 1850 або 1850,50.» is the
+    danger's colour with its crossed circle 16 before it, never the debts'
+    colour; wherever the line's price is typed — the till's basket and
+    «Нове замовлення», which share it.

@@ -603,10 +603,12 @@ test("a debt of a blocked store is found by the whole phone and paid at a store 
     // and the closed stores asked for under it.
     await search.fill(`\u202a+38 ${phone.slice(0, 3)} ${phone.slice(3)}\u202c`);
     await expect(
-      page.getByText(
-        "За цим номером у цьому магазині боргів немає. Внесок приймає магазин, де продали.",
-        { exact: true },
-      ),
+      page.getByText("За цим номером у цьому магазині боргів немає.", {
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("Внесок приймає магазин, де продали.", { exact: true }),
     ).toBeVisible();
     expect(searches.filter((url) => url.includes("elsewhere=true"))).toEqual(
       [],

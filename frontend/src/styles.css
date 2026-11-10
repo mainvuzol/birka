@@ -1002,22 +1002,6 @@ nav:not(.tab-bar, .more-list) {
   min-width: 0;
 }
 
-/* A search box and its button: the input takes the row, the button keeps its
-   natural height and sits on the input's baseline. */
-.search {
-  display: flex;
-  gap: 12px;
-  align-items: flex-end;
-}
-.search label {
-  flex: 1;
-}
-/* Labels carry a 16px bottom margin; match it so the button lines up with the
-   input rather than with the label's margin box. */
-.search button {
-  margin-bottom: 16px;
-}
-
 /* A correction's reasons sit two to a row, so all five fit in one glance on a
    phone. */
 .choices {
@@ -1549,10 +1533,6 @@ html {
   font-size: 14px;
   color: var(--text-2);
 }
-.till-search input {
-  min-height: 52px;
-  border-radius: var(--r-l);
-}
 /* The search field (spec §6.6; «Усе на бірці» task list, P0-5): 52 high,
    card on the page, the magnifier left and «×» right, 44 to the touch. */
 .search-field {
@@ -1847,8 +1827,14 @@ html {
   text-align: center;
   font-weight: 700;
 }
-.line .price-error {
-  color: var(--debt);
+/* What was typed is no price: an input's error, its colour and its crossed
+   circle — never a debt's (direction §4; audit after stage 2, sale P2-2). */
+.hint.price-error {
+  color: var(--danger);
+}
+.price-error > .icon {
+  margin-right: 4px;
+  vertical-align: -3px;
 }
 
 /* A line priced at nothing (owner, В3 (а)): said, never refused. */
@@ -1941,6 +1927,11 @@ button.sale-row:disabled:has(.sale-goods, .debt-name, .more-label) {
    said over the till's field: the till's is in its form's fieldset, 18
    lower than a field of its own would be (P1-3). */
 .returns > .find {
+  margin-top: calc(18px + 16px);
+}
+/* «Внесок»'s too, at the till: switching to it moves nothing under the
+   finger either (audit after stage 2, sale P1-1; review). */
+.credits:not(.customers) > .find {
   margin-top: calc(18px + 16px);
 }
 /* One sale's return (returns task list, P0-3): its context in one line,
@@ -2103,6 +2094,12 @@ button.sale-row:disabled:has(.sale-goods, .debt-name, .more-label) {
 .elsewhere-ask {
   margin-top: 12px;
 }
+/* Under the blank tag, centred with it, as the return's offer (audit after
+   stage 2, sale P1-2; review). */
+.orders-empty ~ .elsewhere-ask {
+  display: block;
+  margin: 12px auto 0;
+}
 /* One debt (credits task list, P0-3, P0-4): who and what in one line, what
    is owed large with a bar of how much is closed, the payment's sum under it
    and its ways in the panel, the history a row an entry. */
@@ -2110,17 +2107,21 @@ button.sale-row:disabled:has(.sale-goods, .debt-name, .more-label) {
   margin: 4px 0 0;
   overflow-wrap: anywhere;
 }
+/* How much of a debt is paid (spec §6.24; audit after stage 2, sale
+   P2-2): a bar of 6 with the sticker's corner 3, its track the fold with a
+   hairline, filled in the paid's colour — never the hand's accent. */
 .debt-bar {
   height: 6px;
   margin: 10px 0 0;
-  border-radius: var(--r-round);
-  background: var(--field);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-xs);
+  background: var(--fold);
   overflow: hidden;
 }
 .debt-bar span {
   display: block;
   height: 100%;
-  background: var(--accent);
+  background: var(--paid);
 }
 .debt-detail .owed-card {
   margin: 10px 0 12px;
@@ -2758,11 +2759,22 @@ section.credits.customer-card {
   align-items: center;
   column-gap: 12px;
 }
-.owed-retry p {
+/* What could not be read, a warning's line in its place over the figures'
+   — its triangle 16, the warning's colour, no plate (audit after stage 2,
+   sale P1-2). */
+.owed-retry .owed-unread {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   margin: 0;
+  padding: 0;
+  background: transparent;
   font-size: 15px;
   font-weight: 600;
-  color: var(--text-2);
+  color: var(--warn);
+}
+.owed-retry .owed-unread::before {
+  content: none;
 }
 .owed-retry button {
   min-height: 44px;
@@ -6544,9 +6556,6 @@ section.receive-list {
 .invoice-owed-sum {
   color: var(--ink);
   overflow-wrap: anywhere;
-}
-.invoice-bar span {
-  background: var(--paid);
 }
 .invoice-closed-head {
   display: flex;

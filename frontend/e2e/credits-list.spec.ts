@@ -5,6 +5,7 @@ import {
   openStore,
   section,
   expectOneSticker,
+  expectEmpty,
 } from "./fixtures";
 import type { Locator, Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
@@ -564,61 +565,80 @@ test("while «Покупці» is read, the store's sum and three rows keep thei
   expect(Math.abs(first.y - place.y)).toBeLessThanOrEqual(2);
 });
 
-test("a store's sum that cannot be read keeps its place, says so, and is read again — the field never moves (owner decision, 2026-10-21)", async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 360, height: 640 });
-  await customers(page, [oksana(), iryna()]);
-  let release: () => void = () => undefined;
-  const held = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  let fails = true;
-  // The read again, held: the block keeps saying so, its button waiting.
-  let again: () => void = () => undefined;
-  const heldAgain = new Promise<void>((resolve) => {
-    again = resolve;
-  });
-  await page.route("**/api/v1/credits/summary?**", async (route) => {
-    await held;
-    if (!fails) await heldAgain;
-    if (fails) {
-      await route.fulfill({
-        status: 500,
-        json: { code: "INTERNAL_ERROR", message: "Internal error" },
-      });
-      return;
-    }
-    await route.fulfill({
-      json: { owed: "12400.00", customers: 8, debts: 11 },
+for (const [name, theme] of [
+  ["light", { bg_color: "#ffffff", text_color: "#000000" }],
+  ["dark", { bg_color: "#17212b", text_color: "#f5f5f5" }],
+] as const)
+  test(`in the ${name} theme a store's sum that cannot be read keeps its place, says so in a warning's line, and is read again — the field never moves (owner decision, 2026-10-21; audit after stage 2, sale P1-2)`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 360, height: 640 });
+    await customers(page, [oksana(), iryna()]);
+    let release: () => void = () => undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
     });
+    let fails = true;
+    // The read again, held: the block keeps saying so, its button waiting.
+    let again: () => void = () => undefined;
+    const heldAgain = new Promise<void>((resolve) => {
+      again = resolve;
+    });
+    await page.route("**/api/v1/credits/summary?**", async (route) => {
+      await held;
+      if (!fails) await heldAgain;
+      if (fails) {
+        await route.fulfill({
+          status: 500,
+          json: { code: "INTERNAL_ERROR", message: "Internal error" },
+        });
+        return;
+      }
+      await route.fulfill({
+        json: { owed: "12400.00", customers: 8, debts: 11 },
+      });
+    });
+    await credits(page, { theme });
+    await expect(page.locator("section.credits .owed-place")).toBeVisible();
+    const before = await field(page).boundingBox();
+    release();
+    const card = page.getByRole("group", {
+      name: "Скільки винні магазину «Основний»",
+    });
+    await expect(card.getByRole("alert")).toHaveText("Не вдалося прочитати");
+    // A warning's line with its triangle 16, in its place — never a
+    // refusal's red plate over what is owed (audit after stage 2, sale P1-2).
+    const unread = card.getByRole("alert");
+    await expect(unread).toHaveCSS("color", await token(page, "--warn"));
+    await expect(unread).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+    expect(
+      await unread.evaluate(
+        (node) => getComputedStyle(node, "::before").content,
+      ),
+    ).toBe("none");
+    const sign = unread.locator("svg.icon");
+    await expect(sign).toBeVisible();
+    expect((await sign.boundingBox())?.width).toBe(16);
+    expect(await contrast(unread)).toBeGreaterThanOrEqual(4.5);
+    const failed = await field(page).boundingBox();
+    fails = false;
+    const retry = card.getByRole("button", { name: "Спробувати ще раз" });
+    expect((await retry.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+    await retry.click();
+    await expect(retry).toBeDisabled();
+    await expect(card.getByRole("alert")).toHaveText("Не вдалося прочитати");
+    again();
+    await expect(card.locator(".owed-sum")).toHaveText("12 400,00 грн");
+    const read = await field(page).boundingBox();
+    if (!before || !failed || !read) throw new Error("not laid out");
+    expect(failed.y).toBe(before.y);
+    expect(read.y).toBe(before.y);
   });
-  await credits(page);
-  await expect(page.locator("section.credits .owed-place")).toBeVisible();
-  const before = await field(page).boundingBox();
-  release();
-  const card = page.getByRole("group", {
-    name: "Скільки винні магазину «Основний»",
-  });
-  await expect(card.getByRole("alert")).toHaveText("Не вдалося прочитати");
-  const failed = await field(page).boundingBox();
-  fails = false;
-  const retry = card.getByRole("button", { name: "Спробувати ще раз" });
-  expect((await retry.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
-  await retry.click();
-  await expect(retry).toBeDisabled();
-  await expect(card.getByRole("alert")).toHaveText("Не вдалося прочитати");
-  again();
-  await expect(card.locator(".owed-sum")).toHaveText("12 400,00 грн");
-  const read = await field(page).boundingBox();
-  if (!before || !failed || !read) throw new Error("not laid out");
-  expect(failed.y).toBe(before.y);
-  expect(read.y).toBe(before.y);
-});
 
-/** What an empty «Покупці» teaches (credits task list, P1-4). */
-const beginsAt =
-  "Зараз ніхто не винен. Борг з’являється, коли продають частинами.";
+/** What an empty «Покупці» teaches (credits task list, P1-4): the blank
+ * tag, a sentence a line (audit after stage 2, sale P1-2). */
+const beginsAt = "Зараз ніхто не винен.";
+const beginsHow = "Борг з’являється, коли продають частинами.";
 
 test("an empty «Покупці» says where a debt begins, «Сплачені» and «Списані» their own words, and «Новий продаж» leads to the till", async ({
   page,
@@ -626,11 +646,20 @@ test("an empty «Покупці» says where a debt begins, «Сплачені»
   await summary(page, "0.00", 0, 0);
   const asked = await customers(page, []);
   await credits(page);
-  const empty = page.getByText(beginsAt, { exact: true });
-  await expect(empty).toBeVisible();
-  // A search that finds nothing says so, never where debts begin.
+  const empty = page.locator(".orders-empty", { hasText: beginsAt });
+  await expectEmpty(empty, beginsAt);
+  await expect(empty.locator(".t-meta")).toHaveText(beginsHow);
+  // A search that finds nothing says so, never where debts begin: the
+  // blank tag, what to do its meta, «Очистити» quiet (sale P1-2).
   await field(page).fill("Оксана");
-  await expect(page.getByText(/За «Оксана» боргів не знайдено/)).toBeVisible();
+  const nobody = page.locator(".orders-empty");
+  await expectEmpty(nobody, "За «Оксана» боргів не знайдено.");
+  await expect(nobody.locator(".t-meta")).toHaveText(
+    "Перевірте ім’я або введіть номер телефону.",
+  );
+  await expect(
+    nobody.getByRole("button", { name: "Очистити", exact: true }),
+  ).toHaveClass("quiet");
   await expect(empty).toHaveCount(0);
   await field(page).fill("");
   await expect(empty).toBeVisible();
@@ -667,9 +696,11 @@ test("a store that does not trade keeps its words for an empty «Покупці�
       if (store.id === fixture.store_id) store.state = "BLOCKED";
     },
   });
-  await expect(
-    page.getByText("Зараз ніхто не винен цьому магазину.", { exact: true }),
-  ).toBeVisible();
+  // The whole list, the blank tag (sale P1-2).
+  await expectEmpty(
+    page.locator(".orders-empty"),
+    "Зараз ніхто не винен цьому магазину.",
+  );
   await expect(page.getByText(beginsAt, { exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Новий продаж" })).toHaveCount(
     0,
@@ -723,11 +754,32 @@ test("«Ім’я або телефон» is searched as it is typed from two le
   const asked = await customers(page, [oksana(), iryna()]);
   await credits(page);
   await expect(rows(page)).toHaveCount(2);
+  // The till's own field (spec §6.6; audit after stage 2, sale P1-1): its
+  // name heard, its hint seen, 52 at the corner 8, the magnifier.
+  const box = page.getByRole("searchbox", { name: "Ім’я або телефон" });
+  await expect(box).toHaveAttribute("placeholder", "Ім’я або телефон");
+  expect((await box.boundingBox())?.height).toBe(52);
+  await expect(box).toHaveCSS("border-top-left-radius", "8px");
+  await expect(page.locator(".search-field label > .icon")).toBeVisible();
+  await expect(page.locator(".search-field label > span")).toHaveClass(
+    "visually-hidden",
+  );
+  await expect(box).not.toHaveAttribute("inputmode", /./);
 
   // No button: two letters, and the list follows.
   await field(page).fill("Ір");
   await expect(rows(page)).toHaveCount(1);
   await expect(rows(page)).toContainText("Ірина Коваль");
+  // «×» empties it, the cursor kept, the list back.
+  await page.getByRole("button", { name: "Очистити пошук" }).click();
+  await expect(box).toHaveValue("");
+  await expect(box).toBeFocused();
+  await expect(rows(page)).toHaveCount(2);
+  await expect(
+    page.getByRole("button", { name: "Очистити пошук" }),
+  ).toHaveCount(0);
+  await field(page).fill("Ір");
+  await expect(rows(page)).toHaveCount(1);
   // One letter is everyone again.
   await field(page).fill("І");
   await expect(rows(page)).toHaveCount(2);
@@ -763,15 +815,78 @@ test("«Ім’я або телефон» is searched as it is typed from two le
   // Nothing found: what was typed, what to try, and a way back.
   await field(page).fill("Зоя");
   await expect(
-    page.getByText(
-      "За «Зоя» боргів не знайдено. Перевірте ім’я або введіть номер телефону.",
-      { exact: true },
-    ),
+    page.getByText("За «Зоя» боргів не знайдено.", { exact: true }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Очистити" }).click();
+  await expect(
+    page.getByText("Перевірте ім’я або введіть номер телефону.", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Очистити", exact: true }).click();
   await expect(field(page)).toHaveValue("");
   await expect(field(page)).toBeFocused();
   await expect(rows(page)).toHaveCount(2);
+});
+
+test("«×» forgets an Enter, as «Очистити» does: the same letters typed again wait for the pause (review)", async ({
+  page,
+}) => {
+  await summary(page);
+  const asked = await customers(page, [oksana(), iryna()]);
+  await page.clock.install();
+  await credits(page);
+  await expect(rows(page)).toHaveCount(2);
+  // The clock moves only when told: a search the pause would make cannot
+  // happen by itself.
+  await page.clock.pauseAt(Date.now() + 60_000);
+  const wait = async (ms: number): Promise<void> => {
+    for (let gone = 0; gone < ms; gone += 100) await page.clock.runFor(100);
+  };
+  // Enter: at once, the clock not moved.
+  await field(page).fill("Окс");
+  await field(page).press("Enter");
+  await expect
+    .poll(() => asked.some((params) => params.get("query") === "Окс"))
+    .toBe(true);
+  await page.getByRole("button", { name: "Очистити пошук" }).click();
+  await expect(field(page)).toHaveValue("");
+  await wait(100);
+  await expect(rows(page)).toHaveCount(2);
+  // The same letters again: the whole list kept until the pause has gone
+  // by.
+  await field(page).fill("Окс");
+  await wait(200);
+  await expect(rows(page)).toHaveCount(2);
+  await expect
+    .poll(async () => {
+      await page.clock.runFor(100);
+      return rows(page).count();
+    })
+    .toBe(1);
+  await page.clock.resume();
+  await expect(rows(page)).toContainText("Оксана Петренко");
+});
+
+test("in a network's «Покупці» a store nobody owes keeps its lines in its block, never the tag, which is the whole list's (2026-11-01; audit after stage 2, sale P1-2)", async ({
+  page,
+}) => {
+  await summary(page, "0.00", 0, 0, {
+    [fixture.second_store_id]: { owed: "2000.00", customers: 1, debts: 1 },
+  });
+  await customers(page, [], undefined, {
+    [fixture.second_store_id]: [
+      customer("Вікторія Савчук", "066 000 24 68", [
+        second("Лагуна персик · L", "2000.00"),
+      ]),
+    ],
+  });
+  await credits(page, { ids: both });
+  const here = page.locator(".credits-block").first();
+  await expect(here.locator(".empty p")).toHaveText(`${beginsAt} ${beginsHow}`);
+  await expect(
+    here.getByRole("button", { name: "Новий продаж" }),
+  ).toBeVisible();
+  await expect(page.locator(".orders-empty")).toHaveCount(0);
 });
 
 /** Forty-five customers, a debt each, the newest first. */
@@ -1405,11 +1520,11 @@ test("a closed store's customer is read among the closed stores: a row a debt wi
     3,
   );
   expect(await ask.count()).toBe(0);
-  const none = page.getByText(
-    "За цим номером у цьому магазині боргів немає. Внесок приймає магазин, де продали.",
-    { exact: true },
+  const none = page.locator(".orders-empty");
+  await expectEmpty(none, "За цим номером у цьому магазині боргів немає.");
+  await expect(none.locator(".t-meta")).toHaveText(
+    "Внесок приймає магазин, де продали.",
   );
-  await expect(none).toBeVisible();
   // A digit more is a number not yet searched: nothing offered for the one
   // before it, at once.
   await expect(ask).toBeVisible();
@@ -1426,8 +1541,17 @@ test("a closed store's customer is read among the closed stores: a row a debt wi
     [],
   );
   await ask.click();
-  // One field, as it was: the number typed is the one asked.
+  // One field, as it was: the number typed is the one asked — a number's
+  // keys there, and the section's caption over it, as the return's (audit
+  // after stage 2, sale P1-1).
   await expect(field(page)).toHaveValue("050 765 43 21");
+  await expect(field(page)).toHaveAttribute("inputmode", "tel");
+  const caption = page.getByRole("heading", {
+    name: "Магазини, що не працюють",
+  });
+  await expect(caption).toHaveClass(/(?:^|\s)t-label(?:\s|$)/);
+  await expect(caption).toHaveCSS("text-transform", "uppercase");
+  await expect(caption).toHaveCSS("font-size", "13px");
   // Their rows' places while they are read, on a list's white block, as
   // the rows to come (audit after stage 2, frame P2-2).
   await expect(page.locator(".placeholder .list-block .debt-row")).toHaveCount(
@@ -1469,6 +1593,44 @@ test("a closed store's customer is read among the closed stores: a row a debt wi
   );
   await expect(which.nth(0).locator(".sticker")).toHaveText("Магазин «Ринок»");
   await expect(which.nth(1).locator(".sticker")).toHaveText("Магазин «Поділ»");
+});
+
+test("a whole number the closed stores owe nothing either: the blank tag, its line and what to do; the offer to ask them centred under this store's tag (audit after stage 2, sale P1-2; review)", async ({
+  page,
+}) => {
+  // A wide screen: the offer narrower than the column, so where it stands
+  // is seen.
+  await page.setViewportSize({ width: 900, height: 900 });
+  await summary(page);
+  await customers(page, [], (params) =>
+    params.get("elsewhere") === "true" ? { items: [] } : null,
+  );
+  await credits(page);
+  await expect(page.getByText(beginsAt, { exact: true })).toBeVisible();
+  await field(page).fill("050 765 43 21");
+  const here = page.locator(".orders-empty");
+  await expectEmpty(here, "За цим номером у цьому магазині боргів немає.");
+  const ask = page.getByRole("button", {
+    name: "Борг магазину, що зараз не працює? Шукати за цим номером",
+  });
+  await expect(ask).toBeVisible();
+  const tag = await here.boundingBox();
+  const offer = await ask.boundingBox();
+  if (!tag || !offer) throw new Error("not laid out");
+  expect(offer.width).toBeLessThan(tag.width);
+  expect(
+    Math.abs(offer.x + offer.width / 2 - (tag.x + tag.width / 2)),
+  ).toBeLessThanOrEqual(1);
+  await ask.click();
+  const none = page.locator(".orders-empty");
+  await expectEmpty(
+    none,
+    "За цим номером боргів магазинів, що не працюють, не знайдено.",
+  );
+  await expect(none.locator(".t-meta")).toHaveText(
+    "Перевірте номер або зверніться до менеджера.",
+  );
+  await expect(none.getByRole("button")).toHaveCount(0);
 });
 
 test("the card's history: every debt's lines, the newest first, a debt opened «Частинами», a knot where one closed; seven, then «Ще N» opens the rest at the eighth", async ({
@@ -1636,8 +1798,13 @@ for (const [name, theme, scheme] of [
       statusWay(page, "Винні зараз"),
       statusWay(page, "Сплачені"),
       page.locator(".credits-kept"),
+      page.getByRole("searchbox", { name: "Ім’я або телефон" }),
     ])
       expect(await contrast(part)).toBeGreaterThanOrEqual(4.5);
+    // The shared field on the card (audit after stage 2, sale P1-1).
+    await expect(
+      page.getByRole("searchbox", { name: "Ім’я або телефон" }),
+    ).toHaveCSS("background-color", await token(page, "--card"));
     // The owed in the debt's colour (spec §6.17).
     await expect(page.locator(".block-owed .owed-sum").first()).toHaveCSS(
       "color",

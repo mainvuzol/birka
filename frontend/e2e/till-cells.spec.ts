@@ -7,6 +7,7 @@ import {
   openStore,
   toTill,
   sellsFrom,
+  expectEmpty,
 } from "./fixtures";
 import type { Locator, Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
@@ -329,9 +330,10 @@ test("no warehouse to sell from: said so, and no search", async ({ page }) => {
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
   await toTill(page);
-  await expect(
-    page.getByText("Доступних складів немає. Зверніться до менеджера."),
-  ).toBeVisible();
+  // The blank tag, a sentence a line (audit after stage 2, sale P1-2).
+  const empty = page.locator(".orders-empty");
+  await expectEmpty(empty, "Доступних складів немає.");
+  await expect(empty.locator(".t-meta")).toHaveText("Зверніться до менеджера.");
   await expect(page.getByRole("combobox")).toHaveCount(0);
   await expect(search(page)).toHaveCount(0);
 });

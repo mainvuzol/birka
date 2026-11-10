@@ -32,7 +32,7 @@ import {
   takenBy,
   usePaperMark,
 } from "@/sales/paperMark";
-import { buzz, hideKeyboard } from "@/shared/telegram";
+import { buzz, hideKeyboard, useAskBeforeClosing } from "@/shared/telegram";
 import { Back } from "@/shared/Back";
 import { ScreenHeader } from "@/shared/ScreenHeader";
 import { SearchField } from "@/shared/SearchField";
@@ -651,6 +651,10 @@ function ReturnForm({
   const touched = useRef<Element | null>(null);
   const shown = units > 0;
   usePanelRoom(panelRef, shown);
+  // Units counted and not yet returned: Telegram asks before Бірка closes,
+  // as the supplier's return does (spec §4.4; audit after stage 2, sale
+  // P2-1). Returned, the form is gone and so is the question.
+  useAskBeforeClosing(shown);
   useEffect(() => {
     // A tag that asks for a warehouse may be taller than the room above the
     // panel on a small phone: then its chips are what is brought into view.

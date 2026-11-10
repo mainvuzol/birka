@@ -25,6 +25,8 @@ import { Toast } from "@/shared/Toast";
 import { ScreenHeader } from "@/shared/ScreenHeader";
 import { hideKeyboard } from "@/shared/telegram";
 import { Unread } from "@/shared/Unread";
+import { SearchField } from "@/shared/SearchField";
+import { Empty } from "@/shared/Empty";
 import { number, plural } from "@/openings/types";
 import { CustomerRow, debtsCount } from "./CustomerRow";
 import { Customer as CustomerCard } from "./Customer";
@@ -484,9 +486,10 @@ export function Credits({
         )}
         {elsewhere && (
           // Never mixed with this store's: headed, and left in one tap, the
-          // number kept, to read here again.
+          // number kept, to read here again. The section's caption, as the
+          // return's (spec §5; audit after stage 2, sale P1-1).
           <div className="toolbar elsewhere-head">
-            <h3 ref={elsewhereHeading} tabIndex={-1}>
+            <h3 ref={elsewhereHeading} tabIndex={-1} className="t-label">
               Магазини, що не працюють
             </h3>
             <button
@@ -502,28 +505,32 @@ export function Credits({
           </div>
         )}
         <form
-          className="search"
+          className="find"
           role="search"
           onSubmit={(event) => {
             event.preventDefault();
             setPressed(query.trim().length >= 2 ? query.trim() : "");
           }}
         >
-          <label className="till-search">
-            Ім’я або телефон
-            <input
-              type="search"
-              enterKeyHint="search"
-              autoComplete="off"
-              inputMode={elsewhere ? "tel" : undefined}
-              ref={field}
-              value={query}
-              maxLength={200}
-              onChange={(event) => {
-                setQuery(event.target.value);
-              }}
-            />
-          </label>
+          {/* The till's and the return's own field (spec §6.6; audit after
+              stage 2, sale P1-1): its name heard, its hint seen, «×» to
+              empty it with the cursor kept; a number's keys where only a
+              number is searched. */}
+          <SearchField
+            label="Ім’я або телефон"
+            placeholder="Ім’я або телефон"
+            maxLength={200}
+            value={query}
+            change={(text) => {
+              // A letter more, or «×», and the search waits for the pause
+              // again, as «Очистити» does — the return's and the orders'
+              // rule (review).
+              setQuery(text);
+              setPressed("");
+            }}
+            inputRef={field}
+            inputMode={elsewhere ? "tel" : undefined}
+          />
         </form>
         {!till && !elsewhere && (
           <ModeSwitch
@@ -579,11 +586,13 @@ export function Credits({
             }}
           />
         ) : listed.length === 0 ? (
+          // The whole list empty: the blank tag (spec §6.28; audit after
+          // stage 2, sale P1-2), the words as before, a sentence a line.
           elsewhere ? (
-            <p>
-              За цим номером боргів магазинів, що не працюють, не знайдено.
-              Перевірте номер або зверніться до менеджера.
-            </p>
+            <Empty
+              title="За цим номером боргів магазинів, що не працюють, не знайдено."
+              meta="Перевірте номер або зверніться до менеджера."
+            />
           ) : search && othersPending ? (
             <Placeholder said="Завантажуємо борги…" rows={1} debts block />
           ) : search && takenElsewhere.length > 0 ? (
@@ -599,26 +608,13 @@ export function Credits({
               ))}
             </div>
           ) : search ? (
-            <div className="empty">
-              <p>{notFound(search, false)}</p>
+            <Empty {...notFound(search, false)}>
               <button type="button" className="quiet" onClick={clear}>
                 Очистити
               </button>
-            </div>
+            </Empty>
           ) : (
-            // The first weeks: where a debt begins, and a way there (credits
-            // task list, P1-4). «Продаж» is the till; «Каса» is the drawer.
-            <div className="empty">
-              <p>
-                Зараз ніхто не винен. Борг з’являється, коли продають частинами.
-              </p>
-              {sell && (
-                // Held as the till's own button is, while a kept command waits.
-                <button type="button" disabled={blocked} onClick={sell}>
-                  Новий продаж
-                </button>
-              )}
-            </div>
+            <NobodyOwes sell={sell} blocked={blocked} />
           )
         ) : (
           <Rows
@@ -789,9 +785,14 @@ function Block({
                   </span>
                 </p>
                 {unread && (
-                  // Over the lines, never below them: nothing moves.
+                  // Over the lines, never below them: nothing moves. A
+                  // warning's line with its triangle, never a refusal's
+                  // red over what is owed (audit after stage 2, sale P1-2).
                   <div className="owed-retry">
-                    <p role="alert">Не вдалося прочитати</p>
+                    <p role="alert" className="owed-unread">
+                      <Icon name="warning" size={16} />
+                      Не вдалося прочитати
+                    </p>
                     <button
                       type="button"
                       className="quiet"
@@ -835,12 +836,13 @@ function Block({
       ) : listed.length === 0 ? (
         search ? (
           alone ? (
-            <div className="empty">
-              <p>{notFound(search, readOnly)}</p>
+            // The whole list: the blank tag (sale P1-2); in a block among
+            // several, its line (2026-11-01).
+            <Empty {...notFound(search, readOnly)}>
               <button type="button" className="quiet" onClick={clear}>
                 Очистити
               </button>
-            </div>
+            </Empty>
           ) : (
             <p className="hint">Нікого не знайдено.</p>
           )
@@ -849,19 +851,11 @@ function Block({
         ) : status === "WRITTEN_OFF" ? (
           <p className="hint">Списаних боргів тут немає.</p>
         ) : store.id === here.id && !readOnly ? (
-          // The first weeks: where a debt begins, and a way there (credits
-          // task list, P1-4). «Продаж» is the till; «Каса» is the drawer.
-          <div className="empty">
-            <p>
-              Зараз ніхто не винен. Борг з’являється, коли продають частинами.
-            </p>
-            {sell && (
-              // Held as the till's own button is, while a kept command waits.
-              <button type="button" disabled={blocked} onClick={sell}>
-                Новий продаж
-              </button>
-            )}
-          </div>
+          // In a block among several, its lines as before: the tag is the
+          // whole list's (2026-11-01).
+          <NobodyOwes sell={sell} blocked={blocked} plain={!alone} />
+        ) : alone ? (
+          <Empty title="Зараз ніхто не винен цьому магазину." />
         ) : (
           <p>Зараз ніхто не винен цьому магазину.</p>
         )
@@ -958,16 +952,59 @@ function Rows({
   );
 }
 
-/** What a search found nothing for says: a name, or a whole number. */
-function notFound(search: string, readOnly: boolean): string {
+/** What a search that found nothing says: the fact its line, what to do
+ * its meta (audit after stage 2, sale P1-2). */
+function notFound(
+  search: string,
+  readOnly: boolean,
+): { title: string; meta?: string } {
   return !wholePhone(search)
-    ? `За «${visible(search)}» боргів не знайдено. Перевірте ім’я або введіть номер телефону.`
+    ? {
+        title: `За «${visible(search)}» боргів не знайдено.`,
+        meta: "Перевірте ім’я або введіть номер телефону.",
+      }
     : readOnly
       ? // Anyone trading takes it: the fact alone (review, 2026-10-19).
-        "За цим номером у цьому магазині боргів немає."
+        { title: "За цим номером у цьому магазині боргів немає." }
       : // A whole number owes nothing here: the rule, and the closed stores
         // asked for under it (P1-1).
-        "За цим номером у цьому магазині боргів немає. Внесок приймає магазин, де продали.";
+        {
+          title: "За цим номером у цьому магазині боргів немає.",
+          meta: "Внесок приймає магазин, де продали.",
+        };
+}
+
+/** The first weeks (credits task list, P1-4): where a debt begins, and a
+ * way there — the blank tag (audit after stage 2, sale P1-2). «Продаж» is
+ * the till; «Каса» is the drawer. */
+function NobodyOwes({
+  sell,
+  blocked,
+  plain = false,
+}: {
+  sell: (() => void) | undefined;
+  blocked: boolean;
+  /** In a block among several: its lines, no tag (2026-11-01). */
+  plain?: boolean;
+}): JSX.Element {
+  const title = "Зараз ніхто не винен.";
+  const meta = "Борг з’являється, коли продають частинами.";
+  // Held as the till's own button is, while a kept command waits.
+  const button = sell && (
+    <button type="button" disabled={blocked} onClick={sell}>
+      Новий продаж
+    </button>
+  );
+  return plain ? (
+    <div className="empty">
+      <p>{`${title} ${meta}`}</p>
+      {button}
+    </div>
+  ) : (
+    <Empty title={title} meta={meta}>
+      {button}
+    </Empty>
+  );
 }
 
 /** A debt opened meanwhile moves the pages' edge: a customer read twice is

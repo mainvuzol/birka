@@ -27,6 +27,7 @@ import { visible } from "@/shared/visible";
 import { Placeholder } from "@/shared/Placeholder";
 import { ScreenHeader } from "@/shared/ScreenHeader";
 import { Unread } from "@/shared/Unread";
+import { Empty } from "@/shared/Empty";
 import { Sticker } from "@/shared/Sticker";
 import { submitSale, useSaleCommand } from "./commands";
 import { StockSearch, useElsewhere, useSettled, useStock } from "./StockSearch";
@@ -1080,11 +1081,13 @@ export function Sale({
           ) : (
             // Nothing to choose above the search: the store's only warehouse,
             // or a cell per warehouse (P0-5). With none to sell from, a
-            // manager's to give.
+            // manager's to give — the blank tag, a sentence a line (spec
+            // §6.28; audit after stage 2, sale P1-2).
             sellable.length === 0 && (
-              <p className="empty">
-                Доступних складів немає. Зверніться до менеджера.
-              </p>
+              <Empty
+                title="Доступних складів немає."
+                meta="Зверніться до менеджера."
+              />
             )
           )}
           {/* Where the till shows no search, in its place. */}
@@ -1092,16 +1095,17 @@ export function Sale({
           {locationId && waiting ? (
             // Nothing is sold there until the list is approved (owner
             // decision, 2026-10-02): the shop sells on paper meanwhile, and
-            // the paper is typed in once it is (redesign P1-5).
-            <p className="empty">
-              На складі «{visible(warehouse)}» зараз немає товару в обліку. Поки
-              власник не затвердить початкові залишки, продавайте на папері.
-            </p>
+            // the paper is typed in once it is (redesign P1-5). The blank
+            // tag: the fact its line, what to do its meta (sale P1-2).
+            <Empty
+              title={`На складі «${visible(warehouse)}» зараз немає товару в обліку.`}
+              meta="Поки власник не затвердить початкові залишки, продавайте на папері."
+            />
           ) : searchAll && ready.length === 0 ? (
-            <p className="empty">
-              На складах магазину зараз немає товару в обліку. Поки власник не
-              затвердить початкові залишки, продавайте на папері.
-            </p>
+            <Empty
+              title="На складах магазину зараз немає товару в обліку."
+              meta="Поки власник не затвердить початкові залишки, продавайте на папері."
+            />
           ) : fromCatalog && searchAll ? (
             <>
               <label>

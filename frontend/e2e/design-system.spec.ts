@@ -1127,9 +1127,13 @@ for (const scheme of ["light", "dark"] as const)
       ".order-status",
       ".order-sent-with",
       ".badge",
+      ".till-search",
     ])
       expect(css).not.toContain(gone);
     expect(css).not.toMatch(/^\s*header(?:\s*>\s*span)?\s*\{/m);
+    // «Внесок»'s and «Покупці»' own field gone with them: the shared one
+    // draws every search (audit after stage 2, sale P1-1).
+    expect(css).not.toMatch(/\.search(?![-\w])/);
   });
 
 test("every place read is its shape in grey, the real element's size and corner: a list's row 64, a mark 40 round, a tag 76, a store's tag 96, a field 52 at 8, a size cell 60 at 6, a choice at 8 (audit after stage 2, frame P1-4; its corner P1-1, part 2)", async ({

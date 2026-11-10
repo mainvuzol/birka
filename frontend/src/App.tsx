@@ -2813,6 +2813,10 @@ function Workspace({
   useAskBeforeClosing(
     basketGoods ||
       keptSale !== null ||
+      // A return's and a payment's kept on the phone too (audit after stage
+      // 2, sale P2-1).
+      keptReturn !== null ||
+      keptCredit !== null ||
       keptReceipt !== null ||
       (adjustmentCommand.pending !== null &&
         !(adjustmentCommand.busy && adjustmentCommand.firstSend)) ||

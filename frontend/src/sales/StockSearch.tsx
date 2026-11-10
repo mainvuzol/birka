@@ -9,6 +9,7 @@ import { visible } from "@/shared/visible";
 import { Placeholder } from "@/shared/Placeholder";
 import { Icon } from "@/shared/Icon";
 import { SearchField } from "@/shared/SearchField";
+import { Empty } from "@/shared/Empty";
 import { usePanelRoom } from "@/shared/panel";
 
 const pageSize = 100;
@@ -403,12 +404,14 @@ export function StockSearch({
         (stock.isPending || (stock.isPlaceholderData && models.length === 0) ? (
           <Placeholder said="Завантажуємо товари…" />
         ) : stock.isSuccess && models.length === 0 ? (
+          // The blank tag (spec §6.28; audit after stage 2, sale P1-2): the
+          // fact its line, what to do its meta; the catalogue's way under
+          // it.
           query ? (
-            <div className="empty">
-              <p>
-                За «{visible(query)}» {where} нічого немає. Перевірте назву або
-                очистіть пошук.
-              </p>
+            <Empty
+              title={`За «${visible(query)}» ${where} нічого немає.`}
+              meta="Перевірте назву або очистіть пошук."
+            >
               <button
                 type="button"
                 className="quiet"
@@ -420,15 +423,13 @@ export function StockSearch({
                 Очистити
               </button>
               {offer}
-            </div>
+            </Empty>
           ) : (
-            <div className="empty">
-              <p>
-                {where.charAt(0).toUpperCase() + where.slice(1)} зараз немає
-                товару в обліку.
-              </p>
+            <Empty
+              title={`${where.charAt(0).toUpperCase() + where.slice(1)} зараз немає товару в обліку.`}
+            >
               {offer}
-            </div>
+            </Empty>
           )
         ) : (
           <div className="tags">
