@@ -27,6 +27,7 @@ import { visible } from "@/shared/visible";
 import { Placeholder } from "@/shared/Placeholder";
 import { ScreenHeader } from "@/shared/ScreenHeader";
 import { Unread } from "@/shared/Unread";
+import { Sticker } from "@/shared/Sticker";
 import { submitSale, useSaleCommand } from "./commands";
 import { StockSearch, useElsewhere, useSettled, useStock } from "./StockSearch";
 import { PriceHint, priceText } from "./PriceHint";
@@ -1840,7 +1841,7 @@ function Receipt({
         {(way !== null || mark) && (
           <p className="stub-head">
             {way !== null && <WaySticker way={way} />}
-            {mark && <span className="badge warn">{markText(mark)}</span>}
+            {mark && <Sticker tone="warn">{markText(mark)}</Sticker>}
           </p>
         )}
         {say !== null && <p className="stub-say">{say}</p>}

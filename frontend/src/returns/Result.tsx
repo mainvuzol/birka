@@ -11,6 +11,7 @@ import { visible } from "@/shared/visible";
 import { paperText } from "@/sales/paperMark";
 import { isRecord } from "@/shared/journal";
 import { ScreenHeader } from "@/shared/ScreenHeader";
+import { Sticker } from "@/shared/Sticker";
 import { useBackOnSale } from "./places";
 import { sizeLabel } from "./types";
 import type { Refund, ReturnBody, ReturnPart } from "./types";
@@ -294,9 +295,7 @@ export function Result({
   const stickers = (paper || (way && !nothingBack)) && (
     <p className="stub-head">
       {way && !paper && !nothingBack && <WaySticker way={way} hidden />}
-      {paper && (
-        <span className="badge warn">{paperText("return", paper)}</span>
-      )}
+      {paper && <Sticker tone="warn">{paperText("return", paper)}</Sticker>}
     </p>
   );
   const debt = credit && (
@@ -350,7 +349,11 @@ export function Result({
     return (
       <div className="return-result kept">
         <h3>Повернення записано один раз</h3>
-        {paper && <p className="badge warn">{paperText("return", paper)}</p>}
+        {paper && (
+          <Sticker tone="warn" as="p">
+            {paperText("return", paper)}
+          </Sticker>
+        )}
         <div className="hand-back">
           {way && !paper && !nothingBack && (
             <p className="stub-head">

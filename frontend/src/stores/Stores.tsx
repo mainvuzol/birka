@@ -32,6 +32,7 @@ import type { Leftover, StoreRecord } from "./types";
 import { BackToMore } from "@/shared/More";
 import type { MoreBack } from "@/shared/More";
 import { ScreenHeader } from "@/shared/ScreenHeader";
+import { Sticker } from "@/shared/Sticker";
 
 /** What the section says once a change is answered: its stub, or why not. */
 type Said =
@@ -319,9 +320,9 @@ export function Stores({
                     {visible(store.code)}
                   </span>
                   {store.state !== "ACTIVE" && (
-                    <span className="badge store-tag-state">
+                    <Sticker className="store-tag-state">
                       {stickerText(store)}
-                    </span>
+                    </Sticker>
                   )}
                 </span>
               </button>
@@ -425,7 +426,9 @@ function StoreScreen({
             </h1>
             <p className="t-meta store-tag-code">{visible(store.code)}</p>
             {store.state !== "ACTIVE" && (
-              <p className="badge store-tag-state">{stickerText(store)}</p>
+              <Sticker className="store-tag-state" as="p">
+                {stickerText(store)}
+              </Sticker>
             )}
             {latest && store.state !== "ACTIVE" && (
               <p className="t-row store-hero-why">

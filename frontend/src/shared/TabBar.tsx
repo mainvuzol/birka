@@ -51,7 +51,7 @@ function TabButton({ tab }: { tab: TabItem }): JSX.Element {
         >
           <Icon name={tab.icon} />
         </span>
-        <span className="tab-label">{tab.label}</span>
+        <span className="t-tab tab-label">{tab.label}</span>
         {tab.attention !== undefined && (
           <span className="visually-hidden"> — {tab.attention}</span>
         )}

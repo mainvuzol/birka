@@ -26,6 +26,7 @@ import type { MoreBack } from "@/shared/More";
 import { Back } from "@/shared/Back";
 import { ScreenHeader } from "@/shared/ScreenHeader";
 import { Unread } from "@/shared/Unread";
+import { Sticker } from "@/shared/Sticker";
 const base = "/catalog/match-decisions";
 
 type Queue = "OPEN" | "APPLIED" | "REJECTED";
@@ -317,7 +318,7 @@ export function Catalog({
                       <span className="catalog-raw">
                         «{visible(d.preview.raw_text)}»
                       </span>
-                      <span className="sticker">{statusLabels[d.status]}</span>
+                      <Sticker>{statusLabels[d.status]}</Sticker>
                     </button>
                   </li>
                 ))}
@@ -454,7 +455,7 @@ function Detail({
         «{visible(decision.preview.raw_text)}»
       </p>
       <p>
-        <span className="sticker">{statusLabels[decision.status]}</span>
+        <Sticker>{statusLabels[decision.status]}</Sticker>
       </p>
       {reasons && <p className="t-meta">{reasons}</p>}
       {decision.rejection && (

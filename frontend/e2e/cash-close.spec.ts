@@ -7,6 +7,7 @@ import {
   moveSheet,
   openStore,
   section,
+  expectOneSticker,
 } from "./fixtures";
 import type { Locator, Page, Request } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
@@ -608,6 +609,7 @@ test("the close's figures are the server's: «Мало бути» and «Пора
   await expect(page.locator(".result-title .recorded-mark")).toHaveCount(1);
   await expect(difference).toHaveClass(/\bsticker\b/);
   expect(await drawn(difference, "warning")).toBe(true);
+  await expectOneSticker(figures);
   const stub = page.locator(".stub");
   await expect(stub).toHaveClass(/\bstub-settled\b/);
   await expect(stub.locator(".perforation")).toHaveCount(1);
@@ -657,6 +659,10 @@ test("to the kopeck is the accent's, and the first count is one figure", async (
   await expect(difference).toHaveClass(/\bmatch\b/);
   // Its knot, not the triangle (spec S28).
   expect(await drawn(difference, "eyelet-knot")).toBe(true);
+  // The paid's green, until the till's own match colour (orders and «Каса»
+  // TZ after stage 2, P1-4).
+  await expect(difference).toHaveClass(/\btone-paid\b/);
+  await expectOneSticker(page.getByRole("group", { name: "Закриття каси" }));
 
   // Never counted: «Перший підрахунок», one figure.
   state.now = drawer({ last_close: null, next_is_opening: true });

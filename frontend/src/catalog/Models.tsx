@@ -43,6 +43,7 @@ import { Sheet } from "@/shared/Sheet";
 import { Stub } from "@/shared/Stub";
 import { usePanelRoom } from "@/shared/panel";
 import { askPopup, buzz, popupHere, useMainButton } from "@/shared/telegram";
+import { Sticker } from "@/shared/Sticker";
 
 const pageSize = 20;
 /** The search asks what is typed once typing pauses (stage 2, goods task
@@ -244,7 +245,7 @@ function ModelSearch({
                   {visible(item.display_name)}
                 </span>
                 {item.status !== "ACTIVE" && (
-                  <span className="sticker">{statusText[item.status]}</span>
+                  <Sticker>{statusText[item.status]}</Sticker>
                 )}
               </button>
             </li>
@@ -759,9 +760,9 @@ function MergeTag({
     >
       <div className="merge-tag-in">
         <p className="merge-tag-head">
-          <span className="sticker">{role}</span>
+          <Sticker>{role}</Sticker>
           {model.status === "RETIRED" && (
-            <span className="sticker">{statusText.RETIRED}</span>
+            <Sticker>{statusText.RETIRED}</Sticker>
           )}
         </p>
         <p className="t-row merge-name" id={id}>
@@ -1379,7 +1380,7 @@ export function Models({
                 </div>
                 {model.status !== "ACTIVE" && (
                   <p className="model-state">
-                    <span className="sticker">{statusText[model.status]}</span>
+                    <Sticker>{statusText[model.status]}</Sticker>
                   </p>
                 )}
                 {model.source && (

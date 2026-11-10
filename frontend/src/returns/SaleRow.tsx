@@ -2,6 +2,7 @@ import { useId } from "react";
 import type { JSX } from "react";
 import { visible } from "@/shared/visible";
 import { Icon } from "@/shared/Icon";
+import { Sticker } from "@/shared/Sticker";
 import { sizeLabel } from "./types";
 import type { SaleSummary } from "./types";
 
@@ -97,22 +98,16 @@ export function SaleRow({
         {time} · {units} шт.
         {/* Pills by what they mean (returns task list, P2-4): a debt's,
             a warning's, or nothing to do. */}
-        {sale.paid_in_parts && (
-          <span className="badge debt">Оплата частинами</span>
-        )}
+        {sale.paid_in_parts && <Sticker tone="debt">Оплата частинами</Sticker>}
         {sale.outage && (
-          <span className="badge warn">
+          <Sticker tone="warn">
             {sale.outage.first_days === true
               ? "Продано з паперу"
               : "Продано під час збою"}
-          </span>
+          </Sticker>
         )}
-        {!here && (
-          <span className="badge">Магазин «{visible(sale.store_name)}»</span>
-        )}
-        {!returnable && (
-          <span className="badge neutral">Усе вже повернено</span>
-        )}
+        {!here && <Sticker>Магазин «{visible(sale.store_name)}»</Sticker>}
+        {!returnable && <Sticker tone="neutral">Усе вже повернено</Sticker>}
       </span>
     </span>
   );

@@ -18,6 +18,7 @@ import { Sheet } from "@/shared/Sheet";
 import { Toast } from "@/shared/Toast";
 import { ScreenHeader } from "@/shared/ScreenHeader";
 import { Unread } from "@/shared/Unread";
+import { Sticker } from "@/shared/Sticker";
 import { useCreditCommand } from "./commands";
 import {
   DebtActions,
@@ -390,9 +391,9 @@ export function Customer({
                       {/* Among the stores that do not trade, each its own
                           (spec S20). */}
                       {elsewhere && (
-                        <span className="badge neutral">
+                        <Sticker tone="neutral">
                           Магазин «{visible(credit.store_name)}»
-                        </span>
+                        </Sticker>
                       )}
                     </span>
                   </span>
@@ -542,13 +543,9 @@ function OneDebt({ credit }: { credit: Credit }): JSX.Element {
   ) : (
     <div className="customer-debt">
       <p>
-        <span
-          className={
-            credit.status === "WRITTEN_OFF" ? "badge neutral" : "badge paid"
-          }
-        >
+        <Sticker tone={credit.status === "WRITTEN_OFF" ? "neutral" : "paid"}>
           {statusLabels[credit.status]}
-        </span>
+        </Sticker>
         {credit.closed_at && ` Закрито ${shortDay(credit.closed_at)}`}
       </p>
       <p className="hint">
@@ -596,9 +593,9 @@ function DebtRows({
                 <span className="sale-meta">
                   {paidOf(credit)}
                   {stores && (
-                    <span className="badge neutral">
+                    <Sticker tone="neutral">
                       Магазин «{visible(credit.store_name)}»
-                    </span>
+                    </Sticker>
                   )}
                 </span>
               </span>
@@ -608,15 +605,11 @@ function DebtRows({
                   {money(credit.owed)}
                 </span>
               ) : (
-                <span
-                  className={
-                    credit.status === "WRITTEN_OFF"
-                      ? "badge neutral"
-                      : "badge paid"
-                  }
+                <Sticker
+                  tone={credit.status === "WRITTEN_OFF" ? "neutral" : "paid"}
                 >
                   {statusLabels[credit.status]}
-                </span>
+                </Sticker>
               )}
               <Icon name="chevron-right" size={16} className="sale-open" />
             </button>

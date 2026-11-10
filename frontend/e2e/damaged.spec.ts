@@ -736,7 +736,7 @@ test("«Брак»'s warehouses read slowly: two choices in grey, 44 high and th
   const grey = sheet.locator(".placeholder.chips.damaged-place > .chip");
   await expect(grey).toHaveCount(2);
   expect(Math.round((await grey.first().boundingBox())?.height ?? 0)).toBe(44);
-  await expect(grey.first()).toHaveCSS("border-top-left-radius", "14px");
+  await expect(grey.first()).toHaveCSS("border-top-left-radius", "8px");
   await expect(
     sheet.getByRole("status").filter({ hasText: "Завантажуємо склади…" }),
   ).toHaveClass(/\bvisually-hidden\b/);

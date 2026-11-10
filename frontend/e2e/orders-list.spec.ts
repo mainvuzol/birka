@@ -5,6 +5,7 @@ import {
   openStore,
   section,
   shippedFace,
+  expectOneSticker,
 } from "./fixtures";
 import type { Locator, Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
@@ -541,6 +542,7 @@ test("the string of places is the filter: «До відправлення 3 · �
   await expect(done.locator(".order-row")).toHaveCount(1);
   await expect(done.locator(".sticker")).toHaveText("Клієнт забрав");
   await expect(done.locator(".sticker")).toHaveClass("sticker tone-paid");
+  await expectOneSticker(done);
   await expect(done.locator("article.order-tag.tied.tone-paid")).toHaveCount(1);
   await expect(done.locator(".tag-verb")).toHaveCount(0);
   expect(await knotsFelt()).toEqual([
@@ -568,6 +570,8 @@ test("the string of places is the filter: «До відправлення 3 · �
   await expect(gone.locator(".sticker").first()).toHaveClass(
     "sticker tone-offline",
   );
+  await expectOneSticker(gone);
+  await expect(gone.locator(".sticker > svg.icon")).toHaveCount(2);
   await expect(knots(page)).toHaveCount(0);
   await page.getByRole("button", { name: "До замовлень", exact: true }).click();
   await expect(knot(page, "Клієнт забрав")).toHaveAttribute(

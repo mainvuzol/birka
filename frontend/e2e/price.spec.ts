@@ -389,7 +389,7 @@ test("for all stores or for this one: two segments on one row at 360 px, the sam
   expect(right.x + right.width).toBeLessThanOrEqual(360);
   // The long name is cut short with «…», never wrapped.
   expect(
-    await one.evaluate((node) => ({
+    await one.locator("span").evaluate((node) => ({
       cut: node.scrollWidth > node.clientWidth,
       overflow: getComputedStyle(node).textOverflow,
       lines: node.getClientRects().length,

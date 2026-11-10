@@ -4,6 +4,7 @@ import { visible } from "@/shared/visible";
 import { money } from "@/orders/types";
 import { number, plural } from "@/openings/types";
 import { Icon } from "@/shared/Icon";
+import { Sticker } from "@/shared/Sticker";
 import { goodsOf, initialsOf } from "./format";
 import { erasedCustomer, statusLabels } from "./types";
 import type { Customer } from "./types";
@@ -84,14 +85,14 @@ export function CustomerRow({
             {only ? goodsOf(only) : debtsCount(customer.credits.length)}
           </span>
           {takenAt !== null ? (
-            <span className="badge neutral">
+            <Sticker tone="neutral">
               Внесок приймає «{visible(takenAt)}»
-            </span>
+            </Sticker>
           ) : (
             away && (
-              <span className="badge neutral">
+              <Sticker tone="neutral">
                 Магазин «{visible(away.store_name)}»
-              </span>
+              </Sticker>
             )
           )}
         </span>
@@ -102,13 +103,9 @@ export function CustomerRow({
           {money(customer.owed)}
         </span>
       ) : (
-        <span
-          className={
-            alike?.status === "SETTLED" ? "badge paid" : "badge neutral"
-          }
-        >
+        <Sticker tone={alike?.status === "SETTLED" ? "paid" : "neutral"}>
           {closed}
-        </span>
+        </Sticker>
       )}
       {takenAt === null && (
         <Icon name="chevron-right" size={16} className="sale-open" />

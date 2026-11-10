@@ -9,6 +9,7 @@ import { Sum } from "@/shared/Sum";
 import { RecordedMark } from "@/shared/Eyelet";
 import { Stub, WaySticker } from "@/shared/Stub";
 import { useMainButton } from "@/shared/telegram";
+import { Sticker } from "@/shared/Sticker";
 import type { Credit } from "./types";
 
 /** Under the way's sticker: what to do with the money (credits task list,
@@ -92,9 +93,9 @@ export function Paid({
       {payment &&
         (paper ? (
           <>
-            <p className="badge warn" aria-hidden="true">
+            <Sticker tone="warn" as="p" hidden>
               {paperText("payment", paper)}
-            </p>
+            </Sticker>
             <p className="hand-back-what" aria-hidden="true">
               {firstDays ? "Уже взяли раніше" : "Уже взяли під час збою"}
             </p>

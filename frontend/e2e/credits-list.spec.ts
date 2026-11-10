@@ -1,4 +1,11 @@
-import { test, expect, listRow, openStore, section } from "./fixtures";
+import {
+  test,
+  expect,
+  listRow,
+  openStore,
+  section,
+  expectOneSticker,
+} from "./fixtures";
 import type { Locator, Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -914,7 +921,9 @@ test("a row opens the customer's card: one debt is the store's block, with what 
   await expect(debts.nth(2).getByRole("button")).toHaveAccessibleName(
     "Відкрити борг: Пальто «Затишок» · M, сплачено 3 000,00 грн з 3 000,00 грн, сплачено",
   );
-  await expect(debts.nth(2).locator(".badge")).toHaveClass("badge paid");
+  await expect(debts.nth(2).locator(".sticker")).toHaveClass(
+    "sticker tone-paid",
+  );
   // None is chosen beforehand; the seller's choice opens.
   await older.click();
   await expect(
@@ -1221,7 +1230,7 @@ test("paid off on S21 opened from her card, back on it nothing read before shows
   await expect(
     page.getByRole("heading", { name: "Магазин «Основний»: не винні" }),
   ).toBeVisible();
-  await expect(card.locator(".customer-debt .badge")).toHaveText("Сплачено");
+  await expect(card.locator(".customer-debt .sticker")).toHaveText("Сплачено");
   await expect(
     page.getByRole("button", { name: "Внесок", exact: true }),
   ).toHaveCount(0);
@@ -1250,8 +1259,9 @@ test("«Сплачені» and «Списані» each ask their own status, eac
     "Відкрити борг: Марта Бойко, сплачено",
   );
   await expect(settled.getByText("Сплачено", { exact: true })).toHaveClass(
-    "badge paid",
+    "sticker tone-paid",
   );
+  await expectOneSticker(settled);
   // The paid have no sum owed: the block is the store's name alone.
   await expect(
     page.getByRole("heading", { name: "Магазин «Основний»", exact: true }),
@@ -1263,7 +1273,8 @@ test("«Сплачені» and «Списані» each ask their own status, eac
     page
       .getByRole("button", { name: /^Відкрити борг: Петро/ })
       .getByText("Списано", { exact: true }),
-  ).toHaveClass(/\bneutral\b/);
+  ).toHaveClass(/\btone-neutral\b/);
+  await expectOneSticker(rows(page));
   await statusWay(page, "Винні зараз").click();
   await expect(rows(page)).toHaveCount(1);
   expect(asked.at(-1)?.get("status")).toBe("OPEN");
@@ -1291,7 +1302,7 @@ test("under «Сплачені» a customer of two paid debts says «Сплач�
   );
   await expect(daryna).toContainText("2 борги");
   await expect(daryna.getByText("Сплачено", { exact: true })).toHaveClass(
-    "badge paid",
+    "sticker tone-paid",
   );
   await expect(daryna).not.toContainText("Нічого не винні");
 });
@@ -1432,8 +1443,8 @@ test("a closed store's customer is read among the closed stores: a row a debt wi
     .getByRole("list", { name: "Борги" })
     .getByRole("listitem");
   await expect(debts).toHaveCount(2);
-  await expect(debts.nth(0).locator(".badge")).toHaveText("Магазин «Ринок»");
-  await expect(debts.nth(1).locator(".badge")).toHaveText("Магазин «Поділ»");
+  await expect(debts.nth(0).locator(".sticker")).toHaveText("Магазин «Ринок»");
+  await expect(debts.nth(1).locator(".sticker")).toHaveText("Магазин «Поділ»");
   // 2 500 and 1 500, never 4 000.
   await expect(page.locator(".customer-owed")).toHaveCount(0);
   await expect(page.locator("body")).not.toContainText(/4\s000,00/);
@@ -1456,8 +1467,8 @@ test("a closed store's customer is read among the closed stores: a row a debt wi
   await expect(which.nth(0)).toHaveAccessibleName(
     /^Альпака сіра · L, винні 2\s500,00\sгрн, магазин «Ринок»$/,
   );
-  await expect(which.nth(0).locator(".badge")).toHaveText("Магазин «Ринок»");
-  await expect(which.nth(1).locator(".badge")).toHaveText("Магазин «Поділ»");
+  await expect(which.nth(0).locator(".sticker")).toHaveText("Магазин «Ринок»");
+  await expect(which.nth(1).locator(".sticker")).toHaveText("Магазин «Поділ»");
 });
 
 test("the card's history: every debt's lines, the newest first, a debt opened «Частинами», a knot where one closed; seven, then «Ще N» opens the rest at the eighth", async ({
@@ -1771,7 +1782,7 @@ for (const [name, theme, scheme] of [
     // nothing to do.
     await expect(rows(page)).toHaveCount(2);
     const ringed = page.getByText("Магазин «Ринок»", { exact: true });
-    await expect(ringed).toHaveClass("badge neutral");
+    await expect(ringed).toHaveClass("sticker tone-neutral");
     expect(await contrast(ringed)).toBeGreaterThanOrEqual(4.5);
     await statusWay(page, "Сплачені").click();
     await expect(rows(page)).toHaveCount(2);
@@ -1781,14 +1792,14 @@ for (const [name, theme, scheme] of [
     const accent = page.getByText("Сплачено", { exact: true });
     await expect(accent).toHaveCount(2);
     for (const pill of await accent.all()) {
-      await expect(pill).toHaveClass("badge paid");
+      await expect(pill).toHaveClass("sticker tone-paid");
       expect(await contrast(pill)).toBeGreaterThanOrEqual(4.5);
     }
     await expect(page.getByText("Нічого не винні")).toHaveCount(0);
     await page.screenshot({ path: `test-results/credits-pills-${name}.png` });
     await statusWay(page, "Списані").click();
     const written = page.getByText("Списано", { exact: true });
-    await expect(written).toHaveClass("badge neutral");
+    await expect(written).toHaveClass("sticker tone-neutral");
     expect(await contrast(written)).toBeGreaterThanOrEqual(4.5);
     await statusWay(page, "Винні зараз").click();
 

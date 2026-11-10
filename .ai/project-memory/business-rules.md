@@ -8011,3 +8011,77 @@ on two buttons, as the goods TZ has them (approved with it).
     name it was opened by and its «←» (a screen opened from another, 28),
     over the plate.
   - The search's retry waits while the screen is held, as before.
+
+## Chosen in chat — 2026-11-10 (audit after stage 2, batch 5: one mode switch; the menu's pill and word; every corner on the scale; nothing left of what no screen draws; one sticker, its glyph brought by its meaning; frame P1-1 part 2, P1-5)
+
+Chosen in chat on 2026-11-10 («Yes, start batch 5»), after batch 4 (#186)
+was merged. No right, no server rule, no field, no word changes. With it
+the frame TZ after stage 2 is built whole but for what its sections took.
+
+- **One mode switch** (frame P1-1, 5; spec §6.7): the section's ways as
+  buttons (`ModeSwitch`) and a choice as radios (`.way-switch`, the
+  return's way) one look — 44 high, the fold's track 8 round with 3
+  around, equal segments 6 round, the one open the card with its edge,
+  15/600 in ink, the others 15/500 in pencil.
+  - **A segment is drawn 38 high, its tap the track's whole 44**
+    (decided here): the spec's 44 is the switch, and a tap is never under
+    44 (direction §4, «касание ≥ 44»). A button's tap reaches over the
+    track's 3 above and below it; a radio's input does the same.
+  - **Left**: «Початкові залишки»' three counts at 14 in two lines where
+    they must, until the list's own screen is drawn anew (goods P0-1); its
+    ⋯ now as high as the switch beside it, not the old track's 52.
+  - A long word in a segment is cut with «…» on its own span (the price's
+    store, the report's stores), never wrapped; the button keeps the tap.
+- **The menu** (frame P1-1, 6; spec §6.3): the open tab's pill 8 round,
+  its word 13/700, the others 13/600, the word in the tab's role `.t-tab`.
+- **Every corner on the scale's tokens** (frame P1-1, 7), each by the role
+  of what it is: a button, a field, the search, a choice (chip), a
+  stepper's −/+, the till's pay ways, «Повернути товар», ⋯, the count's
+  sum field — 8; a block or a card («Борги»'s owed card, a return's
+  «Цілі» / «Пошкоджені», the old section block, data's age) — 4; a
+  sticker's grey and the debt's bar — 3; the sheet's handle, the toggle's
+  track and knob and every 999 — round; the pay panel and the result's dock
+  — the sheet's 16, as before; the grey's own 10 stays (batch 4), now the
+  scale's 10. A choice's grey follows the choice to 8.
+  - **Left** for their own task (orders and «Каса» TZ after stage 2,
+    P2-4, which sets their heights too): `.cash-panel-button`,
+    `.skeleton-way`, `.cancel-ask`, `.same-waybill`. A journey reads the
+    sheet: no other corner off the scale.
+- **Nothing left of what no screen draws** (frame P1-1, 9): `.t-button`,
+  `.size-count`, `.owed-mode`, `.pay-amount`, `.pay-confirm`,
+  `.order-status`, `.order-sent-with`, the base `header` and its `> span`.
+- **The page before the app** (frame P1-1, 10): 560 wide, as the app's
+  content; its plate's corner 4.
+- **One sticker** (frame P1-5; spec §6.18): the shared `Sticker` — 28 high,
+  corner 3, a glyph of 16 and a word of 14/600 — and nothing else draws a
+  status; ESLint holds it (no `sticker` or `badge` class written by hand).
+  - **The glyph comes with the meaning**: a debt — the arrow with a minus;
+    a warning and paper — the triangle; a kept operation not yet confirmed
+    — the dashed eyelet; paid or recorded — the check in a circle; on its
+    way — the parcel in motion; held or online — the pin. A screen may draw
+    another of the same meaning (an order at the post office its building,
+    a settled invoice its check), never none. Grey and neutral ones draw a
+    glyph where they did (an order cancelled, come back), none where they
+    did not.
+  - **Words and colours as they were**, but two (decided here): the mark
+    of a sale typed from paper on a lost sale's settled answer was ink on
+    the fold — now paper's warning with its triangle, as on the receipt
+    and the returns' row; and «Сплачено» on a debt and on a customer now
+    draws its check.
+  - **«Збіглося» stays the paid's green with its knot** — on the close's
+    stub and in «Закриття» — until the till's own match colour comes
+    (orders and «Каса» TZ, P1-4).
+  - **Never shrunk**: «Закриття»'s 13, a correction's and an order row's
+    13, «Гроші»'s store state 13 at padding 6, the close's stub's 20/700
+    at 32 high, a list's state at padding 2 — all the one 28 and 14/600.
+  - Said by the way in pencil (a store's name, «Усе вже повернено»,
+    «Списано») is `neutral` — the spec has no such tone; it keeps its look.
+    «Списано» on a debt keeps it too, though the spec names the offline
+    grey for it (§6.18): the task changes no colour but paper's mark; the
+    difference is named in the batch's report, «Not covered».
+  - **28 on one line, a long one wraps** (decided here; the spec's padding
+    is 0 8): 5 above and below a line of 18, so a sticker that must wrap at 360 grows a line of 18
+    and its words never touch its edge. In a line of text it sits on the
+    line's middle.
+  - **No «брак» tone yet**: no screen says a status of damaged goods in a
+    sticker; the torn tag comes with the first one that does.

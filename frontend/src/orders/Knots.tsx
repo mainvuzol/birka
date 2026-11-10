@@ -1,5 +1,5 @@
 import type { JSX } from "react";
-import { Icon } from "@/shared/Icon";
+import { Sticker } from "@/shared/Sticker";
 import type { IconName } from "@/shared/icons";
 import { buzz } from "@/shared/telegram";
 import { statusLabels } from "./types";
@@ -162,7 +162,7 @@ export function KnotString({ order }: { order: Order }): JSX.Element {
       </ol>
       {(order.status === "CANCELLED" || order.status === "RETURNED") && (
         <p className="knot-sticker">
-          <Sticker status={order.status} />
+          <StatusSticker status={order.status} />
         </p>
       )}
     </>
@@ -190,12 +190,11 @@ export function toneOf(status: Status): Tone {
  * (the design's, 2026-10-27, over the yellow of 2026-10-23's В5 (а)), the
  * two in transit blue, collected green, cancelled and come back grey.
  */
-export function Sticker({ status }: { status: Status }): JSX.Element {
+export function StatusSticker({ status }: { status: Status }): JSX.Element {
   const { tone, icon } = stickers[status];
   return (
-    <span className={`sticker tone-${tone}`}>
-      <Icon name={icon} size={16} />
+    <Sticker tone={tone} icon={icon}>
       {statusLabels[status]}
-    </span>
+    </Sticker>
   );
 }

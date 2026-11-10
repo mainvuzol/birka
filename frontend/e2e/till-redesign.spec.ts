@@ -641,7 +641,7 @@ test("in Telegram's dark theme the shortage answer and a paper sale's mark read 
   await page
     .getByRole("button", { name: "З паперу · Готівка", exact: true })
     .click();
-  const mark = page.locator(".badge", { hasText: "Продано під час збою" });
+  const mark = page.locator(".sticker", { hasText: "Продано під час збою" });
   await expect(mark).toBeVisible();
   expect(await contrast(mark)).toBeGreaterThanOrEqual(4.5);
 });

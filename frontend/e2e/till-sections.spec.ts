@@ -317,7 +317,17 @@ test("selling and taking back are one section's two ways: «Продати | П�
   const left = await sell.boundingBox();
   const right = await back.boundingBox();
   expect(Math.round(left?.y ?? -1)).toBe(Math.round(right?.y ?? -2));
-  expect(left?.height).toBeGreaterThanOrEqual(44);
+  // Drawn 38 inside the track, its tap the track's whole 44 (spec §6.7;
+  // audit after stage 2, frame P1-1, part 2).
+  const track = await ways.boundingBox();
+  expect(Math.round(track?.height ?? 0)).toBe(44);
+  for (const y of [(track?.y ?? 0) + 1, (track?.y ?? 0) + 43])
+    expect(
+      await back.evaluate(
+        (node, [x, at]) => node.contains(document.elementFromPoint(x, at)),
+        [(right?.x ?? 0) + (right?.width ?? 0) / 2, y] as const,
+      ),
+    ).toBe(true);
   // A tap: the returns, «Продаж» still the menu's mark.
   await back.click();
   await expect(

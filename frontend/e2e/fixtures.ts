@@ -101,8 +101,7 @@ export function grn(sum: string): string {
 }
 
 /** The day's first word on «Сьогодні»'s line: «Четвер, 22 жовтня». */
-const weekday =
-  "(Неділя|Понеділок|Вівторок|Середа|Четвер|П’ятниця|Субота)";
+const weekday = "(Неділя|Понеділок|Вівторок|Середа|Четвер|П’ятниця|Субота)";
 
 /**
  * Into a store's workspace. A person with one store is taken into it as the
@@ -723,7 +722,12 @@ export async function tapSize(
       await expect(more.and(page.locator("button:disabled"))).toHaveCount(0);
       continue;
     }
-    if (!(await more.click({ timeout: 2000 }).then(() => true, () => false)))
+    if (
+      !(await more.click({ timeout: 2000 }).then(
+        () => true,
+        () => false,
+      ))
+    )
       continue;
     // The next page read: the chip, or «Ще товари» again.
     await expect(
@@ -921,7 +925,8 @@ export async function expectStub(
   else await expect(stub.locator(".way-pill")).toHaveText(way);
   if (say === null) await expect(stub.locator(".stub-say")).toHaveCount(0);
   else await expect(stub.locator(".stub-say")).toHaveText(say);
-  if (sum !== undefined) await expect(stub.locator(".stub-sum")).toHaveText(sum);
+  if (sum !== undefined)
+    await expect(stub.locator(".stub-sum")).toHaveText(sum);
 }
 
 /** A sticker's glyph beside its words and centred on them, 4 px apart
@@ -948,6 +953,41 @@ export async function expectGlyphBeside(sticker: Locator): Promise<void> {
   });
   expect(look.apart).toBeGreaterThanOrEqual(3.5);
   expect(look.off).toBeLessThanOrEqual(1.5);
+}
+
+/**
+ * Every sticker in `scope` the app's one sticker (spec §6.18; audit after
+ * stage 2, frame P1-5): 28 high on one line (5 above and below a line of
+ * 18, so a long one wraps a line of 18 more), the sticker's corner 3, a
+ * word of 14/600, never shrunk — and every one with a meaning draws its
+ * glyph of 16, so a colour is never all it says. At least one is there to
+ * read. The height is the laid-out one: a stub's swing tilts its box.
+ */
+export async function expectOneSticker(scope: Page | Locator): Promise<void> {
+  const stickers = scope.locator(".sticker:visible");
+  await expect(stickers.first()).toBeVisible();
+  for (const sticker of await stickers.all()) {
+    const look = await sticker.evaluate((node) => {
+      const style = getComputedStyle(node);
+      const glyph = node.querySelector(":scope > svg.icon");
+      const high = node instanceof HTMLElement ? node.offsetHeight : 0;
+      return {
+        words: `${node.textContent} (${String(high)})`,
+        drawn: [
+          high >= 28 && (high - 10) % 18 === 0,
+          style.borderTopLeftRadius,
+          style.fontSize,
+          style.fontWeight,
+        ],
+        meaning: [...node.classList].some((name) =>
+          /^tone-(?:debt|warn|kept|paid|transit|online)$/.test(name),
+        ),
+        glyph: glyph === null ? null : getComputedStyle(glyph).width,
+      };
+    });
+    expect(look.drawn, look.words).toEqual([true, "3px", "14px", "600"]);
+    if (look.meaning) expect(look.glyph, look.words).toBe("16px");
+  }
 }
 
 /**

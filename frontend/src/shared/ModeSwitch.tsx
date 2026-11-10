@@ -66,7 +66,9 @@ export function ModeSwitch<Mode extends string>({
             choose(mode);
           }}
         >
-          {name}
+          {/* Its words, cut with «…» where a switch says so, the button's
+              tap left whole (frame P1-1, part 2). */}
+          <span>{name}</span>
         </button>
       ))}
     </div>

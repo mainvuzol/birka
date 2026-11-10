@@ -619,6 +619,13 @@ test("the app's code that never arrives is said so, but only after a wait", asyn
       ),
   ).toBeVisible();
   await expect(page.locator(".not-loaded-paper svg")).toHaveCount(1);
+  // As wide as the app's content, its plate the plate's corner 4 (audit
+  // after stage 2, frame P1-1, part 2).
+  await expect(page.locator(".not-loaded")).toHaveCSS("max-width", "560px");
+  await expect(page.locator(".not-loaded-paper")).toHaveCSS(
+    "border-top-left-radius",
+    "4px",
+  );
   // The app's paper and ink, before any of its code.
   expect(
     await page.evaluate(

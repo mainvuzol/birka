@@ -7,6 +7,7 @@ import { Icon } from "@/shared/Icon";
 import { ScreenHeader } from "@/shared/ScreenHeader";
 import { buzz } from "@/shared/telegram";
 import { visible } from "@/shared/visible";
+import { Sticker } from "@/shared/Sticker";
 import { money } from "@/orders/types";
 import type { Store } from "@/orders/types";
 import { shortDay, shortWhen } from "@/credits/format";
@@ -130,10 +131,9 @@ export function ReturnDetail({
         </p>
         {item.cancelled && (
           <p className="supplier-return-cancelled" role="status">
-            <span className="sticker tone-offline">
-              <Icon name="close" size={16} />
+            <Sticker tone="offline" icon="close">
               Скасовано
-            </span>
+            </Sticker>
             <span className="t-meta">
               {shortDay(item.cancelled.at)} · {visible(item.cancelled.reason)} ·{" "}
               {visible(item.cancelled.by)}

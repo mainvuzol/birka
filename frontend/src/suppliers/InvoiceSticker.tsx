@@ -1,16 +1,17 @@
 import type { JSX } from "react";
-import { Icon } from "@/shared/Icon";
+import { Sticker } from "@/shared/Sticker";
+import type { Tone } from "@/shared/Sticker";
 import type { IconName } from "@/shared/icons";
 import { statusLabels } from "./invoiceWords";
 import type { InvoiceStatus } from "./types";
 
 const stickers: Record<
   Exclude<InvoiceStatus, "OPEN">,
-  { tone: string; icon: IconName }
+  { tone?: Tone; icon: IconName }
 > = {
-  SETTLED: { tone: "tone-paid", icon: "check" },
-  WRITTEN_OFF: { tone: "", icon: "minus" },
-  CANCELLED: { tone: "tone-offline", icon: "close" },
+  SETTLED: { tone: "paid", icon: "check" },
+  WRITTEN_OFF: { icon: "minus" },
+  CANCELLED: { tone: "offline", icon: "close" },
 };
 
 /**
@@ -25,9 +26,8 @@ export function InvoiceSticker({
 }): JSX.Element {
   const { tone, icon } = stickers[status];
   return (
-    <span className={tone ? `sticker ${tone}` : "sticker"}>
-      <Icon name={icon} size={16} />
+    <Sticker tone={tone} icon={icon}>
       {statusLabels[status]}
-    </span>
+    </Sticker>
   );
 }

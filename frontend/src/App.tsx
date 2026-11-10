@@ -77,6 +77,7 @@ import {
 } from "@/shared/MoreLines";
 import type { IconName } from "@/shared/icons";
 import type { MoreBack, MoreGroup, MoreRow } from "@/shared/More";
+import { Sticker } from "@/shared/Sticker";
 import { Catalog } from "@/catalog/Catalog";
 import {
   loadCatalogCommand,
@@ -604,9 +605,9 @@ export function App(): JSX.Element {
                   </span>
                   {/* Its state in its words, as before, on a sticker. */}
                   {s.state !== "ACTIVE" && (
-                    <span className="badge store-tag-state">
+                    <Sticker className="store-tag-state">
                       {stateText(s)}
-                    </span>
+                    </Sticker>
                   )}
                 </span>
               </button>
@@ -4255,7 +4256,11 @@ function SettledSale({ sale }: { sale: SaleReceipt }): JSX.Element {
       : null;
   return (
     <>
-      {mark && <p className="badge">{markText(mark)}</p>}
+      {mark && (
+        <Sticker tone="warn" as="p">
+          {markText(mark)}
+        </Sticker>
+      )}
       <p>
         Разом {money(sale.total)}
         {way ? ` ${methodHow[way]}` : ""}

@@ -21,8 +21,12 @@ export default tseslint.config(
     // is a refusal's red (audit after stage 2, frame P1-2). It sees
     // `role="alert"` written as a string holding a `readText(` call at any
     // depth; not `role={"alert"}`, nor a text read into a name first.
+    // A status is the shared `Sticker` alone, its glyph brought by its
+    // meaning (frame P1-5): no class `sticker` or `badge` written in a
+    // `className`, as a string or in a template. Each of the two shared
+    // components is let off both: neither draws the other's.
     files: ["src/**/*.tsx"],
-    ignores: ["src/shared/Unread.tsx"],
+    ignores: ["src/shared/Unread.tsx", "src/shared/Sticker.tsx"],
     rules: {
       "no-restricted-syntax": [
         "error",
@@ -31,6 +35,18 @@ export default tseslint.config(
             'JSXElement:has(> JSXOpeningElement:has(JSXAttribute[name.name="role"][value.value="alert"])):has(CallExpression[callee.name="readText"])',
           message:
             "A read that failed is the shared Unread's plate, never a bare alert (frame P1-2).",
+        },
+        {
+          selector:
+            'JSXAttribute[name.name="className"] Literal[value=/(^|\\s)(sticker|badge)(\\s|$)/]',
+          message:
+            "A status is the shared Sticker, its glyph brought by its tone (frame P1-5).",
+        },
+        {
+          selector:
+            'JSXAttribute[name.name="className"] TemplateElement[value.raw=/(^|\\s)(sticker|badge)(\\s|$)/]',
+          message:
+            "A status is the shared Sticker, its glyph brought by its tone (frame P1-5).",
         },
       ],
     },

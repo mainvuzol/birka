@@ -967,7 +967,177 @@ for (const scheme of ["light", "dark"] as const)
     ).toEqual([]);
   });
 
-test("every place read is its shape in grey, the real element's size and corner: a list's row 64, a mark 40 round, a tag 76, a store's tag 96, a field 52 at 8, a size cell 60 at 6, a choice at 14 (audit after stage 2, frame P1-4)", async ({
+for (const scheme of ["light", "dark"] as const)
+  test(`in the ${scheme} theme the mode switch is one look, as buttons and as radios — 44 high, the fold's track 8 round with 3 around, segments 6 round, the one open the card with its edge in ink 15/600, the others pencil 15/500, a tap reaching the track's edge; the menu's pill 8 round, its open word 13/700 and the others 13/600; no corner but the scale's, no rule left of what is gone (audit after stage 2, frame P1-1, part 2)`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ colorScheme: scheme });
+    await page.goto(
+      `/#${new URLSearchParams({ tgWebAppData: initData(fixture.network_owner_telegram_user_id) }).toString()}`,
+    );
+    await openStore(page, "Центр CENTRE");
+    await menu(page).getByRole("button", { name: "Продаж" }).click();
+    await expect(tillWays(page)).toBeVisible();
+    const [card, edge, ink, pencil, fold] = await Promise.all(
+      ["--card", "--edge", "--ink", "--pencil", "--fold"].map((name) =>
+        token(page, name),
+      ),
+    );
+    const drawn = await page.evaluate(() => {
+      const main = document.querySelector("main");
+      const till = document.querySelector(".mode-switch");
+      if (!main || !till) return null;
+      const look = (node: Element): string[] => {
+        const style = getComputedStyle(node);
+        return [
+          style.backgroundColor,
+          style.borderTopLeftRadius,
+          style.color,
+          style.fontSize,
+          style.fontWeight,
+          style.boxShadow,
+        ];
+      };
+      const track = (node: Element) => {
+        const style = getComputedStyle(node);
+        const box = node.getBoundingClientRect();
+        return {
+          high: Math.round(box.height),
+          drawn: [
+            style.backgroundColor,
+            style.borderTopLeftRadius,
+            style.paddingTop,
+            style.paddingLeft,
+          ],
+          box,
+        };
+      };
+      // What a tap 1 px inside the track's top and bottom edges lands on,
+      // over a segment's middle.
+      const reach = (box: DOMRect, segment: Element): [boolean, boolean] => {
+        const own = segment.getBoundingClientRect();
+        const x = own.left + own.width / 2;
+        const lands = (y: number): boolean => {
+          const hit = document.elementFromPoint(x, y);
+          return hit !== null && segment.contains(hit);
+        };
+        return [lands(box.top + 1), lands(box.bottom - 1)];
+      };
+      const buttons = [...till.querySelectorAll("button")];
+      const open = buttons.find((b) => b.getAttribute("aria-current"));
+      const other = buttons.find((b) => !b.getAttribute("aria-current"));
+      if (!open || !other) return null;
+      const tillTrack = track(till);
+      const asButtons = {
+        track: tillTrack.high,
+        trackLook: tillTrack.drawn,
+        segment: Math.round(other.getBoundingClientRect().height),
+        open: look(open),
+        other: look(other),
+        reach: reach(tillTrack.box, other),
+      };
+      // The returns' way, as `Returns.tsx` draws it: drawn for a moment.
+      const box = document.createElement("div");
+      box.innerHTML =
+        '<fieldset class="way-switch"><legend>Як</legend>' +
+        '<label><input type="radio" name="probe" checked><span>Готівка</span></label>' +
+        '<label><input type="radio" name="probe"><span>Картка</span></label>' +
+        '<label><input type="radio" name="probe"><span>Переказ</span></label>' +
+        "</fieldset>";
+      main.prepend(box);
+      const way = box.querySelector(".way-switch");
+      const spans = [...box.querySelectorAll(".way-switch span")];
+      const labels = [...box.querySelectorAll(".way-switch label")];
+      if (!way || spans.length !== 3 || !labels[1]) return null;
+      way.querySelector("legend")?.setAttribute("class", "visually-hidden");
+      const wayTrack = track(way);
+      const asRadios = {
+        track: wayTrack.high,
+        trackLook: wayTrack.drawn,
+        segment: Math.round(
+          (spans[1] as Element).getBoundingClientRect().height,
+        ),
+        open: look(spans[0] as Element),
+        other: look(spans[1] as Element),
+        reach: reach(wayTrack.box, labels[1]),
+      };
+      box.remove();
+      const tab = document.querySelector(".tab[aria-current]");
+      const rest = document.querySelector(".tab:not([aria-current])");
+      if (!tab || !rest) return null;
+      const word = (node: Element | null): string[] => {
+        if (!node) return [];
+        const style = getComputedStyle(node);
+        return [style.fontSize, style.fontWeight];
+      };
+      return {
+        asButtons,
+        asRadios,
+        pill: getComputedStyle(tab.querySelector(".tab-pill") ?? tab)
+          .borderTopLeftRadius,
+        openWord: word(tab.querySelector(".tab-label")),
+        otherWord: word(rest.querySelector(".tab-label")),
+      };
+    });
+    expect(drawn).not.toBeNull();
+    if (!drawn) return;
+    for (const kind of [drawn.asButtons, drawn.asRadios]) {
+      expect(kind.track).toBe(44);
+      expect(kind.trackLook).toEqual([fold, "8px", "3px", "3px"]);
+      expect(kind.segment).toBe(38);
+      expect(kind.open.slice(0, 5)).toEqual([card, "6px", ink, "15px", "600"]);
+      expect(kind.open[5]).toContain(edge);
+      expect(kind.open[5]).toContain("1px inset");
+      expect(kind.other.slice(0, 5)).toEqual([
+        "rgba(0, 0, 0, 0)",
+        "6px",
+        pencil,
+        "15px",
+        "500",
+      ]);
+      expect(kind.reach).toEqual([true, true]);
+    }
+    expect(drawn.pill).toBe("8px");
+    expect(drawn.openWord).toEqual(["13px", "700"]);
+    expect(drawn.otherWord).toEqual(["13px", "600"]);
+    // In the sheet: every corner one of the scale's tokens, or none — but
+    // the four «Замовлення» and «Каса» set right in their own task (orders
+    // and «Каса» task list after stage 2, P2-4).
+    const css = readFileSync("src/styles.css", "utf8");
+    const offScale: string[] = [];
+    let rule = "";
+    for (const line of css.split("\n")) {
+      if (line.trimEnd().endsWith("{"))
+        rule = line.trimEnd().slice(0, -1).trim();
+      const corner = /border(?:-[a-z]+)*-radius:\s*([^;]+);/.exec(line);
+      if (
+        corner?.[1] !== undefined &&
+        !/^(?:(?:var\(--r-[a-z]+\)|0)\s*)+$/.test(corner[1].trim())
+      )
+        offScale.push(rule);
+    }
+    expect(offScale).toEqual([
+      ".cash-panel-button",
+      ".skeleton-way",
+      ".cancel-ask",
+      ".same-waybill",
+    ]);
+    // Nothing left of what no screen draws (P1-1, 9).
+    for (const gone of [
+      ".t-button",
+      ".size-count",
+      ".owed-mode",
+      ".pay-amount",
+      ".pay-confirm",
+      ".order-status",
+      ".order-sent-with",
+      ".badge",
+    ])
+      expect(css).not.toContain(gone);
+    expect(css).not.toMatch(/^\s*header(?:\s*>\s*span)?\s*\{/m);
+  });
+
+test("every place read is its shape in grey, the real element's size and corner: a list's row 64, a mark 40 round, a tag 76, a store's tag 96, a field 52 at 8, a size cell 60 at 6, a choice at 8 (audit after stage 2, frame P1-4; its corner P1-1, part 2)", async ({
   page,
 }) => {
   await page.goto(
@@ -1081,6 +1251,6 @@ test("every place read is its shape in grey, the real element's size and corner:
   expect(drawn.field[2]).toBe(drawn.realField[2]);
   expect(drawn.cell).toEqual([60, 60, "6px"]);
   expect(drawn.cell[2]).toBe(drawn.realCell[2]);
-  expect(drawn.chip.slice(1)).toEqual([44, "14px"]);
+  expect(drawn.chip.slice(1)).toEqual([44, "8px"]);
   expect(drawn.chip.slice(1)).toEqual(drawn.realChip.slice(1));
 });

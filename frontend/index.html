@@ -29,18 +29,20 @@
       .not-loaded {
         visibility: hidden;
         animation: not-loaded-show 0s linear 8s forwards;
-        max-width: 780px;
+        max-width: 560px;
         margin: auto;
         padding: 24px 18px;
         font-family: ui-sans-serif, system-ui, sans-serif;
         line-height: 1.55;
       }
-      /* The owner's words as the paper's warning: its triangle, its plate. */
+      /* The owner's words as the paper's warning: its triangle, its plate,
+         the plate's corner 4; the content as wide as the app's, 560 (audit
+         after stage 2, frame P1-1, part 2). */
       .not-loaded-paper {
         display: flex;
         gap: 10px;
         padding: 12px;
-        border-radius: 12px;
+        border-radius: 4px;
         background: #faeecb;
       }
       .not-loaded-paper p {

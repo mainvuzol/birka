@@ -5,10 +5,12 @@ import {
   grn,
   openStore,
   section,
+  expectOneSticker,
 } from "./fixtures";
 import type { Locator, Page, Request } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { icons } from "../src/shared/icons";
 
 /**
  * «Каса»'s kept command (cash task list, P1-1): its banner names what waits
@@ -498,6 +500,15 @@ for (const kept of [
     const stub = banner.locator(".stub");
     await expect(stub).toHaveClass(/\bstub-kept\b/);
     await expect(stub.locator(".stub-head")).toHaveText("Ще не підтверджено");
+    await expectOneSticker(stub.locator(".stub-head"));
+    // Its glyph the dashed eyelet: a kept operation's own (frame P1-5).
+    expect(
+      await stub.locator(".stub-head .icon").evaluate((svg, want) => {
+        const probe = document.createElementNS(svg.namespaceURI, "svg");
+        probe.innerHTML = want;
+        return svg.innerHTML === probe.innerHTML;
+      }, icons["eyelet-dashed"]),
+    ).toBe(true);
     await expect(banner.locator("p").first()).toHaveText(kept.line);
     // Nothing of the drawer on paper: no paper line, no name.
     await expect(banner.locator("p").nth(1)).toHaveText(
