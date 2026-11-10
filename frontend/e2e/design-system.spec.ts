@@ -1107,7 +1107,8 @@ for (const scheme of ["light", "dark"] as const)
     const offScale: string[] = [];
     let rule = "";
     for (const line of css.split("\n")) {
-      if (line.trimEnd().endsWith("{")) rule = line.replace("{", "").trim();
+      if (line.trimEnd().endsWith("{"))
+        rule = line.trimEnd().slice(0, -1).trim();
       const corner = /border(?:-[a-z]+)*-radius:\s*([^;]+);/.exec(line);
       if (
         corner?.[1] !== undefined &&
