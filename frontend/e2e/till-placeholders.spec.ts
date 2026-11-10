@@ -1,4 +1,4 @@
-import { test, expect, openStore, toTill } from "./fixtures";
+import { test, expect, openStore, sellsFrom, toTill } from "./fixtures";
 import type { Page, Route } from "@playwright/test";
 import { createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -216,4 +216,79 @@ test("a search with nothing found, typed further, never says «нічого не
   ).toBeAttached();
   release();
   await expect(page.getByText(/^За «абв» .* нічого немає/)).toBeVisible();
+});
+
+test("the catalogue's sizes being read keep four cells' places, 60 × 60 and the cell's corner, «Завантажуємо розміри…» said to a reader alone; come, the cells where they stood (audit after stage 2, sale P2-3)", async ({
+  page,
+}) => {
+  await sellsFrom(page, fixture.till_location_id);
+  await page.route("**/api/v1/catalog/stock-options?**", async (route) => {
+    await route.fulfill({ json: coats });
+  });
+  await page.route(
+    "**/api/v1/catalog/receivable-variants?**",
+    async (route) => {
+      await route.fulfill({
+        json: {
+          items: [
+            {
+              product_variant_id: fixture.variant_id,
+              display_name: "Лоран беж",
+            },
+          ],
+          has_more: false,
+        },
+      });
+    },
+  );
+  await page.route("**/api/v1/catalog/prices?**", async (route) => {
+    await route.fulfill({
+      json: {
+        product_variant_id: fixture.variant_id,
+        currency_code: "UAH",
+        shared_price: null,
+        store_price: null,
+        suggested_price: "2400.00",
+        may_set_shared: false,
+      },
+    });
+  });
+  const sizes = await heldBack(
+    page,
+    "**/api/v1/catalog/sizes?**",
+    async (route) => {
+      await route.fulfill({
+        json: [{ size_id: fixture.size_id, code: "M", system: "ALPHA" }],
+      });
+    },
+  );
+  await page.goto(launch());
+  await openStore(page, "Основний MAIN");
+  await toTill(page);
+  await page.getByRole("searchbox", { name: "Знайти модель" }).fill("лор");
+  await page.getByRole("button", { name: "Знайти в каталозі" }).click();
+  const panel = page.getByRole("region", { name: "Товар з каталогу" });
+  await panel.getByLabel("Пошук у каталозі").fill("лоран");
+  await panel.getByRole("radio", { name: "Лоран беж" }).click();
+  const grey = panel.locator(".placeholder.cells > .size-cell");
+  await expect(grey).toHaveCount(4);
+  const before = await grey.first().boundingBox();
+  expect([before?.width ?? 0, before?.height ?? 0].map(Math.round)).toEqual([
+    60, 60,
+  ]);
+  await expect(grey.first()).toHaveCSS("border-top-left-radius", "6px");
+  // Said to a reader alone, never on the screen.
+  await expect(
+    said(page).filter({ hasText: "Завантажуємо розміри…" }),
+  ).toHaveClass(/\bvisually-hidden\b/);
+  sizes.release();
+  const cell = panel
+    .getByRole("group", { name: "Розмір: Лоран беж" })
+    .getByRole("button", { name: "M", exact: true });
+  await expect(cell).toBeVisible();
+  await expect(grey).toHaveCount(0);
+  await expect(page.getByText("Завантажуємо розміри…")).toHaveCount(0);
+  const after = await cell.boundingBox();
+  expect(Math.abs((after?.y ?? 0) - (before?.y ?? 0))).toBeLessThanOrEqual(4);
+  expect(Math.abs((after?.x ?? 0) - (before?.x ?? 0))).toBeLessThanOrEqual(1);
 });

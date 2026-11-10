@@ -8,6 +8,7 @@ import {
   toTill,
   sellsFrom,
   expectEmpty,
+  expectPlate,
 } from "./fixtures";
 import type { Locator, Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
@@ -202,15 +203,55 @@ test("a size read off a coat's label puts its «×1» on that size's cell, the o
   await expect(what.locator(".size-in")).toHaveText("×1");
   // Read off the label in the basket's sheet (P0-5).
   await basketSheet(page);
+  // A deciding chip, never the system's list (audit after stage 2, sale
+  // P2-3).
   await page
-    .getByRole("combobox", { name: "Розмір з етикетки" })
-    .selectOption(fixture.size_id);
+    .getByRole("group", { name: "Розмір з етикетки" })
+    .locator(`button.chip[data-size="${fixture.size_id}"]`)
+    .click();
   await basketDone(page);
   await expect(what.locator(".size-in")).toHaveCount(0);
   await expect(m.locator(".size-in")).toHaveText("×1");
   await m.click();
   await expect(m.locator(".size-in")).toHaveText("×2");
   await expect((await basketSheet(page)).locator(".line")).toHaveCount(1);
+});
+
+test("a label's sizes that could not be read are said in the basket's sheet, by its chips, its retry reading them; the row named by its model (audit after stage 2, sale P2-3; review)", async ({
+  page,
+}) => {
+  let refuse = true;
+  await page.route("**/api/v1/catalog/sizes?**", async (route) => {
+    if (refuse) {
+      await route.fulfill({ status: 503, json: { code: "UNAVAILABLE" } });
+      return;
+    }
+    await route.fallback();
+  });
+  await goods(page);
+  await onTheTill(page);
+  await cell(page, unknown).click();
+  const sheet = await basketSheet(page);
+  const label = sheet.getByRole("group", { name: /^Розмір з етикетки/ });
+  // Two lines whose size is not known are told apart by their model.
+  await expect(label).toHaveAccessibleName(
+    /^Розмір з етикетки Лоран шоколад · /,
+  );
+  const plate = label.locator(".notice.read-failure");
+  await expect(plate).toBeVisible();
+  await expectPlate(plate, "unread");
+  await expect(label.locator("button.chip[data-size]")).toHaveCount(0);
+  await expect(
+    label.getByRole("button", {
+      name: "Не читали — продати як «розмір невідомий»",
+    }),
+  ).toHaveAttribute("aria-pressed", "true");
+  refuse = false;
+  await plate.getByRole("button", { name: "Спробувати ще раз" }).click();
+  await expect(plate).toHaveCount(0);
+  await expect(
+    label.locator(`button.chip[data-size="${fixture.size_id}"]`),
+  ).toBeVisible();
 });
 
 test("a size not known: «?» on its cell, and the tag says what «?» is", async ({

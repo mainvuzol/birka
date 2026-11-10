@@ -1713,11 +1713,15 @@ test.describe("7. a paper sale refused on stock offers no way around it", () => 
     await tapSize(page, ids.variant, ids.unknownSize);
     // In the basket's sheet («Усе на бірці» task list, P0-5).
     await basketSheet(page);
-    await expect(page.getByLabel("Розмір з етикетки")).toBeVisible();
+    await expect(
+      page.getByRole("group", { name: "Розмір з етикетки" }),
+    ).toBeVisible();
     await basketDone(page);
     await fromPaper(page);
     await basketSheet(page);
-    await expect(page.getByLabel("Розмір з етикетки")).toHaveCount(0);
+    await expect(
+      page.getByRole("group", { name: "Розмір з етикетки" }),
+    ).toHaveCount(0);
     // Owner decision, 2026-10-15 (В5): «без розміру» read as «безрозмірна».
     await expect(
       page.getByText(

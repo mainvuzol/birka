@@ -290,7 +290,7 @@ test("both waiting, the till says to sell on paper, and lists nothing", async ({
   expect(asked).toEqual([]);
 });
 
-test("a coat in hand from the catalogue is asked its warehouse, and leaves from the one said", async ({
+test("a coat in hand from the catalogue is asked its warehouse by deciding chips 44, none chosen, its sizes the till's cells with no count; it leaves from the one said, the taps as before (audit after stage 2, sale P2-3)", async ({
   page,
 }) => {
   await twoWarehouses(page);
@@ -340,30 +340,74 @@ test("a coat in hand from the catalogue is asked its warehouse, and leaves from 
     "На складах магазину зараз немає товару в обліку.",
   );
   await page.getByRole("button", { name: "Знайти в каталозі" }).click();
-  const from = page.getByLabel("З якого складу віддаєте?");
-  await expect(from).toHaveValue("");
+  // No list of the system's: a chip a warehouse, none chosen beforehand.
+  await expect(page.locator("select")).toHaveCount(0);
+  const from = page.getByRole("group", { name: "З якого складу віддаєте?" });
+  const chips = from.getByRole("button");
+  await expect(chips).toHaveText(["Свій", "Спільний"]);
+  for (const chip of await chips.all()) {
+    await expect(chip).toHaveAttribute("aria-pressed", "false");
+    await expect(chip).toHaveCSS("min-height", "44px");
+    expect((await chip.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+  }
   // Nothing is offered until the warehouse is said.
   await expect(
     page.getByRole("region", { name: "Товар з каталогу" }),
   ).toHaveCount(0);
-  await from.selectOption(shared);
+  const chosen = from.getByRole("button", { name: "Спільний" });
+  await chosen.click();
+  await expect(chosen).toHaveAttribute("aria-pressed", "true");
+  await expect(from.getByRole("button", { name: "Свій" })).toHaveAttribute(
+    "aria-pressed",
+    "false",
+  );
+  // In the chosen colours, as the return's warehouse (spec §6.13).
+  const colours = await page.evaluate(() => {
+    const probe = document.createElement("span");
+    document.body.append(probe);
+    probe.style.background = "var(--chosen)";
+    probe.style.color = "var(--on-chosen)";
+    const style = getComputedStyle(probe);
+    const said = [style.backgroundColor, style.color];
+    probe.remove();
+    return said;
+  });
+  await expect(chosen).toHaveCSS("background-color", colours[0] ?? "");
+  await expect(chosen).toHaveCSS("color", colours[1] ?? "");
   const panel = page.getByRole("region", { name: "Товар з каталогу" });
   await expect(panel).toContainText(
     "На складі «Спільний» його немає в обліку.",
   );
+  // A part of the till: no heading of its own.
+  await expect(panel.getByRole("heading")).toHaveCount(0);
   await panel.getByLabel("Пошук у каталозі").fill("лоран");
   await panel.getByRole("radio", { name: "Лоран беж" }).click();
-  await panel
-    .getByRole("group", { name: "Розмір: Лоран беж" })
-    .getByRole("button", { name: "M", exact: true })
-    .click();
+  const cells = panel.getByRole("group", { name: "Розмір: Лоран беж" });
+  const cell = cells.getByRole("button", { name: "M", exact: true });
+  // The till's cell, 60 × 60, its letter and no count under it: the books
+  // know none.
+  await expect(cell).toHaveClass(/\bsize-cell\b/);
+  const box = await cell.boundingBox();
+  expect(box?.width ?? 0).toBeGreaterThanOrEqual(60);
+  expect(box?.height ?? 0).toBeGreaterThanOrEqual(60);
+  await expect(cell.locator(".size-letter")).toHaveText("M");
+  await expect(cell.locator(".size-free")).toHaveCount(0);
+  await page.screenshot({
+    path: "test-results/till-catalog-cells.png",
+    fullPage: true,
+  });
+  await cell.click();
   await expect((await basketSheet(page)).locator(".line")).toContainText(
     "Лоран беж · M",
   );
   await basketDone(page);
   // The next coat from the catalogue is asked its warehouse anew.
   await page.getByRole("button", { name: "Знайти в каталозі" }).click();
-  await expect(page.getByLabel("З якого складу віддаєте?")).toHaveValue("");
+  await expect(
+    page
+      .getByRole("group", { name: "З якого складу віддаєте?" })
+      .getByRole("button", { pressed: true }),
+  ).toHaveCount(0);
   await expect(
     page.getByRole("region", { name: "Товар з каталогу" }),
   ).toHaveCount(0);

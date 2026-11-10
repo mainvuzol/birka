@@ -55,6 +55,7 @@ interface SaleBody {
   missing_in_store: unknown[];
   size_clarified?: { line_index: number; quantity: number }[];
   payment_method?: string;
+  lines: { size_id: string }[];
 }
 
 function initData(): string {
@@ -158,16 +159,42 @@ test("a coat held with its size not known is sold with the size on its label", a
   const sent = sales(page);
   const unknown = unknownOf(await enter(page));
   await pick(page, unknown);
-  // Not read, the coat sells as it is held (sale-slice TZ, P2-2).
-  await expect(
-    page
-      .getByRole("combobox", { name: "Розмір з етикетки" })
-      .locator("option")
-      .first(),
-  ).toHaveText("Не читали — продати як «розмір невідомий»");
-  await page
-    .getByRole("combobox", { name: "Розмір з етикетки" })
-    .selectOption({ label: "L" });
+  // Deciding chips 44 in the basket's sheet, once it takes taps; no list
+  // of the system's (audit after stage 2, sale P2-3). Not read, the coat
+  // sells as it is held (sale-slice TZ, P2-2).
+  const label = (await basketSheet(page)).getByRole("group", {
+    name: "Розмір з етикетки",
+  });
+  await expect(page.locator("select")).toHaveCount(0);
+  const notRead = label.getByRole("button", {
+    name: "Не читали — продати як «розмір невідомий»",
+    exact: true,
+  });
+  await expect(notRead).toHaveAttribute("aria-pressed", "true");
+  const sizeL = label.getByRole("button", { name: "L", exact: true });
+  await expect(sizeL).toHaveAttribute("aria-pressed", "false");
+  for (const chip of await label.getByRole("button").all()) {
+    await expect(chip).toHaveCSS("min-height", "44px");
+    expect((await chip.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+  }
+  const sizeLId = await sizeL.getAttribute("data-size");
+  await sizeL.click();
+  await expect(sizeL).toHaveAttribute("aria-pressed", "true");
+  await expect(notRead).toHaveAttribute("aria-pressed", "false");
+  // The chosen one in the chosen colours (spec §6.13).
+  const [chosen, onChosen] = await sizeL.evaluate(() => {
+    const probe = document.createElement("span");
+    document.body.append(probe);
+    probe.style.background = "var(--chosen)";
+    probe.style.color = "var(--on-chosen)";
+    const style = getComputedStyle(probe);
+    const said = [style.backgroundColor, style.color];
+    probe.remove();
+    return said;
+  });
+  await expect(sizeL).toHaveCSS("background-color", chosen ?? "");
+  await expect(sizeL).toHaveCSS("color", onChosen ?? "");
+  await page.screenshot({ path: "test-results/label-size-chips.png" });
   await addToBasket(page, 1);
   // The basket's line, in its sheet («Усе на бірці» task list, P0-5); the
   // tray says it too.
@@ -214,6 +241,12 @@ test("a coat held with its size not known is sold with the size on its label", a
   expect(sent).toHaveLength(2);
   expect(sent[0]?.size_clarified).toEqual([]);
   expect(sent[1]?.size_clarified).toEqual([{ line_index: 0, quantity: 1 }]);
+  // The chip sends the size the list did: L's own.
+  expect(sizeLId).not.toBeNull();
+  expect(sent.map((body) => body.lines[0]?.size_id)).toEqual([
+    sizeLId,
+    sizeLId,
+  ]);
   expect(sent[1]?.found_in_store).toEqual([]);
   // One sale, one command, answered twice.
   expect(sent[1]?.command_id).toBe(sent[0]?.command_id);

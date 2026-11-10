@@ -10,6 +10,7 @@ import {
   sellsFrom,
   shortage,
   expectEmpty,
+  expectPlate,
 } from "./fixtures";
 import type { Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
@@ -289,14 +290,180 @@ test("a model past the first hundred is found by three letters and sold in three
   ]);
 });
 
-test("«Ще товари» reads the next hundred under the first", async ({ page }) => {
+test("«Показати ще» reads the next hundred under the first, the word every list's (audit after stage 2, sale P1-4)", async ({
+  page,
+}) => {
   await stubList(page, [...alpacas, laurent]);
   await onTheTill(page);
   await expect(chip(page, "Альпака 100", "S, вільно 1")).toBeVisible();
-  await page.getByRole("button", { name: "Ще товари" }).click();
+  await expect(page.getByRole("button", { name: "Ще товари" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Показати ще" }).click();
   await expect(chip(page, "Лоран шоколад", "M, вільно 2")).toBeVisible();
   await expect(chip(page, "Альпака 001", "S, вільно 1")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Ще товари" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Показати ще" })).toHaveCount(
+    0,
+  );
+});
+
+/** The till's list refused with 503 while `refused()` says so; the rest is
+ * the stub's. Registered after it, so asked first. */
+async function refuseList(
+  page: Page,
+  refused: (url: URL) => boolean,
+): Promise<string[]> {
+  const offsets: string[] = [];
+  await page.route("**/api/v1/catalog/stock-options?**", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.searchParams.get("store_id") === fixture.store_id)
+      offsets.push(url.searchParams.get("offset") ?? "0");
+    if (refused(url)) {
+      await route.fulfill({ status: 503, json: { code: "UNAVAILABLE" } });
+      return;
+    }
+    await route.fallback();
+  });
+  return offsets;
+}
+
+/** Back in the app: every read is asked again, the till's list too. */
+async function backInTheApp(page: Page): Promise<void> {
+  const refused = page.waitForResponse(
+    (response) =>
+      response.url().includes("/api/v1/catalog/stock-options?") &&
+      response.status() === 503,
+  );
+  await page.evaluate(() => {
+    window.dispatchEvent(new Event("visibilitychange"));
+  });
+  await refused;
+}
+
+test("a list read again and refused keeps its tags, the warning's plate over them, its cells still pressed, «Показати ще» held; «Спробувати ще раз» reads it and the plate goes (audit after stage 2, sale P1-4)", async ({
+  page,
+}) => {
+  await stubList(page, [...alpacas, laurent]);
+  let refuse = false;
+  await refuseList(page, () => refuse);
+  await onTheTill(page);
+  const cell = chip(page, "Альпака 001", "S, вільно 1");
+  await expect(cell).toBeVisible();
+  const more = page.getByRole("button", { name: "Показати ще" });
+  await expect(more).toBeEnabled();
+  refuse = true;
+  await backInTheApp(page);
+  const plate = page.locator(".notice.read-failure");
+  await expect(plate).toBeVisible();
+  await expectPlate(plate, "unread");
+  // The tags as they were read, under it; no page on top of them until
+  // they are read again (review).
+  const tag = page.getByRole("group", { name: "Альпака 001", exact: true });
+  await expect(cell).toBeVisible();
+  await expect(more).toBeDisabled();
+  const over = await plate.boundingBox();
+  const under = await tag.boundingBox();
+  expect((over?.y ?? 0) + (over?.height ?? 0)).toBeLessThanOrEqual(
+    under?.y ?? 0,
+  );
+  await cell.click();
+  await expect(cell).toHaveClass(/\bchosen\b/);
+  refuse = false;
+  await plate.getByRole("button", { name: "Спробувати ще раз" }).click();
+  await expect(plate).toHaveCount(0);
+  await expect(chip(page, "Альпака 001", "S, вільно 1")).toHaveClass(
+    /\bchosen\b/,
+  );
+  await expect(more).toBeEnabled();
+});
+
+test("a search with nothing found, read again and refused, keeps its blank tag, «Очистити» and the catalogue's way under the plate (audit after stage 2, sale P1-4; review)", async ({
+  page,
+}) => {
+  await stubList(page, [laurent]);
+  let refuse = false;
+  await refuseList(page, () => refuse);
+  await onTheTill(page);
+  await search(page).fill("абв");
+  const empty = page.locator(".orders-empty");
+  await expect(empty).toContainText("нічого немає");
+  refuse = true;
+  await backInTheApp(page);
+  const plate = page.locator(".notice.read-failure");
+  await expect(plate).toBeVisible();
+  await expect(empty).toContainText("нічого немає");
+  await expect(empty.getByRole("button", { name: "Очистити" })).toBeVisible();
+  await expect(
+    empty.getByRole("button", { name: "Знайти в каталозі" }),
+  ).toBeVisible();
+});
+
+test("a sale after the list's read again was refused: three taps — the search, the size, the way — and the body as ever; the server checks the shelf (audit after stage 2, sale P1-4)", async ({
+  page,
+}) => {
+  await stubList(page, [...alpacas, laurent]);
+  let refuse = false;
+  await refuseList(page, () => refuse);
+  const sent = await stubSale(page);
+  await onTheTill(page);
+  // One: the search.
+  await search(page).fill("лор");
+  const cell = chip(page, "Лоран шоколад", "M, вільно 2");
+  await expect(cell).toBeVisible();
+  refuse = true;
+  await backInTheApp(page);
+  await expect(page.locator(".notice.read-failure")).toBeVisible();
+  // Two: the size, read before. Three: the way.
+  await cell.click();
+  await pay(page, "Готівка").click();
+  await expect(
+    page.getByRole("heading", { name: "Продаж записано" }),
+  ).toBeVisible();
+  expect(sent).toHaveLength(1);
+  expect(sent[0]?.lines).toEqual([
+    expect.objectContaining({
+      product_variant_id: fixture.variant_id,
+      size_id: fixture.size_id,
+      source_location_id: fixture.till_location_id,
+      quantity: 1,
+      unit_price: "1850.00",
+    }),
+  ]);
+  expect(sent[0]?.payment_method).toBe("CASH");
+});
+
+test("the next page refused: the first hundred kept, the warning's plate under them where «Показати ще» stood, its retry asking offset 100 alone (audit after stage 2, sale P1-4)", async ({
+  page,
+}) => {
+  await stubList(page, [...alpacas, laurent]);
+  let refuse = true;
+  const offsets = await refuseList(
+    page,
+    (url) => refuse && url.searchParams.get("offset") === "100",
+  );
+  await onTheTill(page);
+  await expect(chip(page, "Альпака 100", "S, вільно 1")).toBeVisible();
+  await page.getByRole("button", { name: "Показати ще" }).click();
+  const plate = page.locator(".notice.read-failure");
+  await expect(plate).toBeVisible();
+  await expectPlate(plate, "unread");
+  await expect(page.getByRole("button", { name: "Показати ще" })).toHaveCount(
+    0,
+  );
+  await expect(chip(page, "Альпака 001", "S, вільно 1")).toBeVisible();
+  await expect(page.locator(".model-tag")).toHaveCount(100);
+  const last = await page
+    .getByRole("group", { name: "Альпака 100", exact: true })
+    .boundingBox();
+  const at = await plate.boundingBox();
+  expect(at?.y ?? 0).toBeGreaterThanOrEqual(
+    (last?.y ?? 0) + (last?.height ?? 0),
+  );
+  offsets.length = 0;
+  refuse = false;
+  await plate.getByRole("button", { name: "Спробувати ще раз" }).click();
+  await expect(chip(page, "Лоран шоколад", "M, вільно 2")).toBeVisible();
+  await expect(plate).toHaveCount(0);
+  await expect(chip(page, "Альпака 001", "S, вільно 1")).toBeVisible();
+  expect(offsets).toEqual(["100"]);
 });
 
 test("nothing found says where, and «Очистити» brings the list back", async ({
@@ -545,8 +712,11 @@ test("a size read off a label holds the ways once the sale is from paper", async
   await chip(page, "Лоран шоколад", "розмір невідомий, вільно 3").click();
   // Read off the label in the basket's sheet (P0-5).
   const sheet = await basketSheet(page);
-  const label = sheet.locator(".line").getByLabel("Розмір з етикетки");
-  await label.selectOption({ index: 1 });
+  // A deciding chip: the model's first size (audit after stage 2, sale P2-3).
+  const label = sheet
+    .locator(".line")
+    .getByRole("group", { name: "Розмір з етикетки" });
+  await label.locator("button.chip[data-size]").first().click();
   await expect(
     sheet.getByText("Розмір з етикетки; в обліку — «розмір невідомий»"),
   ).toBeVisible();

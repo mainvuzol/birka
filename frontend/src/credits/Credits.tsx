@@ -478,12 +478,12 @@ export function Credits({
         focusable
         title={till ? "Продаж" : "Покупці"}
         back={back && <BackToMore back={back} />}
+        // Who they are, the screen's one line of context (spec S19; audit
+        // after stage 2, sale P1-3); «Змінити магазин» at its right still.
+        context={till ? undefined : "Ті, хто купує частинами"}
       />
       <section className={till ? "credits" : "credits customers"}>
         {mode}
-        {!till && (
-          <p className="hint credits-context">Ті, хто купує частинами</p>
-        )}
         {elsewhere && (
           // Never mixed with this store's: headed, and left in one tap, the
           // number kept, to read here again. The section's caption, as the
