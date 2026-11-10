@@ -206,6 +206,32 @@ test("a store with no warehouse to count says so, never who may (stage 2, goods 
   await expect(page.getByRole("group", { name: "Склад" })).toHaveCount(0);
 });
 
+test("«Інвентаризація»'s warehouses not read are the warning's plate with «Спробувати ще раз», which reads them again (audit after stage 2, goods P1-1)", async ({
+  page,
+}) => {
+  let refused = true;
+  await page.route("**/api/v1/stock-locations?*", async (route) => {
+    if (!refused) {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 503,
+      json: { code: "UNAVAILABLE", message: "No" },
+    });
+  });
+  await page.goto(launch());
+  await openStore(page, "Основний MAIN");
+  await section(page, "Інвентаризація");
+  const plate = page.locator(".stocktaking .read-failure");
+  await expect(plate).toBeVisible();
+  await expect(plate.getByRole("button")).toHaveText(["Спробувати ще раз"]);
+  refused = false;
+  await plate.getByRole("button", { name: "Спробувати ще раз" }).click();
+  await expect(page.getByRole("group", { name: "Склад" })).toBeVisible();
+  await expect(plate).toHaveCount(0);
+});
+
 test("a warehouse is counted cell by cell, each difference applied at once, and finished in a sheet as one record whose stub says it (stage 2, goods task list, P0-2, P0-3)", async ({
   page,
 }) => {

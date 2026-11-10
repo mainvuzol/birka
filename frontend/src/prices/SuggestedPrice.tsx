@@ -2,17 +2,12 @@ import { useId, useState } from "react";
 import type { JSX } from "react";
 import { createPortal } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  ApiError,
-  api,
-  errorText,
-  inOwnWords,
-  isConflict,
-  readText,
-} from "@/shared/api";
+import { ApiError, api, errorText, inOwnWords, isConflict } from "@/shared/api";
 import { Eyelet } from "@/shared/Eyelet";
 import { Keypad } from "@/shared/Keypad";
 import { ModeSwitch } from "@/shared/ModeSwitch";
+import { Placeholder } from "@/shared/Placeholder";
+import { Unread } from "@/shared/Unread";
 import { buzz, useMainButton } from "@/shared/telegram";
 import { visible } from "@/shared/visible";
 import { decimal, kopecks, money } from "@/orders/types";
@@ -53,20 +48,17 @@ export function SuggestedPrice({
   return (
     <div className="price">
       {prices.isPending ? (
-        <p role="status">Завантажуємо ціну продажу…</p>
+        // A field row in grey where the price comes (audit after stage 2,
+        // frame P1-4).
+        <Placeholder said="Завантажуємо ціну продажу…" field tags={0} />
       ) : prices.error ? (
-        // eslint-disable-next-line no-restricted-syntax -- goods P1-1 moves it onto Unread
-        <div role="alert">
-          <p>{readText(prices.error)}</p>
-          <button
-            type="button"
-            onClick={() => {
-              void prices.refetch();
-            }}
-          >
-            Спробувати ще раз
-          </button>
-        </div>
+        // The warning's plate (stage 2's audit, goods P1-1).
+        <Unread
+          error={prices.error}
+          retry={() => {
+            void prices.refetch();
+          }}
+        />
       ) : (
         <>
           <p>
@@ -146,21 +138,16 @@ export function PriceEditor({
   onCancel?: (() => void) | undefined;
 }): JSX.Element {
   const prices = usePrices(store, token, scopeKey, variantId);
-  if (prices.isPending) return <p role="status">Завантажуємо ціну продажу…</p>;
+  if (prices.isPending)
+    return <Placeholder said="Завантажуємо ціну продажу…" field tags={0} />;
   if (prices.error)
     return (
-      // eslint-disable-next-line no-restricted-syntax -- goods P1-1 moves it onto Unread
-      <div role="alert">
-        <p>{readText(prices.error)}</p>
-        <button
-          type="button"
-          onClick={() => {
-            void prices.refetch();
-          }}
-        >
-          Спробувати ще раз
-        </button>
-      </div>
+      <Unread
+        error={prices.error}
+        retry={() => {
+          void prices.refetch();
+        }}
+      />
     );
   return (
     <Form

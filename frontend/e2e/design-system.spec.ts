@@ -966,3 +966,121 @@ for (const scheme of ["light", "dark"] as const)
         ?.filter((w) => !/\b(?:400|500|600|700|800)$/.test(w)) ?? [],
     ).toEqual([]);
   });
+
+test("every place read is its shape in grey, the real element's size and corner: a list's row 64, a mark 40 round, a tag 76, a store's tag 96, a field 52 at 8, a size cell 60 at 6, a choice at 14 (audit after stage 2, frame P1-4)", async ({
+  page,
+}) => {
+  await page.goto(
+    `/#${new URLSearchParams({ tgWebAppData: initData(fixture.network_owner_telegram_user_id) }).toString()}`,
+  );
+  await openStore(page, "Центр CENTRE");
+  // As `shared/Placeholder.tsx` draws each, beside the real one where a
+  // screen has it: drawn on the paper for a moment, measured, and gone.
+  const drawn = await page.evaluate(() => {
+    const main = document.querySelector("main");
+    if (!main) return null;
+    const measure = (html: string, pick: string): [number, number, string] => {
+      const box = document.createElement("div");
+      box.innerHTML = html;
+      main.append(box);
+      const node = box.querySelector(pick) ?? box;
+      const { width, height } = node.getBoundingClientRect();
+      const out: [number, number, string] = [
+        Math.round(width),
+        Math.round(height),
+        getComputedStyle(node).borderTopLeftRadius,
+      ];
+      box.remove();
+      return out;
+    };
+    const lines =
+      '<span class="sale-main"><span class="skeleton skeleton-name"></span><span class="skeleton skeleton-meta"></span></span>';
+    const grey = (html: string, pick: string): string => {
+      const box = document.createElement("div");
+      box.innerHTML = html;
+      main.append(box);
+      const drawn = getComputedStyle(
+        box.querySelector(pick) ?? box,
+      ).backgroundColor;
+      box.remove();
+      return drawn;
+    };
+    return {
+      greys: [
+        grey('<span class="skeleton skeleton-name"></span>', "span"),
+        grey('<span class="avatar skeleton"></span>', "span"),
+        grey('<span class="chip skeleton"></span>', "span"),
+        grey('<span class="size-cell skeleton"></span>', "span"),
+      ],
+      row: measure(
+        `<div class="placeholder"><div class="sale-row">${lines}</div></div>`,
+        ".sale-row",
+      ),
+      realRow: measure(
+        '<div class="sale-row"><span class="sale-main"><span class="sale-goods">Сукня</span><span class="sale-meta">10:20 · Готівка</span></span></div>',
+        ".sale-row",
+      ),
+      avatarRow: measure(
+        `<div class="placeholder"><div class="sale-row"><span class="avatar skeleton"></span>${lines}</div></div>`,
+        ".sale-row",
+      ),
+      avatar: measure(
+        `<div class="placeholder"><div class="sale-row"><span class="avatar skeleton"></span>${lines}</div></div>`,
+        ".avatar",
+      ),
+      lineTag: measure(
+        '<div class="placeholder tags"><div class="tag-row tag-outline"><div class="model-tag-in skeleton-tag-in"><span class="skeleton skeleton-name"></span><span class="skeleton skeleton-meta"></span></div></div></div>',
+        ".tag-row",
+      ),
+      store: measure(
+        '<div class="placeholder door stores-list"><div class="store-tag tag-hero tag-outline"><span class="store-tag-in"><span class="skeleton skeleton-name"></span><span class="skeleton skeleton-meta"></span></span></div></div>',
+        ".store-tag",
+      ),
+      realStore: measure(
+        '<div class="door stores-list"><button class="store-tag tag-hero tag-outline"><span class="store-tag-in"><span class="store-tag-name">Центр</span><span class="t-meta store-tag-code">CENTRE</span></span></button></div>',
+        ".store-tag",
+      ),
+      field: measure(
+        '<div class="placeholder"><span class="skeleton skeleton-label"></span><span class="skeleton skeleton-field"></span></div>',
+        ".skeleton-field",
+      ),
+      realField: measure("<label>Ціна<input></label>", "input"),
+      cell: measure(
+        '<div class="placeholder cells"><span class="size-cell skeleton"></span></div>',
+        ".size-cell",
+      ),
+      realCell: measure(
+        '<div class="cells"><button class="size-cell"><span class="size-letter">M</span></button></div>',
+        ".size-cell",
+      ),
+      chip: measure(
+        '<div class="placeholder chips damaged-place"><span class="chip skeleton"></span></div>',
+        ".chip",
+      ),
+      realChip: measure(
+        '<div class="chips damaged-place"><button class="chip">Склад</button></div>',
+        ".chip",
+      ),
+    };
+  });
+  expect(drawn).not.toBeNull();
+  if (!drawn) return;
+  // A row 64 at least, as tall as a row of a line and its meta, a mark
+  // or none.
+  expect(drawn.row[1]).toBeGreaterThanOrEqual(64);
+  expect(Math.abs(drawn.row[1] - drawn.realRow[1])).toBeLessThanOrEqual(4);
+  expect(drawn.avatarRow[1]).toBe(drawn.row[1]);
+  // One grey for every shape, the mark's too — never its fold (review).
+  expect(new Set(drawn.greys).size).toBe(1);
+  expect(drawn.avatar).toEqual([40, 40, drawn.avatar[2]]);
+  expect(["999px", "50%"]).toContain(drawn.avatar[2]);
+  expect(drawn.lineTag[1]).toBe(76);
+  expect(drawn.store[1]).toBe(96);
+  expect(drawn.store[1]).toBe(drawn.realStore[1]);
+  expect(drawn.field.slice(1)).toEqual([52, "8px"]);
+  expect(drawn.field[2]).toBe(drawn.realField[2]);
+  expect(drawn.cell).toEqual([60, 60, "6px"]);
+  expect(drawn.cell[2]).toBe(drawn.realCell[2]);
+  expect(drawn.chip.slice(1)).toEqual([44, "14px"]);
+  expect(drawn.chip.slice(1)).toEqual(drawn.realChip.slice(1));
+});

@@ -574,6 +574,11 @@ test("a first read refused says why with «Спробувати ще раз», w
     .getByRole("alert")
     .getByRole("button", { name: "Спробувати ще раз", exact: true });
   await expect(retry).toBeVisible();
+  // The warning's plate, never a refusal's red (audit after stage 2, goods
+  // P1-1).
+  await expect(page.locator(".read-failure").getByRole("button")).toHaveText([
+    "Спробувати ще раз",
+  ]);
   await expect(
     page.getByRole("button", { name: "Повторити завантаження" }),
   ).toHaveCount(0);

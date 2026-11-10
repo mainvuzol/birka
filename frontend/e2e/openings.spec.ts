@@ -1215,6 +1215,36 @@ test("a line's model the catalogue has not is added from its empty search, in th
   ).toBeVisible();
 });
 
+test("the check that no list waits at the warehouse, failed, is the warning's plate with «Спробувати ще раз» — never «Перевірити ще раз» —, which checks again (audit after stage 2, goods P1-1)", async ({
+  page,
+}) => {
+  let refused = true;
+  await page.route("**/api/v1/snapshots?*status=IN_REVIEW*", async (route) => {
+    if (!refused) {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 503,
+      json: { code: "UNAVAILABLE", message: "No" },
+    });
+  });
+  await openings(page);
+  await page.getByRole("button", { name: "Новий список" }).click();
+  await warehouse(page, fixture.opening_location_id);
+  const plate = page
+    .getByRole("form", { name: "Новий список" })
+    .locator(".read-failure");
+  await expect(plate).toBeVisible();
+  await expect(plate.getByRole("button")).toHaveText(["Спробувати ще раз"]);
+  await expect(
+    page.getByRole("button", { name: "Перевірити ще раз" }),
+  ).toHaveCount(0);
+  refused = false;
+  await plate.getByRole("button", { name: "Спробувати ще раз" }).click();
+  await expect(plate).toHaveCount(0);
+});
+
 test("a list typed is kept on the phone, and saved once when its answer is lost", async ({
   page,
 }) => {

@@ -1499,6 +1499,46 @@ test("each verb opens its section, and its «←» comes back to «Сьогод�
   await expect(tab(page, "Замовлення")).toBeFocused();
 });
 
+test("at 360 × 640, «Сьогодні» scrolled to its foot, a tag's verb opens its screen at the top, its heading whole in view; «←» brings «Сьогодні» back at its top (audit after stage 2, frame P1-3)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  await twoStores(page);
+  await failedBackups(page);
+  for (const store of [centre, market]) {
+    await parcels(page, store, [[["Лоран шоколад", "M", 1]]]);
+    await damaged(page, store, [["Кокон графіт", "M"]]);
+  }
+  await lists(page, centre, [5]);
+  await onToday(page);
+  const top = (): Promise<number> => page.evaluate(() => window.scrollY);
+  const back = page.getByRole("button", { name: "Назад до «Сьогодні»" });
+  for (const [verb, heading] of [
+    ["Оглянути", "Брак"],
+    ["Переглянути", "Резервні копії"],
+  ] as const) {
+    await expect(
+      waiting(page).getByRole("button", { name: verb, exact: true }),
+    ).toBeVisible();
+    await page.evaluate(() => {
+      window.scrollTo(0, document.documentElement.scrollHeight);
+    });
+    expect(await top()).toBeGreaterThan(0);
+    await waiting(page)
+      .getByRole("button", { name: verb, exact: true })
+      .click();
+    await expect(
+      page.getByRole("heading", { level: 1, name: heading, exact: true }),
+    ).toBeInViewport({ ratio: 1 });
+    expect(await top()).toBe(0);
+    await back.click();
+    await expect(
+      page.getByRole("heading", { name: "Сьогодні", exact: true }),
+    ).toBeInViewport({ ratio: 1 });
+    expect(await top()).toBe(0);
+  }
+});
+
 test("a list ready to approve is three taps from «Сьогодні», with no scrolling: the tag's verb, «Затвердити · 5 шт.», «Так, затвердити» (stage 2, goods task list, P0-6)", async ({
   page,
 }) => {

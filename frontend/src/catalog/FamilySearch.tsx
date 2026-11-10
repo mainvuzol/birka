@@ -1,7 +1,8 @@
 import { useState } from "react";
 import type { JSX } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { api, readText } from "@/shared/api";
+import { api } from "@/shared/api";
+import { Unread } from "@/shared/Unread";
 import { visible } from "@/shared/visible";
 
 export interface Family {
@@ -99,19 +100,15 @@ export function FamilySearch({
         (result.isPending ? (
           <p role="status">Шукаємо моделі…</p>
         ) : result.error ? (
-          // eslint-disable-next-line no-restricted-syntax -- goods P1-1 moves it onto Unread
-          <div role="alert">
-            <p>{readText(result.error)}</p>
-            <button
-              type="button"
-              disabled={blocked}
-              onClick={() => {
-                void result.refetch();
-              }}
-            >
-              Повторити пошук
-            </button>
-          </div>
+          // The warning's plate, «Спробувати ще раз» (stage 2's audit,
+          // goods P1-1).
+          <Unread
+            error={result.error}
+            held={blocked}
+            retry={() => {
+              void result.refetch();
+            }}
+          />
         ) : (
           <>
             {result.data.items.length === 0 && (

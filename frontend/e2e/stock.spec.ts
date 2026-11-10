@@ -343,6 +343,11 @@ test("stock access denial hides stale balances and offers retry", async ({
   });
   await page.getByRole("button", { name: "Оновити", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("Немає доступу");
+  // The warning's plate, «Спробувати ще раз» (audit after stage 2, goods
+  // P1-1).
+  const plate = page.locator(".read-failure");
+  await expect(plate).toContainText("Немає доступу");
+  await expect(plate.getByRole("button")).toHaveText(["Спробувати ще раз"]);
   await expect(page.getByText(/Лоран шоколад 70(?:\.0)? см/)).toHaveCount(0);
   await expect(page.locator(".stock-tag")).toHaveCount(0);
 });

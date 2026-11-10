@@ -1,4 +1,4 @@
-import { createContext, forwardRef, useContext } from "react";
+import { createContext, forwardRef, useContext, useLayoutEffect } from "react";
 import type { ReactNode } from "react";
 import { visible } from "./visible";
 
@@ -16,6 +16,11 @@ export interface WorkspaceLine {
 /** None before a store opens: the app's own name heads those screens. */
 export const WorkspaceLineContext = createContext<WorkspaceLine | null>(null);
 
+/** The screen the page was last put at the top for, where its header said
+ * which (`screen`): drawn again for the same one — an order's card read
+ * anew, moved on — it keeps its place (frame P1-3; review). */
+let atTop: string | undefined;
+
 /**
  * A screen's head (spec §6.2; «Усе на бірці» task list, P0-4, part 2): its
  * own title as the page's heading — a tab's first screen at 34, a screen
@@ -24,6 +29,15 @@ export const WorkspaceLineContext = createContext<WorkspaceLine | null>(null);
  * stood beside a screen's title, «Оновити» or «До списку», stands there
  * still. A title not read yet keeps its place while it is read, so nothing
  * moves when it comes.
+ *
+ * A screen begins at its top (spec §6.2; audit after stage 2, frame P1-3):
+ * one reset, here, before the screen is painted — whenever a header is
+ * drawn, or its title changes, or the screen it says it stands for. That
+ * is every screen opened: a tab, a «Ще» row, a «Сьогодні» tag, a row's
+ * card, «←» and Telegram's «Назад». Within a screen the place stays: a
+ * sheet, «Показати ще», a switch, a filter or a search draws no header of
+ * its own and changes no title. A screen that falls open where it was left
+ * puts itself there after it (a close's list, the report's table).
  */
 export const ScreenHeader = forwardRef<
   HTMLHeadingElement,
@@ -54,6 +68,11 @@ export const ScreenHeader = forwardRef<
      * screen that says its own: «Почато о 10:20 · Тетяна» (stage 2, goods
      * task list, P0-3). */
     context?: string;
+    /** What tells this screen from the one before it where its title may
+     * not — a list and its row's card under one title — and what a screen
+     * drawn anew is still: an order's card read again, moved on, stays
+     * where it was read to (frame P1-3; review). */
+    screen?: string;
   }
 >(function ScreenHeader(
   {
@@ -68,10 +87,19 @@ export const ScreenHeader = forwardRef<
     lead,
     after,
     context,
+    screen,
   },
   ref,
 ) {
   const line = useContext(WorkspaceLineContext);
+  // A title drawn of parts — a mark beside it, a button in it — says no
+  // screen of its own: its header's coming does.
+  const opened = screen ?? (typeof title === "string" ? title : undefined);
+  useLayoutEffect(() => {
+    if (screen !== undefined && screen === atTop) return;
+    atTop = screen;
+    window.scrollTo(0, 0);
+  }, [opened, screen]);
   return (
     <header className="screen-header">
       {back}

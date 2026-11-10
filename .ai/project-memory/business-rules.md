@@ -7932,3 +7932,82 @@ rules, `index.html`) is a later batch.
     Invoices, Damaged ×2, Returns ×2, Orders' «Замовлень ще немає.». The
     orders' search with nothing found (no mark) is left to orders-cash
     P2-3; the bare `.empty` places to their sections' tasks.
+
+## Chosen in chat — 2026-11-10 (audit after stage 2, batch 4: every place read its shape in grey, «Завантажуємо …» said to a reader alone; a screen opened at its top, by its header; the goods' reads that failed on the warning's plate; frame P1-4, P1-3, goods P1-1)
+
+Chosen in chat on 2026-11-10 («Yes, start batch 4»), after batch 3 (#185)
+was merged. No right, no server rule, no field changes; words change only
+on two buttons, as the goods TZ has them (approved with it).
+
+- **One shape a place read** (frame P1-4, spec §5's skeleton, §6.27): the
+  shared `Placeholder` draws each as the real element stands — a list's row
+  64, with a round mark 40 or without; a tag 76 of a line and its meta; a
+  store's tag 96, its eyelet on top; a field 52 under its label, the
+  field's corner 8; a row of size cells 60 × 60, the cell's corner 6; a
+  row of choices, the chip's corner 14, in the real row's own class; the
+  model tags with their cells, as before. The grey's own corner 10 is never
+  on a shape that has one of its own, and every shape is the one grey —
+  the mark's too, never its fold (review). The sweep as before.
+  - **«Завантажуємо …» is said to a reader alone** (`visually-hidden`),
+    never drawn, in every place the `Placeholder` holds.
+  - **The five places no section took:** «Магазини» — two stores' tags;
+    «Нова модель» — a row of four cells, unless sizes typed by hand stand
+    there already (then the real row, the words said to a reader); «Брак»'s
+    warehouses — two choices in grey, 44 high as its chips (decided here:
+    the TZ says «rows», but the real element is a row of chips, as
+    «Повернення»'s warehouses, whose grey chips stood already); the price
+    on «Прийшов товар» and in the price sheet — a field row (a label and a
+    field 52).
+  - **Two shapes no screen uses yet** — the row with a mark and the tag
+    76 — stand in the `Placeholder` for the sections' tasks that take them
+    (goods P2-2, money P1-3); a journey measures them against the design.
+  - Left as they were: the 21 visible «Завантажуємо …» places the sections'
+    TZs took (goods P2-2 — 12, money P1-3 — 8, sale — `FromCatalog`).
+- **A screen begins at its top** (frame P1-3, spec §6.2): one reset, in
+  `ScreenHeader`, before the screen is painted — whenever a header is
+  drawn, its title changes, or the screen it says it stands for. That is
+  every screen opened: a tab, a «Ще» row, a «Сьогодні» tag, a row's card,
+  «←» and Telegram's «Назад».
+  - **Within a screen the place stays:** a sheet, «Показати ще», a switch,
+    a filter, a search draw no header of their own and change no title (no
+    header stands in a sheet; each mode switch is under its screen's one
+    header).
+  - **A title of parts** — a mark beside it, a button in it («Сукня і ще
+    2») — is not a screen's name: its header's coming is, so opening the
+    rest of a debt's goods does not move the page.
+  - **A screen that says which it is** (`screen`) is put at its top when
+    it is another than the last so put, never when it is drawn anew as the
+    same (review): **an order's card** says its order — read again with its
+    status or its waybill moved on, or after a step, it is drawn afresh and
+    stays where it was read to; the same waybill's other order opens at its
+    top. **«Змінити спосіб оплати»** says its list and an operation's card,
+    under one title, so a row tapped low on the list opens its card at the
+    top.
+  - **Removed**, the frame's now: the four the TZ names — the waybill's
+    other order (`App.tsx`), «Магазини»' two (its heading still takes the
+    cursor back on the list), «Резервні копії»' — and the sales report's
+    own for a screen of its own.
+  - **A screen that falls open where it was left** — «Закриття»'s list,
+    the report's table, a list's row back from its line — puts itself
+    there after the header's reset, before it is painted (a layout effect),
+    so nothing flashes at the top, after Telegram's «Назад» either
+    (review). «Моделі»'s row back from its model is focused just after the
+    paint, as before: taken before it, the focus did not hold (two
+    «Моделі» journeys).
+  - **Left** (decided here): the 14 other resets of their own (suppliers,
+    invoices, «Каса»'s count and close, the stocktake ×3, a list's line,
+    the lists ×4, a debt, a customer) — each redundant or at a step the
+    header does not see; not the TZ's four.
+- **The goods' reads that failed are the warning's plate** (goods P1-1,
+  spec §6.23): the 8 places the lint held — «Інший колір нашої моделі»'s
+  search, the model's detail, «Прийшов товар»'s warehouses and sizes,
+  «Залишки» (three), «Інвентаризація»'s warehouses and sizes, the check
+  that no list waits at a warehouse, the price on «Прийшов товар» and in
+  its sheet — are `Unread`; the lint has no exception left.
+  - **Words** (the TZ's, approved with it): «Повторити пошук» and
+    «Перевірити ще раз» → «Спробувати ще раз». The check's retry was quiet:
+    the secondary now, as every plate's.
+  - **The model's detail that could not be read** heads the screen with the
+    name it was opened by and its «←» (a screen opened from another, 28),
+    over the plate.
+  - The search's retry waits while the screen is held, as before.

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import type { JSX } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { UseQueryResult } from "@tanstack/react-query";
@@ -93,12 +93,10 @@ export function Backups({
    * list, P0-4). */
   back?: MoreBack | undefined;
 }): JSX.Element {
-  const backups = useBackups(token, scopeKey, true);
   // The verdict in view as the screen opens, whatever «Ще» was scrolled to
-  // (stage 2, admin task list, P0-5).
-  useEffect(() => {
-    window.scrollTo(0, 0);
-  }, []);
+  // (stage 2, admin task list, P0-5): the header's (audit after stage 2,
+  // frame P1-3).
+  const backups = useBackups(token, scopeKey, true);
   return (
     <>
       <ScreenHeader

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { JSX, RefObject } from "react";
 import {
   useInfiniteQuery,
@@ -12,7 +12,6 @@ import {
   api,
   errorText,
   unreachable,
-  readText,
 } from "@/shared/api";
 import { Unread } from "@/shared/Unread";
 import type { Location, Store } from "@/orders/types";
@@ -762,19 +761,14 @@ function NewList({
           (waiting.isPending ? (
             <p role="status">Перевіряємо, чи на складі не чекає список…</p>
           ) : waiting.error ? (
-            // eslint-disable-next-line no-restricted-syntax -- goods P1-1 moves it onto Unread
-            <div role="alert">
-              <p>{readText(waiting.error)}</p>
-              <button
-                type="button"
-                className="quiet"
-                onClick={() => {
-                  void waiting.refetch();
-                }}
-              >
-                Перевірити ще раз
-              </button>
-            </div>
+            // The warning's plate, «Спробувати ще раз» (stage 2's audit,
+            // goods P1-1).
+            <Unread
+              error={waiting.error}
+              retry={() => {
+                void waiting.refetch();
+              }}
+            />
           ) : mine ? (
             <div className="notice" role="status">
               <p>
@@ -1121,10 +1115,11 @@ function ListView({
   const items = lines.data?.pages.flatMap((page) => page.items) ?? [];
 
   // Back from a line: to the row it was on, or — the lines done — to the
-  // list's tag, at the top (P0-5).
+  // list's tag, at the top (P0-5) — before it is painted, after the
+  // header's reset (audit after stage 2, frame P1-3; review).
   const tag = useRef<HTMLDivElement>(null);
   const returned = useRef<number | "tag" | null>(null);
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (editing !== null || returned.current === null) return;
     const to = returned.current;
     returned.current = null;

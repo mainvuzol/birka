@@ -17,6 +17,7 @@ import { waitsText } from "@/shared/reach";
 import { SendingLine } from "@/shared/Sending";
 import { Sheet } from "@/shared/Sheet";
 import { buzz } from "@/shared/telegram";
+import { Placeholder } from "@/shared/Placeholder";
 import { Unread } from "@/shared/Unread";
 import { visible } from "@/shared/visible";
 import { shortDay, shortTime } from "@/credits/format";
@@ -90,17 +91,14 @@ export function Stores({
   const screen = open ? "store" : "list";
 
   // Each screen begins at its top, the section too, whatever «Ще» was
-  // scrolled to; back on the list, its heading takes the cursor, the tag
-  // pressed being gone — never as the section opens.
-  useEffect(() => {
-    window.scrollTo(0, 0);
-  }, []);
+  // scrolled to — the header's (audit after stage 2, frame P1-3); back on
+  // the list, its heading takes the cursor, the tag pressed being gone —
+  // never as the section opens.
   const title = useRef<HTMLHeadingElement>(null);
   const was = useRef(screen);
   useEffect(() => {
     if (was.current === screen) return;
     was.current = screen;
-    window.scrollTo(0, 0);
     if (screen === "list") title.current?.focus();
   }, [screen]);
 
@@ -288,7 +286,9 @@ export function Stores({
       <section className="stores">
         {notices}
         {stores.isPending ? (
-          <p role="status">Завантажуємо магазини…</p>
+          // Two stores' tags in grey, where the list comes (audit after
+          // stage 2, frame P1-4).
+          <Placeholder said="Завантажуємо магазини…" stores={2} />
         ) : stores.error ? (
           <Unread
             error={stores.error}

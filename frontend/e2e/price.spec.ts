@@ -670,6 +670,50 @@ test("whoever may set only this store's price is told so, and sets that", async 
   await expect(hero).toContainText("Ціна продажу 1 850,00 грн");
 });
 
+test("a price read slowly is a field in grey, said to a reader alone; one that fails, the warning's plate with «Спробувати ще раз», which reads it again (audit after stage 2, frame P1-4, goods P1-1)", async ({
+  page,
+}) => {
+  const priced = await model(page, await token(page));
+  await sellsFrom(page, fixture.returns_location_id);
+  let answer = (): void => undefined;
+  // Let go by itself in ten seconds, should the journey fail before it
+  // answers: no read is left hanging as it ends.
+  const held = new Promise<void>((resolve) => {
+    answer = resolve;
+    setTimeout(resolve, 10_000);
+  });
+  let refused = false;
+  await page.route("**/api/v1/catalog/prices?*", async (route) => {
+    await held;
+    if (!refused) {
+      refused = true;
+      await route.fulfill({
+        status: 503,
+        json: { code: "UNAVAILABLE", message: "No" },
+      });
+      return;
+    }
+    await route.fallback();
+  });
+  await enter(page, seller);
+  await detail(page, priced.name);
+  const sheet = await priceSheet(page, priced.name);
+  const field = sheet.locator(".placeholder > .skeleton-field");
+  await expect(field).toBeVisible();
+  expect(Math.round((await field.boundingBox())?.height ?? 0)).toBe(52);
+  await expect(field).toHaveCSS("border-top-left-radius", "8px");
+  await expect(
+    sheet.getByRole("status").filter({ hasText: "Завантажуємо ціну продажу…" }),
+  ).toHaveClass(/\bvisually-hidden\b/);
+  answer();
+  const plate = sheet.locator(".read-failure");
+  await expect(plate.getByRole("button")).toHaveText(["Спробувати ще раз"]);
+  await expect(field).toHaveCount(0);
+  await plate.getByRole("button", { name: "Спробувати ще раз" }).click();
+  await expect(sheet.getByLabel("Нова ціна, грн")).toBeVisible();
+  await expect(plate).toHaveCount(0);
+});
+
 test("whoever does not set prices sees them and is offered no change", async ({
   page,
 }) => {

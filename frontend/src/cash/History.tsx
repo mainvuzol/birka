@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import type { JSX } from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { money } from "@/orders/types";
@@ -149,10 +149,11 @@ export function History({
   const heading = useRef<HTMLHeadingElement>(null);
   // Where the list was read to, and the row tapped, kept while a close is
   // open: back, the same place, the same row in hand, as a notebook falls
-  // open where it was left.
+  // open where it was left — put there before it is painted, after the
+  // header's reset (audit after stage 2, frame P1-3).
   const place = useRef(0);
   const row = useRef<string | null>(null);
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (tapped !== null) {
       heading.current?.focus();
       return;

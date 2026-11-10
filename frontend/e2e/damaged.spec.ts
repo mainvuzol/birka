@@ -705,6 +705,50 @@ test("without returning goods to suppliers, a confirmed unit's sheet offers no �
   ]);
 });
 
+test("«Брак»'s warehouses read slowly: two choices in grey, 44 high and the chip's corner, where they come, «Завантажуємо склади…» said to a reader alone (audit after stage 2, frame P1-4)", async ({
+  page,
+}) => {
+  await bin(page, () => [
+    aUnit("Чужа", "M", "INSPECTING", 1, {
+      back_to_sold_from: false,
+      sold_from_location_id: "00000000-0000-4000-8000-500000000001",
+      sold_from_location_name: "Свій склад Ринку",
+      status_by: "Оля",
+    }),
+  ]);
+  await page.goto(launch());
+  await openStore(page, "Основний MAIN");
+  let answer = (): void => undefined;
+  // Let go by itself in ten seconds, should the journey fail before it
+  // answers: no read is left hanging as it ends.
+  const held = new Promise<void>((resolve) => {
+    answer = resolve;
+    setTimeout(resolve, 10_000);
+  });
+  await page.route("**/api/v1/stock-locations?*", async (route) => {
+    await held;
+    await route.fallback();
+  });
+  await section(page, "Брак");
+  await units(page, "Чужа").getByRole("button", { name: "Вирішити" }).click();
+  const sheet = await sheetOf(page, "Чужа");
+  await sheet.getByRole("button", { name: "Повернути в продаж" }).click();
+  const grey = sheet.locator(".placeholder.chips.damaged-place > .chip");
+  await expect(grey).toHaveCount(2);
+  expect(Math.round((await grey.first().boundingBox())?.height ?? 0)).toBe(44);
+  await expect(grey.first()).toHaveCSS("border-top-left-radius", "14px");
+  await expect(
+    sheet.getByRole("status").filter({ hasText: "Завантажуємо склади…" }),
+  ).toHaveClass(/\bvisually-hidden\b/);
+  answer();
+  await expect(
+    sheet
+      .getByRole("group", { name: "Склад вашого магазину" })
+      .getByRole("button", { name: "Склад повернень", exact: true }),
+  ).toBeVisible();
+  await expect(grey).toHaveCount(0);
+});
+
 test("inside Telegram a decision's yes is its MainButton — for a unit sold from another store's own warehouse, inactive until one of this store's is chosen as a chip —, felt when recorded; «Назад» closes the sheet, nothing recorded (stage 2, goods task list, P0-4)", async ({
   page,
 }) => {

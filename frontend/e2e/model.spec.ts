@@ -538,6 +538,13 @@ test("a read that fails says so, and «Спробувати ще раз» reads 
     .click();
   await expect(page.getByRole("alert")).toContainText("Немає доступу");
   await expect(grid(page)).toHaveCount(0);
+  // The warning's plate under the model's name it was opened by, and its
+  // «←» (audit after stage 2, goods P1-1).
+  const plate = page.locator(".read-failure");
+  await expect(plate).toContainText("Немає доступу");
+  await expect(plate.getByRole("button")).toHaveText(["Спробувати ще раз"]);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(MODEL);
+  await expect(page.locator(".screen-header .to-more")).toBeVisible();
   await page.getByRole("button", { name: "Спробувати ще раз" }).click();
   await expect(grid(page)).toBeVisible();
   expect(await units(gridCell(page, BIN, sizeIds.M))).toBe(1);

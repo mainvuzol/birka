@@ -123,7 +123,13 @@ export function FixStep({
   if (chosen)
     return (
       <>
-        <ScreenHeader title="Змінити спосіб оплати" back={leave} />
+        {/* A row's card under the list's own title: its own screen, at its
+            top (audit after stage 2, frame P1-3; review). */}
+        <ScreenHeader
+          title="Змінити спосіб оплати"
+          screen="operation"
+          back={leave}
+        />
         <section className="cash-fix">
           {kept}
           {method.error ? (
@@ -186,7 +192,11 @@ export function FixStep({
     );
   return (
     <>
-      <ScreenHeader title="Змінити спосіб оплати" back={leave} />
+      <ScreenHeader
+        title="Змінити спосіб оплати"
+        screen="operations"
+        back={leave}
+      />
       <section className="cash-fix">
         {kept}
         <p className="cash-context">Ваші операції після останнього закриття</p>

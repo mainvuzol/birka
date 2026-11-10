@@ -3,7 +3,8 @@ import type { JSX } from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { BackToMore } from "@/shared/More";
 import type { MoreBack } from "@/shared/More";
-import { api, readText } from "@/shared/api";
+import { api } from "@/shared/api";
+import { Unread } from "@/shared/Unread";
 import { Icon } from "@/shared/Icon";
 import { Placeholder } from "@/shared/Placeholder";
 import { ScreenHeader } from "@/shared/ScreenHeader";
@@ -193,7 +194,7 @@ export function Stock({
         {locations.isPending ? (
           <p role="status">Завантажуємо склади…</p>
         ) : locations.error ? (
-          <Failure
+          <Unread
             error={locations.error}
             retry={() => {
               void refresh();
@@ -249,7 +250,7 @@ export function Stock({
                 ) : stock.error && !stock.isFetchNextPageError ? (
                   // Read again and refused: nothing of what was read before
                   // stays in sight.
-                  <Failure
+                  <Unread
                     error={stock.error}
                     retry={() => {
                       void refresh();
@@ -258,7 +259,7 @@ export function Stock({
                 ) : (
                   <>
                     {stock.isFetchNextPageError && (
-                      <Failure
+                      <Unread
                         error={stock.error}
                         retry={() => {
                           void stock.fetchNextPage();
@@ -421,21 +422,5 @@ function StockCell({
         </span>
       )}
     </li>
-  );
-}
-
-function Failure({
-  error,
-  retry,
-}: {
-  error: unknown;
-  retry: () => void;
-}): JSX.Element {
-  return (
-    // eslint-disable-next-line no-restricted-syntax -- goods P1-1 moves it onto Unread
-    <div role="alert">
-      <p>{readText(error)}</p>
-      <button onClick={retry}>Спробувати ще раз</button>
-    </div>
   );
 }

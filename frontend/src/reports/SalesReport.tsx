@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import type { JSX } from "react";
 import { periods, rangeOf, usePeriodReport } from "@/money/reads";
 import type { Period } from "@/money/reads";
@@ -176,9 +176,10 @@ export function SalesReport({
   const opened = useRef<View | null>(null);
   // How far the stores were scrolled across: the same on coming back.
   const across = useRef(0);
-  useEffect(() => {
+  // A screen of its own at its top, the header's; back, the table where it
+  // was left, before it is painted (audit after stage 2, frame P1-3).
+  useLayoutEffect(() => {
     if (view !== "table") {
-      window.scrollTo(0, 0);
       heading.current?.focus();
       return;
     }

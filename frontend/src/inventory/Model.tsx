@@ -1,7 +1,8 @@
 import { Fragment, useId, useRef, useState } from "react";
 import type { JSX } from "react";
 import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, readText } from "@/shared/api";
+import { api } from "@/shared/api";
+import { Unread } from "@/shared/Unread";
 import { Icon } from "@/shared/Icon";
 import { BackToMore } from "@/shared/More";
 import type { MoreBack } from "@/shared/More";
@@ -274,23 +275,22 @@ export function Model({
     void cache.invalidateQueries({ queryKey: key });
   }
 
+  // Not read: the model's name it was opened by heads the screen, under its
+  // «←», over the warning's plate (stage 2's audit, goods P1-1).
   if (failed)
     return (
       <>
-        <ScreenHeader back={<BackToMore back={back} />} />
+        <ScreenHeader
+          title={visible(opened.name)}
+          back={<BackToMore back={back} />}
+        />
         <section>
-          {/* eslint-disable-next-line no-restricted-syntax -- goods P1-1 moves it onto Unread */}
-          <div role="alert">
-            <p>{readText(failed.error)}</p>
-            <button
-              type="button"
-              onClick={() => {
-                for (const read of reads) if (read.isError) void read.refetch();
-              }}
-            >
-              Спробувати ще раз
-            </button>
-          </div>
+          <Unread
+            error={failed.error}
+            retry={() => {
+              for (const read of reads) if (read.isError) void read.refetch();
+            }}
+          />
         </section>
       </>
     );
