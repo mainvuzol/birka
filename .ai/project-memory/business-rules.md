@@ -8424,3 +8424,60 @@ words; P2-5 waits for В-П1.
     **Decided here:** the sentence «Нічого з кошика не було на полиці.
     Нестачу записано.» is split — its second half heads the stub; no word
     changes.
+
+## Owner decision — 2026-11-11 (the questions of the audit after stage 2)
+
+Answered in chat on 2026-11-11, after batch 9 was opened as #191. Each
+answer replaces the default the batches were built by until then.
+- **В-П1 — a write refused says what happened, then the step (б).**
+  Never «спробуйте ще раз» on a write; «Спробувати ще раз» stays only
+  where something was not read. The sale tab's words (sale P2-5, now
+  unblocked):
+  - the till: «Дані змінилися, поки ви працювали.» + «Кошик збережено —
+    нічого не продано. Натисніть спосіб оплати ще раз.»;
+  - a return, the data changed: «Дані змінилися, поки ви працювали.
+    Поверніться до списку й відкрийте продаж знову.» + «Нічого не
+    повернено.»; a return checked: «Перевірте, що повертають.»;
+  - a payment, the debt changed: «Внесок не записано. Дані боргу
+    змінилися, поки ви працювали: перевірте залишок.»; the sum: «Внесок
+    не записано. Перевірте суму.» (a write-off: «… Перевірте причину.»);
+  - erasing a customer: «Дані покупця не стерто.» / «Дані покупця не
+    стерто: борг щойно змінився — перегляньте його.».
+  The words never promise what did not happen: «не записано», «нічого не
+  продано», «нічого не повернено» stay.
+- **The same rule reaches every section** — the catalogue, stocktake,
+  receiving, «Брак», «Початкові залишки», suppliers and stores: their
+  write refusals are rewritten by the same pattern in later batches, each
+  batch listing its words in its report. **The kept operations' words
+  stay** — what a sale, a return or a payment kept on the phone says when
+  the server refuses it later (`frontend/src/cash/errors.ts`, the owner's
+  decision of 2026-10-18).
+- **Sale P2-3's words approved:** «Знайти в каталозі» says one line, «На
+  складі «{склад}» його немає в обліку.» (the shortage sheet says the
+  rest at the way of paying); «До списку» for «Назад до списку»; the
+  label chip shows «Не читали», a reader still hearing «Не читали —
+  продати як «розмір невідомий»».
+- **Sale P2-4's line approved:** at the till, which debt a payment goes to
+  is chosen in the sheet «На який борг вносить?», as on the customer's
+  card; under its title one line «{Ім’я} · винні всього {сума}» — this
+  store's sum only, never the network's; none in «Магазини, що не
+  працюють», as now. P2-4 is unblocked.
+- **В-ГР1 — «4 людини» (а):** those who owe are «людини» next to the sum
+  on «Сьогодні», «Гроші» and «Ще», as in the design (S29). Nothing changes.
+- **В-К1 — the day's tag folds below 700 px only (б):** as in the design;
+  on an ordinary phone the work tags come after a short scroll. Nothing
+  changes.
+- **В-ТА1 — no «Відкласти під замовлення» on a model's page (а):** orders
+  start from «Замовлення», as now.
+- **Goods P0-1 approved** (the goods task list after stage 2): the
+  «Початкові залишки» list opens on its tag and its lines; «Додати файл»,
+  «Додати рядки вручну», «Файли списку» and «Відхилити список» go under
+  the tag's «⋯»; the approval's summary moves into the sheet «Затвердити
+  «{список}»?»; «Відхилити список» a sheet with its reason required and
+  «Залишків цей список не змінить.». It replaces batch 11's «The files
+  stay above the lines» and «The summary … stays above; «Відхилити
+  список» is as it was». Who approves and rejects, the required reason
+  and the warehouse waiting while the list is open do not change.
+
+Not built by these answers; each waits for its batch: sale P2-4, sale
+P2-5, the other sections' write refusals, goods P0-1.
