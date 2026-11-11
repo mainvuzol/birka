@@ -7,7 +7,6 @@ import {
   fillLine,
   fromPaper,
   grn,
-  listRow,
   more,
   openStore,
   toTill,
@@ -1347,15 +1346,23 @@ test("one phone is one customer, whatever the name, and the store sees what it i
   // The second debt adds what it leaves owing to the store's total.
   expect(await storeOwed(page, first.token)).toBe(before + 200000n);
 
-  // At the till, two debts on one phone: the seller chooses on a screen of
-  // its own, its rows a list's by §6.8 on a white block (audit after stage
-  // 2, frame P2-2).
+  // At the till, two debts on one phone: the seller chooses in a sheet over
+  // the list, as on the card, what is owed here in all one line under its
+  // title (audit after stage 2, sale P2-4).
   await atTheTill(page);
   await searchField(page).fill(tel);
   await customerRow(page, name).click();
-  const owing = page.getByRole("list", { name: `Борги: ${name}` });
+  const choose = page.getByRole("dialog", { name: "На який борг вносить?" });
+  await expect(choose).toHaveAccessibleDescription(
+    `${name} · винні всього 4 000,00 грн`,
+  );
+  const owing = choose.getByRole("list", { name: `Борги: ${name}` });
   await expect(owing.getByRole("listitem")).toHaveCount(2);
-  await listRow(page, owing.getByRole("button").first(), ".debt-name");
+  await expect(choose.locator(".list-block")).toHaveCount(0);
+  // Escape closes it on the list, as the card's does.
+  await page.keyboard.press("Escape");
+  await expect(choose).toHaveCount(0);
+  await expect(customerRow(page, name)).toBeFocused();
 
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
@@ -1837,8 +1844,38 @@ test("the network's owner erases a closed debt's customer who asks, and every su
       "Ім’я й телефон покупця зникнуть з усіх закритих боргів мережі з цим телефоном. Суми лишаються. Скасувати це не можна.",
     ),
   ).toBeVisible();
+  // The server's own failure: not erased, and to press again — safe, the
+  // same whenever repeated — its request's number kept, never «Спробуйте
+  // ще раз» on a write (owner, 2026-11-11, В-П1 (б); audit after stage 2,
+  // sale P2-5).
+  let failed = false;
+  await page.route("**/api/v1/credits/*/erase-customer", async (route) => {
+    if (failed) {
+      await route.fallback();
+      return;
+    }
+    failed = true;
+    await route.fulfill({
+      status: 500,
+      headers: { "X-Request-ID": "3f9c2a7e-1b2c-4d5e-8f90-a1b2c3d4e5f6" },
+      json: {
+        code: "INTERNAL_ERROR",
+        message: "Внутрішня помилка сервера.",
+        details: {},
+      },
+    });
+  });
+  await sheet.getByRole("button", { name: "Так, стерти дані покупця" }).click();
+  await expect(
+    page.getByText(
+      "Дані покупця не стерто. Натисніть ще раз — повторити безпечно. Номер запиту: 3f9c2a7e.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  sheet = await eraseSheet(page);
   // Refused once for a reason the screen does not name: its own words,
-  // never an order's (owner decision, 2026-10-25).
+  // never an order's (owner decision, 2026-10-25), the step without
+  // «спробуйте ще раз» (sale P2-5).
   // The debt itself, never the list or the summary.
   const debtReads = readsOf(
     page,
@@ -1848,7 +1885,7 @@ test("the network's owner erases a closed debt's customer who asks, and every su
   await sheet.getByRole("button", { name: "Так, стерти дані покупця" }).click();
   await expect(
     page.getByText(
-      "Дані покупця не стерто: борг щойно змінився — перегляньте його й спробуйте ще раз.",
+      "Дані покупця не стерто: борг щойно змінився — перегляньте його.",
       { exact: true },
     ),
   ).toBeVisible();

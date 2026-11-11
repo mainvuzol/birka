@@ -8642,3 +8642,86 @@ Settled:
 - Kept: outside Telegram, Enter in a field of «Додати рядки вручну» sends
   the lines, as the form did before — lines added are removed again as
   their part, unlike a rejection.
+
+## Chosen in chat — 2026-11-11 (audit after stage 2, batch 11: the till's «На який борг вносить?» a sheet over the list, as on the card, «{Ім’я} · винні всього {сума}» its one line; the sale tab's write refusals by В-П1 (б); sale P2-3's approved words; sale P2-4, P2-5 — the sale task list closed)
+
+Chosen in chat on 2026-11-11 («Yes, sale first»), after batch 10 (#193)
+was merged: sale P2-4 and P2-5, with the owner's answers of 2026-11-11.
+P2-3's words, approved the same day and not yet built, came with them, so
+that the sale task list closes. No right, no server rule, no field changes.
+- **«На який борг вносить?» at the till** (P2-4; §3, §6.29, S20):
+  - A customer of two debts or more, tapped in the till's «Внесок» list:
+    the sheet rises over the list, as on the customer's card. The list
+    stays under it, out of reach while it is open, its search kept. The
+    screen of its own is gone — the name for a header, «← До боргів», the
+    phone as a link, the card «Винні всього».
+  - Under the title, one line in pencil, read with the title: «{Ім’я} ·
+    винні всього {сума}» — the server's sum for this store alone. Among
+    «Магазини, що не працюють», the name alone, as before.
+  - Its rows are the card's sheet's: the goods, since when, another
+    store's sticker, what is owed with the debt's glyph, the chevron; each
+    heard «{товар}, винні {сума}» (+ «, магазин «…»»). Only debts still
+    owed are read (`status=OPEN`, as the till's list reads them); none is
+    chosen beforehand (owner decision, 2026-10-01).
+  - Read again by her phone, as the screen did: refused, the warning's
+    plate in the sheet over the rows as they were; gone — every debt paid
+    meanwhile — the sheet closes on the list, and the list under it is read
+    again, so her row goes too (review: the screen did this by mounting the
+    list anew; the sheet leaves it mounted).
+  - A row tapped: the sheet is done with, S21 opens on that debt.
+    **Decided here:** S21's «←» from the sheet says «До боргів», as from a
+    single debt's row (decision 2026-11-01), and goes back to the list with
+    no sheet over it; S22's way back is named the same. Before, it was
+    named by the customer and went back to their screen, which is gone.
+  - Telegram's «Назад», Escape, the scrim and the handle close it. Where a
+    keyboard or a reader had the cursor on her row, it goes back there; a
+    tap on a phone leaves no cursor, as on the card's sheet (review).
+- **The sale tab's write refusals** (P2-5; owner, В-П1 (б)): what happened,
+  the fate, the step, in the owner's words:
+  - the till's conflict: «Дані змінилися, поки ви працювали. Кошик
+    збережено — нічого не продано. Натисніть спосіб оплати ще раз.»;
+  - a return's conflict: «Дані змінилися, поки ви працювали. Поверніться
+    до списку й відкрийте продаж знову. Нічого не повернено.» (from paper
+    «… Нічого не записано.»); a return the server could not take:
+    «Перевірте, що повертають. Нічого не повернено.»;
+  - a payment's or a write-off's conflict: «Внесок (Списання) не записано.
+    Дані боргу змінилися, поки ви працювали: перевірте залишок.»; the
+    request not taken: «Внесок не записано. Перевірте суму.», «Списання не
+    записано. Перевірте причину.»;
+  - erasing a customer: «Дані покупця не стерто.»; its conflict «Дані
+    покупця не стерто: борг щойно змінився — перегляньте його.».
+  - **Decided here, by batch 10's rule for «Початкові залишки»:** a
+    refusal naming nothing at all — a 400 or 404 the screens have no words
+    for, which said the shared «Не вдалося виконати операцію. Спробуйте ще
+    раз.» — says the fate, then what to check: «Кошик збережено — нічого
+    не продано. Перевірте товар, кількість і ціну.»; «Нічого не повернено.
+    Перевірте, що повертають.»; «Внесок не записано. Перевірте суму.»
+    («Списання … причину.»); «Дані покупця не стерто.». The server's own
+    failure on erasing (a 5xx; erasing is sent directly, never kept):
+    «Дані покупця не стерто. Натисніть ще раз — повторити безпечно. Номер
+    запиту: …» — erasing is the same however often it is sent. A sale, a
+    return and a payment answered with a 5xx are kept on the phone, as
+    before, and say the kept operations' words.
+  - **Decided here (review):** a pressed return refused because the
+    warehouse its goods went to was closed meanwhile (a 404 the server
+    names `WAREHOUSE_UNAVAILABLE`) says the kept return's words for it
+    (owner decisions, 2026-10-18): «Склад, куди йшов цей товар, закрито.
+    Зверніться до менеджера. Нічого не повернено.» — it said the shared
+    failure before, and by the rule above would have sent the seller to
+    check the goods.
+  - The return's words are its list's too: the list's plate for a read
+    refused with a conflict or a request not taken says them, as before.
+  - **The kept operations' words stay** (owner): a kept return refused on
+    resend for a request the server could not take still says
+    «Повернення не записано. Перевірте, що повертають, і спробуйте ще
+    раз.» — by a branch of its own now, since the pressed words changed.
+    The phone's own failure before anything is sent keeps the shared
+    words, as in batch 10.
+  - One helper says this for the till, the return, the debt and
+    «Початкові залишки»: `failedWrite` (`frontend/src/shared/api.ts`);
+    batch 10's rule moved there unchanged.
+- **Sale P2-3's words** (owner, 2026-11-11): «Знайти в каталозі» says one
+  line, «На складі «{склад}» його немає в обліку.» (the shortage sheet
+  says the rest at the way of paying); «До списку» for «Назад до списку»,
+  both ways back from it; the label's chip shows «Не читали», a reader
+  hearing «Не читали — продати як «розмір невідомий»».

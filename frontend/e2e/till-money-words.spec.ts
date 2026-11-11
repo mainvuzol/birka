@@ -258,7 +258,7 @@ test("a shelf short of what an order holds says how many are free of it, in «ш
   );
 });
 
-test("a conflict the till knows no more of says to try again, and a request it could not read to check the goods, the count and the price — never an order", async ({
+test("a conflict the till knows no more of says the basket is kept and to press a way again, a request it could not read to check the goods, the count and the price — never an order, nor «спробуйте ще раз» (audit after stage 2, sale P2-5)", async ({
   page,
 }) => {
   let answer: { status: number; json: object } = {
@@ -276,9 +276,10 @@ test("a conflict the till knows no more of says to try again, and a request it c
   await tapSize(page, fixture.variant_id, fixture.size_id);
   await pay(page, "Готівка").click();
   await expect(refused(page)).toHaveText(
-    "Дані змінилися, поки ви працювали. Спробуйте ще раз. Кошик збережено — нічого не продано.",
+    "Дані змінилися, поки ви працювали. Кошик збережено — нічого не продано. Натисніть спосіб оплати ще раз.",
   );
   await expect(refused(page)).not.toContainText(/замовлен/);
+  await expect(refused(page)).not.toContainText(/спробуйте/i);
 
   answer = {
     status: 422,
@@ -293,6 +294,16 @@ test("a conflict the till knows no more of says to try again, and a request it c
     "Перевірте товар, кількість і ціну. Кошик збережено — нічого не продано.",
   );
   await expect(refused(page)).not.toContainText(/замовлен/);
+  // Refused for nothing named at all: its fate, then what to check — never
+  // the shared «Спробуйте ще раз» (owner, 2026-11-11, В-П1 (б)).
+  answer = {
+    status: 400,
+    json: { code: "BAD_REQUEST", message: "Bad request", details: {} },
+  };
+  await pay(page, "Готівка").click();
+  await expect(refused(page)).toHaveText(
+    "Кошик збережено — нічого не продано. Перевірте товар, кількість і ціну.",
+  );
   // The basket is kept as it was.
   await expect(page.locator(".till-tray .tray-basket")).toHaveAccessibleName(
     "Кошик · 1 · Лоран шоколад · M",

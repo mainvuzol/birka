@@ -375,11 +375,17 @@ test("a coat in hand from the catalogue is asked its warehouse by deciding chips
   await expect(chosen).toHaveCSS("background-color", colours[0] ?? "");
   await expect(chosen).toHaveCSS("color", colours[1] ?? "");
   const panel = page.getByRole("region", { name: "Товар з каталогу" });
-  await expect(panel).toContainText(
+  // One line: the shortage sheet says the rest at the way of paying
+  // (owner, 2026-11-11; audit after stage 2, sale P2-3).
+  await expect(panel.locator(".hint")).toHaveText(
     "На складі «Спільний» його немає в обліку.",
   );
-  // A part of the till: no heading of its own.
+  // A part of the till: no heading of its own. Its way back «До списку»
+  // (owner, 2026-11-11; sale P2-3).
   await expect(panel.getByRole("heading")).toHaveCount(0);
+  await expect(
+    panel.getByRole("button", { name: "До списку", exact: true }),
+  ).toBeVisible();
   await panel.getByLabel("Пошук у каталозі").fill("лоран");
   await panel.getByRole("radio", { name: "Лоран беж" }).click();
   const cells = panel.getByRole("group", { name: "Розмір: Лоран беж" });
@@ -411,7 +417,7 @@ test("a coat in hand from the catalogue is asked its warehouse by deciding chips
   await expect(
     page.getByRole("region", { name: "Товар з каталогу" }),
   ).toHaveCount(0);
-  await page.getByRole("button", { name: "Назад до списку" }).click();
+  await page.getByRole("button", { name: "До списку", exact: true }).click();
   await pay(page).click();
   await expect.poll(() => sent.length).toBe(1);
   expect(sent[0]?.lines.map((line) => line.source_location_id)).toEqual([

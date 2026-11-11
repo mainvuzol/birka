@@ -1,8 +1,7 @@
 import {
-  ApiError,
   CONFLICT_TEXT,
   errorText,
-  FAILED_TEXT,
+  failedWrite,
   inOwnWords,
 } from "@/shared/api";
 import type { StoreState } from "@/orders/types";
@@ -287,12 +286,10 @@ export function listRefusal(
   changed: string = LIST_CHANGED,
 ): string {
   const said = errorText(error);
-  if (error instanceof ApiError && said.startsWith(FAILED_TEXT))
-    return error.status >= 500
-      ? `${notDone} Натисніть ще раз — повторити безпечно.${said.slice(FAILED_TEXT.length)}`
-      : // Refused for nothing named: the same press is refused again.
-        `${notDone} ${check}`;
-  return inOwnWords(said, `${notDone} ${check}`, `${notDone} ${changed}`);
+  return (
+    failedWrite(error, said, notDone, check) ??
+    inOwnWords(said, `${notDone} ${check}`, `${notDone} ${changed}`)
+  );
 }
 
 /** A conflict a list's screen does not name: its caller reads the list

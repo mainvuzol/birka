@@ -323,6 +323,79 @@ async function pressAndSettle(page: Page): Promise<void> {
   );
 }
 
+test("the till's «На який борг вносить?» shows Telegram's «Назад»; pressed, it closes the sheet on the list, which hides it again (audit after stage 2, sale P2-4)", async ({
+  page,
+}) => {
+  const owing = (goods: string, owed: string): Record<string, unknown> => ({
+    id: randomUUID(),
+    sale_id: randomUUID(),
+    store_id: fixture.store_id,
+    store_name: "Основний",
+    store_state: "ACTIVE",
+    customer_name: "Оксана Петренко",
+    customer_phone: "067 123 45 67",
+    customer_erased_at: null,
+    amount: "3000.00",
+    currency_code: "UAH",
+    status: "OPEN",
+    paid: "0.00",
+    returned: "0.00",
+    cash_back: "0.00",
+    written_off: "0.00",
+    owed,
+    opened_at: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
+    last_payment_at: null,
+    closed_at: null,
+    goods: [goods],
+    entries: [],
+  });
+  const credits = [
+    owing("Лоран шоколад · M", "2000.00"),
+    owing("Шарф «Затишок»", "500.00"),
+  ];
+  await page.route("**/api/v1/credits/summary?**", async (route) => {
+    await route.fulfill({ json: { owed: "2500.00", customers: 1, debts: 2 } });
+  });
+  await page.route("**/api/v1/credits/customers?**", async (route) => {
+    await route.fulfill({
+      json: {
+        items: [
+          {
+            phone_digits: "0671234567",
+            customer_name: "Оксана Петренко",
+            customer_phone: "067 123 45 67",
+            owed: "2500.00",
+            open_debts: 2,
+            credits,
+          },
+        ],
+        has_more: false,
+      },
+    });
+  });
+  await hearBack(page);
+  await page.goto(launch("8.0"));
+  await openStore(page, "Основний MAIN");
+  await toTill(page);
+  await tillWays(page)
+    .getByRole("button", { name: "Внесок", exact: true })
+    .click();
+  const till = page.getByRole("heading", { name: "Продаж", level: 1 });
+  await expect(till).toBeVisible();
+  expect(await backs(page)).toEqual([]);
+  await page
+    .getByRole("button", { name: /^Відкрити борг: Оксана Петренко,/ })
+    .click();
+  const which = page.getByRole("dialog", { name: "На який борг вносить?" });
+  await expect(which).toHaveAttribute("data-ready", "");
+  await expect.poll(async () => (await backs(page)).at(-1)).toBe(true);
+  await pressAndSettle(page);
+  await expect(which).toHaveCount(0);
+  await expect(till).toBeVisible();
+  // The till itself, a tab's first screen: Telegram's «Назад» hidden.
+  await expect.poll(async () => (await backs(page)).at(-1)).toBe(false);
+});
+
 test("S21 shows Telegram's «Назад»; while its payment is in flight its «←» is held and Telegram's hidden, and pressed meanwhile it does nothing", async ({
   page,
 }) => {

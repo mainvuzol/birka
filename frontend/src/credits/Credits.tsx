@@ -381,13 +381,10 @@ export function Credits({
         back={() => {
           setSelected(null);
         }}
+        // From the till — a row or the sheet's — «← До боргів», back to the
+        // list (decision 2026-11-01; audit after stage 2, sale P2-4).
         {...(till
-          ? {
-              till: { task: till.task },
-              ...(chosen
-                ? { backTo: visible(chosen.customer_name ?? erasedCustomer) }
-                : {}),
-            }
+          ? { till: { task: till.task } }
           : {
               backTo: cardName ?? "Покупці",
               ...(other
@@ -401,21 +398,6 @@ export function Credits({
       />
     );
   }
-
-  if (chosen)
-    return (
-      <Debts
-        store={store}
-        token={token}
-        first={chosen}
-        openOnly
-        elsewhere={elsewhere}
-        choose={(credit) => {
-          setSelected({ credit, store });
-        }}
-        back={leave}
-      />
-    );
 
   if (card)
     return (
@@ -636,6 +618,21 @@ export function Credits({
           </button>
         )}
       </section>
+      {chosen && (
+        // Over the list, never instead of it (audit after stage 2, sale
+        // P2-4): the till stays where it was.
+        <Debts
+          store={store}
+          token={token}
+          first={chosen}
+          elsewhere={elsewhere}
+          choose={(credit) => {
+            setChosen(null);
+            setSelected({ credit, store });
+          }}
+          close={leave}
+        />
+      )}
       {toast && (
         <Toast
           key={toast.times}

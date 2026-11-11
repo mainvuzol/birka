@@ -7,6 +7,7 @@ import {
   INVALID_TEXT,
   api,
   errorText,
+  failedWrite,
   inOwnWords,
   isConflict,
 } from "@/shared/api";
@@ -1060,12 +1061,17 @@ export function DebtActions({
       erased(result);
     } catch (error) {
       setView(null);
+      // What was not done, then the step — never «спробуйте ще раз» on a
+      // write; the server's own failure, pressed again, which is safe
+      // (owner, 2026-11-11, В-П1 (б); audit after stage 2, sale P2-5).
+      const said = refusalText(error);
       refused(
-        inOwnWords(
-          refusalText(error),
-          "Дані покупця не стерто. Спробуйте ще раз.",
-          "Дані покупця не стерто: борг щойно змінився — перегляньте його й спробуйте ще раз.",
-        ),
+        failedWrite(error, said, "Дані покупця не стерто.") ??
+          inOwnWords(
+            said,
+            "Дані покупця не стерто.",
+            "Дані покупця не стерто: борг щойно змінився — перегляньте його.",
+          ),
       );
       // Changed in a way it does not name: the debt shown as it is now.
       if (isConflict(error)) await readAgain();
@@ -1274,8 +1280,9 @@ function moreThanOwed(owed: string, way: TillMethod | null): string {
 /**
  * A payment or a write-off refused as it was pressed: what was not recorded
  * first, in the debt's words where the shared ones would speak of an order
- * (credits task list, P2-2). Proven to have recorded nothing, so «спробуйте
- * ще раз»; the debt is read again after it.
+ * (credits task list, P2-2), then the step — never «спробуйте ще раз» on a
+ * write (owner, 2026-11-11, В-П1 (б); audit after stage 2, sale P2-5). The
+ * debt is read again after it.
  */
 export function pressRefusalText(
   error: unknown,
@@ -1284,11 +1291,11 @@ export function pressRefusalText(
 ): string {
   const said = refusalText(error, way);
   const what = kind === "payment" ? "Внесок" : "Списання";
+  const check = `Перевірте ${kind === "payment" ? "суму" : "причину"}.`;
   if (said === CONFLICT_TEXT)
-    return `${what} не записано. Дані боргу змінилися, поки ви працювали: перевірте залишок і спробуйте ще раз.`;
-  if (said === INVALID_TEXT)
-    return `${what} не записано. Перевірте ${kind === "payment" ? "суму" : "причину"} й спробуйте ще раз.`;
-  return said;
+    return `${what} не записано. Дані боргу змінилися, поки ви працювали: перевірте залишок.`;
+  if (said === INVALID_TEXT) return `${what} не записано. ${check}`;
+  return failedWrite(error, said, `${what} не записано.`, check) ?? said;
 }
 
 /**

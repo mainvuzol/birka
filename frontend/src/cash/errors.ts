@@ -15,6 +15,7 @@ import { refusalText as correctionRefusalText } from "@/inventory/Correction";
 import {
   refusalText as returnRefusalText,
   RETURN_CONFLICT_TEXT,
+  RETURN_INVALID_TEXT,
 } from "@/returns/Returns";
 import {
   refusalText as tillRefusalText,
@@ -486,6 +487,11 @@ export function returnErrorText(error: unknown, misses = 0): string {
   // show over the till (owner decision, 2026-10-18).
   if (returnRefusalText(error) === RETURN_CONFLICT_TEXT)
     return "Повернення не записано. Дані змінилися, поки сервер не відповідав. Поверніться до списку в «Поверненні» й спробуйте ще раз.";
+  // A request the server could not take, in the words it had: a kept
+  // operation's words stay (owner, 2026-11-11, В-П1 (б)), whatever the
+  // return pressed now says (audit after stage 2, sale P2-5).
+  if (returnRefusalText(error) === RETURN_INVALID_TEXT)
+    return "Повернення не записано. Перевірте, що повертають, і спробуйте ще раз.";
   // Where it was going is lost while the phone kept it — the right to take
   // returns, the warehouse no longer reached or closed, the «Брак» undone:
   // the money may have been handed back meanwhile, and the paper says so

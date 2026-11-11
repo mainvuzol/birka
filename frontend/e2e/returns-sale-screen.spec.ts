@@ -1247,7 +1247,7 @@ for (const rights of [
     await expect(page.locator(".return-mistake")).toHaveText(rights.said);
   });
 
-test("a refusal nothing more is known of says the return's own words, never an order's", async ({
+test("a refusal nothing more is known of says the return's own words, never an order's, nor «спробуйте ще раз» (audit after stage 2, sale P2-5)", async ({
   page,
 }) => {
   const coat = line("Лоран шоколад");
@@ -1255,19 +1255,38 @@ test("a refusal nothing more is known of says the return's own words, never an o
   await oneSale(page, [coat], {
     answer: () => {
       answers += 1;
-      return answers !== 2
+      return answers === 2
         ? {
-            status: 409,
-            json: { code: "CONFLICT", message: "Conflict", details: {} },
-          }
-        : {
             status: 422,
             json: {
               code: "VALIDATION_ERROR",
               message: "Request failed validation",
               details: {},
             },
-          };
+          }
+        : answers === 3
+          ? {
+              status: 400,
+              json: {
+                code: "BAD_REQUEST",
+                message: "Bad request",
+                details: {},
+              },
+            }
+          : answers === 4
+            ? {
+                // The warehouse the goods went to, closed meanwhile.
+                status: 404,
+                json: {
+                  code: "NOT_FOUND",
+                  message: "Not found",
+                  details: { reason: "WAREHOUSE_UNAVAILABLE" },
+                },
+              }
+            : {
+                status: 409,
+                json: { code: "CONFLICT", message: "Conflict", details: {} },
+              };
     },
   });
   await opened(page);
@@ -1278,11 +1297,22 @@ test("a refusal nothing more is known of says the return's own words, never an o
   await press.click();
   const refused = page.getByRole("alert");
   await expect(refused).toHaveText(
-    "Дані змінилися, поки ви працювали. Поверніться до списку й спробуйте ще раз. Нічого не повернено.",
+    "Дані змінилися, поки ви працювали. Поверніться до списку й відкрийте продаж знову. Нічого не повернено.",
   );
   await press.click();
   await expect(refused).toHaveText(
-    "Перевірте, що повертають, і спробуйте ще раз. Нічого не повернено.",
+    "Перевірте, що повертають. Нічого не повернено.",
+  );
+  // Refused for nothing named at all: its fate, then what to check.
+  await press.click();
+  await expect(refused).toHaveText(
+    "Нічого не повернено. Перевірте, що повертають.",
+  );
+  // A closed warehouse named: the kept return's words, never the goods to
+  // check (review).
+  await press.click();
+  await expect(refused).toHaveText(
+    "Склад, куди йшов цей товар, закрито. Зверніться до менеджера. Нічого не повернено.",
   );
   // From paper, nothing is recorded rather than handed back.
   await fromPaper(page, "Вношу повернення з паперу");
@@ -1292,8 +1322,11 @@ test("a refusal nothing more is known of says the return's own words, never an o
     })
     .click();
   await expect(refused).toHaveText(
-    "Дані змінилися, поки ви працювали. Поверніться до списку й спробуйте ще раз. Нічого не записано.",
+    "Дані змінилися, поки ви працювали. Поверніться до списку й відкрийте продаж знову. Нічого не записано.",
   );
+  await expect(
+    page.getByRole("alert").filter({ hasText: /спробуйте/i }),
+  ).toHaveCount(0);
   // Not a word of an order in what is said (the sections' row names theirs).
   await expect(
     page.getByRole("alert").filter({ hasText: /замовлен/i }),
