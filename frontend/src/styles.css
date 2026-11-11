@@ -797,7 +797,7 @@ nav:not(.tab-bar, .more-list) {
 .part-removed {
   opacity: 0.6;
 }
-.part-removed strong {
+.part-removed .today-tag-title span {
   text-decoration: line-through;
 }
 .catalog-card {
@@ -6935,7 +6935,8 @@ section.receive-list {
    P0-5, P0-6). The lists, a row tag each: the sticker left of «Відкрити»
    at the foot. Empty, one line on a blank tag. */
 .opening-lists,
-.opening-lines {
+.opening-lines,
+.opening-parts {
   margin: 12px 0 0;
 }
 .opening-tag-foot {
@@ -6994,6 +6995,23 @@ section.receive-list {
   margin: 0;
   color: var(--pencil);
 }
+/* The warehouse and the tag's ⋯ (goods task list after stage 2, P0-1), as
+   the model's card has it: ⋯ 44 square on the place's first line, its
+   reach not lengthening the tag. */
+.opening-hero-head {
+  display: flex;
+  align-self: stretch;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+.opening-hero-head .debt-more {
+  margin: -9px -10px -9px 0;
+}
+/* What the waiting holds, the tag's one line of it (P0-1). */
+.openings .opening-hold {
+  margin-top: 8px;
+}
 .opening-hero-in .stub {
   align-self: stretch;
   margin: 8px 0 0;
@@ -7023,6 +7041,27 @@ section.receive-list {
   border-radius: var(--r-xs);
   background: var(--paid);
 }
+/* A decision refused, under the tag (P0-1). */
+.openings .opening-said {
+  margin: 0 0 12px;
+}
+/* One file's lines, chosen on «Файли списку»: which, and «Усі файли»,
+   over the switch (P0-1). */
+.opening-file-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 4px 0 -4px;
+}
+.openings .opening-file-line p {
+  min-width: 0;
+  margin: 0;
+  color: var(--ink);
+}
+.opening-file-line .quiet {
+  flex-shrink: 0;
+}
 /* The switch's three, each word allowed two lines at 360 px, and ⋯ for
    the rest beside it. */
 .opening-modes {
@@ -7035,9 +7074,9 @@ section.receive-list {
 .opening-modes .mode-switch {
   margin: 0;
 }
-/* Three counts at 14 in two lines where they must, until the list's own
-   screen is drawn anew (goods task list after stage 2, P0-1); ⋯ as high as
-   the switch beside it. */
+/* Three counts at 14 in two lines where they must — kept as they are when
+   the list's own screen was drawn anew (goods task list after stage 2,
+   P0-1: «переключатель … как есть»); ⋯ as high as the switch beside it. */
 .opening-modes .mode-switch button {
   font-size: 14px;
   line-height: 17px;
@@ -7056,19 +7095,58 @@ section.receive-list {
   border-color: var(--ink);
   color: var(--ink);
 }
-.opening-line .catalog-raw,
-.opening-part strong {
+.opening-line .catalog-raw {
   margin: 0;
   overflow-wrap: anywhere;
 }
 .opening-line .t-meta,
-.opening-part small {
+.opening-part .t-meta {
   margin: 0;
   color: var(--pencil);
   overflow-wrap: anywhere;
 }
-.opening-part .actions {
-  margin-top: 4px;
+/* A file on «Файли списку» (P0-1): its name may be one long word. */
+.opening-part .today-tag-title span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+/* Its photo's lines in other files: the reason to remove it, in a
+   warning's colour with its triangle. */
+.openings .opening-repeats {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 4px 0 0;
+  color: var(--warn);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 19px;
+}
+.opening-repeats .icon {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.opening-part .opening-part-lines {
+  margin-left: auto;
+}
+.opening-part .hint {
+  margin: 4px 0 0;
+}
+/* A sheet's question about a file: its name may be one long word. */
+.opening-asked {
+  overflow-wrap: anywhere;
+}
+/* «Відхилити «…»?»: why, and what it does not change (P0-1). */
+.opening-reject label {
+  margin: 0;
+}
+.opening-reject .t-meta {
+  margin: 8px 0 0;
+  color: var(--pencil);
+}
+.opening-reject [role="alert"] {
+  margin: 12px 0 0;
+  overflow-wrap: anywhere;
 }
 /* A line's own screen (P0-5): the line as written on the notebook's
    paper, large; what was read under it; then the model, the size, where
@@ -7181,10 +7259,20 @@ label.way-option {
 .opening-quiet {
   margin: 16px 0 0;
 }
-/* «Затвердити «…»?»: how many, large, over what they become. */
+/* «Затвердити «…»?»: how many, large, over what they become, and what
+   they add up (P0-1). */
 .opening-units {
   margin: 0 0 8px;
   font-variant-numeric: tabular-nums;
+}
+.opening-summary {
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+  font-variant-numeric: tabular-nums;
+}
+.opening-summary li + li {
+  margin-top: 4px;
 }
 .opening-new .opening-places {
   margin: 12px 0 0;

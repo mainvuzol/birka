@@ -2,6 +2,9 @@ import {
   test,
   expect,
   addModel,
+  listWay,
+  rejectList,
+  removePart,
   menu,
   more,
   newModelSheet,
@@ -323,10 +326,10 @@ test("a list is typed, each line answered, and approved into opening stock", asy
     page.getByRole("progressbar", { name: "Розібрано рядків" }),
   ).toHaveAttribute("aria-valuetext", "Розібрано 2 з 3, не товар 1");
 
-  const approval = page.getByLabel("Затвердження списку");
-  await expect(
-    approval.getByText("Як у списку: рядків 1, одиниць 3"),
-  ).toBeVisible();
+  // What the approval adds up is its sheet's, under the number — nothing
+  // of it on the list (goods task list after stage 2, P0-1).
+  await expect(page.getByLabel("Затвердження списку")).toHaveCount(0);
+  await expect(page.getByText(/^Затвердити можна, коли/)).toHaveCount(0);
   await page.getByRole("button", { name: "Затвердити · 4 шт." }).click();
   const sheet = page.getByRole("dialog", { name: "Затвердити «Зошит 1»?" });
   await expect(sheet).toHaveAttribute("data-ready", "");
@@ -336,6 +339,11 @@ test("a list is typed, each line answered, and approved into opening stock", asy
       "стануть початковим залишком складу «Новий склад». Скасувати це потім не можна.",
     ),
   ).toBeVisible();
+  await expect(
+    sheet.getByText("Як у списку: 1 рядок · 3 шт.", { exact: true }),
+  ).toBeVisible();
+  // One file: no count of files.
+  await expect(sheet.getByText(/^Файлів у списку/)).toHaveCount(0);
   await sheet.getByRole("button", { name: "Так, затвердити" }).click();
   await expect(
     page.getByText(
@@ -418,7 +426,7 @@ async function telegram(page: Page): Promise<{
   };
 }
 
-test("inside Telegram a line's answer is its MainButton, naming what is recorded, and the next line opens; «Назад» goes back to the list, hidden while an answer is on its way; «Пропустити» opens the next line with nothing sent; approval is the MainButton and its sheet's (stage 2, goods task list, P0-5, P0-6)", async ({
+test("inside Telegram a line's answer is its MainButton, naming what is recorded, and the next line opens; «Назад» goes back to the list, hidden while an answer is on its way; «Пропустити» opens the next line with nothing sent; approval is the MainButton and its sheet's; lines typed and the rejection are ⋯'s, each with its own MainButton, «Назад» the list (stage 2, goods task list, P0-5, P0-6; after stage 2, P0-1)", async ({
   page,
 }) => {
   const { main, back, pressMain, pressBack } = await telegram(page);
@@ -429,7 +437,7 @@ test("inside Telegram a line's answer is its MainButton, naming what is recorded
     const path = new URL(request.url()).pathname;
     if (
       (request.method() === "PUT" && /\/lines\/\d+$/.test(path)) ||
-      (request.method() === "POST" && path.endsWith("/approve"))
+      (request.method() === "POST" && /\/(approve|reject|parts)$/.test(path))
     )
       sent.push(path.split("/").slice(-2).join("/"));
   });
@@ -589,15 +597,64 @@ test("inside Telegram a line's answer is its MainButton, naming what is recorded
     text: "Затвердити · 3 шт.",
   });
   expect(sent).toEqual(["lines/2", "lines/1", "lines/3"]);
-  // Lines being typed into the list: no approval under them.
-  await page.getByRole("button", { name: "Додати рядки вручну" }).click();
-  const typing = page.getByRole("form", { name: "Додати рядки вручну" });
+  // Lines typed into the list: the tag's ⋯, a screen of their own, its
+  // MainButton «Додати рядки» until there are lines; «Назад» the list
+  // (goods task list after stage 2, P0-1).
+  await page.getByRole("button", { name: "Дії зі списком" }).click();
+  const ways = page.getByRole("dialog", { name: "Зошит у Телеграмі" });
+  await expect(ways).toHaveAttribute("data-ready", "");
   await expect.poll(main).toMatchObject({ is_visible: false });
-  await typing.getByRole("button", { name: "Закрити" }).click();
+  await ways.getByRole("button", { name: "Додати рядки вручну" }).click();
+  const typing = page.getByRole("form", { name: "Додати рядки вручну" });
+  await expect(
+    page.getByRole("heading", { name: "Додати рядки вручну" }),
+  ).toBeFocused();
+  await expect.poll(main).toMatchObject({
+    is_visible: true,
+    is_active: false,
+    text: "Додати рядки",
+  });
+  await expect(typing.locator(".main-mimic")).toHaveCount(0);
+  await typing
+    .getByLabel("Рядки — кожен товар з нового рядка, як написано")
+    .fill("ще рядок");
+  await expect.poll(main).toMatchObject({ is_active: true });
+  await pressBack();
+  await expect(typing).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Дії зі списком" }),
+  ).toBeFocused();
   await expect.poll(main).toMatchObject({
     is_visible: true,
     text: "Затвердити · 3 шт.",
   });
+  // The rejection, ⋯'s too: its MainButton «Так, відхилити» not pressed
+  // until a reason is given; «Назад» closes the sheet, nothing rejected.
+  await page.getByRole("button", { name: "Дії зі списком" }).click();
+  await expect(ways).toHaveAttribute("data-ready", "");
+  await ways.getByRole("button", { name: "Відхилити список" }).click();
+  const rejecting = page.getByRole("dialog", {
+    name: "Відхилити «Зошит у Телеграмі»?",
+  });
+  await expect(rejecting).toBeVisible();
+  await expect.poll(main).toMatchObject({
+    is_visible: true,
+    is_active: false,
+    text: "Так, відхилити",
+  });
+  await expect(rejecting.locator(".main-mimic")).toHaveCount(0);
+  await expect(
+    rejecting.getByRole("button", { name: "Скасувати" }),
+  ).toHaveCount(0);
+  await rejecting.getByLabel("Чому відхиляємо").fill("ще подумаємо");
+  await expect.poll(main).toMatchObject({ is_active: true });
+  await pressBack();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect.poll(main).toMatchObject({
+    is_visible: true,
+    text: "Затвердити · 3 шт.",
+  });
+  expect(sent).toEqual(["lines/2", "lines/1", "lines/3"]);
   // Pressed once the sheet has risen, it approves.
   await pressMain();
   await expect(sheet).toHaveAttribute("data-ready", "");
@@ -765,8 +822,15 @@ test("at 360 px, light and dark, the lists, a list's big tag and a line's screen
   const paper: string[] = [];
   for (const scheme of ["light", "dark"] as const) {
     await page.emulateMedia({ colorScheme: scheme });
-    // The list: its big tag, the switch and the rows.
+    // The list: its big tag, the switch and the rows — no `<select>`, no
+    // h3 and no form inside a plate (goods task list after stage 2, P0-1).
     await expect(page.locator(".opening-hero-in")).toBeVisible();
+    const list = page.locator("section.openings");
+    await expect(list.locator("select")).toHaveCount(0);
+    await expect(list.locator("h3")).toHaveCount(0);
+    await expect(list.locator(".notice form, .notice [role=form]")).toHaveCount(
+      0,
+    );
     expect(await fits()).toBe(true);
     await page.screenshot({
       path: `test-results/openings-list-360-${scheme}.png`,
@@ -797,8 +861,10 @@ test("at 360 px, light and dark, the lists, a list's big tag and a line's screen
     });
     await page.getByRole("button", { name: "Назад до списку" }).click();
     await expect(line).toHaveCount(0);
-    // The lists.
-    await page.getByRole("button", { name: "До списків" }).click();
+    // The lists: «← Початкові залишки» over the title (P0-1).
+    await page
+      .getByRole("button", { name: "Назад до «Початкові залишки»" })
+      .click();
     await expect(
       page.getByRole("article", { name: `Список ${name}` }),
     ).toContainText("Розібрано 0 з 3 · не товар 1");
@@ -819,10 +885,24 @@ test("at 360 px, light and dark, the lists, a list's big tag and a line's screen
 /** The next command sent to `pattern` (never a read of it) answered as
  * `answer` says, once: a form the server does not name (422), a conflict
  * (409), or any answer of its own. */
+/** The server's own failure, its request numbered. */
+const serverFailed = {
+  status: 500,
+  headers: { "X-Request-ID": "3f9c2a7e-1b2c-4d5e-8f90-a1b2c3d4e5f6" },
+  json: {
+    code: "INTERNAL_ERROR",
+    message: "Внутрішня помилка сервера.",
+    details: {},
+  },
+};
+
 async function refuseOnce(
   page: Page,
   pattern: string,
-  answer: "form" | "conflict" | { status: number; json: object },
+  answer:
+    | "form"
+    | "conflict"
+    | { status: number; json: object; headers?: Record<string, string> },
 ): Promise<void> {
   let used = false;
   await page.route(pattern, async (route) => {
@@ -878,13 +958,13 @@ test("a new list refused for a reason the screen does not name says so by what w
   await refuseOnce(page, "**/api/v1/snapshots", "form");
   await save.click();
   await expect(page.getByRole("alert")).toHaveText(
-    "Список не збережено. Перевірте рядки та спробуйте ще раз.",
+    "Список не збережено. Перевірте рядки.",
   );
   await refuseOnce(page, "**/api/v1/snapshots", "conflict");
   await save.click();
   const before = listReads();
   await expect(page.getByRole("alert")).toHaveText(
-    "Список не збережено. Поки ви працювали, дані змінилися — спробуйте ще раз.",
+    "Список не збережено. Поки ви працювали, дані змінилися: перевірте склад і натисніть «Зберегти список» ще раз.",
   );
   // The warehouse read again: a list made meanwhile is found.
   await expect.poll(listReads).toBeGreaterThan(before);
@@ -911,16 +991,13 @@ test("a new list refused for a reason the screen does not name says so by what w
     page.getByRole("heading", { name: "Зошит нового списку" }),
   ).toBeVisible();
   // Rejected: the warehouse free for the journeys after.
-  const approval = page.getByLabel("Затвердження списку");
-  await approval.getByRole("button", { name: "Відхилити список" }).click();
-  await approval.getByLabel("Чому відхиляємо").fill("перевірка нового списку");
-  await approval.getByRole("button", { name: "Так, відхилити" }).click();
+  await rejectList(page, "перевірка нового списку");
   await expect(
     page.getByText(/^Відхилено: перевірка нового списку/),
   ).toBeVisible();
 });
 
-test("a list's refusals the server does not name are said in the list's words, never an order's: what was not done, and what to check; a conflict read again", async ({
+test("a list's refusals the server does not name are said in the list's words, never an order's: what was not done, then the step — never «спробуйте ще раз» on a write; a conflict read again (owner, В-П1 (б), 2026-11-11)", async ({
   page,
 }) => {
   const coat = await model(page);
@@ -950,13 +1027,13 @@ test("a list's refusals the server does not name are said in the list's words, n
   await refuseOnce(page, "**/api/v1/snapshots/*/lines/*", "form");
   await answered.click();
   await expect(line.getByRole("alert")).toHaveText(
-    "Відповідь не збережено. Перевірте її та спробуйте ще раз.",
+    "Відповідь не збережено. Перевірте її.",
   );
   const before = lineReads();
   await refuseOnce(page, "**/api/v1/snapshots/*/lines/*", "conflict");
   await answered.click();
   await expect(line.getByRole("alert")).toHaveText(
-    "Відповідь не збережено. Поки ви працювали, список змінився — перегляньте його й спробуйте ще раз.",
+    "Відповідь не збережено. Поки ви працювали, список змінився — перегляньте його.",
   );
   // Read again, as it says.
   await expect.poll(lineReads).toBeGreaterThan(before);
@@ -969,16 +1046,27 @@ test("a list's refusals the server does not name are said in the list's words, n
   await expect(line.getByRole("alert")).toHaveText(
     "Немає доступу до цієї операції або складу. Зверніться до менеджера.",
   );
+  // The server's own failure: what was not done, and to press again — its
+  // request's number kept, never «Спробуйте ще раз» (review).
+  await refuseOnce(page, "**/api/v1/snapshots/*/lines/*", serverFailed);
+  await answered.click();
+  await expect(line.getByRole("alert")).toHaveText(
+    "Відповідь не збережено. Натисніть ще раз — повторити безпечно. Номер запиту: 3f9c2a7e.",
+  );
   // The only line: «Зберегти», back to the list.
   await answered.click();
   await expect(line).toHaveCount(0);
   await expect(card(page, 1).getByText(/^Розібрано/)).toBeVisible();
 
-  // Lines typed by hand: too many said first; refused; added, then removed.
-  await page.getByRole("button", { name: "Додати рядки вручну" }).click();
+  // Lines typed by hand, ⋯'s: too many said first; refused; added, then
+  // removed on «Файли списку» (P0-1).
+  await listWay(page, "Додати рядки вручну");
   const typing = page.getByRole("form", { name: "Додати рядки вручну" });
   const pasted = typing.getByLabel(/Рядки — кожен товар/);
   const add = typing.getByRole("button", { name: "Додати рядки" });
+  // How much room the list has: a list typed in one go has no files'
+  // screen to say it (review).
+  await expect(typing.getByText(/^Місце у списку: рядків 1 з /)).toBeVisible();
   await pasted.fill(
     Array.from({ length: 1001 }, (_, i) => `${coat} сірий ${String(i)}`).join(
       "\n",
@@ -1006,59 +1094,72 @@ test("a list's refusals the server does not name are said in the list's words, n
   await refuseOnce(page, "**/api/v1/snapshots/*/parts?**", "form");
   await add.click();
   await expect(typing.getByRole("alert")).toHaveText(
-    "Рядки не додано. Перевірте їх та спробуйте ще раз.",
+    "Рядки не додано. Перевірте їх.",
   );
   const partsBefore = partReads();
   await refuseOnce(page, "**/api/v1/snapshots/*/parts?**", "conflict");
   await add.click();
   await expect(typing.getByRole("alert")).toHaveText(
-    "Рядки не додано. Поки ви працювали, список змінився — перегляньте його й спробуйте ще раз.",
+    "Рядки не додано. Поки ви працювали, список змінився — перегляньте його.",
   );
   await expect.poll(partReads).toBeGreaterThan(partsBefore);
+  // Added: back on the list, the files ⋯'s.
   await add.click();
+  await expect(typing).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Дії зі списком" }),
+  ).toBeFocused();
+  await listWay(page, "Файли списку · 2");
+  await expect(
+    page.getByRole("heading", { name: "Файли списку" }),
+  ).toBeFocused();
   const typed = page.getByRole("article", { name: "Файл 2" });
   await expect(typed).toContainText("Рядки, внесені вручну");
-  await typed.getByRole("button", { name: "Прибрати рядки" }).click();
   await refuseOnce(page, "**/api/v1/snapshots/*/parts/*/remove?**", "form");
-  await typed.getByRole("button", { name: "Так, прибрати" }).click();
+  const removing = await removePart(page, typed, "Прибрати рядки");
+  await expect(removing).toHaveCount(0);
   await expect(
-    page.getByText("Рядки не прибрано. Спробуйте ще раз.", { exact: true }),
-  ).toBeVisible();
-  await typed.getByRole("button", { name: "Прибрати рядки" }).click();
-  await refuseOnce(page, "**/api/v1/snapshots/*/parts/*/remove?**", "conflict");
-  await typed.getByRole("button", { name: "Так, прибрати" }).click();
-  await expect(
-    page.getByText(
-      "Рядки не прибрано. Поки ви працювали, список змінився — перегляньте його й спробуйте ще раз.",
-      { exact: true },
-    ),
-  ).toBeVisible();
-  await typed.getByRole("button", { name: "Прибрати рядки" }).click();
-  await typed.getByRole("button", { name: "Так, прибрати" }).click();
-  await expect(typed).toContainText(/Прибрано: Оля, /);
-
-  // The decision: approved, rejected.
-  const approval = page.getByLabel("Затвердження списку");
-  const reject = async (): Promise<void> => {
-    await approval.getByRole("button", { name: "Відхилити список" }).click();
-    await approval.getByLabel("Чому відхиляємо").fill("перевірка відмов");
-    await approval.getByRole("button", { name: "Так, відхилити" }).click();
-  };
-  await refuseOnce(page, "**/api/v1/snapshots/*/approve?**", "form");
-  await approve(page);
-  await expect(
-    approval.getByText("Список не затверджено. Спробуйте ще раз.", {
+    page.getByText("Рядки не прибрано. Перегляньте файли списку.", {
       exact: true,
     }),
   ).toBeVisible();
-  await refuseOnce(page, "**/api/v1/snapshots/*/approve?**", "conflict");
-  await approve(page);
+  await refuseOnce(page, "**/api/v1/snapshots/*/parts/*/remove?**", "conflict");
+  await removePart(page, typed, "Прибрати рядки");
   await expect(
-    approval.getByText(
-      "Список не затверджено. Поки ви працювали, список змінився — перегляньте його й спробуйте ще раз.",
+    page.getByText(
+      "Рядки не прибрано. Поки ви працювали, список змінився — перегляньте його.",
       { exact: true },
     ),
   ).toBeVisible();
+  await removePart(page, typed, "Прибрати рядки");
+  await expect(typed).toContainText(/Прибрано: Оля, /);
+  await page.getByRole("button", { name: "Назад до «Зошит відмов»" }).click();
+
+  // The decision: an approval refused said under the tag; a rejection
+  // refused in its sheet, its reason kept (P0-1).
+  const said = page.locator(".opening-said");
+  await refuseOnce(page, "**/api/v1/snapshots/*/approve?**", "form");
+  await approve(page);
+  await expect(said).toHaveText(
+    "Список не затверджено. Перегляньте рядки списку.",
+  );
+  await refuseOnce(page, "**/api/v1/snapshots/*/approve?**", "conflict");
+  await approve(page);
+  await expect(said).toHaveText(
+    "Список не затверджено. Поки ви працювали, список змінився — перегляньте його.",
+  );
+  await refuseOnce(page, "**/api/v1/snapshots/*/approve?**", serverFailed);
+  await approve(page);
+  await expect(said).toHaveText(
+    "Список не затверджено. Натисніть ще раз — повторити безпечно. Номер запиту: 3f9c2a7e.",
+  );
+  // Said of its moment: a line opened to be answered takes it away
+  // (review).
+  await card(page, 1)
+    .getByRole("button", { name: "Змінити відповідь" })
+    .click();
+  await page.getByRole("button", { name: "Назад до списку" }).click();
+  await expect(said).toHaveCount(0);
   // Nothing in it is stock: the server's own answer, said.
   await refuseOnce(page, "**/api/v1/snapshots/*/approve?**", {
     status: 409,
@@ -1069,20 +1170,27 @@ test("a list's refusals the server does not name are said in the list's words, n
     },
   });
   await approve(page);
+  await expect(said).toHaveText(
+    "Список не затверджено: у ньому немає жодного рядка товару. Якщо так і є — відхиліть його.",
+  );
+  await listWay(page, "Відхилити список");
+  await expect(said).toHaveCount(0);
+  const rejecting = page.getByRole("dialog", {
+    name: "Відхилити «Зошит відмов»?",
+  });
+  await expect(rejecting).toHaveAttribute("data-ready", "");
+  const yes = rejecting.getByRole("button", { name: "Так, відхилити" });
+  // Not pressed until a reason is given; what it does not change, said.
+  await expect(yes).toBeDisabled();
   await expect(
-    approval.getByText(
-      "Список не затверджено: у ньому немає жодного рядка товару. Якщо так і є — відхиліть його.",
-      { exact: true },
-    ),
+    rejecting.getByText("Залишків цей список не змінить.", { exact: true }),
   ).toBeVisible();
+  await rejecting.getByLabel("Чому відхиляємо").fill("перевірка відмов");
   await refuseOnce(page, "**/api/v1/snapshots/*/reject?**", "form");
-  await reject();
-  await expect(
-    approval.getByText(
-      "Список не відхилено. Перевірте причину та спробуйте ще раз.",
-      { exact: true },
-    ),
-  ).toBeVisible();
+  await yes.click();
+  await expect(rejecting.getByRole("alert")).toHaveText(
+    "Список не відхилено. Перевірте причину.",
+  );
   // Rejected meanwhile by someone else for another reason: the server's
   // conflict for it.
   await refuseOnce(page, "**/api/v1/snapshots/*/reject?**", {
@@ -1093,15 +1201,37 @@ test("a list's refusals the server does not name are said in the list's words, n
       details: {},
     },
   });
-  await reject();
-  await expect(
-    approval.getByText("Цей список уже затвердили або відхилили.", {
-      exact: true,
-    }),
-  ).toBeVisible();
-  // And rejected for real: the warehouse free for the journeys after.
-  await reject();
+  await yes.click();
+  await expect(rejecting.getByRole("alert")).toHaveText(
+    "Цей список уже затвердили або відхилили.",
+  );
+  // Enter only puts the keyboard away: a rejection is never undone, so
+  // only the button rejects; closed and opened again, the reason is the
+  // list's still (review).
+  let rejects = 0;
+  page.on("request", (request) => {
+    if (request.method() === "POST" && /\/reject\?/.test(request.url()))
+      rejects += 1;
+  });
+  const why = rejecting.getByLabel("Чому відхиляємо");
+  await why.focus();
+  await page.keyboard.press("Enter");
+  await expect(why).not.toBeFocused();
+  await expect(rejecting).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(rejecting).toHaveCount(0);
+  await listWay(page, "Відхилити список");
+  await expect(rejecting).toHaveAttribute("data-ready", "");
+  expect(rejects).toBe(0);
+  // And rejected for real, the reason kept: the sheet closes, the tag
+  // says so, the warehouse free for the journeys after.
+  await expect(rejecting.getByLabel("Чому відхиляємо")).toHaveValue(
+    "перевірка відмов",
+  );
+  await yes.click();
+  await expect(rejecting).toHaveCount(0);
   await expect(page.getByText(/^Відхилено: перевірка відмов/)).toBeVisible();
+  await expect(page.locator(".opening-hero-in")).toBeFocused();
 });
 
 test("a split the list does not state asks who counted, and a warehouse with history refuses it", async ({
@@ -1138,24 +1268,19 @@ test("a split the list does not state asks who counted, and a warehouse with his
     card(page, 1).getByText("Звідки кількість: Перелічили"),
   ).toBeVisible();
 
-  const approval = page.getByLabel("Затвердження списку");
+  // Refused, said under the tag (goods task list after stage 2, P0-1).
+  const said = page.locator(".opening-said");
   await approve(page);
-  await expect(
-    approval.getByText(
-      /уже був рух товару, тому початковий залишок туди внести не можна/,
-    ),
-  ).toBeVisible();
+  await expect(said).toHaveText(
+    /уже був рух товару, тому початковий залишок туди внести не можна/,
+  );
   // Where the missing goods go in, as the row names it now (owner decision
   // after #142, 2026-10-26).
-  await expect(
-    approval.getByText(
-      /Відхиліть цей список, а відсутній товар прийміть через «Ще» › «Прийшов товар»\.$/,
-    ),
-  ).toBeVisible();
+  await expect(said).toHaveText(
+    /Відхиліть цей список, а відсутній товар прийміть через «Ще» › «Прийшов товар»\.$/,
+  );
 
-  await approval.getByRole("button", { name: "Відхилити список" }).click();
-  await approval.getByLabel("Чому відхиляємо").fill("склад уже працює");
-  await approval.getByRole("button", { name: "Так, відхилити" }).click();
+  await rejectList(page, "склад уже працює");
   await expect(
     page.getByText(
       "Відхилено: склад уже працює. Залишків цей список не змінив.",
@@ -1206,10 +1331,7 @@ test("a line's model the catalogue has not is added from its empty search, in th
   await save(page, editor);
   await expect(card(page, 1).getByText(/^Розібрано/)).toBeVisible();
   // The list goes: nothing waits at the warehouse the receipts use.
-  const approval = page.getByLabel("Затвердження списку");
-  await approval.getByRole("button", { name: "Відхилити список" }).click();
-  await approval.getByLabel("Чому відхиляємо").fill("перевірка нової моделі");
-  await approval.getByRole("button", { name: "Так, відхилити" }).click();
+  await rejectList(page, "перевірка нової моделі");
   await expect(
     page.getByText(/^Відхилено: перевірка нової моделі\./),
   ).toBeVisible();
@@ -1319,15 +1441,24 @@ test("approving is for whoever may approve, and the section for whoever handles 
   );
   await expect(page.locator(".opening-rest")).toHaveText("1 шт.");
   await expect(page.getByLabel("Затвердження списку")).toHaveCount(0);
-  // Whoever handles a list may still reject it (review, 2026-10-09).
-  await expect(
-    page
-      .getByLabel("Рішення щодо списку")
-      .getByRole("button", { name: "Відхилити список" }),
-  ).toBeVisible();
   await expect(page.getByRole("button", { name: /^Затвердити/ })).toHaveCount(
     0,
   );
+  // Whoever handles a list may still reject it (review, 2026-10-09): the
+  // tag's ⋯ offers what this person may do, and only that (goods task
+  // list after stage 2, P0-1). One part typed in one go: no files.
+  await page.getByRole("button", { name: "Дії зі списком" }).click();
+  const ways = page.getByRole("dialog", { name: source });
+  await expect(ways.getByRole("button")).toHaveText([
+    "Додати файл",
+    "Додати рядки вручну",
+    "Відхилити список",
+  ]);
+  await page.keyboard.press("Escape");
+  await expect(ways).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Дії зі списком" }),
+  ).toBeFocused();
 
   // Whoever may not take the stock in reads the lines without «Розібрати
   // рядок», and nothing is said of the rule (stage 2, goods task list,
@@ -1406,10 +1537,7 @@ test("nothing is received into a warehouse while its list waits, and it is once 
     .getByRole("article", { name: `Список ${source}` })
     .getByRole("button", { name: "Відкрити" })
     .click();
-  const approval = page.getByLabel("Затвердження списку");
-  await approval.getByRole("button", { name: "Відхилити список" }).click();
-  await approval.getByLabel("Чому відхиляємо").fill("перелічимо заново");
-  await approval.getByRole("button", { name: "Так, відхилити" }).click();
+  await rejectList(page, "перелічимо заново");
   await expect(
     page.getByText(
       "Відхилено: перелічимо заново. Залишків цей список не змінив.",

@@ -1457,7 +1457,11 @@ test("each verb opens its section, and its «←» comes back to «Сьогод�
   await expect(
     page.getByRole("heading", { name: "Зошит", exact: true }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "До списків" }).click();
+  // «← Початкові залишки» over the title (goods task list after stage 2,
+  // P0-1).
+  await page
+    .getByRole("button", { name: "Назад до «Початкові залишки»" })
+    .click();
   await expect(
     page.getByRole("heading", { name: "Початкові залишки", exact: true }),
   ).toBeVisible();

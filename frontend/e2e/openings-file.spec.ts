@@ -1,4 +1,13 @@
-import { changeStore, test, expect, openStore, section } from "./fixtures";
+import {
+  changeStore,
+  test,
+  expect,
+  listWay,
+  openStore,
+  rejectList,
+  removePart,
+  section,
+} from "./fixtures";
 import type { Locator, Page, Request, Route } from "@playwright/test";
 import { createHmac, randomBytes, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -466,11 +475,21 @@ test("a file fills a new list: lines show their photo and reading, a split the l
       items: { summary: { limits: { lines: number; allocations: number } } }[];
     }
   ).items[0]?.summary ?? { limits: { lines: -1, allocations: -1 } };
+  // On «Файли списку», the tag's ⋯ (goods task list after stage 2, P0-1).
+  await listWay(page, "Файли списку · 1");
+  await expect(
+    page.getByRole("heading", { name: "Файли списку" }),
+  ).toBeFocused();
   await expect(
     page.getByText(
       `Місце у списку: рядків 5 з ${limits.lines.toLocaleString("uk-UA")} · відповідей 0 з ${limits.allocations.toLocaleString("uk-UA")}`,
     ),
   ).toBeVisible();
+  await page.getByRole("button", { name: "Назад до «Зошит 1»" }).click();
+  await expect(
+    page.getByRole("button", { name: "Дії зі списком" }),
+  ).toBeFocused();
+  await expect(page.getByText(/^Місце у списку/)).toHaveCount(0);
   await showLines(page, "Усі");
 
   // A line's row: its text, and what the list says of its count.
@@ -585,7 +604,7 @@ test("a file fills a new list: lines show their photo and reading, a split the l
     await expect(card(page, line)).toContainText(`Не товар: ${why}`);
 
   // A second file joins the same list.
-  await page.getByRole("button", { name: "Додати файл" }).click();
+  await listWay(page, "Додати файл");
   const adding = page.getByRole("form", { name: "Додати файл" });
   await choose(
     adding,
@@ -606,16 +625,81 @@ test("a file fills a new list: lines show their photo and reading, a split the l
   await expect(adding.getByLabel("Що у файлі")).toHaveText(
     "Файл «зошит-2.json»: рядків 1, фото 1. Піде до списку складу «Склад для файлу».",
   );
+  // How much room the list has, where lines are added too (review).
+  await expect(adding.getByText(/^Місце у списку: рядків 5 з /)).toBeVisible();
   await adding.getByRole("button", { name: "Додати до списку" }).click();
+  // Added: back on the list, read again first — no «Затвердити» of the
+  // list before it, even for a moment (review); its files on their own
+  // screen (P0-1).
+  await expect(adding).toHaveCount(0);
+  expect(await page.locator(".pay-panel.order-dock").count()).toBe(0);
+
+  // At 360 × 640, light and dark, a list in work of two files, a line
+  // still waiting — no «Затвердити», even for the moment the list is read
+  // again: the header, the tag and the switch over the menu, nothing between
+  // the switch's row and the first line (P0-1, its first criterion). The
+  // tag's line of what the waiting holds takes four lines at 360 px in the
+  // words approved, so the first line itself begins a short scroll below —
+  // said to the owner (batch 10's report).
+  const size360 = page.viewportSize();
+  await page.setViewportSize({ width: 360, height: 640 });
+  for (const scheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    await page.evaluate(() => {
+      window.scrollTo(0, 0);
+    });
+    await expect(page.locator(".pay-panel.order-dock")).toHaveCount(0);
+    const room = await page.evaluate(() => {
+      const menu = document.querySelector('nav[aria-label="Розділи"]');
+      return Math.min(
+        innerHeight,
+        menu?.getBoundingClientRect().top ?? innerHeight,
+      );
+    });
+    for (const seen of [
+      page.locator(".screen-header h1"),
+      page.locator(".opening-hero"),
+      page.getByRole("group", { name: "Які рядки" }),
+    ]) {
+      const box = await seen.boundingBox();
+      expect(box).not.toBeNull();
+      expect((box?.y ?? 0) + (box?.height ?? 0)).toBeLessThanOrEqual(room);
+    }
+    const others = await page
+      .getByRole("button", { name: /^Інші рядки/ })
+      .boundingBox();
+    const first = await page
+      .getByRole("article", { name: /^Рядок \d+$/ })
+      .first()
+      .boundingBox();
+    expect(others).not.toBeNull();
+    expect(first).not.toBeNull();
+    expect(
+      (first?.y ?? 0) - (others?.y ?? 0) - (others?.height ?? 0),
+    ).toBeLessThanOrEqual(16);
+    expect(await fitsWidth(page)).toBe(true);
+    await page.screenshot({
+      path: `test-results/openings-two-files-360-${scheme}.png`,
+    });
+  }
+  await page.emulateMedia({ colorScheme: "light" });
+  if (size360) await page.setViewportSize(size360);
+
+  await listWay(page, "Файли списку · 2");
   const second = page.getByRole("article", { name: "Файл 2" });
-  await expect(second).toContainText("2. «зошит-2.json»");
+  await expect(second.locator(".today-tag-title")).toHaveText(
+    "2. «зошит-2.json» · Звідки: Зошит 2",
+  );
   await expect(second).toContainText("Рядки 6–6 · розібрано 0 з 1");
   await expect(second).toContainText(/Додано: Оля, /);
 
-  // Its lines alone, and its one size with its count, by a tap.
-  await page
-    .getByRole("combobox", { name: "Файл", exact: true })
-    .selectOption({ label: "2. «зошит-2.json»" });
+  // Its lines alone, «Показати рядки»: the list says whose, over the
+  // switch — no `<select>` (P0-1); its one size with its count, by a tap.
+  await second.getByRole("button", { name: "Показати рядки" }).click();
+  const whose = page.locator(".opening-file-line p");
+  await expect(whose).toHaveText("Рядки файлу «2. зошит-2.json»");
+  await expect(whose).toBeFocused();
+  await expect(page.locator("section.openings select")).toHaveCount(0);
   await expect(card(page, 6)).toBeVisible();
   await expect(card(page, 1)).toHaveCount(0);
   editor = await answer(page, 6);
@@ -626,17 +710,26 @@ test("a file fills a new list: lines show their photo and reading, a split the l
   await pickModel(editor, coat);
   await save(page, editor);
   await expect(card(page, 6)).toContainText(`→ ${coat} сірий, L × 1`);
+  // «Усі файли»: every file's lines again.
+  await page.getByRole("button", { name: "Усі файли" }).click();
+  await expect(whose).toHaveCount(0);
+  await expect(card(page, 1)).toBeVisible();
 
-  // The approval names what rests on the split the lines showed.
-  const approval = page.getByLabel("Затвердження списку");
-  await expect(approval).toContainText("Файлів у списку: 2");
-  await expect(
-    approval.getByText("Як у рядку, по розмірах: рядків 2, одиниць 4"),
-  ).toBeVisible();
-  await expect(
-    approval.getByText("Відомо інакше: рядків 1, одиниць 3"),
-  ).toBeVisible();
-  await approve(page);
+  // The approval names what rests on the split the lines showed — in its
+  // sheet, under the number; nothing of it on the list (P0-1).
+  await expect(page.getByLabel("Затвердження списку")).toHaveCount(0);
+  await page.getByRole("button", { name: /^Затвердити · / }).click();
+  const confirm = page.getByRole("dialog", { name: "Затвердити «Зошит 1»?" });
+  await expect(confirm).toHaveAttribute("data-ready", "");
+  for (const said of [
+    "Як у рядку, по розмірах: 2 рядки · 4 шт.",
+    "Відомо інакше: 1 рядок · 3 шт.",
+    "Файлів у списку: 2",
+  ])
+    await expect(
+      confirm.locator(".opening-summary").getByText(said, { exact: true }),
+    ).toBeVisible();
+  await confirm.getByRole("button", { name: "Так, затвердити" }).click();
   await expect(
     page.getByText(
       "Затверджено: 7 шт. стали початковим залишком складу «Склад для файлу».",
@@ -689,32 +782,43 @@ test("a file added by mistake is removed with its answers, the last file is not,
   ).toBeVisible();
 
   // The one file of a list is not removed: the list is rejected instead.
+  // The files, ⋯'s screen of their own (goods task list after stage 2,
+  // P0-1).
+  const back = page.getByRole("button", {
+    name: "Назад до «Зошит прибирання»",
+  });
+  await listWay(page, "Файли списку · 1");
   const one = page.getByRole("article", { name: "Файл 1" });
   await expect(
     one.getByRole("button", { name: "Прибрати файл" }),
   ).toBeDisabled();
   await expect(one).toContainText(LAST);
+  await back.click();
 
-  await page.getByRole("button", { name: "Додати файл" }).click();
-  await choose(
-    page.getByRole("form", { name: "Додати файл" }),
-    "b.json",
-    wrong,
-  );
-  // Refused for a reason the screen does not name: a file's words, never
-  // an order's (review, 2026-10-24).
-  await refuseOnce(page, "**/api/v1/snapshots/*/parts?**", 422);
-  await page.getByRole("button", { name: "Додати до списку" }).click();
+  await listWay(page, "Додати файл");
+  const adding = page.getByRole("form", { name: "Додати файл" });
   await expect(
-    page.getByRole("form", { name: "Додати файл" }).getByRole("alert"),
-  ).toHaveText("Файл не додано. Перевірте його та спробуйте ще раз.");
-  await page.getByRole("button", { name: "Додати до списку" }).click();
+    page.getByRole("heading", { name: "Додати файл" }),
+  ).toBeFocused();
+  await choose(adding, "b.json", wrong);
+  // Refused for a reason the screen does not name: a file's words, never
+  // an order's (review, 2026-10-24) — what was not done, then the step
+  // (owner, В-П1 (б), 2026-11-11).
+  await refuseOnce(page, "**/api/v1/snapshots/*/parts?**", 422);
+  await adding.getByRole("button", { name: "Додати до списку" }).click();
+  await expect(adding.getByRole("alert")).toHaveText(
+    "Файл не додано. Перевірте його.",
+  );
+  await adding.getByRole("button", { name: "Додати до списку" }).click();
+  await expect(adding).toHaveCount(0);
+  await listWay(page, "Файли списку · 2");
   const two = page.getByRole("article", { name: "Файл 2" });
   await expect(two).toContainText("Рядки 2–3 · розібрано 0 з 2");
   await expect(
     one.getByRole("button", { name: "Прибрати файл" }),
   ).toBeEnabled();
   await expect(one).not.toContainText(LAST);
+  await back.click();
 
   // One of its lines answered, then the file goes, with that answer.
   await showLines(page, "Усі");
@@ -723,30 +827,45 @@ test("a file added by mistake is removed with its answers, the last file is not,
   await pickModel(editor, coat);
   await size(editor, "L");
   await save(page, editor);
-  await expect(two).toContainText("розібрано 1 з 2");
   await expect(page.locator(".opening-progress")).toContainText(
     "Розібрано 1 з 3",
   );
+  await listWay(page, "Файли списку · 2");
+  await expect(two).toContainText("розібрано 1 з 2");
+  // Its lines shown, then its files' screen again: the file whose lines
+  // the list shows is the one removed below.
+  await two.getByRole("button", { name: "Показати рядки" }).click();
+  const whose = page.locator(".opening-file-line p");
+  await expect(whose).toHaveText("Рядки файлу «2. b.json»");
+  await listWay(page, "Файли списку · 2");
 
+  // Asked in a sheet, the same words; «Так, прибрати», no «Скасувати».
   await two.getByRole("button", { name: "Прибрати файл" }).click();
-  await expect(two.getByLabel("Прибрати файл?", { exact: true })).toContainText(
+  const asking = page.getByRole("dialog", { name: "Прибрати файл?" });
+  await expect(asking.locator(".opening-asked")).toHaveText(
     "Прибрати файл «b.json»? Рядки цього файлу (2) не увійдуть до затвердження, а відповіді на них (1) зникнуть; рядки буде видно як прибрані. Інші файли лишаться.",
   );
+  await expect(asking.getByRole("button", { name: "Скасувати" })).toHaveCount(
+    0,
+  );
+  await page.keyboard.press("Escape");
+  await expect(asking).toHaveCount(0);
+  await expect(
+    two.getByRole("button", { name: "Прибрати файл" }),
+  ).toBeFocused();
   await refuseOnce(page, "**/api/v1/snapshots/*/parts/*/remove?**", 409);
-  await two.getByRole("button", { name: "Так, прибрати" }).click();
+  await removePart(page, two, "Прибрати файл");
+  await expect(asking).toHaveCount(0);
   await expect(
     page.getByText(
-      "Файл не прибрано. Поки ви працювали, список змінився — перегляньте його й спробуйте ще раз.",
+      "Файл не прибрано. Поки ви працювали, список змінився — перегляньте його.",
       { exact: true },
     ),
   ).toBeVisible();
-  await two.getByRole("button", { name: "Прибрати файл" }).click();
-  await two.getByRole("button", { name: "Так, прибрати" }).click();
+  await removePart(page, two, "Прибрати файл");
   await expect(two).toContainText(/Прибрано: Оля, /);
+  await expect(two).not.toContainText(/Додано: /);
   await expect(two).toHaveClass(/part-removed/);
-  await expect(page.locator(".opening-progress")).toContainText(
-    "Розібрано 0 з 1",
-  );
   // The one left is the last again.
   await expect(
     one.getByRole("button", { name: "Прибрати файл" }),
@@ -755,6 +874,14 @@ test("a file added by mistake is removed with its answers, the last file is not,
   await expect(two.getByRole("button", { name: "Прибрати файл" })).toHaveCount(
     0,
   );
+  await back.click();
+  await expect(page.locator(".opening-progress")).toContainText(
+    "Розібрано 0 з 1",
+  );
+  // The line over the switch names the file as it now is (review).
+  await expect(whose).toHaveText("Рядки файлу «2. b.json» (прибрано)");
+  await page.getByRole("button", { name: "Усі файли" }).click();
+  await expect(whose).toHaveCount(0);
 
   // Its lines stay readable, as removed, and take no answer.
   await showLines(page, "Прибрані");
@@ -765,15 +892,14 @@ test("a file added by mistake is removed with its answers, the last file is not,
   ).toHaveCount(0);
 
   // Added again, it is a new file, whose lines wait to be answered.
-  await page.getByRole("button", { name: "Додати файл" }).click();
-  await choose(
-    page.getByRole("form", { name: "Додати файл" }),
-    "b.json",
-    wrong,
-  );
-  await page.getByRole("button", { name: "Додати до списку" }).click();
+  await listWay(page, "Додати файл");
+  await choose(adding, "b.json", wrong);
+  await adding.getByRole("button", { name: "Додати до списку" }).click();
+  await expect(adding).toHaveCount(0);
+  await listWay(page, "Файли списку · 2");
   const three = page.getByRole("article", { name: "Файл 3" });
   await expect(three).toContainText("Рядки 4–5 · розібрано 0 з 2");
+  await back.click();
   await showLines(page, "Усі");
   await expect(card(page, 4)).toContainText(/Чекає|Потребує уваги/);
 
@@ -793,9 +919,16 @@ test("a file added by mistake is removed with its answers, the last file is not,
   await save(page, editor);
   await expect(card(page, 5)).toContainText("Не товар: підсумок сторінки");
 
-  const approval = page.getByLabel("Затвердження списку");
-  await expect(approval).toContainText("Файлів у списку: 2 · прибрано: 1");
-  await approve(page);
+  // Two files left of three: the sheet counts the two (P0-1).
+  await page.getByRole("button", { name: /^Затвердити · / }).click();
+  const confirm = page.getByRole("dialog", {
+    name: "Затвердити «Зошит прибирання»?",
+  });
+  await expect(confirm).toHaveAttribute("data-ready", "");
+  await expect(
+    confirm.getByText("Файлів у списку: 2", { exact: true }),
+  ).toBeVisible();
+  await confirm.getByRole("button", { name: "Так, затвердити" }).click();
   await expect(
     page.getByText(
       "Затверджено: 3 шт. стали початковим залишком складу «Склад, де прибирають файл».",
@@ -982,7 +1115,7 @@ test("a file not in Birka's format is refused before it is sent, and the same fi
   await page.getByRole("button", { name: "Назад до списку" }).click();
 
   // The same file again is the server's to refuse, naming the file.
-  await page.getByRole("button", { name: "Додати файл" }).click();
+  await listWay(page, "Додати файл");
   const adding = page.getByRole("form", { name: "Додати файл" });
   await choose(adding, "перевірка-2.json", checked);
   await adding.getByRole("button", { name: "Додати до списку" }).click();
@@ -1286,13 +1419,14 @@ test("a record that may be a size with its count or a range of sizes is asked ab
       },
     });
   });
-  const approval = page.getByLabel("Затвердження списку");
+  // Refused, said under the tag (goods task list after stage 2, P0-1).
+  const refused = page.locator(".opening-said");
   for (const said of [
     "Рядок 1 треба розібрати ще раз: запис у ньому тепер може бути діапазоном розмірів.",
     "Рядки 1, 2 і ще 1 треба розібрати ще раз: запис у них тепер може бути діапазоном розмірів.",
   ]) {
     await approve(page);
-    await expect(approval.getByRole("alert")).toHaveText(said);
+    await expect(refused).toHaveText(said);
   }
   await page.unrouteAll({ behavior: "wait" });
 });
@@ -1332,7 +1466,7 @@ test("the shared warehouse's list is seen and filled from the other store, and n
   await expect(page.getByRole("heading", { name })).toBeVisible();
   await expect(page.getByText("Веде магазин «Основний»")).toBeVisible();
 
-  await page.getByRole("button", { name: "Додати файл" }).click();
+  await listWay(page, "Додати файл");
   await choose(
     page.getByRole("form", { name: "Додати файл" }),
     "спільний-2.json",
@@ -1341,9 +1475,11 @@ test("the shared warehouse's list is seen and filled from the other store, and n
     ]),
   );
   await page.getByRole("button", { name: "Додати до списку" }).click();
+  await listWay(page, "Файли списку · 2");
   await expect(page.getByRole("article", { name: "Файл 2" })).toContainText(
     "Рядки 2–2 · розібрано 0 з 1",
   );
+  await page.getByRole("button", { name: `Назад до «${name}»` }).click();
   await showLines(page, "Усі");
   const editor = await answer(page, 2);
   await expect(editor.getByLabel("Як у списку: 2 шт.")).toBeChecked();
@@ -1359,7 +1495,9 @@ test("the shared warehouse's list is seen and filled from the other store, and n
     );
 
   // No second list for the warehouse: its list is named, and opened.
-  await page.getByRole("button", { name: "До списків" }).click();
+  await page
+    .getByRole("button", { name: "Назад до «Початкові залишки»" })
+    .click();
   await page.getByRole("button", { name: "Новий список" }).click();
   const another = page.getByRole("form", { name: "Новий список" });
   await chip(page, "Спільний новий склад");
@@ -1467,20 +1605,20 @@ test("a shared list whose own store stopped trading is only rejected, from the o
     await expect(
       page.getByRole("button", { name: /^Затвердити · / }),
     ).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Додати файл" })).toHaveCount(
-      0,
-    );
     await expect(
       card(page, 1).getByRole("button", { name: "Розібрати", exact: true }),
     ).toHaveCount(0);
+    // ⋯ offers its rejection alone: typed in one go, it has no files to
+    // tell apart, and nothing is added to it (goods task list after stage
+    // 2, P0-1).
+    await page.getByRole("button", { name: "Дії зі списком" }).click();
+    const ways = page.getByRole("dialog", { name });
+    await expect(ways.getByRole("button")).toHaveText(["Відхилити список"]);
+    await page.keyboard.press("Escape");
+    await expect(ways).toHaveCount(0);
 
     // A manager rejects it, and the warehouse is released.
-    const decision = page.getByLabel("Рішення щодо списку");
-    await decision.getByRole("button", { name: "Відхилити список" }).click();
-    await decision
-      .getByLabel("Чому відхиляємо")
-      .fill("Північний не працює, файли — до нового списку");
-    await decision.getByRole("button", { name: "Так, відхилити" }).click();
+    await rejectList(page, "Північний не працює, файли — до нового списку");
     await expect(
       page.getByText(
         "Відхилено: Північний не працює, файли — до нового списку. Залишків цей список не змінив.",
@@ -1491,7 +1629,9 @@ test("a shared list whose own store stopped trading is only rejected, from the o
       expect(new URL(url).searchParams.get("store_id")).toBe(south);
 
     // Its warehouse takes a new list, started from «Південний».
-    await page.getByRole("button", { name: "До списків" }).click();
+    await page
+      .getByRole("button", { name: "Назад до «Початкові залишки»" })
+      .click();
     await page.getByRole("button", { name: "Новий список" }).click();
     const fresh = page.getByRole("form", { name: "Новий список" });
     await chip(page, "Склад півночі й півдня");
@@ -1511,35 +1651,46 @@ test("a shared list whose own store stopped trading is only rejected, from the o
     ).toBeVisible();
     await expect(page.getByText("Веде магазин «Північний»")).toHaveCount(0);
     await expect(
-      page.getByRole("button", { name: "Додати файл" }),
-    ).toBeVisible();
-
+      page.getByRole("button", { name: /^Затвердити · / }),
+    ).toHaveCount(0);
+    // What may be done is ⋯'s: adding, the files, the rejection. Approving
+    // is not theirs, and they are not asked to (review, 2026-10-09); the
+    // tag says what the waiting holds, and nothing of what to do about it
+    // (goods task list after stage 2, P0-1).
+    await expect(page.locator(".opening-hold")).toHaveText(
+      /не продають і не виправляють\.$/,
+    );
+    await expect(page.getByText(/Відхилити його можете й ви/)).toHaveCount(0);
+    await expect(page.getByText(/право/)).toHaveCount(0);
+    await expect(page.getByText(/Затвердіть або відхиліть його/)).toHaveCount(
+      0,
+    );
+    await page.getByRole("button", { name: "Дії зі списком" }).click();
+    const own = page.getByRole("dialog", { name: `${name}, заново` });
+    await expect(own.getByRole("button")).toHaveText([
+      "Додати файл",
+      "Додати рядки вручну",
+      "Файли списку · 1",
+      "Відхилити список",
+    ]);
     // Its one file is the last: a manager is told to reject the list
-    // instead, and the button to is there. Approving is not theirs, and
-    // they are not asked to (review, 2026-10-09).
+    // instead, and the way to is there.
+    // Its taps once it has risen (a tap carried over is not one).
+    await expect(own).toHaveAttribute("data-ready", "");
+    await own.getByRole("button", { name: "Файли списку · 1" }).click();
     await expect(page.getByRole("article", { name: "Файл 1" })).toContainText(
       LAST,
     );
-    await expect(
-      page.getByRole("button", { name: /^Затвердити · / }),
-    ).toHaveCount(0);
-    // Nothing said of who may approve (stage 2, goods task list, P1-5).
-    await expect(page.getByText(/Відхилити його можете й ви\.$/)).toBeVisible();
-    await expect(page.getByText(/право/)).toHaveCount(0);
-    await expect(page.getByText("Затвердіть або відхиліть його.")).toHaveCount(
-      0,
-    );
-    const own = page.getByLabel("Рішення щодо списку");
-    await own.getByRole("button", { name: "Відхилити список" }).click();
+    await page
+      .getByRole("button", { name: `Назад до «${name}, заново»` })
+      .click();
     // A character that reorders a reason is shown as a mark, and so is a
     // line separator and a selector after a letter; an emoji's own
     // selector and joiner are not (review, 2026-10-09).
-    await own
-      .getByLabel("Чому відхиляємо")
-      .fill(
-        `Не той файл ${RLO}12 ${HEART} ${FAMILY} ${KEYCAP_ONE}${LINE_SEPARATOR}M${VS16}`,
-      );
-    await own.getByRole("button", { name: "Так, відхилити" }).click();
+    await rejectList(
+      page,
+      `Не той файл ${RLO}12 ${HEART} ${FAMILY} ${KEYCAP_ONE}${LINE_SEPARATOR}M${VS16}`,
+    );
     await expect(
       page.getByText(
         `Відхилено: Не той файл ⟦U+202E⟧12 ${HEART} ${FAMILY} ${KEYCAP_ONE}⟦U+2028⟧M⟦U+FE0F⟧. Залишків цей список не змінив.`,
@@ -1687,7 +1838,7 @@ test("a slow answer is no outage: a file and an approval wait 60 s, say so, and 
   const add = hold(page, "**/api/v1/snapshots/*/parts?*");
   await add.ready;
   try {
-    await page.getByRole("button", { name: "Додати файл" }).click();
+    await listWay(page, "Додати файл");
     const adding = page.getByRole("form", { name: "Додати файл" });
     await choose(
       adding,
@@ -1702,7 +1853,9 @@ test("a slow answer is no outage: a file and an approval wait 60 s, say so, and 
     await page.clock.fastForward("00:40");
     await expect(adding.getByRole("alert")).toHaveText(SLOW);
     expect(await down(page)).toBe(false);
-    await adding.getByRole("button", { name: "Закрити" }).click();
+    await page
+      .getByRole("button", { name: "Назад до «Повільний зошит»" })
+      .click();
   } finally {
     await add.release();
   }
@@ -1718,14 +1871,15 @@ test("a slow answer is no outage: a file and an approval wait 60 s, say so, and 
   const held = hold(page, "**/api/v1/snapshots/*/approve?*");
   await held.ready;
   try {
-    const approval = page.getByLabel("Затвердження списку");
+    // Said under the tag (goods task list after stage 2, P0-1).
+    const said = page.locator(".opening-said");
     await approve(page);
     await expect.poll(() => held.held()).toBe(1);
     await page.clock.fastForward("00:21");
     await page.waitForTimeout(300);
-    await expect(approval.getByRole("alert")).toHaveCount(0);
+    await expect(said).toHaveCount(0);
     await page.clock.fastForward("00:40");
-    await expect(approval.getByRole("alert")).toHaveText(SLOW);
+    await expect(said).toHaveText(SLOW);
     expect(await down(page)).toBe(false);
   } finally {
     await held.release();
@@ -1789,43 +1943,49 @@ test("answers lost on their way back: a file removed since comes back as a new o
     { text: `${coat} сірий L 1 шт`, photo: "L2.jpg", photo_line: 1 },
   ]);
   lose = 1;
-  await page.getByRole("button", { name: "Додати файл" }).click();
+  await listWay(page, "Додати файл");
   let adding = page.getByRole("form", { name: "Додати файл" });
   await choose(adding, "другий.json", second);
   await adding.getByRole("button", { name: "Додати до списку" }).click();
   await expect(adding.getByRole("alert")).toHaveText(
     "Невідомо, чи додано файл. Натисніть ще раз — той самий файл не додасться двічі.",
   );
-  await adding.getByRole("button", { name: "Закрити" }).click();
+  await page.getByRole("button", { name: `Назад до «${source}»` }).click();
 
   // Read again, the list has it; it is removed as a mistake.
-  await page.getByRole("button", { name: "До списків" }).click();
+  await page
+    .getByRole("button", { name: "Назад до «Початкові залишки»" })
+    .click();
   await page
     .getByRole("article", { name: `Список ${source}` })
     .getByRole("button", { name: "Відкрити" })
     .click();
+  await listWay(page, "Файли списку · 2");
   const two = page.getByRole("article", { name: "Файл 2" });
   await expect(two).toContainText("2. «другий.json»");
-  await two.getByRole("button", { name: "Прибрати файл" }).click();
-  await two.getByRole("button", { name: "Так, прибрати" }).click();
+  await removePart(page, two, "Прибрати файл");
   await expect(two).toContainText(/Прибрано: Оля, /);
+  await page.getByRole("button", { name: `Назад до «${source}»` }).click();
 
   // Added again: the command kept for it names the removed file, so it is
   // sent once more as a new one, and a new file joins.
-  await page.getByRole("button", { name: "Додати файл" }).click();
+  await listWay(page, "Додати файл");
   adding = page.getByRole("form", { name: "Додати файл" });
   await choose(adding, "другий.json", second);
   await adding.getByRole("button", { name: "Додати до списку" }).click();
+  await expect(adding).toHaveCount(0);
+  await listWay(page, "Файли списку · 2");
   await expect(page.getByRole("article", { name: "Файл 3" })).toContainText(
     "Рядки 4–4 · розібрано 0 з 1",
   );
+  await page.getByRole("button", { name: `Назад до «${source}»` }).click();
   expect(posted).toHaveLength(3);
   expect(posted[1]).toBe(posted[0]);
   expect(posted[2]).not.toBe(posted[0]);
 
   // Lines typed by hand, their answer lost; changed, then sent again.
   lose = 1;
-  await page.getByRole("button", { name: "Додати рядки вручну" }).click();
+  await listWay(page, "Додати рядки вручну");
   const typing = page.getByRole("form", { name: "Додати рядки вручну" });
   const text = typing.getByLabel(/Рядки — кожен товар/);
   await text.fill(`${coat} сірий M 1 шт`);
@@ -1840,11 +2000,13 @@ test("answers lost on their way back: a file removed since comes back as a new o
   await expect(typing.getByRole("alert")).toHaveText(
     "Рядки, надіслані перед цим, уже є в списку, а ці відрізняються від них. Натисніть «Додати рядки» ще раз — ці буде додано як нові, окремо від тих.",
   );
+  await expect(text).toHaveValue(changed);
+  await typing.getByRole("button", { name: "Додати рядки" }).click();
+  await expect(typing).toHaveCount(0);
+  await listWay(page, "Файли списку · 4");
   await expect(page.getByRole("article", { name: "Файл 4" })).toContainText(
     "4. Рядки, внесені вручну",
   );
-  await expect(text).toHaveValue(changed);
-  await typing.getByRole("button", { name: "Додати рядки" }).click();
   const typed = page.getByRole("article", { name: "Файл 5" });
   await expect(typed).toContainText("Рядки 6–7 · розібрано 0 з 2");
   // Typed lines are removed as typed lines, never called a file (review,
@@ -1853,12 +2015,13 @@ test("answers lost on their way back: a file removed since comes back as a new o
     typed.getByRole("button", { name: "Прибрати файл" }),
   ).toHaveCount(0);
   await typed.getByRole("button", { name: "Прибрати рядки" }).click();
-  await expect(
-    typed.getByLabel("Прибрати рядки?", { exact: true }).locator("p"),
-  ).toHaveText(
+  const asking = page.getByRole("dialog", { name: "Прибрати рядки?" });
+  await expect(asking.locator(".opening-asked")).toHaveText(
     "Прибрати рядки, внесені вручну? Ці рядки (2) не увійдуть до затвердження, а відповіді на них (0) зникнуть; їх буде видно як прибрані. Інші файли лишаться.",
   );
-  await typed.getByRole("button", { name: "Скасувати" }).click();
+  await page.keyboard.press("Escape");
+  await expect(asking).toHaveCount(0);
+  await page.getByRole("button", { name: `Назад до «${source}»` }).click();
   expect(posted).toHaveLength(6);
   expect(posted[4]).toBe(posted[3]);
   expect(posted[5]).not.toBe(posted[3]);
@@ -1916,14 +2079,18 @@ test("on a narrow phone a file's long name breaks, never pushes the page sideway
   await expect(
     page.getByRole("heading", { name: "Вузький зошит" }),
   ).toBeVisible();
+  await expect(page.getByText(`перелічено ${date}`)).toBeVisible();
+  expect(await fitsWidth(page)).toBe(true);
+  const back = page.getByRole("button", { name: "Назад до «Вузький зошит»" });
+  await listWay(page, "Файли списку · 1");
   await expect(page.getByRole("article", { name: "Файл 1" })).toContainText(
     long,
   );
-  await expect(page.getByText(`перелічено ${date}`)).toBeVisible();
   expect(await fitsWidth(page)).toBe(true);
+  await back.click();
 
   // A second file, and the question before one is removed, name it whole.
-  await page.getByRole("button", { name: "Додати файл" }).click();
+  await listWay(page, "Додати файл");
   const adding = page.getByRole("form", { name: "Додати файл" });
   await choose(
     adding,
@@ -1960,13 +2127,18 @@ test("on a narrow phone a file's long name breaks, never pushes the page sideway
   );
   await page.unrouteAll({ behavior: "wait" });
   await adding.getByRole("button", { name: "Додати до списку" }).click();
+  await expect(adding).toHaveCount(0);
+  await listWay(page, "Файли списку · 2");
   const two = page.getByRole("article", { name: "Файл 2" });
   await two.getByRole("button", { name: "Прибрати файл" }).click();
-  await expect(two.getByLabel("Прибрати файл?", { exact: true })).toContainText(
+  const asking = page.getByRole("dialog", { name: "Прибрати файл?" });
+  await expect(asking.locator(".opening-asked")).toContainText(
     `Прибрати файл «${other}»?`,
   );
   expect(await fitsWidth(page)).toBe(true);
-  await two.getByRole("button", { name: "Скасувати" }).click();
+  await page.keyboard.press("Escape");
+  await expect(asking).toHaveCount(0);
+  await back.click();
 
   // The line's editor names the file and the photo.
   await showLines(page, "Усі");
@@ -2027,10 +2199,7 @@ test("on a narrow phone a file's long name breaks, never pushes the page sideway
   // A reason given as one long word, a link, breaks too (review,
   // 2026-10-09).
   const link = `https://example.com/${"zoshyt_2_storinky_1-4_".repeat(4)}`;
-  const decision = page.getByLabel("Затвердження списку");
-  await decision.getByRole("button", { name: "Відхилити список" }).click();
-  await decision.getByLabel("Чому відхиляємо").fill(link);
-  await decision.getByRole("button", { name: "Так, відхилити" }).click();
+  await rejectList(page, link);
   await expect(page.getByText(`Відхилено: ${link}.`)).toBeVisible();
   expect(await fitsWidth(page)).toBe(true);
 });
@@ -2412,7 +2581,9 @@ test("a send refused as the same command in another form settles the draft: what
     // A send whose answer never came, its list then opened from the
     // overview: the list is made, and the draft is done.
     await noListWaits(page, location);
-    await page.getByRole("button", { name: "До списків" }).click();
+    await page
+      .getByRole("button", { name: "Назад до «Початкові залишки»" })
+      .click();
     lost = "nothing";
     form = await newFromFile(page, location);
     await choose(
