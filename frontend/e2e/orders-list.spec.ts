@@ -340,6 +340,9 @@ async function fire(
   );
 }
 
+/** The list's own warehouses read, from `enter`: `drawn` waits for it. */
+const placesRead = new WeakMap<Page, Promise<void>>();
+
 async function enter(
   page: Page,
   options: { theme?: Record<string, string>; version?: string } = {},
@@ -347,6 +350,21 @@ async function enter(
   await page.goto("about:blank");
   await page.goto(launch(options));
   await openStore(page, "Основний MAIN");
+  // The list's own read of the warehouses, asked as it opens: the screen
+  // before reads them under its own name, before this tap.
+  placesRead.set(
+    page,
+    page
+      .waitForRequest(
+        (request) =>
+          new URL(request.url()).pathname === "/api/v1/stock-locations",
+        { timeout: 0 },
+      )
+      .then(async (request) => {
+        await (await request.response())?.finished();
+      })
+      .catch(() => undefined),
+  );
   await section(page, "Замовлення");
 }
 
@@ -368,8 +386,13 @@ function rows(page: Page, name: string): Locator {
  * the warehouses — the rows come where their places stood, and a tap within
  * 0.7 s of that is let go. So a journey's pause starts from there, never
  * from the screen opened: on CI the warehouses once answered 650 ms before
- * the tap (2026-11-11). */
+ * the tap (2026-11-11). Their answer is waited for as such, not only by
+ * «Завантажуємо склади…»: with nothing to be sent that is never shown, yet
+ * the answer still changes the list — on CI it came 260 ms after the
+ * knot's tap, and the verb's tap 840 ms after the knot was let go
+ * (2026-11-12). For whoever reads the stock, so its read is asked. */
 async function drawn(page: Page): Promise<void> {
+  await placesRead.get(page);
   await expect(
     page.getByRole("status").filter({
       hasText: /^Завантажуємо (замовлення|склади)…$/,
