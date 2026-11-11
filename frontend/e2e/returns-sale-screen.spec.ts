@@ -234,7 +234,7 @@ async function opened(
 
 /**
  * What the screen shows, counted as the task list counts it: the heading
- * and «До списку», each line of text, the paper switch, a tag's name and
+ * and «← До списку» over it, the header's one line, each line of text, the paper switch, a tag's name and
  * meta, a whole «−/+» row as one, «Додати причину»; and the panel's lines,
  * its switch as one, its button.
  */
@@ -242,7 +242,9 @@ async function shown(page: Page): Promise<number> {
   return page
     .locator(
       [
+        ".screen-header > .back",
         ".screen-title > *",
+        ".store-line > .t-meta",
         "section > p",
         "fieldset > label.check",
         ".line-return > h3",
@@ -563,10 +565,24 @@ test("before a tap: nine things to see, nothing to type and nothing to press; a 
   const coat = line("Лоран шоколад");
   const { sent } = await oneSale(page, [coat]);
   await opened(page);
-  // «Продаж 17.10, 14:32 · 6 000,00 грн»: one sale's sum (G33).
-  await expect(
-    page.getByText(/^Продаж \d\d\.\d\d, \d\d:\d\d · 6\s000,00\sгрн$/),
-  ).toBeVisible();
+  // «Продаж 17.10, 14:32 · 6 000,00 грн»: one sale's sum (G33), the
+  // header's one line of context in the store's and the person's place;
+  // «← До списку» over the title (audit after stage 2, sale P1-3).
+  const context = page.locator(".store-line");
+  await expect(context).toHaveCount(1);
+  await expect(context.locator(".t-meta")).toHaveText(
+    /^Продаж \d\d\.\d\d, \d\d:\d\d · 6\s000,00\sгрн$/,
+  );
+  await expect(page.locator(".sale-context")).toHaveCount(0);
+  const back = page.locator(".screen-header > .back");
+  await expect(back).toHaveText("← До списку");
+  const over = await back.boundingBox();
+  const title = await page
+    .getByRole("heading", { name: "Повернення", level: 1 })
+    .boundingBox();
+  expect((over?.y ?? 0) + (over?.height ?? 0)).toBeLessThanOrEqual(
+    title?.y ?? 0,
+  );
   await expect(
     page.getByRole("heading", { name: "Лоран шоколад · M", exact: true }),
   ).toBeVisible();

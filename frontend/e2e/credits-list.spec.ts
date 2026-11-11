@@ -319,9 +319,13 @@ test("«Покупці» says who they are, the store's block what it is owed, l
   await credits(page);
 
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Покупці");
-  await expect(page.locator(".credits-context")).toHaveText(
-    "Ті, хто купує частинами",
-  );
+  // Who they are, the header's one line of context (audit after stage 2,
+  // sale P1-3): in the store's and the person's place, no paragraph of its
+  // own.
+  const line = page.locator(".store-line");
+  await expect(line).toHaveCount(1);
+  await expect(line.locator(".t-meta")).toHaveText("Ті, хто купує частинами");
+  await expect(page.locator(".credits-context")).toHaveCount(0);
   await expect(
     page.getByRole("heading", { name: "Магазину «Основний» винні" }),
   ).toBeVisible();
@@ -1787,7 +1791,7 @@ for (const [name, theme, scheme] of [
     ).toHaveText("12 400,00 грн");
     await expect(rows(page, "Хто винен магазину «Основний»")).toHaveCount(2);
     for (const part of [
-      page.locator(".credits-context"),
+      page.locator(".store-line .t-meta"),
       page.locator(".credits-block h3").first(),
       page.locator(".block-owed .owed-sum").first(),
       page.locator(".owed-count").first(),

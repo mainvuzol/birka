@@ -8331,3 +8331,96 @@ approval; P1-3, P1-4, P2-3 and P2-5 are later batches.
     danger's colour with its crossed circle 16 before it, never the debts'
     colour; wherever the line's price is typed — the till's basket and
     «Нове замовлення», which share it.
+
+## Chosen in chat — 2026-11-10 (audit after stage 2, batch 9: the till's list kept when a read again or a next page fails, «Показати ще»; one line of context on S21, the return form and «Покупці», S21's «Винні» over the dock at 360 × 640; «Знайти в каталозі», «Розмір з етикетки» and «Продажу немає» in the new system; sale P1-3, P1-4, P2-3)
+
+Chosen in chat on 2026-11-10 («Sale P1-3, P1-4, P2-3»), after batch 8
+(#190) was merged. No right, no server rule, no field changes. One word
+changes: «Ще товари» → «Показати ще» (P1-4). P2-3's new words wait for the
+owner's approval, so its screens change their look and keep their words.
+Sale P2-4 («{Ім’я} · винні всього {сума}» in a sheet) still waits for its
+words; P2-5 waits for В-П1.
+
+- **The till's list kept** (P1-4; P7, §5; the returns' rule of a list
+  read again): what is shown depends on what was read.
+  - The first read failed, nothing read: the warning's plate in the
+    list's place, as before.
+  - Read, then a read again failed (back in the app, after a sale): the
+    plate over the tags; the tags stay as read and their cells are
+    pressed. **Decided here, as the TZ's flag asked:** the cells' free
+    counts are the ones read before, named by the plate as not read
+    again; the basket sells nothing over the books — the server checks at
+    the way, and its shortage sheet answers, as ever. This is safer than
+    an empty screen with a coat in hand (inventory-ledger reading).
+  - A search that found nothing, or a warehouse with nothing, read again
+    and refused: its blank tag, «Очистити» and the catalogue's way stay
+    under the plate (review).
+  - While the plate over the tags shows, «Показати ще» is held: its retry
+    reads the whole list first, never a page on top of free counts gone
+    stale (review).
+  - The next page failed: the plate under the tags read, where «Показати
+    ще» stood; its «Спробувати ще раз» reads that page alone
+    (`fetchNextPage`, offset 100), never the list from the start.
+  - «Ще товари» → «Показати ще», every list's word; «Нове замовлення»
+    shares the list, so it says it too, and the journeys' helpers press
+    it. «Ще товари» stays in the catalogue picker and the supplier's
+    return: their passes' (a line in the TZ's observations).
+  - The till and «Нове замовлення» no longer pass their own failure in:
+    the list draws its plates itself.
+- **One line of context** (P1-3; P2's budget, S19, S21): the header's
+  line names what the screen is about, in the store's and the person's
+  place; no paragraph of its own under the title.
+  - S21 (the till's payment): «{покупець} · «{магазин}» · з {дд.мм}», the
+    debt's own store in it; the `debt-context` paragraph is gone there.
+    A debt's detail keeps its own line with the phone to call, and a
+    closed store's debt keeps its plate «Продано в «…» …».
+  - The return form: «Продаж {дд.мм, гг:хх} · {сума}», « · магазин «…»»
+    when sold in another store; «← До списку» over the title, as on S21
+    and stage 2's task screens, the same words; Telegram's «Назад» stands
+    for it, as before.
+  - «Покупці»: «Ті, хто купує частинами»; «Змінити магазин» stays at the
+    line's right. At the till («Внесок») the line keeps the store and the
+    person, as before.
+- **S21 at 360 × 640** (P1-3; spec §6.25, the cash count's rule): below
+  700 px of stable height the keys are 44, the sum's field 64. The keys
+  alone left «Винні» under the dock, so, as the TZ's fallback says,
+  «Винні» and its sum stand on one line in `money-l` (32/34), «Винні»'s
+  words on the sum's baseline (review), «Сплачено X з Y» and its bar
+  under them. Above 700 px nothing changes.
+- **The till's rare screens** (P2-3; §5, §6.13, §6.27, §6.30; stage 2's
+  screens, words to approve):
+  - «Знайти в каталозі» is a part of the till, no card and no heading of
+    its own; its words as before (the one-line hint «На складі «…» його
+    немає в обліку.» waits for approval, and so does «До списку» for
+    «Назад до списку»). With two warehouses or more, which one the coat
+    leaves is asked by deciding chips 44 under «З якого складу
+    віддаєте?», none chosen beforehand, the chosen one in the chosen
+    colours — the seller's choice, never the till's (2026-09-17); the
+    system's list and «Оберіть склад» are gone. The model's sizes are the
+    till's cells 60 × 60 with no count under the letter — the books know
+    none — a tap puts one coat in the basket, as before; while they are
+    read, four grey cells in their place, «Завантажуємо розміри…» said to
+    a reader alone. The taps: the link, the warehouse's chip (two or
+    more), the model, the cell — as before; the sale's body as before.
+  - «Розмір з етикетки» in the basket: deciding chips 44, «Не читали —
+    продати як «розмір невідомий»» chosen by default as the list's empty
+    choice was, then the model's sizes; a chip sends the same `size_id`
+    the list did. The visible «Не читали» waits for approval: the chip
+    says the whole words until then. While the sizes are read, two grey
+    chips; a read that failed leaves «Не читали» alone, as the list did,
+    and says so in the sheet with the warning's plate and its retry
+    (review) — the till's own plate behind the sheet stays. Each row is
+    read with its caption and its line's model, two lines whose size is
+    not known told apart (review).
+  - The chosen chip of either row is drawn in the pressed chip's own
+    colours, which are the chosen ones in both themes: no rule of its own
+    (review).
+  - «Продажу немає»: «Нічого з кошика не було на полиці.», then the stub
+    torn off (recorded, its eyelet filled) headed «Нестачу записано», a
+    line a model — «{Модель} · {розмір}» and «Знято з обліку: N шт.» or
+    «Облік і так не мав цих одиниць — нічого не знято.»; «Перевірте склад
+    із менеджером.» its one line; «Новий продаж» in the receipt's dock.
+    The shortage is the server's record; the screen only names it.
+    **Decided here:** the sentence «Нічого з кошика не було на полиці.
+    Нестачу записано.» is split — its second half heads the stub; no word
+    changes.

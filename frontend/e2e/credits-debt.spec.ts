@@ -1462,6 +1462,51 @@ test.describe("«Продаж» › «Внесок»: a payment on a debt from t
     await expect(search).toBeFocused();
   });
 
+  test("S21 at 360 × 640: who and where the header's one line, and «Винні» with what is owed over the dock unscrolled, its keys 44 at least (audit after stage 2, sale P1-3)", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 360, height: 640 });
+    await serve(page, coat());
+    await atTheTill(page);
+    await page
+      .getByRole("button", { name: /^Відкрити борг: Оксана Петренко,/ })
+      .click();
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+      "Лоран шоколад · M",
+    );
+    // One line under the title: the debt's, in the store's and the
+    // person's place.
+    const line = page.locator(".store-line");
+    await expect(line).toHaveCount(1);
+    await expect(line.locator(".t-meta")).toHaveText(
+      "Оксана Петренко · «Основний» · з 01.10",
+    );
+    await expect(page.locator(".debt-context")).toHaveCount(0);
+    // As it opened: nothing scrolled, what is owed over the dock.
+    expect(await page.evaluate(() => window.scrollY)).toBe(0);
+    const owed = page.getByRole("group", { name: "Скільки винні" });
+    const what = await owed.locator(".owed-what").boundingBox();
+    const sum = await owed.locator(".owed-sum").boundingBox();
+    const dock = await page.locator(".till-dock").boundingBox();
+    if (!what || !sum || !dock) throw new Error("not laid out");
+    expect(what.y).toBeGreaterThanOrEqual(0);
+    expect(sum.y + sum.height).toBeLessThanOrEqual(dock.y);
+    await page.screenshot({ path: "test-results/debt-till-360x640.png" });
+    // Its keys 44 on a short phone, never less, and the sum's field 64, as
+    // the cash count's (spec §6.25).
+    await expect(page.locator(".till-dock .keypad-sum")).toHaveCSS(
+      "height",
+      "64px",
+    );
+    // «Винні» and the sum one line in money-l (32/34), the TZ's fallback.
+    await expect(owed.locator(".owed-sum .sum")).toHaveCSS("font-size", "32px");
+    for (const each of await page.locator(".keypad-key").all()) {
+      const box = await each.boundingBox();
+      expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
+      expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
+    }
+  });
+
   test("three taps from the till — «Внесок», the row, a way: S21 names the goods, the menu steps aside, the sum is keyed in, and S22's stub says what the customer owes the store in all", async ({
     page,
   }) => {
@@ -1495,7 +1540,7 @@ test.describe("«Продаж» › «Внесок»: a payment on a debt from t
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(
       "Лоран шоколад · M",
     );
-    await expect(page.locator(".debt-context")).toHaveText(
+    await expect(page.locator(".store-line .t-meta")).toHaveText(
       "Оксана Петренко · «Основний» · з 01.10",
     );
     await expect(
@@ -1937,7 +1982,7 @@ test.describe("«Продаж» › «Внесок»: a payment on a debt from t
       for (const part of [
         page.locator(".owed-sum"),
         page.locator(".owed-what"),
-        page.locator(".debt-context"),
+        page.locator(".store-line .t-meta"),
       ])
         expect(await contrast(part)).toBeGreaterThanOrEqual(4.5);
       await page.screenshot({ path: `test-results/debt-till-${name}.png` });

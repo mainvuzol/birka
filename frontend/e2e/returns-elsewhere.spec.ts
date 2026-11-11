@@ -224,7 +224,11 @@ test("goods bought at another store come back here, and this store hands the mon
   await expect(card).toContainText("Магазин «Другий»");
 
   await card.getByRole("button", { name: "Оформити повернення" }).click();
-  await expect(page.getByText(/ · магазин «Другий»$/)).toBeVisible();
+  // The sale's store in the header's one line (audit after stage 2, sale
+  // P1-3).
+  await expect(page.locator(".store-line .t-meta")).toHaveText(
+    / · магазин «Другий»$/,
+  );
   // One line of explanation (returns task list, P0-3).
   await expect(
     page.getByText(

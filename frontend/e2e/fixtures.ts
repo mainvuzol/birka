@@ -242,7 +242,7 @@ export async function toTill(page: Page): Promise<void> {
 /**
  * A model's detail (spec S23; «Усе на бірці» sections task list, P0-6):
  * the till, its search settled on `query`, and the model's name on its
- * tag — «Ще товари» read until the tag is listed.
+ * tag — «Показати ще» read until the tag is listed.
  */
 export async function openModel(
   page: Page,
@@ -261,7 +261,7 @@ export async function openModel(
     .getByRole("group", { name, exact: typeof name === "string" })
     .locator("button.model-open")
     .first();
-  const more = page.getByRole("button", { name: "Ще товари" });
+  const more = page.getByRole("button", { name: "Показати ще" });
   while (!(await open.isVisible()) && (await more.isVisible())) {
     await more.click();
     await expect(
@@ -695,7 +695,7 @@ export async function sellsFrom(page: Page, locationId: string): Promise<void> {
 /**
  * A coat into the till's basket as a seller puts it (redesign P0-3): a tap
  * on its size cell, under its model's tag — of `locationId`'s, when every
- * warehouse is listed (a new order's, orders task list, P0-5). «Ще товари»
+ * warehouse is listed (a new order's, orders task list, P0-5). «Показати ще»
  * is read until the cell is listed: a warehouse the specs share holds more
  * than a page.
  */
@@ -708,13 +708,13 @@ export async function tapSize(
   const chip = page.locator(
     `button.size-cell[data-stock="${variantId}:${sizeId}"]${locationId ? `[data-location="${locationId}"]` : ""}`,
   );
-  const more = page.getByRole("button", { name: "Ще товари" });
+  const more = page.getByRole("button", { name: "Показати ще" });
   for (;;) {
     await expect(page.getByText("Завантажуємо товари…")).toHaveCount(0);
     if (await chip.isVisible()) break;
     if (!(await more.isVisible())) break;
     // A search typed just before is answered under it: the list before it
-    // stays, «Ще товари» held, and the answer takes the button away — even
+    // stays, «Показати ще» held, and the answer takes the button away — even
     // between two looks. Looked at again once it is not held, never waited
     // on for good.
     const held = await more.isDisabled({ timeout: 1000 }).catch(() => null);
@@ -729,7 +729,7 @@ export async function tapSize(
       ))
     )
       continue;
-    // The next page read: the chip, or «Ще товари» again.
+    // The next page read: the chip, or «Показати ще» again.
     await expect(
       chip.or(more.and(page.locator("button:enabled"))).first(),
     ).toBeVisible();

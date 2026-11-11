@@ -10,7 +10,9 @@ import { Placeholder } from "@/shared/Placeholder";
 import { Icon } from "@/shared/Icon";
 import { SearchField } from "@/shared/SearchField";
 import { Empty } from "@/shared/Empty";
+import { useNextPageFailed } from "@/shared/nextPage";
 import { usePanelRoom } from "@/shared/panel";
+import { Unread } from "@/shared/Unread";
 
 const pageSize = 100;
 
@@ -44,7 +46,7 @@ export function useSettled(text: string): string {
 
 /**
  * One warehouse's stock as the till lists it: by the model's name, its sizes
- * together, narrowed by what was typed. «Ще товари» reads the next hundred
+ * together, narrowed by what was typed. «Показати ще» reads the next hundred
  * rows onto the list rather than in place of it. `locationId` null asks for
  * every warehouse the store sells from (sale-slice TZ, P2-5).
  */
@@ -315,7 +317,6 @@ export function StockSearch({
   offerHeld,
   sticky,
   searchRef,
-  failure,
   offer,
   under,
   elsewhere,
@@ -350,8 +351,6 @@ export function StockSearch({
    * it; a field the page scrolls to keeps clear of it (`--find-h`). */
   sticky: boolean;
   searchRef: RefObject<HTMLInputElement>;
-  /** What the till shows when the list could not be read. */
-  failure: JSX.Element | null;
   /**
    * The way to a coat in hand the list does not show (redesign P1-5): under
    * a search, and when the warehouse holds nothing. Null for whoever may
@@ -386,6 +385,15 @@ export function StockSearch({
   const where = warehouse
     ? `на складі «${visible(warehouse)}»`
     : "на складах магазину";
+  // What could not be read (audit after stage 2, sale P1-4): never read, the
+  // warning's plate in the list's place; read again and refused, the plate
+  // over the tags read, each still taking its taps — the server checks the
+  // sale at its way, as ever; a next page, the plate where «Показати ще»
+  // stood, its retry reading that page alone.
+  const nextFailed = useNextPageFailed(stock);
+  const neverRead = stock.error !== null && stock.data === undefined;
+  const readAgainFailed =
+    stock.error !== null && stock.data !== undefined && !nextFailed;
   return (
     <>
       <div ref={findRef} className={sticky ? "find sticky" : "find"}>
@@ -398,124 +406,155 @@ export function StockSearch({
         />
       </div>
       {under}
-      {failure ??
-        // Nothing found before, and the new search not read yet: never the
-        // old «нічого немає» under the new words.
-        (stock.isPending || (stock.isPlaceholderData && models.length === 0) ? (
-          <Placeholder said="Завантажуємо товари…" />
-        ) : stock.isSuccess && models.length === 0 ? (
-          // The blank tag (spec §6.28; audit after stage 2, sale P1-2): the
-          // fact its line, what to do its meta; the catalogue's way under
-          // it.
-          query ? (
-            <Empty
-              title={`За «${visible(query)}» ${where} нічого немає.`}
-              meta="Перевірте назву або очистіть пошук."
+      {readAgainFailed && (
+        <Unread
+          error={stock.error}
+          held={stock.isFetching}
+          retry={() => {
+            void stock.refetch();
+          }}
+        />
+      )}
+      {neverRead ? (
+        <Unread
+          error={stock.error}
+          held={stock.isFetching}
+          retry={() => {
+            void stock.refetch();
+          }}
+        />
+      ) : // Nothing found before, and the new search not read yet: never the
+      // old «нічого немає» under the new words.
+      stock.isPending || (stock.isPlaceholderData && models.length === 0) ? (
+        <Placeholder said="Завантажуємо товари…" />
+      ) : models.length === 0 ? (
+        // The blank tag (spec §6.28; audit after stage 2, sale P1-2): the
+        // fact its line, what to do its meta; the catalogue's way under
+        // it — read before, it stays under the plate of a read again
+        // refused (sale P1-4; review).
+        query ? (
+          <Empty
+            title={`За «${visible(query)}» ${where} нічого немає.`}
+            meta="Перевірте назву або очистіть пошук."
+          >
+            <button
+              type="button"
+              className="quiet"
+              onClick={() => {
+                type("");
+                searchRef.current?.focus();
+              }}
             >
-              <button
-                type="button"
-                className="quiet"
-                onClick={() => {
-                  type("");
-                  searchRef.current?.focus();
-                }}
-              >
-                Очистити
-              </button>
-              {offer}
-            </Empty>
-          ) : (
-            <Empty
-              title={`${where.charAt(0).toUpperCase() + where.slice(1)} зараз немає товару в обліку.`}
-            >
-              {offer}
-            </Empty>
-          )
+              Очистити
+            </button>
+            {offer}
+          </Empty>
         ) : (
-          <div className="tags">
-            {models.map((tag) => (
-              // A model's tag (spec §6.12): its name and price, then its
-              // cells. Its colour and kind have no field of their own yet:
-              // they are in its name, as the catalogue spells it.
-              <div
-                className="model-tag tag-row tag-outline"
-                role="group"
-                aria-label={visible(tag.name)}
-                key={tag.variantId}
-              >
-                <div className="model-tag-in">
-                  <p className="model-head">
-                    {open ? (
-                      <button
-                        type="button"
-                        className="model-name model-open"
-                        onClick={() => {
-                          open({
-                            variantId: tag.variantId,
-                            name: tag.name,
-                            query: shownBy.current,
-                          });
-                        }}
-                      >
-                        {visible(tag.name)}
-                      </button>
-                    ) : (
-                      <strong className="model-name">
-                        {visible(tag.name)}
-                      </strong>
-                    )}
-                    {tag.price && (
-                      <span className="model-price">{money(tag.price)}</span>
-                    )}
-                  </p>
-                  <div className="cells">
-                    {tag.sizes.map((size) => (
-                      <SizeCell
-                        key={`${size.size_id}:${size.location_id}`}
-                        size={size}
-                        place={
-                          places?.has(size.location_id)
-                            ? (places.get(size.location_id) ?? null)
-                            : null
-                        }
-                        inBasket={chosen(size)}
-                        chosenIn={chosenIn}
-                        offerHeld={offerHeld}
-                        canAdd={canAdd(size)}
-                        pick={pick}
-                      />
-                    ))}
-                  </div>
-                  {tag.sizes.some((size) => size.size_is_unknown) && (
-                    <p className="cell-note" aria-hidden="true">
-                      ? — розмір невідомий
-                    </p>
+          <Empty
+            title={`${where.charAt(0).toUpperCase() + where.slice(1)} зараз немає товару в обліку.`}
+          >
+            {offer}
+          </Empty>
+        )
+      ) : (
+        <div className="tags">
+          {models.map((tag) => (
+            // A model's tag (spec §6.12): its name and price, then its
+            // cells. Its colour and kind have no field of their own yet:
+            // they are in its name, as the catalogue spells it.
+            <div
+              className="model-tag tag-row tag-outline"
+              role="group"
+              aria-label={visible(tag.name)}
+              key={tag.variantId}
+            >
+              <div className="model-tag-in">
+                <p className="model-head">
+                  {open ? (
+                    <button
+                      type="button"
+                      className="model-name model-open"
+                      onClick={() => {
+                        open({
+                          variantId: tag.variantId,
+                          name: tag.name,
+                          query: shownBy.current,
+                        });
+                      }}
+                    >
+                      {visible(tag.name)}
+                    </button>
+                  ) : (
+                    <strong className="model-name">{visible(tag.name)}</strong>
                   )}
-                  {/* Said, never pressed: sold there, not here. */}
-                  {elsewhere?.get(tag.variantId)?.map((line) => (
-                    <p className="t-meta elsewhere" key={line}>
-                      {line}
-                    </p>
+                  {tag.price && (
+                    <span className="model-price">{money(tag.price)}</span>
+                  )}
+                </p>
+                <div className="cells">
+                  {tag.sizes.map((size) => (
+                    <SizeCell
+                      key={`${size.size_id}:${size.location_id}`}
+                      size={size}
+                      place={
+                        places?.has(size.location_id)
+                          ? (places.get(size.location_id) ?? null)
+                          : null
+                      }
+                      inBasket={chosen(size)}
+                      chosenIn={chosenIn}
+                      offerHeld={offerHeld}
+                      canAdd={canAdd(size)}
+                      pick={pick}
+                    />
                   ))}
                 </div>
+                {tag.sizes.some((size) => size.size_is_unknown) && (
+                  <p className="cell-note" aria-hidden="true">
+                    ? — розмір невідомий
+                  </p>
+                )}
+                {/* Said, never pressed: sold there, not here. */}
+                {elsewhere?.get(tag.variantId)?.map((line) => (
+                  <p className="t-meta elsewhere" key={line}>
+                    {line}
+                  </p>
+                ))}
               </div>
-            ))}
-          </div>
-        ))}
-      {stock.hasNextPage && (
-        <button
-          type="button"
-          className="quiet"
-          disabled={stock.isFetchingNextPage || stock.isPlaceholderData}
-          onClick={() => {
+            </div>
+          ))}
+        </div>
+      )}
+      {nextFailed ? (
+        <Unread
+          error={stock.error}
+          held={stock.isFetching}
+          retry={() => {
             void stock.fetchNextPage();
           }}
-        >
-          Ще товари
-        </button>
+        />
+      ) : (
+        stock.hasNextPage && (
+          // The word of every list (audit after stage 2, sale P1-4).
+          // Not while the plate over the tags says they were not read
+          // again: its retry reads the whole list first, never a page on
+          // top of free counts gone stale (review).
+          <button
+            type="button"
+            className="quiet"
+            disabled={
+              stock.isFetching || stock.isPlaceholderData || readAgainFailed
+            }
+            onClick={() => {
+              void stock.fetchNextPage();
+            }}
+          >
+            Показати ще
+          </button>
+        )
       )}
       {/* Found something, but maybe not the coat in hand. */}
-      {failure === null && query && models.length > 0 && offer}
+      {!neverRead && query && models.length > 0 && offer}
     </>
   );
 }

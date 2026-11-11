@@ -1934,12 +1934,9 @@ button.sale-row:disabled:has(.sale-goods, .debt-name, .more-label) {
 .credits:not(.customers) > .find {
   margin-top: calc(18px + 16px);
 }
-/* One sale's return (returns task list, P0-3): its context in one line,
-   each line a tag whose units are counted with «−» and «+», «Пошкоджені» in
-   the colour of «Брак». */
-.sale-context {
-  margin: 0 0 8px;
-}
+/* One sale's return (returns task list, P0-3): its context the header's
+   one line (audit after stage 2, sale P1-3), each line a tag whose units
+   are counted with «−» and «+», «Пошкоджені» in the colour of «Брак». */
 .sale-marks {
   display: flex;
   flex-wrap: wrap;
@@ -1992,8 +1989,9 @@ button.sale-row:disabled:has(.sale-goods, .debt-name, .more-label) {
 .add-reason {
   margin-top: 12px;
 }
-/* Another store's own warehouse sold it: this store's, a chip each
-   (P1-1). */
+/* A row of deciding chips' caption: another store's own warehouse sold it,
+   this store's, a chip each (P1-1); the till's warehouse for a coat from
+   the catalogue, a label's size (audit after stage 2, sale P2-3). */
 .return-place-ask {
   margin: 12px 0 8px;
   font-size: 14px;
@@ -2005,16 +2003,26 @@ button.sale-row:disabled:has(.sale-goods, .debt-name, .more-label) {
 }
 /* Which warehouse takes the intact ones: deciding chips 44, the chosen one
    in the chosen colours (spec §6.13), as «Куди» (stage 2, orders task list,
-   P0-6). */
-.return-place .chip {
+   P0-6). The till's too: which warehouse a coat from the catalogue leaves,
+   and a label's size (audit after stage 2, sale P2-3) — chosen in the
+   pressed chip's own colours, which are the chosen ones. */
+.return-place .chip,
+.catalog-at .chip,
+.label-size .chip {
   min-height: 44px;
 }
 .return-place .chip[aria-pressed="true"] {
   background: var(--chosen);
   color: var(--on-chosen);
 }
-.return-place .hint {
+.return-place .hint,
+.label-size .hint {
   margin: 8px 0 0;
+}
+/* The catalogue's cells, or their grey places, clear of the model chosen
+   over them and of «Назад до списку» under them (sale P2-3). */
+.from-catalog > .cells {
+  margin: 12px 0 16px;
 }
 /* «Борги»'s list (credits task list, P0-1): what the store is owed, large
    in the debt's colour, and a row a customer — their initial, name, phone
@@ -2366,13 +2374,11 @@ section.credits.customer-card {
   margin: 12px 0 0;
 }
 /* «Покупці» (spec S19; «Усе на бірці» sections task list, P0-4): the
-   context under the heading, then a block a store — its label in capitals,
-   under it what the store is owed in the debt's colour with its glyph and
-   how many owe, the same two lines while read or unread, so nothing moves —
-   and the line on how long a name and phone are kept. */
-.credits-context {
-  margin: 0 0 12px;
-}
+   context the header's one line (audit after stage 2, sale P1-3), then a
+   block a store — its label in capitals, under it what the store is owed
+   in the debt's colour with its glyph and how many owe, the same two lines
+   while read or unread, so nothing moves — and the line on how long a name
+   and phone are kept. */
 .credits-block {
   margin: 20px 0 0;
 }
@@ -3510,6 +3516,34 @@ section.cash-count {
   .count-dock .keypad-sum {
     height: 64px;
     margin: 6px 0;
+  }
+  /* S21 on a short phone too: «Винні» and what is owed seen over the dock
+     unscrolled (audit after stage 2, sale P1-3). */
+  .debt-till .till-dock {
+    --h-key: 44px;
+  }
+  .debt-till .till-dock .keypad-sum {
+    height: 64px;
+    margin: 6px 0;
+  }
+  /* And «Винні» with what is owed one line in money-l, «Сплачено X з Y»
+     under it: still under the dock at 640 with the keys alone. */
+  .debt-till .owed-card {
+    display: flex;
+    flex-wrap: wrap;
+    /* «Винні»'s words on the sum's line, not its glyph's foot (review). */
+    align-items: baseline;
+    align-items: last baseline;
+    column-gap: 8px;
+  }
+  .debt-till .owed-card .debt-bar,
+  .debt-till .owed-card .owed-count {
+    flex-basis: 100%;
+  }
+  .debt-till .owed-sum .sum {
+    font-size: 32px;
+    line-height: 34px;
+    letter-spacing: 0;
   }
 }
 /* «Закрити касу: у касі 5 260,00 грн?» (spec S27): the sum in money-xl on

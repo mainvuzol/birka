@@ -741,24 +741,22 @@ function ReturnForm({
   const one = picked.length === 1 ? picked[0] : undefined;
   return (
     <>
+      {/* «← До списку» over the title, as on S21 and every task screen of
+          stage 2; one sale's day and sum the one line of context (G33;
+          audit after stage 2, sale P1-3). */}
       <ScreenHeader
-        pushed
         title="Повернення"
-        aside={
-          <Back go={back} held={working} className="quiet">
+        back={
+          <Back go={back} held={working}>
             <span aria-hidden="true">← </span>До списку
           </Back>
         }
+        context={`Продаж ${when(sale.sold_at)} · ${money(sale.total)}${elsewhere ? ` · магазин «${visible(sale.store_name)}»` : ""}`}
       />
       <section className="returns">
         {/* From paper: its banner at the top, as the till's (stage 2,
             orders task list, P0-4). */}
         <PaperBanner mark={mark} what="return" />
-        {/* One sale's sum, once it is opened (G33). */}
-        <p className="sale-context">
-          Продаж {when(sale.sold_at)} · {money(sale.total)}
-          {elsewhere && ` · магазин «${visible(sale.store_name)}»`}
-        </p>
         {(sale.paid_in_parts || sale.outage) && (
           // Stickers with their glyphs, so a meaning is never told by colour
           // alone (spec §6.18; stage 2, orders task list, P0-6).

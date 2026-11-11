@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "@/shared/api";
 import { visible } from "@/shared/visible";
 import { Unread } from "@/shared/Unread";
+import { Placeholder } from "@/shared/Placeholder";
 import type { StockOption, Store } from "@/orders/types";
 import { CatalogPicker } from "@/inventory/CatalogPicker";
 import type { ReceivableVariant, SizeOption } from "@/inventory/receiptTypes";
@@ -20,6 +21,11 @@ import type { Prices } from "@/prices/types";
  * For whoever may answer «Товар на місці» and read the catalogue
  * (`inventory:correct_during_sale`, `inventory:receive`), and never from
  * paper: nobody stands at the shelf then (ADR-0013 §6).
+ *
+ * A part of the till, not a card of its own: no heading over it, its sizes
+ * the till's cells with no count under the letter — the books know none —
+ * and grey cells in their place while they are read (audit after stage 2,
+ * sale P2-3). Its words wait for the owner's approval and stay as they were.
  */
 export function FromCatalog({
   store,
@@ -69,7 +75,6 @@ export function FromCatalog({
   const priced = prices.isSuccess || prices.isError;
   return (
     <section className="from-catalog" aria-label="Товар з каталогу">
-      <h3>Товар з каталогу</h3>
       <p className="hint">
         На складі «{visible(warehouse)}» його немає в обліку. Знайдіть модель і
         торкніться розміру; коли натиснете, як платить покупець, каса спитає, чи
@@ -93,17 +98,17 @@ export function FromCatalog({
             }}
           />
         ) : sizes.isPending ? (
-          <p role="status">Завантажуємо розміри…</p>
+          <Placeholder said="Завантажуємо розміри…" cells={4} />
         ) : (
           <div
-            className="chips"
+            className="cells"
             role="group"
             aria-label={`Розмір: ${visible(variant.display_name)}`}
           >
             {sizes.data.map((size) => (
               <button
                 type="button"
-                className="chip"
+                className="size-cell"
                 key={size.size_id}
                 disabled={!priced}
                 onClick={() => {
@@ -122,7 +127,7 @@ export function FromCatalog({
                   close();
                 }}
               >
-                {visible(size.code)}
+                <span className="size-letter">{visible(size.code)}</span>
               </button>
             ))}
           </div>

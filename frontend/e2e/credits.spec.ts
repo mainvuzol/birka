@@ -202,7 +202,7 @@ async function basket(page: Page, coat: Coat, paper = false): Promise<void> {
   await page.getByRole("button", { name: "Продаж", exact: true }).click();
   // Ticked first: ticking it empties a basket (G20).
   if (paper) await fromPaper(page);
-  // The warehouse holds every journey's own models: «Ще товари» is read
+  // The warehouse holds every journey's own models: «Показати ще» is read
   // until this one is listed.
   await tapSize(page, coat.variant, coat.size);
   await fillLine(page, { quantity: 2, price: "1500" });
@@ -1481,7 +1481,9 @@ test("a phone owing «Основний» and «Другий»: a block each in �
   ).toContainText(["«Другий»", "«Основний»"]);
   // «Внесок» on «Основний»'s one debt: S21 at once.
   await deposit(page);
-  await expect(page.locator(".debt-context")).toContainText("«Основний»");
+  // The debt's store in the screen's one line (audit after stage 2, sale
+  // P1-3).
+  await expect(page.locator(".store-line .t-meta")).toContainText("«Основний»");
 });
 
 /** An order of two coats at 1500, sent and arrived — through the API. */

@@ -17,6 +17,7 @@ import type { PaymentMethod, TillMethod } from "@/shared/payment";
 import { Eyelet, RecordedMark } from "@/shared/Eyelet";
 import { SendingLine } from "@/shared/Sending";
 import { Banner } from "@/shared/Banner";
+import { Settled } from "@/shared/Kept";
 import { Perforation, Stub, WaySticker } from "@/shared/Stub";
 import { backNoted, useReach } from "@/shared/reach";
 import { buzz, hideKeyboard } from "@/shared/telegram";
@@ -838,6 +839,9 @@ export function Sale({
   const rowRef = useRef<HTMLButtonElement>(null);
   // What the shelf's question is about, read with its title.
   const shortSaid = useId();
+  // The catalogue's warehouse and a label's size, each a row of chips
+  // read with its caption.
+  const chipsSaid = useId();
   // Turned on by its row, the paper's fields come into view over the tray:
   // the ways wait for them (screenshots, 2026-10-30).
   const paperRef = useRef<HTMLDivElement>(null);
@@ -1108,22 +1112,34 @@ export function Sale({
             />
           ) : fromCatalog && searchAll ? (
             <>
-              <label>
-                З якого складу віддаєте?
-                <select
-                  value={catalogAt}
-                  onChange={(event) => {
-                    setCatalogAt(event.target.value);
-                  }}
-                >
-                  <option value="">Оберіть склад</option>
+              {/* Deciding chips 44, none chosen beforehand: the seller says
+                  which warehouse the coat leaves, never the till (owner
+                  decision, 2026-09-17; audit after stage 2, sale P2-3). */}
+              <div
+                className="catalog-at"
+                role="group"
+                aria-labelledby={`${chipsSaid}-at`}
+              >
+                <p className="return-place-ask" id={`${chipsSaid}-at`}>
+                  З якого складу віддаєте?
+                </p>
+                <div className="chips">
                   {ready.map((location) => (
-                    <option key={location.id} value={location.id}>
+                    <button
+                      type="button"
+                      className="chip"
+                      key={location.id}
+                      data-location={location.id}
+                      aria-pressed={catalogAt === location.id}
+                      onClick={() => {
+                        setCatalogAt(location.id);
+                      }}
+                    >
                       {visible(location.name)}
-                    </option>
+                    </button>
                   ))}
-                </select>
-              </label>
+                </div>
+              </div>
               {catalogPlace ? (
                 <FromCatalog
                   store={store}
@@ -1218,16 +1234,6 @@ export function Sale({
                         },
                       }
                     : {})}
-                  failure={
-                    stock.error ? (
-                      <Failure
-                        error={stock.error}
-                        retry={() => {
-                          void stock.refetch();
-                        }}
-                      />
-                    ) : null
-                  }
                   offer={
                     mayFindInCatalog ? (
                       <p className="hint">
@@ -1474,7 +1480,7 @@ export function Sale({
                   className={index === shortIndex ? "line short" : "line"}
                   key={d.id}
                 >
-                  <strong>
+                  <strong id={`${chipsSaid}-name-${String(index)}`}>
                     {visible(d.name)} · {visible(d.size)}
                   </strong>
                   {/* Where it leaves from, under it (spec §6.16; P0-5): the
@@ -1562,28 +1568,83 @@ export function Sale({
                     </span>
                   )}
                   {d.unknownStock && mayReadLabel && !paper && (
-                    <label>
-                      Розмір з етикетки
-                      <select
-                        value={d.fromUnknown ? d.line.size_id : ""}
-                        onChange={(event) => {
-                          relabel(index, event.target.value);
-                        }}
+                    // Deciding chips 44, «Не читали» chosen as the list's
+                    // empty choice was; the same size sent (audit after
+                    // stage 2, sale P2-3). Its words wait for approval.
+                    // Read with its caption and its line's model: two lines
+                    // whose size is not known are told apart (review).
+                    <div
+                      className="label-size"
+                      role="group"
+                      aria-labelledby={`${chipsSaid}-label-${String(index)} ${chipsSaid}-name-${String(index)}`}
+                    >
+                      <p
+                        className="return-place-ask"
+                        id={`${chipsSaid}-label-${String(index)}`}
                       >
-                        <option value="">
+                        Розмір з етикетки
+                      </p>
+                      <div className="chips">
+                        <button
+                          type="button"
+                          className="chip"
+                          aria-pressed={!d.fromUnknown}
+                          onClick={() => {
+                            relabel(index, "");
+                          }}
+                        >
                           Не читали — продати як «розмір невідомий»
-                        </option>
-                        {(sizes.data ?? []).map((size) => (
-                          <option key={size.size_id} value={size.size_id}>
-                            {visible(size.code)}
-                          </option>
-                        ))}
-                      </select>
-                      <span className="hint">
+                        </button>
+                        {sizes.isPending ? (
+                          // Their places while they are read.
+                          <>
+                            <span className="visually-hidden" role="status">
+                              Завантажуємо розміри…
+                            </span>
+                            <span
+                              className="chip skeleton"
+                              aria-hidden="true"
+                            />
+                            <span
+                              className="chip skeleton"
+                              aria-hidden="true"
+                            />
+                          </>
+                        ) : (
+                          (sizes.data ?? []).map((size) => (
+                            <button
+                              type="button"
+                              className="chip"
+                              key={size.size_id}
+                              data-size={size.size_id}
+                              // An unread line's size is «розмір невідомий»,
+                              // never among these (ADR-0005 §3).
+                              aria-pressed={d.line.size_id === size.size_id}
+                              onClick={() => {
+                                relabel(index, size.size_id);
+                              }}
+                            >
+                              {visible(size.code)}
+                            </button>
+                          ))
+                        )}
+                      </div>
+                      {sizes.error && (
+                        // The sizes not read, said in the sheet, where the
+                        // chips are; its retry reads them (review).
+                        <Unread
+                          error={sizes.error}
+                          held={sizes.isFetching}
+                          retry={() => {
+                            void sizes.refetch();
+                          }}
+                        />
+                      )}
+                      <p className="hint">
                         Прочитали розмір на етикетці — оберіть його, і товар
                         продасться з цим розміром.
-                      </span>
-                    </label>
+                      </p>
+                    </div>
                   )}
                   {d.fromUnknown && (
                     <span className="hint">
@@ -1972,7 +2033,12 @@ function Receipt({
   );
 }
 
-/** Nothing in the basket was on the shelf: no sale, and the shortage recorded. */
+/**
+ * Nothing in the basket was on the shelf: no sale, and the shortage
+ * recorded — by the server; the screen only names it. Its record a stub
+ * torn off, «Новий продаж» under the thumb in the receipt's dock (spec
+ * §6.30, P3; audit after stage 2, sale P2-3). The words as they were.
+ */
 function NothingSold({
   shelf,
   next,
@@ -1983,27 +2049,33 @@ function NothingSold({
   return (
     <>
       <ScreenHeader pushed title="Продажу немає" />
-      <section>
-        <p>Нічого з кошика не було на полиці. Нестачу записано.</p>
-        {shelf.lines.map((line) => (
-          <div
-            className="line"
-            key={`${line.source_location_id}:${line.product_variant_id}:${line.size_id}`}
-          >
-            <strong>
-              {visible(line.display_name)} · {sizeLabel(line.size)}
-            </strong>
-            <span>
-              {line.removed > 0
-                ? `Знято з обліку: ${String(line.removed)} шт.`
-                : "Облік і так не мав цих одиниць — нічого не знято."}
-            </span>
-          </div>
-        ))}
+      <section className="nothing-sold">
+        <p>Нічого з кошика не було на полиці.</p>
+        <Settled own>
+          <h3>Нестачу записано</h3>
+          {shelf.lines.map((line) => (
+            <div
+              className="line"
+              key={`${line.source_location_id}:${line.product_variant_id}:${line.size_id}`}
+            >
+              <strong>
+                {visible(line.display_name)} · {sizeLabel(line.size)}
+              </strong>
+              <span>
+                {line.removed > 0
+                  ? `Знято з обліку: ${String(line.removed)} шт.`
+                  : "Облік і так не мав цих одиниць — нічого не знято."}
+              </span>
+            </div>
+          ))}
+        </Settled>
         <p className="hint">Перевірте склад із менеджером.</p>
-        <button type="button" className="primary" onClick={next}>
-          Новий продаж
-        </button>
+        {/* Under the thumb, as the receipt's (spec §6.5). */}
+        <div className="result-dock">
+          <button type="button" className="primary" onClick={next}>
+            Новий продаж
+          </button>
+        </div>
       </section>
     </>
   );

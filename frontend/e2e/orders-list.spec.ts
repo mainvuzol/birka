@@ -364,6 +364,19 @@ function rows(page: Page, name: string): Locator {
   return page.getByRole("list", { name, exact: true }).locator(".order-row");
 }
 
+/** The rows drawn: the open orders read and, for whoever reads the stock,
+ * the warehouses — the rows come where their places stood, and a tap within
+ * 0.7 s of that is let go. So a journey's pause starts from there, never
+ * from the screen opened: on CI the warehouses once answered 650 ms before
+ * the tap (2026-11-11). */
+async function drawn(page: Page): Promise<void> {
+  await expect(
+    page.getByRole("status").filter({
+      hasText: /^Завантажуємо (замовлення|склади)…$/,
+    }),
+  ).toHaveCount(0);
+}
+
 /** A tap within 0.7 s of the list changing is taken as meant for the list
  * before (review, 2026-10-24). */
 async function settle(page: Page): Promise<void> {
@@ -804,6 +817,7 @@ test("«Прибув на пошту» on its row: a tap carried from the knot l
   });
   await stub(page, orders);
   await enter(page, { version: "7.0" });
+  await drawn(page);
   await knot(page, "Відправлено 1").click();
   const verb = page
     .getByRole("list", { name: "Відправлено" })
@@ -851,6 +865,7 @@ test("«Прибув на пошту» on its way: the ring on the pressed verb 
   });
   await stub(page, orders);
   await enter(page, { version: "7.0" });
+  await drawn(page);
   await knot(page, "Відправлено 2").click();
   await settle(page);
   const verbs = page
@@ -927,6 +942,7 @@ test("«Прибув на пошту» on its row refused says why with a buzz, 
   const orders = server({ open: [first], arriveAnswer: "refused" });
   await stub(page, orders);
   await enter(page, { version: "7.0" });
+  await drawn(page);
   await knot(page, "Відправлено 1").click();
   await settle(page);
   const verb = page
@@ -978,6 +994,7 @@ test("«Відправити» on its row opens the card with its sheet, the cur
     release = done;
   });
   await enter(page, { version: "7.0" });
+  await drawn(page);
   await settle(page);
   await page
     .getByRole("list", { name: "До відправлення" })
@@ -992,6 +1009,7 @@ test("«Відправити» on its row opens the card with its sheet, the cur
   delete orders.detailHeld;
   await enter(page, { version: "7.0" });
   // The list just come under the finger: a tap now is let go.
+  await drawn(page);
   await settle(page);
   await page
     .getByRole("list", { name: "До відправлення" })
@@ -1022,6 +1040,7 @@ test("«Відправити» on its row opens the card with its sheet, the cur
   const there = order({ status: "ARRIVED", waybill: "20450055554444" });
   orders.open = [there];
   await enter(page, { version: "7.0" });
+  await drawn(page);
   await knot(page, "Прибув на пошту 1").click();
   await settle(page);
   await page

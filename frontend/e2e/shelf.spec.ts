@@ -190,9 +190,10 @@ test("a line with nothing on the shelf is dropped, and the rest is sold", async 
   expect(await held(page, there)).toBe(0);
 });
 
-test("a basket with nothing on the shelf records the shortage and sells nothing", async ({
+test("a basket with nothing on the shelf records the shortage and sells nothing: at 360 the record a stub torn off, «Новий продаж» in the receipt's dock (audit after stage 2, sale P2-3)", async ({
   page,
 }) => {
+  await page.setViewportSize({ width: 360, height: 640 });
   const empty = await model(page, 1);
   const recorded: Request[] = [];
   page.on("request", (request: Request) => {
@@ -214,7 +215,61 @@ test("a basket with nothing on the shelf records the shortage and sells nothing"
   await expect(
     page.getByRole("heading", { name: "Продажу немає" }),
   ).toBeVisible();
-  await expect(page.getByText("Знято з обліку: 1 шт.")).toBeVisible();
+  await expect(page.locator(".nothing-sold > p").first()).toHaveText(
+    "Нічого з кошика не було на полиці.",
+  );
+  // The shortage the server recorded, on a stub torn off, its eyelet
+  // filled (spec §6.30, P3).
+  const stub = page.locator(".nothing-sold .stub");
+  await expect(stub).toHaveClass(/\bstub-recorded\b/);
+  await expect(stub.locator(".eyelet")).toBeVisible();
+  await expect(
+    stub.getByRole("heading", { name: "Нестачу записано" }),
+  ).toBeVisible();
+  await expect(stub.locator(".line")).toHaveCount(1);
+  await expect(stub.locator(".line span")).toHaveText("Знято з обліку: 1 шт.");
+  // What to do, one line under it.
+  const hint = page.locator(".nothing-sold > .hint");
+  await expect(hint).toHaveText("Перевірте склад із менеджером.");
+  const line = await hint.evaluate((node) =>
+    parseFloat(getComputedStyle(node).lineHeight),
+  );
+  expect((await hint.boundingBox())?.height ?? 0).toBeLessThanOrEqual(line + 1);
+  // Under the thumb, as the receipt's: the screen's one main in its dock,
+  // on the screen's field of 16.
+  const dock = page.locator(".nothing-sold .result-dock");
+  const next = dock.getByRole("button", { name: "Новий продаж" });
+  await expect(next).toHaveClass(/\bprimary\b/);
+  await expect(next).toBeInViewport({ ratio: 1 });
+  await expect(page.locator("main button.primary:visible")).toHaveCount(1);
+  const docked = await dock.boundingBox();
+  expect(Math.round(docked?.x ?? 0)).toBe(16);
+  expect(Math.round((docked?.x ?? 0) + (docked?.width ?? 0))).toBe(344);
+  await expect(page.locator("html")).toHaveJSProperty("scrollWidth", 360);
+  await page.screenshot({ path: "test-results/nothing-sold-360.png" });
+  // In both themes the slip and the dock white on the paper.
+  for (const scheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    const [slip, bottom, card, paper] = await stub.evaluate((node) => {
+      const probe = document.createElement("span");
+      document.body.append(probe);
+      probe.style.color = "var(--card)";
+      const white = getComputedStyle(probe).color;
+      probe.style.color = "var(--paper)";
+      const ground = getComputedStyle(probe).color;
+      probe.remove();
+      const dockOf = document.querySelector(".nothing-sold .result-dock");
+      return [
+        getComputedStyle(node).backgroundColor,
+        dockOf ? getComputedStyle(dockOf).backgroundColor : "",
+        white,
+        ground,
+      ];
+    });
+    expect([slip, bottom]).toEqual([card, card]);
+    expect(card).not.toBe(paper);
+  }
+  await page.emulateMedia({ colorScheme: "light" });
   expect(recorded).toHaveLength(1);
   expect(await held(page, empty)).toBe(0);
   await page.getByRole("button", { name: "Новий продаж" }).click();

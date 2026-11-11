@@ -457,16 +457,6 @@ export function NewOrder({
               offerHeld={false}
               sticky={false}
               searchRef={searchRef}
-              failure={
-                stock.error ? (
-                  <Unread
-                    error={stock.error}
-                    retry={() => {
-                      void stock.refetch();
-                    }}
-                  />
-                ) : null
-              }
               offer={null}
             />
           )}

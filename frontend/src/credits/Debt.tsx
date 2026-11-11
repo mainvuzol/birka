@@ -572,6 +572,10 @@ export function Debt({
               {backTo}
             </Back>
           }
+          // Who and where, the screen's one line of context (spec S21;
+          // audit after stage 2, sale P1-3): in the store's and the
+          // person's place, the debt's store named in it.
+          context={`${customerName} · «${visible(credit.store_name)}» · з ${shortDay(credit.opened_at)}`}
         />
         <section className="credits debt-detail debt-till">
           {/* From paper: its banner at the top, as the till's (stage 2,
@@ -580,10 +584,6 @@ export function Debt({
             <PaperBanner mark={paperMark} what="payment" />
           )}
           {goods}
-          <p className="hint debt-context">
-            {customerName} · «{visible(credit.store_name)}» · з{" "}
-            {shortDay(credit.opened_at)}
-          </p>
           {paidResult || (
             <>
               {elsewhere && (
