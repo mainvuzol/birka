@@ -20,7 +20,7 @@ import { visible } from "@/shared/visible";
 import { FileChooser } from "./FileChooser";
 import { fileProblemTexts } from "./fileErrors";
 import { LineEvidence, LineTask, sizeText } from "./Line";
-import { AddFile, AddLines, PartsSection, partName } from "./Parts";
+import { AddFile, AddLines, PartsScreen } from "./Parts";
 import { MAX_BODY_BYTES, TOO_LARGE, bodyBytes } from "./stockFile";
 import type { StockFileRead } from "./stockFile";
 import {
@@ -31,6 +31,7 @@ import {
   listRefusal,
   listStatusLabels,
   number,
+  plural,
   sourceQuantity,
   typedTooMuch,
 } from "./types";
@@ -46,6 +47,7 @@ import type { MoreBack } from "@/shared/More";
 import { Back } from "@/shared/Back";
 import { BlankTag } from "@/shared/BlankTag";
 import { Eyelet } from "@/shared/Eyelet";
+import { Icon } from "@/shared/Icon";
 import { ModeSwitch } from "@/shared/ModeSwitch";
 import { CARRIED_TAP, usePanelRoom } from "@/shared/panel";
 import { ScreenHeader } from "@/shared/ScreenHeader";
@@ -480,11 +482,13 @@ function newListRefusal(
         `Перевірте ${what}${mode === "file" ? " і" : " й"} натисніть ще раз — двічі список не збережеться.`,
         "Дані змінилися — натисніть ще раз: двічі список не збережеться.",
       )
-    : listRefusal(
+    : // What happened, then the step — never «спробуйте ще раз» on a write
+      // (owner, В-П1 (б), 2026-11-11).
+      listRefusal(
         error,
         "Список не збережено.",
-        `Перевірте ${what} та спробуйте ще раз.`,
-        "Поки ви працювали, дані змінилися — спробуйте ще раз.",
+        `Перевірте ${what}.`,
+        "Поки ви працювали, дані змінилися: перевірте склад і натисніть «Зберегти список» ще раз.",
       );
 }
 
@@ -948,24 +952,6 @@ function NewList({
   );
 }
 
-/**
- * What the person is asked to do about a waiting list, by what they may do
- * (review, 2026-10-09): approving takes its own right, rejecting is open to
- * whoever may add a file, and someone who may do neither is asked nothing.
- */
-function decisionText(
-  trading: boolean,
-  canApprove: boolean,
-  canImport: boolean,
-): string {
-  if (!canApprove && !canImport) return "";
-  if (!trading) return " Відхиліть його, щоб склад звільнився.";
-  // Nothing said of who may approve (stage 2, goods task list, P1-5).
-  return canApprove
-    ? " Затвердіть або відхиліть його."
-    : " Відхилити його можете й ви.";
-}
-
 /** The switch's three (P0-6): what waits on a person, what waits, what is
  * answered — the rest in ⋯. */
 type LineMode = "NEEDS_REVIEW" | "PENDING" | "RESOLVED" | "OTHER";
@@ -1024,6 +1010,27 @@ function Progress({ list }: { list: StockList }): JSX.Element {
   );
 }
 
+/** A file's lines over the switch, once chosen on «Файли списку»: «Рядки
+ * файлу «2. зошит-2.json»» — lines typed by hand by their part's own name. */
+function fileLinesText(part: StockPart): string {
+  const named =
+    part.file_name === null
+      ? `${String(part.part_no)}. Рядки, внесені вручну`
+      : `Рядки файлу «${String(part.part_no)}. ${visible(part.file_name)}»`;
+  return part.removed_at === null ? named : `${named} (прибрано)`;
+}
+
+/** The list's own screens beside its lines (goods task list after stage 2,
+ * P0-1): its files, a file added, lines typed by hand. */
+type ListScreen = "lines" | "files" | "file" | "typed";
+
+/**
+ * A list (goods task list after stage 2, P0-1): its big tag, and under it at
+ * once the switch and the lines — what the manager comes for. The rest is
+ * the tag's ⋯: a file or lines added, the list's files, its rejection; the
+ * approval's summary is in its sheet. One line of what the waiting holds,
+ * inside the tag.
+ */
 function ListView({
   list,
   store,
@@ -1056,25 +1063,36 @@ function ListView({
         ? "PENDING"
         : "RESOLVED",
   );
-  // One file's lines only, or every file's.
-  const [partFilter, setPartFilter] = useState<string | null>(null);
+  // One file's lines only, chosen on «Файли списку», or every file's.
+  const [partFilter, setPartFilter] = useState<StockPart | null>(null);
   // The line answered on its own screen, as it was read when it opened.
   const [editing, setEditing] = useState<ListLine | null>(null);
-  const [adding, setAdding] = useState<"file" | "lines" | null>(null);
-  // ⋯'s sheet of the other lines.
-  const [others, setOthers] = useState(false);
+  const [screen, setScreen] = useState<ListScreen>("lines");
+  // The tag's ⋯, the other lines, the rejection: one sheet at a time.
+  const [sheet, setSheet] = useState<"ways" | "others" | "reject" | null>(null);
+  // An approval refused, said under the tag.
+  const [said, setSaid] = useState<string | null>(null);
+  // Why the list is rejected, kept by the list while its sheet is closed
+  // and opened again (review).
+  const [reason, setReason] = useState("");
+  // A refusal said under the tag is of its moment: gone once the list is
+  // decided, or a line opened to be answered (review).
+  const answering = editing !== null;
+  useEffect(() => {
+    setSaid(null);
+  }, [list.status, answering]);
   const linesKey = [
     "stock-list-lines",
     scopeKey,
     list.snapshot_id,
     filter,
-    partFilter,
+    partFilter?.part_id ?? null,
   ] as const;
   const lines = useInfiniteQuery({
     queryKey: linesKey,
     queryFn: ({ pageParam }) =>
       api<LinePage>(
-        `/snapshots/${list.snapshot_id}/lines?store_id=${store.id}&limit=${String(linesPerPage)}&offset=${String(pageParam)}${filter ? `&status=${filter}` : ""}${partFilter ? `&part_id=${partFilter}` : ""}`,
+        `/snapshots/${list.snapshot_id}/lines?store_id=${store.id}&limit=${String(linesPerPage)}&offset=${String(pageParam)}${filter ? `&status=${filter}` : ""}${partFilter ? `&part_id=${partFilter.part_id}` : ""}`,
         token,
       ),
     initialPageParam: 0,
@@ -1104,6 +1122,40 @@ function ListView({
   // decision, 2026-10-09).
   const trading = list.store_state === "ACTIVE";
   const editable = list.status === "IN_REVIEW" && canImport && trading;
+  // Approving takes its own right, while the store that started the list
+  // trades; rejecting is for whoever may approve, or add and remove the
+  // list's files — a list whose last file is wrong is rejected (owner,
+  // 2026-10-08; review, 2026-10-09).
+  const approvable = list.status === "IN_REVIEW" && trading && canApprove;
+  const rejectable = list.status === "IN_REVIEW" && (canApprove || canImport);
+  // A list typed in one go is one part: nothing to tell apart. Before its
+  // parts are read, the list's own counts say whether there are more.
+  const hasFiles = parts.data
+    ? allParts.length > 1 || allParts[0]?.kind === "FILE"
+    : list.summary.parts + list.summary.parts_removed > 1;
+  const ways = editable || hasFiles || rejectable;
+  // The files' count as read: a file whose answer was lost is the list's
+  // too, though the list read before it knows nothing of it.
+  const liveParts = parts.data
+    ? allParts.filter((part) => part.removed_at === null).length
+    : list.summary.parts;
+  // A form for a list decided meanwhile is no form: the lines, and the
+  // screen left for them (review).
+  const at: ListScreen =
+    (screen === "file" || screen === "typed") && !editable ? "lines" : screen;
+  useEffect(() => {
+    if (!editable && (screen === "file" || screen === "typed")) {
+      from.current = "more";
+      setScreen("lines");
+    }
+  }, [editable, screen]);
+  // The file whose lines are shown, as read now: removed meanwhile, its
+  // line says so (review).
+  const filePart =
+    partFilter === null
+      ? null
+      : (allParts.find((part) => part.part_id === partFilter.part_id) ??
+        partFilter);
   const sheetFilters: { status: LineStatus | null; label: string }[] =
     list.summary.parts_removed > 0
       ? [...otherFilters, { status: "REMOVED", label: "Прибрані" }]
@@ -1136,6 +1188,17 @@ function ListView({
     window.scrollTo(0, 0);
     tag.current?.focus();
   }, [editing]);
+  // Back from a screen of the list's own: the cursor on what opened it —
+  // the tag's ⋯, or the line that names the file whose lines it showed.
+  const more = useRef<HTMLButtonElement>(null);
+  const fileLine = useRef<HTMLParagraphElement>(null);
+  const from = useRef<"more" | "file" | null>(null);
+  useLayoutEffect(() => {
+    if (at !== "lines" || from.current === null) return;
+    const to = from.current;
+    from.current = null;
+    ((to === "file" ? fileLine.current : more.current) ?? tag.current)?.focus();
+  }, [at]);
   // Decided here — approved or rejected — the list's tag says so first.
   const status = useRef(list.status);
   useEffect(() => {
@@ -1194,10 +1257,10 @@ function ListView({
     setEditing(null);
   }
 
-  function showPart(id: string | null): void {
-    setPartFilter(id);
+  function showPart(part: StockPart | null): void {
+    setPartFilter(part);
     // A file's lines, all of them: a removed file's are only «Прибрано».
-    if (id !== null) setFilter(null);
+    if (part !== null) setFilter(null);
     setEditing(null);
   }
 
@@ -1205,6 +1268,15 @@ function ListView({
     setFilter(status);
     setEditing(null);
   }
+
+  const back = (to: "more" | "file" = "more"): void => {
+    from.current = to;
+    setScreen("lines");
+  };
+  const go = (to: ListScreen): void => {
+    setSheet(null);
+    setScreen(to);
+  };
 
   const shown =
     editing && (items.find((l) => l.line_no === editing.line_no) ?? editing);
@@ -1238,25 +1310,106 @@ function ListView({
         task={task}
       />
     );
+  if (at === "files")
+    return (
+      <PartsScreen
+        list={list}
+        store={store}
+        token={token}
+        parts={parts}
+        title={listName(list)}
+        editable={editable}
+        blocked={blocked}
+        show={(part) => {
+          showPart(part);
+          back("file");
+        }}
+        leave={() => {
+          back();
+        }}
+        refresh={refresh}
+      />
+    );
+  if (at === "file")
+    return (
+      <AddFile
+        list={list}
+        store={store}
+        token={token}
+        title={listName(list)}
+        warehouse={warehouse}
+        blocked={blocked}
+        done={async () => {
+          // Read again first, under the screen's eyelet: the list comes
+          // back with what was added, never a moment of the list before it
+          // — «Затвердити» over a line just added.
+          await refresh();
+          back();
+        }}
+        refresh={refresh}
+        leave={() => {
+          back();
+        }}
+      />
+    );
+  if (at === "typed")
+    return (
+      <AddLines
+        list={list}
+        store={store}
+        token={token}
+        title={listName(list)}
+        blocked={blocked}
+        done={async () => {
+          // Read again first, under the screen's eyelet: the list comes
+          // back with what was added, never a moment of the list before it
+          // — «Затвердити» over a line just added.
+          await refresh();
+          back();
+        }}
+        refresh={refresh}
+        leave={() => {
+          back();
+        }}
+      />
+    );
 
   return (
     <>
       <ScreenHeader
         pushed
         title={listName(list)}
-        aside={
-          <Back go={close} className="quiet">
-            До списків
+        back={
+          <Back go={close} label="Назад до «Початкові залишки»">
+            <span aria-hidden="true">← </span>
+            Початкові залишки
           </Back>
         }
       />
       <section className="openings">
         {/* The list's big tag (spec §5 «Большая бирка»; P0-6): its
-            warehouse, its state, how far it is answered — or, decided, what
-            became of it. */}
+            warehouse, its state, how far it is answered and what its
+            waiting holds — or, decided, what became of it; ⋯ for the rest
+            (P0-1). */}
         <div className="tag-hero tag-outline opening-hero">
           <div className="opening-hero-in" ref={tag} tabIndex={-1}>
-            <p className="opening-hero-place">Склад «{warehouse}»</p>
+            <div className="opening-hero-head">
+              <p className="opening-hero-place">Склад «{warehouse}»</p>
+              {ways && (
+                <button
+                  ref={more}
+                  type="button"
+                  className="debt-more"
+                  aria-label="Дії зі списком"
+                  aria-haspopup="dialog"
+                  onClick={() => {
+                    setSheet("ways");
+                  }}
+                >
+                  <Icon name="tab-more" />
+                </button>
+              )}
+            </div>
             <Sticker className="opening-state" as="p">
               {listStatusLabels[list.status]}
             </Sticker>
@@ -1273,6 +1426,15 @@ function ListView({
               </p>
             )}
             {list.status === "IN_REVIEW" && <Progress list={list} />}
+            {/* What the waiting holds, the tag's one line; what may be done
+                about it, MainButton and ⋯ say (P0-1). */}
+            {list.status === "IN_REVIEW" && (
+              <p className="t-meta opening-hold">
+                Поки список чекає рішення, на складі «{warehouse}», де ще не
+                було руху товару, нічого не приймають, не продають і не
+                виправляють.
+              </p>
+            )}
             {list.status === "APPLIED" && (
               <Stub state="settled">
                 <p className="stub-line" role="status">
@@ -1292,120 +1454,46 @@ function ListView({
             )}
           </div>
         </div>
+        {said && (
+          <p role="alert" className="opening-said">
+            {said}
+          </p>
+        )}
+        {/* What may be done here, and the only thing: the plate stays
+            (P0-1). */}
         {list.status === "IN_REVIEW" && !trading && (
           <p className="notice" role="status">
             {`Магазин «${visible(list.store_name ?? "—")}», що почав цей список, не працює: список можна лише відхилити, а файли додати до нового списку.`}
           </p>
         )}
-        {list.status === "IN_REVIEW" && (
-          <p className="hint">
-            {`Місце у списку: рядків ${number(list.summary.lines)} з ${number(list.summary.limits.lines)} · відповідей ${number(list.summary.allocations)} з ${number(list.summary.limits.allocations)}`}
-          </p>
-        )}
-        {list.status === "IN_REVIEW" && (
-          <p className="notice">
-            Поки список чекає рішення, на складі «{warehouse}», де ще не було
-            руху товару, нічого не приймають, не продають і не виправляють.
-            {decisionText(trading, canApprove, canImport)}
-          </p>
-        )}
-        {/* Whoever may add or remove a file may reject the list too: a list
-            whose last file is wrong is rejected (owner, 2026-10-08), so the
-            button the hint names is there. Approving takes its own right. */}
-        {list.status === "IN_REVIEW" && (canApprove || canImport) && (
-          <Approval
-            list={list}
-            store={store}
-            token={token}
-            warehouse={warehouse}
-            approvable={trading && canApprove}
-            blocked={blocked}
-            quiet={others || adding !== null}
-            fallback={tag}
-            refresh={refresh}
-          />
-        )}
-        {/* Whoever may not take the stock in reads the lines without
-            «Розібрати», and nothing is said of the rule (stage 2, goods
-            task list, P1-5). */}
-        {parts.error ? (
+        {/* The lines say what was read of them by their files. */}
+        {parts.error && (
           <Unread
             error={parts.error}
             retry={() => {
               void parts.refetch();
             }}
           />
-        ) : (
-          // A list typed in one go is one part: nothing to tell apart.
-          (allParts.length > 1 || allParts[0]?.kind === "FILE") && (
-            <PartsSection
-              list={list}
-              store={store}
-              token={token}
-              parts={allParts}
-              editable={editable}
-              blocked={blocked}
-              show={(part) => {
-                showPart(part.part_id);
-              }}
-              refresh={refresh}
-            />
-          )
         )}
-        {editable &&
-          (adding === "file" ? (
-            <AddFile
-              list={list}
-              store={store}
-              token={token}
-              warehouse={warehouse}
-              blocked={blocked}
-              done={async () => {
-                setAdding(null);
-                await refresh();
+        {filePart !== null && (
+          <div className="opening-file-line">
+            <p className="t-meta" ref={fileLine} tabIndex={-1}>
+              {fileLinesText(filePart)}
+            </p>
+            <button
+              type="button"
+              className="quiet"
+              onClick={() => {
+                showPart(null);
               }}
-              refresh={refresh}
-              cancel={() => {
-                setAdding(null);
-              }}
-            />
-          ) : adding === "lines" ? (
-            <AddLines
-              list={list}
-              store={store}
-              token={token}
-              blocked={blocked}
-              done={async () => {
-                setAdding(null);
-                await refresh();
-              }}
-              refresh={refresh}
-              cancel={() => {
-                setAdding(null);
-              }}
-            />
-          ) : (
-            <div className="actions">
-              <button
-                className="quiet"
-                disabled={blocked}
-                onClick={() => {
-                  setAdding("file");
-                }}
-              >
-                Додати файл
-              </button>
-              <button
-                className="quiet"
-                disabled={blocked}
-                onClick={() => {
-                  setAdding("lines");
-                }}
-              >
-                Додати рядки вручну
-              </button>
-            </div>
-          ))}
+            >
+              Усі файли
+            </button>
+          </div>
+        )}
+        {/* Whoever may not take the stock in reads the lines without
+            «Розібрати», and nothing is said of the rule (stage 2, goods
+            task list, P1-5). */}
         <nav className="opening-modes" aria-label="Рядки списку">
           <ModeSwitch<LineMode>
             label="Які рядки"
@@ -1441,7 +1529,7 @@ function ListView({
                 : `Інші рядки: ${otherLabel}`
             }
             onClick={() => {
-              setOthers(true);
+              setSheet("others");
             }}
           >
             {otherLabel === undefined ? (
@@ -1454,55 +1542,6 @@ function ListView({
             )}
           </button>
         </nav>
-        {others && (
-          <Sheet
-            title="Інші рядки"
-            close={() => {
-              setOthers(false);
-            }}
-          >
-            <div className="debt-more-ways">
-              {sheetFilters.map(({ status, label }) => (
-                <button
-                  type="button"
-                  key={label}
-                  className="sheet-way"
-                  aria-pressed={filter === status}
-                  onClick={() => {
-                    buzz("selection");
-                    setOthers(false);
-                    show(status);
-                  }}
-                >
-                  {label}
-                  {status === "SKIPPED"
-                    ? ` · ${number(list.summary.skipped)}`
-                    : status === null
-                      ? ` · ${number(list.summary.lines)}`
-                      : ""}
-                </button>
-              ))}
-            </div>
-          </Sheet>
-        )}
-        {allParts.length > 1 && (
-          <label>
-            Файл
-            <select
-              value={partFilter ?? ""}
-              onChange={(event) => {
-                showPart(event.target.value === "" ? null : event.target.value);
-              }}
-            >
-              <option value="">Усі файли</option>
-              {allParts.map((part) => (
-                <option key={part.part_id} value={part.part_id}>
-                  {`${String(part.part_no)}. ${partName(part)}${part.removed_at === null ? "" : " (прибрано)"}`}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
         {/* A read that failed is said over the lines read before, as the
             next page's failing is (review, 2026-11-08). */}
         {!lines.isPending && lines.error && (
@@ -1550,7 +1589,132 @@ function ListView({
             )}
           </>
         )}
+        {approvable && (
+          <Approval
+            list={list}
+            store={store}
+            token={token}
+            warehouse={warehouse}
+            blocked={blocked}
+            quiet={sheet !== null}
+            fallback={tag}
+            refresh={refresh}
+            said={setSaid}
+          />
+        )}
       </section>
+      {sheet === "ways" && (
+        // Only what this person may do here (P0-1).
+        <Sheet
+          title={listName(list)}
+          close={() => {
+            setSheet(null);
+          }}
+          fallback={more}
+        >
+          <div className="debt-more-ways">
+            {editable && (
+              <>
+                <button
+                  type="button"
+                  className="sheet-way"
+                  disabled={blocked}
+                  onClick={() => {
+                    go("file");
+                  }}
+                >
+                  Додати файл
+                </button>
+                <button
+                  type="button"
+                  className="sheet-way"
+                  disabled={blocked}
+                  onClick={() => {
+                    go("typed");
+                  }}
+                >
+                  Додати рядки вручну
+                </button>
+              </>
+            )}
+            {hasFiles && (
+              <button
+                type="button"
+                className="sheet-way"
+                onClick={() => {
+                  go("files");
+                }}
+              >
+                Файли списку · {number(liveParts)}
+              </button>
+            )}
+            {rejectable && (
+              <button
+                type="button"
+                className="sheet-way danger-way"
+                disabled={blocked}
+                onClick={() => {
+                  setSaid(null);
+                  setSheet("reject");
+                }}
+              >
+                Відхилити список
+              </button>
+            )}
+          </div>
+        </Sheet>
+      )}
+      {sheet === "others" && (
+        <Sheet
+          title="Інші рядки"
+          close={() => {
+            setSheet(null);
+          }}
+        >
+          <div className="debt-more-ways">
+            {sheetFilters.map(({ status, label }) => (
+              <button
+                type="button"
+                key={label}
+                className="sheet-way"
+                aria-pressed={filter === status}
+                onClick={() => {
+                  buzz("selection");
+                  setSheet(null);
+                  show(status);
+                }}
+              >
+                {label}
+                {status === "SKIPPED"
+                  ? ` · ${number(list.summary.skipped)}`
+                  : status === null
+                    ? ` · ${number(list.summary.lines)}`
+                    : ""}
+              </button>
+            ))}
+          </div>
+        </Sheet>
+      )}
+      {sheet === "reject" && rejectable && (
+        <RejectSheet
+          list={list}
+          store={store}
+          token={token}
+          warehouse={warehouse}
+          blocked={blocked}
+          fallback={more}
+          reason={reason}
+          setReason={setReason}
+          close={() => {
+            setSheet(null);
+          }}
+          rejected={() => {
+            setReason("");
+            setSheet(null);
+          }}
+          refresh={refresh}
+        />
+      )}
     </>
   );
 }
@@ -1661,207 +1825,119 @@ function rangeAgainText(details: Record<string, unknown>): string {
 }
 
 /**
- * The decision on a list: approve it, or reject it. Approval is for whoever
- * may approve, while the store that started the list trades (owner decision,
- * 2026-10-09); rejection is for them and for whoever may add and remove the
- * list's files, so a list whose last file is wrong is rejected where it is
- * looked at (owner, 2026-10-08; review, 2026-10-09).
- *
- * Approval is Telegram's MainButton, «Затвердити · 412 шт.», once nothing
- * waits — before, none, and the tag says what waits — and it is confirmed in
- * a sheet, the number large (spec §6.6; stage 2, goods task list, P0-6).
- * Rejection stays as it was.
+ * A decision on a list refused, in words: what the server named, or what was
+ * not done and the step — never «спробуйте ще раз» on a write (owner, В-П1
+ * (б), 2026-11-11).
+ */
+function decisionRefusal(
+  error: unknown,
+  action: "approve" | "reject",
+  list: StockList,
+  warehouse: string,
+): string {
+  if (error instanceof SlowAnswer) return errorText(error);
+  if (!(error instanceof ApiError))
+    return "Немає відповіді сервера. Оновіть список і подивіться, чи рішення збережено.";
+  const reason = error.details.reason;
+  if (error.code === "OPENING_BALANCE_CONFLICT")
+    return `У складі «${warehouse}» уже був рух товару, тому початковий залишок туди внести не можна. Відхиліть цей список, а відсутній товар прийміть через «Ще» › «Прийшов товар».`;
+  if (reason === "REVISION_CHANGED")
+    return "Поки ви дивились, хтось змінив відповідь у списку. Перегляньте підсумок ще раз.";
+  if (reason === "ROWS_NEED_REVIEW") return "Ще не всі рядки розібрано.";
+  // Rejected meanwhile for another reason: its conflict (review,
+  // 2026-10-24).
+  if (reason === "ALREADY_DECIDED" || error.code === "IDEMPOTENCY_CONFLICT")
+    return "Цей список уже затвердили або відхилили.";
+  if (reason === "NOTHING_TO_APPLY")
+    return "Список не затверджено: у ньому немає жодного рядка товару. Якщо так і є — відхиліть його.";
+  if (reason === "SPLIT_MAY_BE_RANGE") return rangeAgainText(error.details);
+  if (reason === "LIST_STORE_CANNOT_RECEIVE") return cannotReceiveText(list);
+  return action === "approve"
+    ? listRefusal(error, "Список не затверджено.", "Перегляньте рядки списку.")
+    : listRefusal(error, "Список не відхилено.", "Перевірте причину.");
+}
+
+/**
+ * The approval, for whoever may approve while the store that started the
+ * list trades (owner decision, 2026-10-09): Telegram's MainButton,
+ * «Затвердити · 412 шт.», once nothing waits — before, none, and the tag
+ * says what waits — confirmed in a sheet, the number large (spec §6.6;
+ * stage 2, goods task list, P0-6). The rejection is the tag's ⋯ (goods task
+ * list after stage 2, P0-1). A refusal is `said` under the tag.
  */
 function Approval({
   list,
   store,
   token,
   warehouse,
-  approvable,
   blocked,
   quiet,
   fallback,
   refresh,
+  said,
 }: {
   list: StockList;
   store: Store;
   token: string;
   warehouse: string;
-  /** Whether approval is offered at all; rejection always is. */
-  approvable: boolean;
   blocked: boolean;
   /** Another sheet over the list: its MainButton is not this one. */
   quiet: boolean;
   /** Where the cursor goes as the sheet closes, its button gone. */
   fallback: RefObject<HTMLElement>;
   refresh: () => Promise<void>;
+  said: (problem: string | null) => void;
 }): JSX.Element {
-  const [asking, setAsking] = useState<"approve" | "reject" | null>(null);
-  const [reason, setReason] = useState("");
+  const [asking, setAsking] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState<string | null>(null);
-  const waiting = list.summary.pending + list.summary.needs_review;
-  const bases = (Object.keys(basisLabels) as Basis[]).filter(
-    (basis) => list.summary.lines_by_basis[basis] > 0,
-  );
   const units = list.summary.units;
-  const ready = approvable && list.ready_to_approve;
+  const ready = list.ready_to_approve;
   const ask = (): void => {
     if (blocked || busy) return;
-    setProblem(null);
-    setAsking("approve");
+    said(null);
+    setAsking(true);
   };
   const words = `Затвердити · ${number(units)} шт.`;
   const main = useMainButton(words, ask, {
-    shown: ready && asking === null && !quiet,
+    shown: ready && !asking && !quiet,
     active: !blocked && !busy,
   });
   const dock = useRef<HTMLDivElement>(null);
-  usePanelRoom(dock, ready && asking === null && !main);
+  usePanelRoom(dock, ready && !asking && !main);
 
-  async function decide(action: "approve" | "reject"): Promise<void> {
+  async function approve(): Promise<void> {
     setBusy(true);
-    setProblem(null);
+    said(null);
     try {
       await api(
-        `/snapshots/${list.snapshot_id}/${action}?store_id=${store.id}`,
+        `/snapshots/${list.snapshot_id}/approve?store_id=${store.id}`,
         token,
-        action === "approve"
-          ? { expected_review_revision: list.review_revision }
-          : { reason: reason.trim() },
+        { expected_review_revision: list.review_revision },
         undefined,
         "POST",
         // A large list's approval may take longer than 20 s (ADR-0014 §16).
-        { slow: action === "approve" },
+        { slow: true },
       );
       buzz("success");
     } catch (error) {
       buzz("error");
-      const reasonCode =
-        error instanceof ApiError ? error.details.reason : undefined;
-      setProblem(
-        error instanceof SlowAnswer
-          ? errorText(error)
-          : !(error instanceof ApiError)
-            ? "Немає відповіді сервера. Оновіть список і подивіться, чи рішення збережено."
-            : error.code === "OPENING_BALANCE_CONFLICT"
-              ? `У складі «${warehouse}» уже був рух товару, тому початковий залишок туди внести не можна. Відхиліть цей список, а відсутній товар прийміть через «Ще» › «Прийшов товар».`
-              : reasonCode === "REVISION_CHANGED"
-                ? "Поки ви дивились, хтось змінив відповідь у списку. Перегляньте підсумок ще раз."
-                : reasonCode === "ROWS_NEED_REVIEW"
-                  ? "Ще не всі рядки розібрано."
-                  : // Rejected meanwhile for another reason: its
-                    // conflict (review, 2026-10-24).
-                    reasonCode === "ALREADY_DECIDED" ||
-                      error.code === "IDEMPOTENCY_CONFLICT"
-                    ? "Цей список уже затвердили або відхилили."
-                    : reasonCode === "NOTHING_TO_APPLY"
-                      ? "Список не затверджено: у ньому немає жодного рядка товару. Якщо так і є — відхиліть його."
-                      : reasonCode === "SPLIT_MAY_BE_RANGE"
-                        ? rangeAgainText(error.details)
-                        : reasonCode === "LIST_STORE_CANNOT_RECEIVE"
-                          ? cannotReceiveText(list)
-                          : action === "approve"
-                            ? listRefusal(
-                                error,
-                                "Список не затверджено.",
-                                "Спробуйте ще раз.",
-                              )
-                            : listRefusal(
-                                error,
-                                "Список не відхилено.",
-                                "Перевірте причину та спробуйте ще раз.",
-                              ),
-      );
-    } finally {
-      setAsking(null);
+      // Refused: said under the tag at once, the list read again behind it.
+      said(decisionRefusal(error, "approve", list, warehouse));
+      setAsking(false);
       setBusy(false);
       await refresh();
+      return;
     }
+    // Approved: read again under the sheet's eyelet, then closed — never a
+    // moment of «Затвердити» over the list just decided (review).
+    await refresh();
+    setAsking(false);
+    setBusy(false);
   }
 
   return (
-    <div
-      className="notice opening-decision"
-      aria-label={approvable ? "Затвердження списку" : "Рішення щодо списку"}
-    >
-      <h3>{approvable ? "Затвердження" : "Рішення щодо списку"}</h3>
-      {approvable && (
-        <p>
-          Стане початковим залишком складу «{warehouse}»:{" "}
-          <strong>{units} шт.</strong>
-        </p>
-      )}
-      <p>
-        {`Файлів у списку: ${String(list.summary.parts)}${list.summary.parts_removed > 0 ? ` · прибрано: ${String(list.summary.parts_removed)}` : ""}`}
-      </p>
-      {approvable && bases.length > 0 && (
-        <ul>
-          {bases.map((basis) => (
-            <li key={basis}>
-              {basisLabels[basis]}: рядків {list.summary.lines_by_basis[basis]},
-              одиниць {list.summary.units_by_basis[basis]}
-            </li>
-          ))}
-        </ul>
-      )}
-      {approvable && list.summary.lines_differing_from_source > 0 && (
-        <p>
-          Рядків, де відповідь відрізняється від списку:{" "}
-          {list.summary.lines_differing_from_source}
-        </p>
-      )}
-      {approvable && waiting > 0 && (
-        <p className="hint">
-          Затвердити можна, коли кожен рядок розібрано або позначено «не товар».
-          Ще чекають: {waiting}.
-        </p>
-      )}
-      {problem && <p role="alert">{problem}</p>}
-      {asking === "reject" ? (
-        <div className="actions">
-          <label>
-            Чому відхиляємо
-            <input
-              value={reason}
-              maxLength={1000}
-              onChange={(event) => {
-                setReason(event.target.value);
-              }}
-            />
-          </label>
-          <button
-            disabled={busy || blocked || reason.trim() === ""}
-            onClick={() => {
-              void decide("reject");
-            }}
-          >
-            Так, відхилити
-          </button>
-          <button
-            className="quiet"
-            onClick={() => {
-              setAsking(null);
-            }}
-          >
-            Скасувати
-          </button>
-        </div>
-      ) : (
-        <div className="actions">
-          <button
-            className="quiet"
-            disabled={busy || blocked}
-            onClick={() => {
-              setProblem(null);
-              setAsking("reject");
-            }}
-          >
-            Відхилити список
-          </button>
-        </div>
-      )}
-      {ready && asking === null && !main && (
+    <>
+      {ready && !asking && !main && (
         // Outside Telegram, its MainButton as the dock's one button.
         <div className="pay-panel order-dock" ref={dock}>
           <button
@@ -1875,7 +1951,7 @@ function Approval({
           </button>
         </div>
       )}
-      {asking === "approve" && (
+      {asking && (
         <ApproveSheet
           list={list}
           warehouse={warehouse}
@@ -1883,23 +1959,187 @@ function Approval({
           held={blocked}
           fallback={fallback}
           approve={() => {
-            void decide("approve");
+            void approve();
           }}
           close={() => {
-            if (!busy) setAsking(null);
+            if (!busy) setAsking(false);
           }}
         />
       )}
-    </div>
+    </>
+  );
+}
+
+/**
+ * «Відхилити «Зошит 1»?» (goods task list after stage 2, P0-1): why, and
+ * Telegram's MainButton «Так, відхилити», not pressed until a reason is
+ * given — outside Telegram, the sheet's own; «Назад» closes it, the reason
+ * kept by the list. Enter only puts the keyboard away: a rejection is never
+ * undone, so only the button rejects (review). Rejected, the list is read
+ * again under the sheet's eyelet, then the sheet closes and the tag says
+ * so; refused, it stays with the reason typed and says why.
+ */
+function RejectSheet({
+  list,
+  store,
+  token,
+  warehouse,
+  blocked,
+  fallback,
+  reason,
+  setReason,
+  close,
+  rejected,
+  refresh,
+}: {
+  list: StockList;
+  store: Store;
+  token: string;
+  warehouse: string;
+  blocked: boolean;
+  fallback: RefObject<HTMLElement>;
+  reason: string;
+  setReason: (reason: string) => void;
+  close: () => void;
+  rejected: () => void;
+  refresh: () => Promise<void>;
+}): JSX.Element {
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  const given = reason.trim() !== "";
+  const press = (): void => {
+    if (given && !blocked && !busy) void reject();
+  };
+  const words = "Так, відхилити";
+  const main = useMainButton(words, press, {
+    progress: busy,
+    active: given && !blocked,
+  });
+
+  async function reject(): Promise<void> {
+    setBusy(true);
+    setProblem(null);
+    try {
+      await api(
+        `/snapshots/${list.snapshot_id}/reject?store_id=${store.id}`,
+        token,
+        { reason: reason.trim() },
+        undefined,
+        "POST",
+      );
+      buzz("success");
+    } catch (error) {
+      buzz("error");
+      // Refused: said in the sheet at once, its reason free to change; the
+      // list read again behind it.
+      setProblem(decisionRefusal(error, "reject", list, warehouse));
+      setBusy(false);
+      await refresh();
+      return;
+    }
+    await refresh();
+    rejected();
+  }
+
+  return (
+    <Sheet
+      title={`Відхилити «${listName(list)}»?`}
+      close={() => {
+        if (!busy) close();
+      }}
+      fallback={fallback}
+      held={busy}
+      foot={
+        main ? undefined : (
+          <div className="count-foot">
+            <button
+              type="button"
+              className="sheet-done main-mimic"
+              disabled={(!given || blocked) && !busy}
+              aria-disabled={busy || undefined}
+              onClick={press}
+            >
+              {busy ? (
+                <>
+                  <Eyelet state="spin" size={20} />
+                  <span className="visually-hidden">{words}</span>
+                </>
+              ) : (
+                words
+              )}
+            </button>
+          </div>
+        )
+      }
+    >
+      <div className="opening-reject">
+        <label>
+          Чому відхиляємо
+          <input
+            value={reason}
+            maxLength={1000}
+            disabled={busy}
+            enterKeyHint="done"
+            onChange={(event) => {
+              setReason(event.target.value);
+              setProblem(null);
+            }}
+            onKeyDown={(event) => {
+              if (event.key !== "Enter") return;
+              event.preventDefault();
+              // The keyboard put away, the cursor still the sheet's: Escape
+              // and «Назад» close it as ever.
+              event.currentTarget
+                .closest<HTMLElement>('[role="dialog"]')
+                ?.focus();
+            }}
+          />
+        </label>
+        <p className="t-meta">Залишків цей список не змінить.</p>
+        {problem && <p role="alert">{problem}</p>}
+      </div>
+    </Sheet>
+  );
+}
+
+/**
+ * What an approval adds up, under its number (goods task list after stage
+ * 2, P0-1): each basis's lines and pieces, the lines answered otherwise than
+ * the list says, and its files when there are more than one.
+ */
+function ApprovalSummary({ list }: { list: StockList }): JSX.Element | null {
+  const { summary } = list;
+  const bases = (Object.keys(basisLabels) as Basis[]).filter(
+    (basis) => summary.lines_by_basis[basis] > 0,
+  );
+  const differing = summary.lines_differing_from_source;
+  if (bases.length === 0 && differing === 0 && summary.parts <= 1) return null;
+  return (
+    <ul className="opening-summary">
+      {bases.map((basis) => {
+        const count = summary.lines_by_basis[basis];
+        return (
+          <li key={basis}>
+            {`${basisLabels[basis]}: ${number(count)} ${plural(count, "рядок", "рядки", "рядків")} · ${number(summary.units_by_basis[basis])} шт.`}
+          </li>
+        );
+      })}
+      {differing > 0 && (
+        <li>{`Рядків, де відповідь відрізняється від списку: ${number(differing)}`}</li>
+      )}
+      {summary.parts > 1 && (
+        <li>{`Файлів у списку: ${number(summary.parts)}`}</li>
+      )}
+    </ul>
   );
 }
 
 /**
  * «Затвердити «Зошит 1»?» (spec §6.6; P0-6): the number large, what it
- * becomes, that it cannot be undone, and Telegram's MainButton «Так,
- * затвердити» — outside Telegram, the sheet's own. A press sooner than
- * `CARRIED_TAP` after it opened was meant for «Затвердити · … шт.», which
- * stood where «Так, затвердити» stands: let go.
+ * becomes, that it cannot be undone, what it adds up (P0-1), and Telegram's
+ * MainButton «Так, затвердити» — outside Telegram, the sheet's own. A press
+ * sooner than `CARRIED_TAP` after it opened was meant for «Затвердити · …
+ * шт.», which stood where «Так, затвердити» stands: let go.
  */
 function ApproveSheet({
   list,
@@ -1971,6 +2211,7 @@ function ApproveSheet({
         стануть початковим залишком складу «{warehouse}». Скасувати це потім не
         можна.
       </p>
+      <ApprovalSummary list={list} />
     </Sheet>
   );
 }

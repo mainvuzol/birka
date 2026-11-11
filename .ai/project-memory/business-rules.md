@@ -8481,3 +8481,164 @@ answer replaces the default the batches were built by until then.
 
 Not built by these answers; each waits for its batch: sale P2-4, sale
 P2-5, the other sections' write refusals, goods P0-1.
+
+## Chosen in chat — 2026-11-11 (audit after stage 2, batch 10: the «Початкові залишки» list on its tag and its lines — «← Початкові залишки», the tag's ⋯ with only what the person may do, the waiting's one line, a file's lines named over the switch; «Файли списку», «Додати файл» and «Додати рядки вручну» screens of their own; «Відхилити список» a sheet; the approval's summary in its sheet; the section's write refusals by В-П1 (б); goods P0-1)
+
+Chosen in chat on 2026-11-11 («Yes, start batch 10»), after the owner's
+answers (#192): goods P0-1 as the owner approved it, and the write refusals
+of the screens it touches by В-П1 (б). No right, no server rule, no field
+changes. Who approves and rejects, the reason required, the last file never
+removed, the limits, the warehouse waiting while the list is open and the
+approval never undone stay as they were. This replaces batch 11's «The
+files stay above the lines» and «The summary … stays above; «Відхилити
+список» is as it was» (2026-11-08), as the owner's answer says.
+- **The header** (P2, §6.8): «← Початкові залишки» over the title, the
+  arrow hidden from a reader, who hears «Назад до «Початкові залишки»»;
+  Telegram's «Назад» does the same; from «Сьогодні»'s tag it leads where
+  «До списків» led.
+- **The tag** (§5): its warehouse with ⋯ on the same line, its sticker, its
+  meta and progress as before, and one line inside it: «Поки список чекає
+  рішення, на складі «…», де ще не було руху товару, нічого не приймають,
+  не продають і не виправляють.» The tail «Затвердіть або відхиліть його.»
+  / «Відхилити його можете й ви.» is gone: MainButton and ⋯ say what may
+  be done. A store that does not trade keeps its plate «Магазин «…», що
+  почав цей список, не працює: …», as the TZ says.
+  - **Decided here:** ⋯ is named «Дії зі списком» to a reader (no visible
+    word); it shows only when the sheet would hold something.
+- **⋯'s sheet**, titled the list's name, only what the person may do:
+  «Додати файл» and «Додати рядки вручну» (`snapshot:import`, the store
+  trading, the list in review; held while the app is blocked); «Файли
+  списку · N» where the list has files — two parts or more, or one file —
+  as the section stood before; «Відхилити список» (`snapshot:approve` or
+  `snapshot:import`, the list in review), in the danger's colour.
+  - **Decided here (review):** N is the files still in the list as read on
+    the list's screen, not the list's own count — a file whose answer was
+    lost is the list's, though the list read before it knows nothing of it.
+- **Under the tag at once** the switch of three and «Інші рядки» as they
+  were, the lines and «Показати ще». A file's lines are no `<select>`:
+  «Показати рядки» on «Файли списку» puts «Рядки файлу «2. {назва}»» over
+  the switch, with a quiet «Усі файли» beside it; the line takes the cursor
+  coming back.
+  - **Decided here:** a part typed by hand says «2. Рядки, внесені вручну»
+    there; a part removed meanwhile, « (прибрано)» after its name — the
+    part as read now (review).
+- **«Файли списку»**, a screen of its own, «← {список}», its heading taking
+  the cursor: «Місце у списку: рядків … з … · відповідей … з …» (the same
+  words); a tag a file — «N. «назва» · Звідки: …», «Рядки 1–40 ·
+  розібрано 12 з 40» (removed: «Рядки 1–40 · рядків 40», struck through,
+  in the offline tone) and «Додано: {хто}, {коли}» / «Прибрано: {хто},
+  {коли}»; the line of lines its photo shares with other files only when
+  there are any, in the warning's colour with its glyph; the verb «Показати
+  рядки» and a quiet «Прибрати файл» / «Прибрати рядки» (the words kept);
+  «Останній файл не прибрати» as before.
+  - Its question in a sheet «Прибрати файл?», the same words, Telegram's
+    MainButton «Так, прибрати», no «Скасувати» — «Назад», Escape and the
+    scrim close it, the cursor back on the button.
+  - **Decided here (review):** refused, the sheet closes at once and the
+    screen says why; removed, the list is read again under the sheet's
+    eyelet, then it closes — the tag comes back as it now is.
+- **«Додати файл» and «Додати рядки вручну»** are screens of their own,
+  «← {список}»: the form's old h3 the screen's heading, taking the cursor;
+  Telegram's MainButton «Додати до списку» / «Додати рядки» — outside
+  Telegram, the dock's one button. The forms, their checks, the file's
+  kept command and the lines' draft as before.
+  - **Decided here (review):** the room line «Місце у списку: …» on both:
+    a list typed in one go has no files' screen to say it, and here is
+    where its room is spent.
+  - **Decided here:** added, the list is read again under the screen's
+    eyelet, then the screen closes — the list never comes back as it was
+    before, with «Затвердити» over a line just added (seen at 360 × 640).
+  - A list decided, or its store stopped, while a form is open: the form
+    gives way to the list (review).
+- **«Відхилити «{список}»?»**, a sheet: «Чому відхиляємо», then «Залишків
+  цей список не змінить.»; Telegram's MainButton «Так, відхилити», not
+  active until a reason is given; no «Скасувати» — «Назад», Escape and the
+  scrim close it. Refused, it stays open with the reason and says why;
+  rejected, the list is read again under its eyelet, then it closes and the
+  tag takes the cursor.
+  - **Decided here (review):** Enter in the reason only puts the keyboard
+    away and leaves the cursor in the sheet — a rejection is never undone,
+    so only the button rejects; the reason is kept by the list while the
+    sheet is closed and opened again, and cleared once rejected.
+- **The approval** (P0-1, 7): the block «Затвердження» is gone. Under the
+  large «N шт.» and «стануть початковим залишком складу «…». Скасувати це
+  потім не можна.» the sheet «Затвердити «{список}»?» adds up:
+  «{основа}: N рядок/рядки/рядків · N шт.» each basis, «Рядків, де
+  відповідь відрізняється від списку: N» when there are any, «Файлів у
+  списку: N» when more than one. «Затвердити можна, коли…» is gone; while
+  lines wait there is no MainButton, and the tag says how many wait. The
+  approval sheet keeps «Скасувати» (the TZ takes it from the other two).
+  - **Decided here:** «N рядків» is said in its number's form — «1
+    рядок», «2 рядки», «5 рядків».
+  - A refused approval is said under the tag (it was said in the block):
+    at once, the sheet closed, the list read again behind it; approved,
+    the list is read again under the sheet's eyelet, then it closes.
+  - **Decided here (review):** what is said under the tag is of its
+    moment — gone once the list is decided or a line is opened to be
+    answered.
+- **The section's write refusals** (owner, В-П1 (б)): what was not done,
+  then the step; never «спробуйте ще раз» on a write. Was → now:
+  - a line's answer: «Відповідь не збережено. Перевірте її та спробуйте ще
+    раз.» → «Відповідь не збережено. Перевірте її.»;
+  - a new list: «Список не збережено. Перевірте рядки / файл та спробуйте
+    ще раз.» → «Список не збережено. Перевірте рядки.» / «… Перевірте
+    файл.»; its conflict «… Поки ви працювали, дані змінилися — спробуйте
+    ще раз.» → «… Поки ви працювали, дані змінилися: перевірте склад і
+    натисніть «Зберегти список» ще раз.»;
+  - approval: «Список не затверджено. Спробуйте ще раз.» → «Список не
+    затверджено. Перегляньте рядки списку.»;
+  - rejection: «Список не відхилено. Перевірте причину та спробуйте ще
+    раз.» → «Список не відхилено. Перевірте причину.»;
+  - removal: «Файл не прибрано. Спробуйте ще раз.» → «Файл не прибрано.
+    Перегляньте файли списку.» (and «Рядки не прибрано. …»);
+  - adding: «Файл не додано. Перевірте його та спробуйте ще раз.» → «Файл
+    не додано. Перевірте його.»; «Рядки не додано. Перевірте їх та
+    спробуйте ще раз.» → «Рядки не додано. Перевірте їх.»;
+  - a conflict none of them names: «Поки ви працювали, список змінився —
+    перегляньте його й спробуйте ще раз.» → «Поки ви працювали, список
+    змінився — перегляньте його.»;
+  - **decided here (review):** the server's own failure on any of them
+    (5xx): «Не вдалося виконати операцію. Спробуйте ще раз. Номер запиту:
+    …» → «{що не зроблено} Натисніть ще раз — повторити безпечно. Номер
+    запиту: …» — every command here is safe to send again (its command id,
+    or the list's state); a refusal naming nothing (4xx): «{що не зроблено}
+    {що перевірити}».
+  The words that already said what happened and the step stay («Невідомо,
+  чи … Натисніть ще раз — …», «Немає відповіді сервера…», each named
+  reason). The other sections' write refusals wait for their batches.
+- **360 × 640** (P0-1's first criterion): in a list in work of two files,
+  light and dark, the header, the tag and the switch stand over the menu,
+  and nothing stands between the switch's row and the first line. **Not
+  met:** the first line itself begins about 30 px under the menu — the
+  tag's approved line of what the waiting holds takes four lines at 360
+  px. Asked of the owner (batch 10's report).
+  - «Інші рядки ⋯» stands on its own row under the switch, as on main: the
+    general `nav` rule wins over the row's grid. Beside the switch,
+    «Потребують» would break inside the word at 360 px, so it is kept as
+    it is (the TZ: the switch «как есть»).
+
+### Settled in the review (2026-11-11)
+
+An independent reviewer read the diff with P0-1 and В-П1 (б); it ran the
+type check and ESLint. Nothing blocking, no right or idempotency broken.
+Settled:
+- Enter in the rejection's reason rejected the list (medium): only the
+  button rejects now (above).
+- A server failure still said «Спробуйте ще раз» (medium): the section's
+  words for it (above).
+- A refusal under the tag outlived its moment (low–medium): cleared when
+  the list is decided or a line opened.
+- The sheets closed before the list was read again, «Затвердити» back for
+  a moment (low): a refusal frees its sheet at once; a success reads
+  first, then closes.
+- A form left standing for a list no longer open to it (low): the list.
+- The file's line kept a copy of the file, removed meanwhile (low): read
+  from the parts now, « (прибрано)».
+- The reason lost when the sheet closed (low): kept by the list.
+- «Місце у списку» never said for a list typed in one go (low): on the add
+  screens too.
+- «Файли списку · N» counts the files still in the list; the screen shows
+  the removed ones too, struck through — kept, each its own meaning.
+- Kept: outside Telegram, Enter in a field of «Додати рядки вручну» sends
+  the lines, as the form did before — lines added are removed again as
+  their part, unlike a rejection.

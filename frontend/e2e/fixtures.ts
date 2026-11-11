@@ -1215,3 +1215,39 @@ export async function expectEmpty(
   await expect(title).toHaveCSS("font-weight", "600");
   await expect(title).toHaveCSS("color", said.ink);
 }
+
+/* «Початкові залишки»' list (goods task list after stage 2, P0-1). */
+
+/** A way of the list's tag's ⋯, once its sheet takes a tap (goods task
+ * list after stage 2, P0-1): «Додати файл», «Додати рядки вручну»,
+ * «Файли списку · N», «Відхилити список». */
+export async function listWay(page: Page, way: string | RegExp): Promise<void> {
+  await page.getByRole("button", { name: "Дії зі списком" }).click();
+  const sheet = page.getByRole("dialog");
+  await expect(sheet).toHaveAttribute("data-ready", "");
+  await sheet.getByRole("button", { name: way }).click();
+}
+
+/** «Відхилити список», ⋯'s: why, then «Так, відхилити» in its sheet. */
+export async function rejectList(page: Page, reason: string): Promise<void> {
+  await listWay(page, "Відхилити список");
+  const sheet = page.getByRole("dialog", { name: /^Відхилити «/ });
+  await expect(sheet).toHaveAttribute("data-ready", "");
+  await sheet.getByLabel("Чому відхиляємо").fill(reason);
+  await sheet.getByRole("button", { name: "Так, відхилити" }).click();
+  await expect(sheet).toHaveCount(0);
+}
+
+/** A part removed on «Файли списку»: its question's sheet, «Так,
+ * прибрати» (P0-1). */
+export async function removePart(
+  page: Page,
+  part: Locator,
+  button: string,
+): Promise<Locator> {
+  await part.getByRole("button", { name: button }).click();
+  const sheet = page.getByRole("dialog", { name: `${button}?` });
+  await expect(sheet).toHaveAttribute("data-ready", "");
+  await sheet.getByRole("button", { name: "Так, прибрати" }).click();
+  return sheet;
+}

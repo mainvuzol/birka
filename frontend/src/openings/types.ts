@@ -1,4 +1,10 @@
-import { CONFLICT_TEXT, errorText, inOwnWords } from "@/shared/api";
+import {
+  ApiError,
+  CONFLICT_TEXT,
+  errorText,
+  FAILED_TEXT,
+  inOwnWords,
+} from "@/shared/api";
 import type { StoreState } from "@/orders/types";
 import { visible } from "@/shared/visible";
 import { MAX_PART_LINES, MAX_PART_TEXT_CHARS } from "./stockFile";
@@ -262,13 +268,17 @@ export function cannotReceiveText(list: StockList): string {
 /** A conflict a list's screen does not name, the list read again by its
  * caller (review, 2026-10-24). */
 export const LIST_CHANGED =
-  "Поки ви працювали, список змінився — перегляньте його й спробуйте ще раз.";
+  "Поки ви працювали, список змінився — перегляньте його.";
 
 /**
  * A refusal a list's screen does not name, in the list's words — never the
  * shared ones, which speak of an order: what was not done, and what to
- * check, or after a conflict `changed`. Every other shared answer — the
- * server out of reach, a session ended, no access — keeps its own words.
+ * check, or after a conflict `changed`; any other refusal it does not name,
+ * what to check. The server's own failure, answered, says what was not done
+ * and to press again, its request's number kept — never «спробуйте ще раз»
+ * on a write (owner, В-П1 (б), 2026-11-11; review): every command here is
+ * safe to send again. Every other shared answer — the server out of reach,
+ * a session ended, no access — keeps its own words.
  */
 export function listRefusal(
   error: unknown,
@@ -276,11 +286,13 @@ export function listRefusal(
   check: string,
   changed: string = LIST_CHANGED,
 ): string {
-  return inOwnWords(
-    errorText(error),
-    `${notDone} ${check}`,
-    `${notDone} ${changed}`,
-  );
+  const said = errorText(error);
+  if (error instanceof ApiError && said.startsWith(FAILED_TEXT))
+    return error.status >= 500
+      ? `${notDone} Натисніть ще раз — повторити безпечно.${said.slice(FAILED_TEXT.length)}`
+      : // Refused for nothing named: the same press is refused again.
+        `${notDone} ${check}`;
+  return inOwnWords(said, `${notDone} ${check}`, `${notDone} ${changed}`);
 }
 
 /** A conflict a list's screen does not name: its caller reads the list
