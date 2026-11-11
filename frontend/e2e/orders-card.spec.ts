@@ -1415,7 +1415,15 @@ test("«Клієнт забрав» is four taps from the menu: «Замовле
       true,
     );
   });
+  // The warehouses' names, read for whoever reads the stock, change the
+  // list as they come, and a tap within 0.7 s of that is let go: the
+  // knot's tap waits for them. On CI they once came 280 ms after it, and
+  // the row's tap 800 ms after it was let go (2026-11-12).
+  const places = page.waitForRequest((request) =>
+    request.url().includes("/api/v1/stock-locations?"),
+  );
   await section(page, "Замовлення");
+  await (await places).response();
   await page
     .getByRole("group", { name: "Замовлення", exact: true })
     .getByRole("button", { name: /^Прибув на пошту/ })
