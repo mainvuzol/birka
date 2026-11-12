@@ -2250,7 +2250,11 @@ test("a list saved while the screen's first read of the lists is still on its wa
   await openStore(page, "Основний MAIN");
   armed = true;
   await section(page, "Початкові залишки");
-  await expect(page.getByText("Завантажуємо списки…")).toBeVisible();
+  // The lists' tags in grey while read; the words to a reader alone
+  // (goods task list after stage 2, P2-2).
+  await expect(
+    page.getByRole("status").filter({ hasText: "Завантажуємо списки…" }),
+  ).toHaveClass(/visually-hidden/);
   const form = await newFromFile(page, fixture.file_narrow_location_id);
   await choose(
     form,

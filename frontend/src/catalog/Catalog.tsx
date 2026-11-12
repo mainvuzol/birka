@@ -1,7 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { JSX } from "react";
 import { createPortal } from "react-dom";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { recordedNothing, api } from "@/shared/api";
 import { Eyelet } from "@/shared/Eyelet";
 import { ModeSwitch } from "@/shared/ModeSwitch";
@@ -27,7 +31,13 @@ import { Back } from "@/shared/Back";
 import { ScreenHeader } from "@/shared/ScreenHeader";
 import { Unread } from "@/shared/Unread";
 import { Sticker } from "@/shared/Sticker";
+import { Empty } from "@/shared/Empty";
+import { Placeholder } from "@/shared/Placeholder";
+import { useNextPageFailed } from "@/shared/nextPage";
 const base = "/catalog/match-decisions";
+/** A page of the queue; the server reads no further than offset 10 000. */
+const PAGE = 20;
+const LAST_OFFSET = 10000;
 
 type Queue = "OPEN" | "APPLIED" | "REJECTED";
 const queues: readonly { mode: Queue; label: string }[] = [
@@ -35,10 +45,15 @@ const queues: readonly { mode: Queue; label: string }[] = [
   { mode: "APPLIED", label: "Підтверджені" },
   { mode: "REJECTED", label: "Відхилені" },
 ];
-const emptyQueue: Record<Queue, string> = {
-  OPEN: "Нічого не чекає перевірки. Перевірка не змінює залишки й не об’єднує моделі.",
-  APPLIED: "Підтверджених пропозицій ще немає.",
-  REJECTED: "Відхилених пропозицій немає.",
+/** The blank tag's one line, and its meta where the queue needs one (goods
+ * task list after stage 2, P2-2): the words as they were. */
+const emptyQueue: Record<Queue, { title: string; meta?: string }> = {
+  OPEN: {
+    title: "Нічого не чекає перевірки.",
+    meta: "Перевірка не змінює залишки й не об’єднує моделі.",
+  },
+  APPLIED: { title: "Підтверджених пропозицій ще немає." },
+  REJECTED: { title: "Відхилених пропозицій немає." },
 };
 
 /**
@@ -98,7 +113,6 @@ export function Catalog({
   // «Створити нову» on a proposal: the sheet over this screen.
   const [making, setMaking] = useState(false);
   const [queue, setQueue] = useState<Queue>("OPEN");
-  const [offset, setOffset] = useState(0);
   const [success, setSuccess] = useState("");
   const { pending, busy, error, kept } = useCatalogCommand();
   // Kept when this screen opened: its journal read it from the phone's
@@ -106,13 +120,42 @@ export function Catalog({
   const [loaded] = useState(() => pending !== null);
   const blocked = storageError || busy || pending !== null;
   const canCreate = store.permissions.includes("catalog:create");
-  const list = useQuery({
-    queryKey: ["catalog-decisions", journalKey, queue, offset],
-    queryFn: () =>
+  // «Показати ще» adds the next page under the rows (goods task list after
+  // stage 2, P2-1): the first never goes while the next is read.
+  const list = useInfiniteQuery({
+    queryKey: ["catalog-decisions", journalKey, queue],
+    queryFn: ({ pageParam }) =>
       api<{ items: Decision[]; has_more: boolean }>(
-        `${base}?store_id=${store.id}&limit=20&offset=${String(offset)}${queue === "OPEN" ? "" : `&status=${queue}`}`,
+        `${base}?store_id=${store.id}&limit=${String(PAGE)}&offset=${String(pageParam)}${queue === "OPEN" ? "" : `&status=${queue}`}`,
         token,
       ),
+    initialPageParam: 0,
+    getNextPageParam: (last, pages) =>
+      last.has_more && pages.length * PAGE <= LAST_OFFSET
+        ? pages.length * PAGE
+        : undefined,
+  });
+  const rows = list.data?.pages.flatMap((page) => page.items) ?? [];
+  // What could not be read (as the till's list, sale P1-4): never read, the
+  // plate in the rows' place; read again and refused, the plate over the
+  // rows read; a next page, the plate where «Показати ще» stood (review).
+  const nextFailed = useNextPageFailed(list);
+  const neverRead = list.error !== null && list.data === undefined;
+  const readAgainFailed =
+    list.error !== null && list.data !== undefined && !nextFailed;
+  // «Показати ще» pressed: the cursor goes to the first row it brings.
+  const [focusAt, setFocusAt] = useState<number | null>(null);
+  const shelf = useRef<HTMLUListElement>(null);
+  useEffect(() => {
+    if (focusAt === null) return;
+    const next =
+      shelf.current?.querySelectorAll<HTMLElement>(".catalog-proposal")[
+        focusAt
+      ];
+    if (next) {
+      next.focus();
+      setFocusAt(null);
+    }
   });
   const detail = useQuery({
     queryKey: ["catalog-decision", journalKey, selected],
@@ -180,9 +223,16 @@ export function Catalog({
       <ScreenHeader
         title={selected ? "Пропозиція" : "Перевірка каталогу"}
         back={
+          // One way back, as every screen's (goods task list after stage
+          // 2, P2-3): the arrow unheard, the queue's name said.
           selected ? (
-            <Back go={toQueue} held={blocked} className="quiet">
-              ← До черги перевірки
+            <Back
+              go={toQueue}
+              held={blocked}
+              label="Назад до «Перевірка каталогу»"
+            >
+              <span aria-hidden="true">← </span>
+              Перевірка каталогу
             </Back>
           ) : (
             back && <BackToMore back={back} />
@@ -250,7 +300,7 @@ export function Catalog({
       )}
       {selected ? (
         detail.isPending ? (
-          <p role="status">Завантажуємо пропозицію…</p>
+          <ProposalPlaceholder />
         ) : detail.error ? (
           <Failure
             error={detail.error}
@@ -282,15 +332,24 @@ export function Catalog({
             current={queue}
             choose={(mode) => {
               setQueue(mode);
-              setOffset(0);
               setSuccess("");
+              setFocusAt(null);
             }}
             disabled={blocked}
             filters
           />
           {list.isPending ? (
-            <p role="status">Завантажуємо чергу…</p>
-          ) : list.error ? (
+            <Placeholder
+              said="Завантажуємо чергу…"
+              rows={3}
+              day={false}
+              rowShape={{
+                list: "catalog-rows",
+                row: "catalog-proposal",
+                pill: true,
+              }}
+            />
+          ) : neverRead ? (
             <Failure
               error={list.error}
               retry={() => {
@@ -299,58 +358,116 @@ export function Catalog({
             />
           ) : (
             <>
-              {list.data.items.length === 0 && offset === 0 && (
-                <p className="t-meta">{emptyQueue[queue]}</p>
+              {readAgainFailed && (
+                <Failure
+                  error={list.error}
+                  held={list.isFetching}
+                  retry={() => {
+                    void list.refetch();
+                  }}
+                />
               )}
-              <ul className="catalog-rows" aria-label="Пропозиції">
-                {list.data.items.map((d) => (
-                  <li key={d.decision_id}>
-                    <button
-                      type="button"
-                      className="catalog-proposal"
-                      disabled={blocked}
-                      onClick={() => {
-                        forgetCatalogRefusal();
-                        setSelected(d.decision_id);
-                        setSuccess("");
-                      }}
-                    >
-                      <span className="catalog-raw">
-                        «{visible(d.preview.raw_text)}»
-                      </span>
-                      <Sticker>{statusLabels[d.status]}</Sticker>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-              {(offset > 0 || list.data.has_more) && (
-                <div className="toolbar">
+              {rows.length === 0 ? (
+                <Empty
+                  title={emptyQueue[queue].title}
+                  meta={emptyQueue[queue].meta}
+                />
+              ) : (
+                <ul
+                  ref={shelf}
+                  className="catalog-rows"
+                  aria-label="Пропозиції"
+                >
+                  {rows.map((d) => (
+                    <li key={d.decision_id}>
+                      <button
+                        type="button"
+                        className="catalog-proposal"
+                        disabled={blocked}
+                        onClick={() => {
+                          forgetCatalogRefusal();
+                          setSelected(d.decision_id);
+                          setSuccess("");
+                        }}
+                      >
+                        <span className="catalog-raw">
+                          «{visible(d.preview.raw_text)}»
+                        </span>
+                        <Sticker>{statusLabels[d.status]}</Sticker>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {/* A page that failed: its retry alone, never «Показати ще»
+                  beside it reading the same page (as «Накладні»'s). */}
+              {nextFailed ? (
+                <Failure
+                  error={list.error}
+                  held={list.isFetching}
+                  retry={() => {
+                    void list.fetchNextPage();
+                  }}
+                />
+              ) : (
+                list.hasNextPage && (
                   <button
                     type="button"
                     className="quiet"
-                    disabled={blocked || offset === 0}
+                    disabled={blocked || list.isFetching || readAgainFailed}
                     onClick={() => {
-                      setOffset(Math.max(0, offset - 20));
+                      // Kept until the page is read: after its retry too.
+                      setFocusAt(rows.length);
+                      void list.fetchNextPage();
                     }}
                   >
-                    Попередні пропозиції
+                    Показати ще
                   </button>
-                  <button
-                    type="button"
-                    className="quiet"
-                    disabled={blocked || !list.data.has_more || offset >= 10000}
-                    onClick={() => {
-                      setOffset(offset + 20);
-                    }}
-                  >
-                    Наступні пропозиції
-                  </button>
-                </div>
+                )
               )}
             </>
           )}
         </>
       )}
+    </>
+  );
+}
+
+/**
+ * A proposal being read (goods task list after stage 2, P2-2): its words
+ * large, its sticker and two candidates' rows in grey where they come; the
+ * title «Пропозиція» and its «←» stand already. A screen reader hears that
+ * it is read.
+ */
+function ProposalPlaceholder(): JSX.Element {
+  return (
+    <>
+      <p role="status" className="visually-hidden">
+        Завантажуємо пропозицію…
+      </p>
+      <section
+        className="catalog-proposal-screen placeholder"
+        aria-hidden="true"
+      >
+        <p className="catalog-raw catalog-raw-large">
+          <span className="skeleton-line">
+            <span>«Пальто кокон графіт»</span>
+          </span>
+        </p>
+        <p>
+          <span className="skeleton skeleton-pill" />
+        </p>
+        <ul className="new-model-candidates">
+          {[0, 1].map((n) => (
+            <li key={n}>
+              <span className="new-model-name">
+                <span className="skeleton skeleton-name" />
+              </span>
+              <span className="skeleton skeleton-choose" />
+            </li>
+          ))}
+        </ul>
+      </section>
     </>
   );
 }
@@ -371,11 +488,16 @@ function addedSaid(decision: Decision): string {
 function Failure({
   error,
   retry,
+  held = false,
 }: {
   error: unknown;
   retry: () => void;
+  /** Its retry held while the list is read. */
+  held?: boolean;
 }): JSX.Element {
-  return <Unread error={error} said={catalogMessage} retry={retry} />;
+  return (
+    <Unread error={error} said={catalogMessage} retry={retry} held={held} />
+  );
 }
 
 function Detail({

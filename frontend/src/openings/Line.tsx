@@ -11,6 +11,7 @@ import { usePanelRoom } from "@/shared/panel";
 import { ScreenHeader } from "@/shared/ScreenHeader";
 import { buzz, useMainButton } from "@/shared/telegram";
 import { Unread } from "@/shared/Unread";
+import { Placeholder } from "@/shared/Placeholder";
 import { visible } from "@/shared/visible";
 import { partName } from "./Parts";
 import {
@@ -628,7 +629,9 @@ export function LineTask({
     );
   const cells = (index: number, part: Part): JSX.Element =>
     sizes.isPending ? (
-      <p role="status">Завантажуємо розміри…</p>
+      // A row of size cells in grey, where they come (goods task list after
+      // stage 2, P2-2).
+      <Placeholder said="Завантажуємо розміри…" cells={4} />
     ) : sizes.isError ? (
       <Unread
         error={sizes.error}

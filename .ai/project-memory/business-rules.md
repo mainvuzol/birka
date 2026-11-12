@@ -8859,3 +8859,98 @@ field and no sum changes; what is read and how much is as before.
   - kept as the task says: «Повернути постачальнику»'s warehouses held as
     two grey choices, though a store with one is shown a line of 22 —
     what comes is not known before it is read.
+
+## Chosen in chat — 2026-11-12 (audit after stage 2, batch 14: «Перевірка каталогу»'s queue and the catalogue's search by pages added under the first, one «Спробувати ще раз» after a failed page; «Товар»'s screens hold grey places while read, never a «Завантажуємо …» line; one blank tag for nothing; «← Перевірка каталогу» over a proposal; a receipt's result keeps its «←»; goods P2-1, P2-2, P2-3)
+
+Chosen in chat on 2026-11-12 («merged, go next»), after batch 13 (#196)
+was merged: the goods task list after stage 2's three points that wait for
+no approval. Its P1-2, P1-3, P1-4, P1-5 and P2-4 are marked «нужно
+утверждение» and stay. No right, no server rule, no field, no count and
+no sum changes; what is read and how much is as before.
+- **Pages added under the first** (P2-1; P7):
+  - «Перевірка каталогу»'s queue: «Показати ще» reads the next twenty and
+    adds them under the rows; «Попередні пропозиції» and «Наступні
+    пропозиції» are gone. The server's limit stays: nothing past offset
+    10 000. «Оновити» and a decision read again every page shown, in
+    order, from the first; a switch back to a queue shows the pages read
+    before at once and reads them again;
+  - the catalogue's search («Пошук у каталозі» on «Прийшов товар», a
+    stocktake's found goods, a line of «Початкові залишки», and the till's
+    «Знайти в каталозі», which shares it): «Ще товари»
+    adds the next page under what was found; «Попередні» is gone. Its word
+    stays «Ще товари», as the batch of 2026-11-11 kept it for this search
+    (the till's list says «Показати ще»);
+  - after a page that could not be read, the rows read stay and its one
+    «Спробувати ще раз» reads that page alone; «Показати ще» / «Ще товари»
+    come back once it is read — as «Накладні»'s (batch 13).
+- **Grey places while read** (P2-2; spec §5 «Скелетон», §6.27): no screen
+  of «Товар» shows «Завантажуємо …» to the eye. The words stay, said to a
+  screen reader alone, and the places are the real ones' shapes:
+  - the queue: three grey proposals' rows, their lines the row's width;
+  - a proposal opened: its words large, its sticker and two models offered
+    with «Це вона»'s place 44, under «Пропозиція» and its «←»;
+  - the catalogue's search: three grey rows of one line, «Шукаємо…» to a
+    screen reader;
+  - «Моделі»'s model: its hero tag — the eyelet, the name's line 42, ⋯'s
+    place — under «← Моделі»;
+  - «Прийшов товар», «Залишки» and «Інвентаризація»: the warehouses as two
+    grey choices (as «Брак» and «Повернути постачальнику»); «Прийшов
+    товар»'s sizes as four sizes' steps — the letters, «−», the count, «+»,
+    44 high — two a line;
+  - «Інвентаризація»'s stocktakes of a warehouse: «Попередні» and three
+    rows of its thread, their eyelets round — what a warehouse's
+    stocktakes most often are (an open one, when there is one, comes
+    above it); a finished stocktake's differences: two grey lines in their
+    own height;
+  - «Початкові залишки»: three grey tags of the lists, and of a list's
+    lines; a line's sizes, four grey cells 60 × 60.
+  - Where motion is reduced, the grey stands still (the shared rule).
+- **Nothing here** (P2-2; spec §6.28): the blank tag 64 and its one line,
+  the words as they were. A line of two sentences says its first, the
+  second under it as the blank tag's meta (decided here):
+  - the queue: «Нічого не чекає перевірки.» / «Перевірка не змінює залишки
+    й не об’єднує моделі.»; «Підтверджених пропозицій ще немає.»;
+    «Відхилених пропозицій немає.»;
+  - «Залишки»: «На цьому складі зараз немає товару.»;
+  - counting: «Усі позиції з залишком пораховано.» / «Ще нічого не
+    пораховано.»;
+  - «Початкові залишки» with no list: «Списки із зошита — рядок за
+    рядком.» / «Поки список чекає, склад не рухається.» — on the shared
+    blank tag, no longer the screens' before a store («BlankTag»).
+  - «Тут рядків немає.» under a list's switch is not a section's nothing
+    and stays as it is (not in the task's list).
+- **One way back** (P2-3; spec §6.8):
+  - over a proposal, «← Перевірка каталогу»: the arrow unheard, read
+    «Назад до «Перевірка каталогу»», drawn as every screen's «←» over its
+    title;
+  - «Прийшов товар»'s result keeps the form's «←» — «← Ще», «← {модель}»
+    when it was opened from a model's page — and Telegram's «Назад» with
+    it; «Прийняти ще» stays. Back on the model, its grid is read anew: a
+    receipt recorded drops the stock read before, so «Залишки» and a
+    model's grid never show the count from before the delivery.
+- **Left as it is:** «Шукаємо моделі…» of «Інший колір нашої моделі» —
+  that search is P1-5's, which waits for approval.
+- **After the independent review** (2026-11-12):
+  - what could not be read, as the till's list (sale P1-4): never read,
+    the plate in the list's place; a page that failed, its retry at the
+    rows' foot, held while the list is read, and still there while
+    «Оновити» reads; a re-read refused, the plate over the rows read,
+    which stay, «Показати ще» held under it — the queue and the
+    catalogue's search alike (`useNextPageFailed`);
+  - the catalogue's search typed again keeps what was found in place
+    until the new search comes, as the till's list does; never «Нічого не
+    знайшли» under the new words, nothing past offset 10 000;
+  - «Показати ще» and «Ще товари» put the cursor on the first row they
+    bring, as «Залишки»'s does;
+  - a grey proposal's row has its sticker's place, 28, under its words —
+    as high as the row that comes (±2, checked);
+  - «Початкові залишки»'s grey tags are a list's own — its eyelet, name,
+    meta, sticker and «Відкрити» 44 — and a line's — its eyelet, words,
+    meta and verb 44 — where they come; a list awaited from «Сьогодні»
+    shows its big tag over three lines in grey, never the lists' tags;
+  - a stocktake's differences: as many grey lines as will be shown, five
+    at most, folded;
+  - a receipt confirmed — by its form, or on reopening the app — resets
+    the stock read before: a screen showing it reads it again, the others
+    wait in grey; the till's search reads it again too, as after a
+    correction. Before, a receipt refreshed neither.

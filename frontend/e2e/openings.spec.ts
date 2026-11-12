@@ -2,6 +2,7 @@ import {
   test,
   expect,
   addModel,
+  holdReads,
   listWay,
   rejectList,
   removePart,
@@ -250,14 +251,57 @@ test("a list is typed, each line answered, and approved into opening stock", asy
     "Разом по сторінці",
   ]);
   await expect(page.getByText("Рядків: 3. Порожні рядки")).toBeVisible();
+  // Read slowly, the lines and the sizes hold their places (goods task
+  // list after stage 2, P2-2).
+  const linesRead = await holdReads(page, "snapshots/*/lines");
+  const sizesRead = await holdReads(page, "catalog/sizes");
   await page.getByRole("button", { name: "Зберегти список" }).click();
 
   await expect(page.getByRole("heading", { name: "Зошит 1" })).toBeVisible();
+  // The lines' tags in grey, three, a line's own shape — its eyelet, its
+  // words, its meta, its verb 44 — where they come; the words to a reader
+  // alone (review).
+  const greyLines = page.locator(
+    ".openings .placeholder > .tags.opening-lines > .today-tag",
+  );
+  await expect(greyLines).toHaveCount(3);
+  await expect(greyLines.first().locator(".today-tag-eyelet")).toHaveCount(1);
+  expect(
+    (await greyLines.first().locator(".skeleton-verb").boundingBox())?.height,
+  ).toBe(44);
+  await expect(
+    page.getByRole("status").filter({ hasText: "Завантажуємо рядки…" }),
+  ).toHaveClass(/visually-hidden/);
+  const greyLine = await greyLines.first().boundingBox();
+  linesRead();
+  await expect(greyLines).toHaveCount(0);
+  const firstLine = await page
+    .locator(".tags.opening-lines > .opening-line")
+    .first()
+    .boundingBox();
+  expect(
+    Math.abs((firstLine?.y ?? 0) - (greyLine?.y ?? 0)),
+  ).toBeLessThanOrEqual(2);
+  expect(
+    Math.abs((firstLine?.height ?? 0) - (greyLine?.height ?? 0)),
+  ).toBeLessThanOrEqual(2);
   await showLines(page, "Усі");
 
   // A line on its own screen: «Рядок 1 з 3», the menu aside (stage 2,
   // goods task list, P0-5).
   let editor = await answer(page, 1);
+  // Its sizes read slowly: a row of four cells in grey, 60 × 60 (P2-2).
+  const greyCells = editor.locator(".placeholder.cells > .size-cell.skeleton");
+  await expect(greyCells).toHaveCount(4);
+  expect(await greyCells.first().boundingBox()).toMatchObject({
+    width: 60,
+    height: 60,
+  });
+  await expect(
+    editor.getByRole("status").filter({ hasText: "Завантажуємо розміри…" }),
+  ).toHaveClass(/visually-hidden/);
+  sizesRead();
+  await expect(greyCells).toHaveCount(0);
   await expect(
     page.getByRole("heading", { name: "Рядок 1 з 3" }),
   ).toBeFocused();

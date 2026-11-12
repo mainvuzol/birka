@@ -2728,13 +2728,48 @@ section.credits.customer-card {
   width: 40%;
   height: 0.9em;
 }
-.placeholder :is(.sale-row, .supplier-row, .set-off-return) .sale-main {
+.placeholder
+  :is(.sale-row, .supplier-row, .set-off-return, .catalog-proposal)
+  .sale-main {
   gap: 8px;
 }
 /* A return's card held in «Зарахувати повернення» (money task list after
-   stage 2, P1-3): its lines the card's width, as the card's own. */
-.placeholder .set-off-return .sale-main {
+   stage 2, P1-3), a proposal's row in «Перевірка каталогу» (goods task
+   list after stage 2, P2-2): its lines the card's width, as the card's
+   own. */
+.placeholder :is(.set-off-return, .catalog-proposal) .sale-main {
   align-self: stretch;
+}
+/* «Товар»'s places while read (goods task list after stage 2, P2-2): a
+   found model's row one line, 44, as the radio it holds the place of. */
+.placeholder .catalog-row {
+  display: flex;
+  align-items: center;
+}
+.placeholder .catalog-row .sale-main {
+  flex: 1;
+}
+/* A size's steps: its letters 28 × 26, «−», the count and «+» 44 high in
+   the buttons' corner. */
+.placeholder .receive-size .skeleton-code {
+  width: 28px;
+  height: 26px;
+}
+.placeholder .receive-size .skeleton-step {
+  height: 44px;
+  border-radius: var(--r-l);
+}
+/* A proposal's candidate held: «Це вона»'s place, a button 44 high. */
+.skeleton-choose {
+  flex-shrink: 0;
+  width: 88px;
+  height: 44px;
+  border-radius: var(--r-l);
+}
+/* A model's name on its hero tag, 42 a line, ⋯'s place beside it. */
+.model-hero-head > .skeleton-title {
+  flex: 1;
+  height: 42px;
 }
 /* «Борги»'s places while read (credits task list, P2-3): what is owed on a
    row's right, and the store's card in its own lines' heights, grey lines
@@ -6644,10 +6679,40 @@ section.receive-list {
   color: var(--ink);
   overflow-wrap: anywhere;
 }
-/* An invoice opened from another screen while it is read (money task list
-   after stage 2, P1-3): its history's eyelets grey and round. */
-.invoice-placeholder .timeline-node.skeleton {
+/* A history held while read — an invoice opened from another screen (money
+   task list after stage 2, P1-3), «Інвентаризація»'s «Попередні» (goods,
+   P2-2): its eyelets grey and round. */
+.placeholder .timeline-node.skeleton {
   border-radius: var(--r-round);
+}
+/* «Початкові залишки» read (goods task list after stage 2, P2-2; review):
+   a list's or a line's tag in grey, its own shape — the eyelet a grey dot,
+   its lines in their type's heights, its sticker 28 and its verb 44. */
+.placeholder .today-tag-eyelet.skeleton {
+  position: absolute;
+  background: var(--skeleton);
+}
+.placeholder .today-tag-body > .t-row {
+  width: 70%;
+}
+.placeholder .today-tag-body > .t-meta {
+  width: 45%;
+}
+.skeleton-verb {
+  align-self: flex-end;
+  width: 96px;
+  height: 44px;
+  margin-top: 4px;
+  border-radius: var(--r-l);
+}
+.opening-tag-foot > .skeleton-verb {
+  margin-top: 0;
+}
+.placeholder .opening-hero-place {
+  width: 60%;
+}
+.placeholder .opening-hero-in > .t-meta {
+  width: 40%;
 }
 .invoice-closed-head {
   display: flex;
@@ -6894,9 +6959,6 @@ section.receive-list {
 .stocktake-modes {
   margin-top: 12px;
 }
-.stocktake-empty {
-  margin: 16px 0;
-}
 .stocktake-more {
   display: block;
   margin: 12px 0 0;
@@ -7006,10 +7068,6 @@ section.receive-list {
 }
 .opening-tag-foot .tag-verb {
   margin-top: 0;
-}
-.opening-empty {
-  margin: 0;
-  text-align: center;
 }
 /* A list's big tag (spec §5 «Большая бирка»): its warehouse large, its
    state's sticker, how far it is answered over a bar of 6 (spec §6.24). */

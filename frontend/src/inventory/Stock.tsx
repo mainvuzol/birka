@@ -7,6 +7,7 @@ import { api } from "@/shared/api";
 import { Unread } from "@/shared/Unread";
 import { Icon } from "@/shared/Icon";
 import { Placeholder } from "@/shared/Placeholder";
+import { Empty } from "@/shared/Empty";
 import { ScreenHeader } from "@/shared/ScreenHeader";
 import { buzz } from "@/shared/telegram";
 import { visible } from "@/shared/visible";
@@ -192,7 +193,13 @@ export function Stock({
           </p>
         )}
         {locations.isPending ? (
-          <p role="status">Завантажуємо склади…</p>
+          // The warehouses' choices in grey, where they come (goods task
+          // list after stage 2, P2-2).
+          <Placeholder
+            said="Завантажуємо склади…"
+            chips={2}
+            className="stock-places"
+          />
         ) : locations.error ? (
           <Unread
             error={locations.error}
@@ -266,10 +273,10 @@ export function Stock({
                         }}
                       />
                     )}
+                    {/* Nothing: the blank tag and its one line (goods task
+                        list after stage 2, P2-2). */}
                     {tags.length === 0 && (
-                      <p className="t-meta">
-                        На цьому складі зараз немає товару.
-                      </p>
+                      <Empty title="На цьому складі зараз немає товару." />
                     )}
                     <div className="tags stock-tags" ref={shelf}>
                       {tags.map((tag) => (

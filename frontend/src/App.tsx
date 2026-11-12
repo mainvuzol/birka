@@ -1575,6 +1575,10 @@ function Workspace({
         buzz("success");
         setReceiptSettled(true);
         setReceiveEpoch((epoch) => epoch + 1);
+        // The stock read before the delivery is gone, as when the form
+        // itself is told (goods task list after stage 2, P2-3; review).
+        void cache.resetQueries({ queryKey: ["inventory-stock"] });
+        void cache.invalidateQueries({ queryKey: ["sale-stock"] });
       }
     });
   }
