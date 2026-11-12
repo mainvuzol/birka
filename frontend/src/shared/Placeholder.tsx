@@ -11,6 +11,7 @@ import type { JSX, ReactNode } from "react";
  * a mark 40 or without; a row tag 76 of a line and its meta, as an order's
  * list draws it; a store's tag 96;
  * a field 52 under its label; a row of size cells 60; a row of choices;
+ * rows in their own list's shape, where a row is not a list's 64;
  * and the model tags with their cells, as before.
  */
 export function Placeholder({
@@ -28,6 +29,7 @@ export function Placeholder({
   cells = 0,
   chips = 0,
   className,
+  rowShape,
 }: {
   said: string;
   /** The search field's place, above the tags. */
@@ -64,6 +66,10 @@ export function Placeholder({
   chips?: number;
   /** The real row's own class, for `chips`. */
   className?: string;
+  /** The rows' own class and their list's, where a row is not a list's 64:
+   * a supplier's 56 over a line, a return's card in «Зарахувати
+   * повернення» (money task list after stage 2, P1-3). */
+  rowShape?: { list: string; row: string };
 }): JSX.Element {
   const status = (
     <p role="status" className="visually-hidden">
@@ -133,9 +139,14 @@ export function Placeholder({
         {status}
         <div className="placeholder" aria-hidden="true">
           {!debts && day && <span className="skeleton skeleton-day" />}
-          <div className={block ? "list-block" : undefined}>
+          <div className={block ? "list-block" : rowShape?.list}>
             {Array.from({ length: rows }, (_, n) => (
-              <div className={debts ? "sale-row debt-row" : "sale-row"} key={n}>
+              <div
+                className={
+                  debts ? "sale-row debt-row" : (rowShape?.row ?? "sale-row")
+                }
+                key={n}
+              >
                 {debts && <span className="debt-mark skeleton" />}
                 {avatar && !debts && <span className="avatar skeleton" />}
                 <span className="sale-main">

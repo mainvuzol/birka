@@ -10,6 +10,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { UseQueryResult } from "@tanstack/react-query";
 import { ApiError, api, errorText, inOwnWords } from "@/shared/api";
 import { Unread } from "@/shared/Unread";
+import { Placeholder } from "@/shared/Placeholder";
 import type { Store } from "@/orders/types";
 import { visible } from "@/shared/visible";
 import { Icon } from "@/shared/Icon";
@@ -193,7 +194,14 @@ function SupplierList({
         autoFocus
       />
       {suppliers.isPending ? (
-        <p role="status">Завантажуємо постачальників…</p>
+        // Three suppliers' rows in their places (money task list after
+        // stage 2, P1-3).
+        <Placeholder
+          said="Завантажуємо постачальників…"
+          rows={3}
+          day={false}
+          rowShape={{ list: "supplier-rows", row: "supplier-row" }}
+        />
       ) : suppliers.error ? (
         <Unread
           error={suppliers.error}

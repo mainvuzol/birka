@@ -24,6 +24,7 @@ import { SendingLine } from "@/shared/Sending";
 import { Sum } from "@/shared/Sum";
 import { buzz, useMainButton } from "@/shared/telegram";
 import { Empty } from "@/shared/Empty";
+import { Placeholder } from "@/shared/Placeholder";
 import { ageOf } from "@/today/reads";
 import { Stamp, staleOf, useNow } from "@/today/age";
 import { shortDay, shortWhen } from "@/credits/format";
@@ -376,12 +377,17 @@ export function Invoices({
   if (view.screen === "finding")
     return (
       <>
+        {/* Its supplier's name not known yet: the title's place held, and
+          the place of its ⋯, unseen, so the line under it stays where the
+          card's will be (money task list after stage 2, P1-3; review). */}
         <ScreenHeader
-          title="Накладні"
+          waiting
+          pushed
           back={listBack && <BackToMore back={listBack} />}
+          aside={<span className="debt-more" aria-hidden="true" />}
         />
-        <section className="invoices">
-          <p role="status">Завантажуємо накладну…</p>
+        <section className="invoices invoice-detail">
+          <InvoicePlaceholder />
         </section>
       </>
     );
@@ -562,10 +568,9 @@ function InvoiceList({
       />
       <section className="invoices">
         {readOnly && (
-          <p className="hint">
-            Магазин не торгує: його накладні тут лише для перегляду. Сплачує
-            будь-який магазин мережі, що працює.
-          </p>
+          // The store's own notice says it does not trade; this says who
+          // pays, in one line (money task list after stage 2, P2-4).
+          <p className="hint">Сплачує будь-який магазин мережі, що працює.</p>
         )}
         <ModeSwitch
           label="Які накладні"
@@ -634,7 +639,9 @@ function InvoiceList({
           </div>
         )}
         {invoices.isPending ? (
-          <p role="status">Завантажуємо накладні…</p>
+          // Three tags' places, where the first one comes (money task list
+          // after stage 2, P1-3).
+          <Placeholder said="Завантажуємо накладні…" lineTags={3} />
         ) : invoices.data === undefined ? (
           <Unread
             error={invoices.error}
@@ -705,7 +712,9 @@ function InvoiceList({
                 }}
               />
             )}
-            {invoices.hasNextPage && (
+            {/* A page that failed is asked again by its own retry, alone
+              (money task list after stage 2, P2-1). */}
+            {invoices.hasNextPage && !invoices.isFetchNextPageError && (
               <button
                 className="quiet"
                 disabled={invoices.isFetching}
@@ -1155,6 +1164,69 @@ function InvoiceDetail({
           </div>
         )}
       </section>
+    </>
+  );
+}
+
+/**
+ * An invoice opened from another screen while it is read (money task list
+ * after stage 2, P1-3): its «Записано …» line, what is owed large over its
+ * bar and what is paid, and two rows of its history, grey in their own
+ * sizes — as an order's card waits (`CardPlaceholder`). A screen reader
+ * hears «Завантажуємо накладну…».
+ */
+function InvoicePlaceholder(): JSX.Element {
+  return (
+    <>
+      <p role="status" className="visually-hidden">
+        Завантажуємо накладну…
+      </p>
+      <div className="placeholder invoice-placeholder" aria-hidden="true">
+        <p className="hint debt-context">
+          <span className="skeleton-line">
+            <span>Записано 00.00, 00:00 · Оля</span>
+          </span>
+        </p>
+        <div className="invoice-owed">
+          <p className="owed-what">
+            <span className="skeleton-line">
+              <span>Винні</span>
+            </span>
+          </p>
+          <p className="invoice-owed-sum t-money-l t-money-xl">
+            <span className="skeleton-line">
+              <span>0 000,00 грн</span>
+            </span>
+          </p>
+          <div className="debt-bar invoice-bar" />
+          <p className="owed-count">
+            <span className="skeleton-line">
+              <span>Сплачено 0,00 грн з 0 000,00 грн</span>
+            </span>
+          </p>
+        </div>
+        <p className="t-label customer-history-title">
+          <span className="skeleton-line">
+            <span>Історія</span>
+          </span>
+        </p>
+        <div className="timeline">
+          {[0, 1].map((n) => (
+            <div className="timeline-row" key={n}>
+              <span className="timeline-day">
+                <span className="skeleton-line">
+                  <span>00.00</span>
+                </span>
+              </span>
+              <span className="timeline-node skeleton" />
+              <span className="timeline-main">
+                <span className="skeleton skeleton-name" />
+                <span className="skeleton skeleton-meta" />
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
     </>
   );
 }

@@ -5938,8 +5938,10 @@ and «… записано один раз» (В-ЗП2 (а)).
   longer page: the server takes fifty at most, so the third press was
   refused and the list gave way to the refusal. Each row once, by its id:
   a row the page's edge moved past is not shown twice. A page that fails
-  says why under the rows read, which stand, and «Показати ще» reads it
-  again. A filter changed (the supplier, still owed, on hand, other
+  says why under the rows read, which stand, and its one «Спробувати ще
+  раз» reads it again; «Показати ще» is gone meanwhile, as the report's
+  thread has it (money task list after stage 2, P2-1, 2026-11-12). A
+  filter changed (the supplier, still owed, on hand, other
   stores) reads from the first page; a filter come back to shows what was
   read under it while it is read again, as «Закриття» does (review).
 - **The plates said at once (orders-paper P0-2):** a refusal, or what was
@@ -8774,3 +8776,86 @@ both on «Гроші». No right, no server rule, no field and no sum changes.
     the owner's approval** (the task marks them so); the «Закриття» button
     on «Каса» itself does not change;
   - after a «yes» to Q-1, every line gets its «›» (S29 whole) — not here.
+
+## Chosen in chat — 2026-11-12 (audit after stage 2, batch 13: the suppliers' screens hold grey places while read, never a «Завантажуємо …» line; one «Спробувати ще раз» after a failed page; the report's blank tags; «Продано»'s stub with its sum large; «Менше» felt, one line where a store does not trade, hairline dividers; money P1-3, P2-1…P2-4 — the money task list closed)
+
+Chosen in chat on 2026-11-12 («merged go next»), after batch 12 (#195)
+was merged: the rest of the money task list after stage 2 in one batch, as
+its §8 orders it («Поставщики и отчёт»). No right, no server rule, no
+field and no sum changes; what is read and how much is as before.
+- **Grey places while read** (P1-3; spec §5 «Скелетон», §6.27; P7): no
+  screen of the suppliers' shows «Завантажуємо …» to the eye. The words
+  stay, said to a screen reader alone (`role="status"`, hidden), and the
+  places are the real rows' shapes, from the shared `Placeholder`:
+  - «Накладні» and «Позичене й під реалізацію»: three grey row tags, an
+    order's (`lineTags`); the first tag comes where the first grey stood;
+  - «Постачальникам»: three grey rows of a list (64);
+  - the supplier's sheet and «Список постачальників»: three grey supplier
+    rows (56, over a line — `rowShape`). «Список постачальників»' search
+    stands from the start, over the places, so nothing moves when the
+    rows come; it is not drawn for a list that came back empty, as before;
+  - «Зарахувати повернення»: three grey cards of a return (`rowShape`);
+  - «Повернути постачальнику»: its warehouses as two grey choices;
+  - an invoice opened from another screen (a return's «Відкрити накладну»)
+    while it is found among its supplier's: the title's place held, its
+    «Записано …» line, what is owed large over its bar and what is paid,
+    and two rows of its history on the thread, grey in their own sizes —
+    as an order's card waits. Its «←» is the way it came, as before.
+  - Where motion is reduced, the grey stands still (the shared rule).
+- **A page that failed** (P2-1): on «Накладні», «Постачальникам» and
+  «Позичене й під реалізацію», a page after the first that could not be
+  read keeps the rows read and says why with its one «Спробувати ще раз»;
+  «Показати ще» is gone meanwhile and comes back once that page is read.
+  A whole re-read that fails is said as before. The rule of the first
+  batch says so now.
+- **The report with nothing in it** (P2-2; spec §6.28): «Моделі» and
+  «Продажі й повернення» with no record in the period show the blank tag
+  64 and their one line, «Нічого не продано.» / «Ні продажів, ні
+  повернень.», no button and no second line — the line of context says
+  the period.
+- **«Продано»'s stub** (P2-3; spec §5 «Корешок», §6.30): a «Продано»
+  recorded is a debt to the supplier, money, so its stub reads as an
+  invoice's own:
+  - the title «Продано 1 шт.» with its check;
+  - the stub recorded: the invoice's sum as the server answered it
+    (`invoice.amount`), large — nothing is multiplied on the phone; under
+    it «Ганна · Кокон графіт, M × 1»; a perforation; «Борг «Ганна» — у
+    «Накладних».» and «Відкрити накладну ›» (for `supplier:debt`, as
+    before). The name is never declined;
+  - a long name, even one with no space in it (a shop's Instagram name),
+    wraps inside the stub; the sum stays whole;
+  - «Повернено постачальнику …» is unchanged: no money in it;
+  - **the words wait for the owner's approval** (the task marks them so).
+- **Small things of one system** (P2-4):
+  - «Менше» on «Повернути постачальнику»'s sizes and in a lot's sheet is
+    felt as «Більше» is, a light tap (spec §6 rule 9), when the count goes
+    down; held at its least, nothing changes and nothing is felt;
+  - «Накладні» of a store that does not trade say one line under the
+    store's own notice: «Сплачує будь-який магазин мережі, що працює.»
+    Today no one sees it: such a store keeps only the rights that read
+    (`asShown`), and «Накладні» need `supplier:debt`. It stays, in case
+    that changes;
+  - the rows of «Надійшло» and of the report's table are parted by the
+    divider's `hairline`, never a control's `edge` (spec §6.8); «Разом»
+    and «З урахуванням повернень» stay bold;
+  - «Записано …» on an invoice, «Спершу скасуйте її оплати й заліки.»
+    and «Щоб скасувати повернення, …» were already 14/500 in pencil (the
+    frame's P1-1, #185): `.hint` is the meta's size. Nothing on these
+    screens reads under 14 but the capitals' labels and a large sum's own
+    «,00» and «грн».
+- **After the independent review** (2026-11-12):
+  - an invoice opened from another screen holds its ⋯'s place, unseen,
+    while it is found: the line under the title stays where the card's
+    will be (a «⋯» shows on every invoice still owed in a store that
+    trades);
+  - «Зарахувати повернення» holds three returns' cards, as the task says;
+  - focused, «Продано 1 шт.» is heard with its sum and «Борг … — у
+    «Накладних».» (described by them);
+  - a name with no space wraps in «Борг …» too, never past the stub (it
+    had widened the page by 2 px at 360);
+  - the meta's floor, 14, for what the section still drew smaller: a cell's
+    meta in the report's table (13), a day's year in its thread (12),
+    «вільно N» under a size on «Повернути постачальнику» (13);
+  - kept as the task says: «Повернути постачальнику»'s warehouses held as
+    two grey choices, though a store with one is shown a line of 22 —
+    what comes is not known before it is read.

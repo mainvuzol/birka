@@ -68,15 +68,33 @@ function initData(telegramUserId: string): string {
   return fields.toString();
 }
 
-/** Бірка at «Центр», as this person; in `theme`'s colours. */
+/** Бірка at «Центр», as this person; in `theme`'s colours; inside
+ * Telegram 8.0 when `telegram`, what it is told kept in `window.told`. */
 async function openAs(
   page: Page,
   telegramUserId: string,
   theme?: Record<string, string>,
+  telegram = false,
 ): Promise<void> {
+  if (telegram)
+    await page.addInitScript(() => {
+      const host = window as unknown as {
+        TelegramWebviewProxy: {
+          postEvent: (event: string, data: string) => void;
+        };
+        told: [string, unknown][];
+      };
+      host.told = [];
+      host.TelegramWebviewProxy = {
+        postEvent: (event, data) => {
+          host.told.push([event, data ? (JSON.parse(data) as unknown) : null]);
+        },
+      };
+    });
   await page.goto("about:blank");
   const hash = new URLSearchParams({ tgWebAppData: initData(telegramUserId) });
   if (theme) hash.set("tgWebAppThemeParams", JSON.stringify(theme));
+  if (telegram) hash.set("tgWebAppVersion", "8.0");
   await page.goto(`/#${hash.toString()}`);
   await openStore(page, "Центр CENTRE");
 }
@@ -127,8 +145,10 @@ async function aModel(page: Page): Promise<Coat> {
   };
 }
 
-async function aSupplier(page: Page): Promise<{ id: string; name: string }> {
-  const name = `Сусід ${randomUUID().slice(0, 6)}`;
+async function aSupplier(
+  page: Page,
+  name = `Сусід ${randomUUID().slice(0, 6)}`,
+): Promise<{ id: string; name: string }> {
   const added = await page.request.post("/api/v1/suppliers", {
     headers: await headers(page),
     data: { store_id: centre, name, phone: null },
@@ -351,11 +371,28 @@ test("jackets borrowed from another shop are taken at a price, marked sold, and 
   await sheet
     .getByRole("button", { name: "Позначити проданим · 2 шт." })
     .click();
-  // Its stub: the debt the server counted, and its invoice one tap away.
+  // Its stub: the debt the server counted, large, as an invoice's own
+  // stub; whose and what under it; and its invoice one tap away (money task
+  // list after stage 2, P2-3).
   await expect(sheet).toHaveCount(0);
-  const said = `Продано 2 шт.: у «Накладних» борг «${supplier.name}» 3 000,00 грн.`;
-  await expect(page.getByText(said, { exact: true })).toBeFocused();
-  await page.getByRole("button", { name: "Відкрити накладну" }).click();
+  const said = page.locator(".result-title");
+  await expect(said).toHaveText("Продано 2 шт.");
+  await expect(said).toBeFocused();
+  // Heard with the debt it recorded and where it is (review).
+  await expect(said).toHaveAccessibleDescription(
+    `3 000,00 грн Борг «${supplier.name}» — у «Накладних».`,
+  );
+  const stub = page.locator(".borrowed-done .stub");
+  await expect(stub).toHaveClass(/\bstub-recorded\b/);
+  await expect(stub.locator(".stub-sum")).toHaveText("3 000,00 грн");
+  await expect(stub.locator(".stub-say")).toHaveText(
+    `${supplier.name} · ${coat.model} графіт, M × 2`,
+  );
+  await expect(stub.locator(".perforation")).toHaveCount(1);
+  await expect(stub.locator(".stub-line")).toHaveText(
+    `Борг «${supplier.name}» — у «Накладних».`,
+  );
+  await stub.getByRole("button", { name: "Відкрити накладну" }).click();
   await expect(
     page.getByRole("heading", { name: supplier.name, exact: true }),
   ).toBeVisible();
@@ -370,7 +407,7 @@ test("jackets borrowed from another shop are taken at a price, marked sold, and 
     .click();
   await expect(lot).toContainText("на руках 1");
   await expect(lot).toContainText("продано 2 · повернено 0");
-  await expect(page.getByText(said, { exact: true })).toHaveCount(0);
+  await expect(stub).toHaveCount(0);
 });
 
 test("unsold borrowed jackets go back to their supplier for nothing", async ({
@@ -712,22 +749,66 @@ test("one borrowed jacket is marked sold in four taps from «Ще», nothing scr
   });
   await expect(mark).toBeInViewport();
   await mark.click();
-  await expect(page.locator(".result-title")).toHaveText(
-    `Продано 1 шт.: у «Накладних» борг «${supplier.name}» 1 500,00 грн.`,
+  await expect(page.locator(".result-title")).toHaveText("Продано 1 шт.");
+  await expect(page.locator(".borrowed-done .stub-sum")).toHaveText(
+    "1 500,00 грн",
   );
   expect(await taps()).toBe(4);
+});
+
+test("inside Telegram ±1 of a lot's count is felt both ways, «Менше» held at one is not (money task list after stage 2, P2-4)", async ({
+  page,
+}) => {
+  const coat = await aModel(page);
+  const supplier = await aSupplier(page);
+  await borrowed(page, coat, supplier.id, 2);
+  await openAs(page, hanna, undefined, true);
+  await section(page, "Позичене й під реалізацію");
+  const sheet = await lotSheet(page, coat, "tag");
+  const impacts = (): Promise<unknown[]> =>
+    page.evaluate(() =>
+      (window as unknown as { told: [string, { type?: string }][] }).told
+        .filter(
+          ([event, data]) =>
+            event === "web_app_trigger_haptic_feedback" &&
+            data.type === "impact",
+        )
+        .map(([, data]) => data),
+    );
+  const light = { type: "impact", impact_style: "light" };
+  const count = sheet.locator(".lot-count output");
+  await sheet.getByRole("button", { name: "Більше" }).click();
+  await expect(count).toHaveText("2");
+  await expect.poll(impacts).toEqual([light]);
+  await sheet.getByRole("button", { name: "Менше" }).click();
+  await expect(count).toHaveText("1");
+  await expect.poll(impacts).toEqual([light, light]);
+  // Held at one (aria-disabled, the cursor kept on it): nothing changes,
+  // nothing is felt.
+  await sheet.getByRole("button", { name: "Менше" }).click({ force: true });
+  await expect(count).toHaveText("1");
+  await sheet.getByRole("button", { name: "Більше" }).click();
+  await expect(count).toHaveText("2");
+  await expect.poll(impacts).toEqual([light, light, light]);
 });
 
 for (const [name, theme] of [
   ["light", { bg_color: "#ffffff", text_color: "#000000" }],
   ["dark", { bg_color: "#17212b", text_color: "#f5f5f5" }],
 ] as const)
-  test(`in the ${name} theme at 360 × 640 «Позичене»'s tags and a lot's sheet read at 4.5:1, nothing wider than the phone`, async ({
+  test(`in the ${name} theme at 360 × 640 «Позичене»'s tags, a lot's sheet and «Продано»'s stub read at 4.5:1, nothing wider than the phone; a forty-letter name wraps, the sum whole`, async ({
     page,
   }) => {
     const coat = await aModel(page);
-    const supplier = await aSupplier(page);
-    await borrowed(page, coat, supplier.id, 2, "1500.00");
+    // Forty letters with no space to break at, as a shop's Instagram name
+    // is: the longest a stub must hold (money task list after stage 2,
+    // P2-3).
+    const supplier = await aSupplier(
+      page,
+      `@postachalnyk_duzhe_dovhoiu_nazvoiu_${randomUUID().slice(0, 4)}`,
+    );
+    expect(supplier.name).toHaveLength(40);
+    await borrowed(page, coat, supplier.id, 2, "123456.78");
     await page.setViewportSize({ width: 360, height: 640 });
     await openAs(page, hanna, theme);
     await section(page, "Позичене й під реалізацію");
@@ -757,6 +838,36 @@ for (const [name, theme] of [
       expect(await contrast(part)).toBeGreaterThanOrEqual(4.5);
     await expect(page.locator("html")).toHaveJSProperty("scrollWidth", 360);
     await page.screenshot({ path: `test-results/borrowed-lot-${name}.png` });
+
+    // «Продано»'s stub: the sum the server counted, whole on one line; the
+    // name wraps inside the stub (P2-3).
+    await sheet
+      .getByRole("button", { name: "Позначити проданим · 1 шт." })
+      .click();
+    const stub = page.locator(".borrowed-done .stub");
+    const sum = stub.locator(".stub-sum .sum");
+    await expect(sum).toHaveText("123 456,78 грн");
+    const size = await sum.evaluate((node) =>
+      parseFloat(getComputedStyle(node).fontSize),
+    );
+    expect((await sum.boundingBox())?.height ?? 0).toBeLessThan(size * 1.6);
+    const say = stub.locator(".stub-say");
+    await expect(say).toContainText(supplier.name);
+    // Every line of the stub inside it, the name's two included.
+    for (const line of await stub.locator("p").all())
+      expect(
+        await line.evaluate((node) => node.scrollWidth <= node.clientWidth),
+      ).toBe(true);
+    for (const part of [
+      page.locator(".borrowed-done .result-title"),
+      sum,
+      say,
+      stub.locator(".stub-line"),
+      stub.getByRole("button", { name: "Відкрити накладну" }),
+    ])
+      expect(await contrast(part)).toBeGreaterThanOrEqual(4.5);
+    await expect(page.locator("html")).toHaveJSProperty("scrollWidth", 360);
+    await page.screenshot({ path: `test-results/borrowed-sold-${name}.png` });
   });
 
 /** The WCAG contrast of an element's text against what it is drawn on. */

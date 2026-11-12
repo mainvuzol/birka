@@ -40,6 +40,52 @@ export const test = base.extend<{ pageErrorsExpected: boolean }>({
 
 export { expect } from "@playwright/test";
 
+/**
+ * `path`'s reads held from now until the answer returned is called — or ten
+ * seconds, should the journey fail before it answers: no read is left
+ * hanging as it ends (money task list after stage 2, P1-3).
+ */
+export async function holdReads(page: Page, path: string): Promise<() => void> {
+  let answer = (): void => undefined;
+  const held = new Promise<void>((resolve) => {
+    answer = resolve;
+    setTimeout(resolve, 10_000);
+  });
+  await page.route(`**/api/v1/${path}?**`, async (route) => {
+    await held;
+    await route.fallback();
+  });
+  return answer;
+}
+
+/** The words in `scope` drawn under 14 px — the floor for reading (spec §4;
+ * money task list after stage 2, P2-4) — but the 13/700 capitals' labels,
+ * a table's column heads and a large sum's own «,00» and «грн»; what is
+ * not seen (a place while read, words for a reader alone) is not read. */
+export async function under14(scope: Locator): Promise<string[]> {
+  return scope.evaluate((root) => {
+    const small: string[] = [];
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      const text = node.textContent?.trim();
+      const parent = node.parentElement;
+      if (!text || !parent) continue;
+      if (
+        parent.closest(
+          ".t-label, thead, .visually-hidden, .placeholder, .sum-kop, .sum-unit",
+        )
+      )
+        continue;
+      const style = getComputedStyle(parent);
+      if (style.visibility === "hidden" || parent.getClientRects().length === 0)
+        continue;
+      const size = parseFloat(style.fontSize);
+      if (size < 14) small.push(`${text} (${String(size)})`);
+    }
+    return small;
+  });
+}
+
 /** The banner of a command kept on the phone, under its `heading`, says
  * what waits for it, as the till's does (sale-slice TZ, P2-2). */
 export async function waitsFor(page: Page, heading: RegExp): Promise<void> {

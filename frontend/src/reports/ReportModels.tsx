@@ -5,6 +5,7 @@ import { api } from "@/shared/api";
 import { Placeholder } from "@/shared/Placeholder";
 import { Unread } from "@/shared/Unread";
 import { visible } from "@/shared/visible";
+import { Empty } from "@/shared/Empty";
 import { query } from "./format";
 import type { Range } from "./format";
 import type { ModelFigures, Models } from "./types";
@@ -53,7 +54,10 @@ export function ReportModels({
       />
     );
   if (models.data.models.length === 0)
-    return <p className="report-empty">Нічого не продано.</p>;
+    // Nothing in the period (spec §6.28; money task list after stage 2,
+    // P2-2): the blank tag and its one line; the period is the line of
+    // context's.
+    return <Empty title="Нічого не продано." />;
   return (
     <>
       <ul className="report-rows" aria-label="Моделі">

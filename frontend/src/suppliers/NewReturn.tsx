@@ -367,7 +367,13 @@ export function NewReturn({
         <fieldset disabled={blocked || working}>
           <legend className="visually-hidden">Повернення постачальнику</legend>
           {places.isPending ? (
-            <p role="status">Завантажуємо склади…</p>
+            // Two choices in grey where they come (money task list after
+            // stage 2, P1-3).
+            <Placeholder
+              said="Завантажуємо склади…"
+              chips={2}
+              className="receive-place"
+            />
           ) : places.data === undefined ? (
             <Unread
               error={places.error}
@@ -458,7 +464,11 @@ export function NewReturn({
                           // Held, not disabled: the cursor stays on it.
                           aria-disabled={got <= 0}
                           onClick={() => {
-                            if (got > 0) count(size, (n) => n - 1);
+                            if (got <= 0) return;
+                            count(size, (n) => n - 1);
+                            // ±1 is felt, both ways (spec §6 rule 9; money
+                            // task list after stage 2, P2-4).
+                            buzz("light");
                           }}
                         >
                           −

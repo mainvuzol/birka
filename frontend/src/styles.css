@@ -2728,8 +2728,13 @@ section.credits.customer-card {
   width: 40%;
   height: 0.9em;
 }
-.placeholder .sale-row .sale-main {
+.placeholder :is(.sale-row, .supplier-row, .set-off-return) .sale-main {
   gap: 8px;
+}
+/* A return's card held in «Зарахувати повернення» (money task list after
+   stage 2, P1-3): its lines the card's width, as the card's own. */
+.placeholder .set-off-return .sale-main {
+  align-self: stretch;
 }
 /* «Борги»'s places while read (credits task list, P2-3): what is owed on a
    row's right, and the store's card in its own lines' heights, grey lines
@@ -5132,6 +5137,12 @@ span.cash-difference > .difference-sign {
 .stub-line.damaged-line {
   color: var(--damaged);
 }
+/* «Продано»'s stub (money task list after stage 2, P2-3): a supplier's long
+   name wraps under the sum and in «Борг …», never past the stub — even one
+   with no space in it, a shop's Instagram name (review). */
+.borrowed-done :is(.stub-say, .stub-line) {
+  overflow-wrap: anywhere;
+}
 .stub h3 {
   margin: 0 32px 8px 0;
 }
@@ -6126,8 +6137,10 @@ button.money-line-open:disabled {
   text-align: left;
   color: var(--pencil);
 }
+/* Rows apart by a divider's hairline, never a control's edge (spec §6.8;
+   money task list after stage 2, P2-4). */
 .money-table tbody tr {
-  border-top: 1px solid var(--edge);
+  border-top: 1px solid var(--hairline);
 }
 .money-total th[scope="row"],
 .money-total td {
@@ -6631,6 +6644,11 @@ section.receive-list {
   color: var(--ink);
   overflow-wrap: anywhere;
 }
+/* An invoice opened from another screen while it is read (money task list
+   after stage 2, P1-3): its history's eyelets grey and round. */
+.invoice-placeholder .timeline-node.skeleton {
+  border-radius: var(--r-round);
+}
 .invoice-closed-head {
   display: flex;
   flex-wrap: wrap;
@@ -6795,10 +6813,10 @@ section.receive-list {
 .supplier-return-cancel {
   margin-top: 24px;
 }
+/* How many are free, in the meta's 14 (money task list after stage 2,
+   P2-4; review). */
 .receive-size-free {
   grid-column: 1 / -1;
-  font-size: 13px;
-  line-height: 16px;
   text-align: center;
   color: var(--pencil);
 }
@@ -7530,11 +7548,13 @@ label.way-option {
   color: var(--pencil);
   white-space: normal;
 }
+/* The meta's floor, 14 (spec §4; money task list after stage 2, P2-4;
+   review). */
 .report-meta {
   display: block;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
-  line-height: 16px;
+  line-height: 19px;
   color: var(--pencil);
 }
 .report-note {
@@ -7579,12 +7599,8 @@ nav.report-ways {
    wide (review, 2026-11-08). */
 .report-thread .timeline-year {
   display: block;
-  font-size: 12px;
-  font-weight: 400;
-}
-.report-empty {
-  margin: 12px 0;
-  color: var(--pencil);
+  font-size: 14px;
+  font-weight: 500;
 }
 .report-how {
   margin: 0;

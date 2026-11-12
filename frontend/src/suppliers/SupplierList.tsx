@@ -8,6 +8,7 @@ import { ScreenHeader } from "@/shared/ScreenHeader";
 import { SearchField } from "@/shared/SearchField";
 import { Sheet } from "@/shared/Sheet";
 import { Unread } from "@/shared/Unread";
+import { Placeholder } from "@/shared/Placeholder";
 import { buzz } from "@/shared/telegram";
 import { visible } from "@/shared/visible";
 import { Empty } from "@/shared/Empty";
@@ -52,8 +53,25 @@ export function SupplierList({
         }
       />
       <section className="supplier-list-screen">
+        {/* The search stands as the list is read, over its rows' places:
+          nothing moves when they come (money task list after stage 2,
+          P1-3). */}
+        {(suppliers.isPending || (suppliers.data?.length ?? 0) > 0) && (
+          <SearchField
+            label="Пошук постачальника"
+            placeholder="Пошук постачальника"
+            value={query}
+            change={setQuery}
+            inputRef={field}
+          />
+        )}
         {suppliers.isPending ? (
-          <p role="status">Завантажуємо постачальників…</p>
+          <Placeholder
+            said="Завантажуємо постачальників…"
+            rows={3}
+            day={false}
+            rowShape={{ list: "supplier-rows", row: "supplier-row" }}
+          />
         ) : suppliers.data === undefined ? (
           <Unread
             error={suppliers.error}
@@ -68,13 +86,6 @@ export function SupplierList({
           />
         ) : (
           <>
-            <SearchField
-              label="Пошук постачальника"
-              placeholder="Пошук постачальника"
-              value={query}
-              change={setQuery}
-              inputRef={field}
-            />
             <ul className="supplier-rows" aria-label="Постачальники">
               {found.map((supplier) => (
                 <li key={supplier.id}>
