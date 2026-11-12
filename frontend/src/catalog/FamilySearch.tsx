@@ -1,9 +1,37 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { JSX } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
+import type { InfiniteData } from "@tanstack/react-query";
 import { api } from "@/shared/api";
+import { useNextPageFailed } from "@/shared/nextPage";
+import { Placeholder } from "@/shared/Placeholder";
+import { SearchField } from "@/shared/SearchField";
+import { hideKeyboard } from "@/shared/telegram";
 import { Unread } from "@/shared/Unread";
 import { visible } from "@/shared/visible";
+
+const pageSize = 20;
+/** The farthest the server reads from (`offset` ≤ 10 000). */
+const LAST_OFFSET = 10000;
+/** Typed letters wait this long before they are asked (spec §5 «Поиск»). */
+const PAUSE = 300;
+/** What a search starts from: two letters. */
+const FROM = 2;
+
+interface FamilyPage {
+  items: Family[];
+  has_more: boolean;
+}
+
+/**
+ * What is asked for: from two letters, the words trimmed; fewer, every
+ * model, as the empty search was — one letter keeps the list where it
+ * stood, never a blank between (review).
+ */
+function askable(text: string): string {
+  const trimmed = text.trim();
+  return trimmed.length >= FROM ? trimmed : "";
+}
 
 export interface Family {
   family_id: string;
@@ -25,6 +53,15 @@ export function familyLabel(family: Family): string {
     .map(visible)
     .join(" — ");
 }
+/**
+ * «Інший колір нашої моделі»: the model the new colour belongs to, found as
+ * it is typed, from two letters, a moment after the last — no «Знайти
+ * модель» (goods task list after stage 2, P1-5), as «Моделі» and the
+ * catalogue's search do. Nothing typed, every model is shown, from the
+ * first page; «Показати ще» adds the next under them. What is found is
+ * searched by its name, its source and its difference, as before; a tap
+ * chooses the model, never a likeness by itself (catalogue identity).
+ */
 export function FamilySearch({
   storeId,
   decisionId,
@@ -41,124 +78,184 @@ export function FamilySearch({
   choose: (family: Family) => void;
 }): JSX.Element {
   const [text, setText] = useState("");
-  const [search, setSearch] = useState<string | null>(null);
-  const [offset, setOffset] = useState(0);
-  const result = useQuery({
-    queryKey: [
-      "catalog-family-search",
-      scopeKey,
-      decisionId,
-      storeId,
-      search,
-      offset,
-    ],
-    queryFn: () =>
-      api<{ items: Family[]; has_more: boolean }>(
-        `/catalog/families?store_id=${storeId}&query=${encodeURIComponent(search ?? "")}&limit=20&offset=${String(offset)}`,
+  // Every model at once; what is typed, after a pause.
+  const [asked, setAsked] = useState("");
+  // «Показати ще» pressed: the cursor goes to the first model it brings.
+  const [focusAt, setFocusAt] = useState<number | null>(null);
+  const field = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    const wanted = askable(text);
+    if (wanted === asked) return;
+    const wait = window.setTimeout(() => {
+      // New words: a page pressed for the old ones takes no cursor from
+      // the field (review).
+      setFocusAt(null);
+      setAsked(wanted);
+    }, PAUSE);
+    return () => {
+      window.clearTimeout(wait);
+    };
+  }, [text, asked]);
+  const families = useInfiniteQuery({
+    queryKey: ["catalog-family-search", scopeKey, decisionId, storeId, asked],
+    queryFn: ({ pageParam }) =>
+      api<FamilyPage>(
+        `/catalog/families?store_id=${storeId}&query=${encodeURIComponent(asked)}&limit=${String(pageSize)}&offset=${String(pageParam)}`,
         token,
       ),
-    enabled: search !== null,
+    initialPageParam: 0,
+    getNextPageParam: (last, pages) =>
+      last.has_more && pages.length * pageSize <= LAST_OFFSET
+        ? pages.length * pageSize
+        : undefined,
+    retry: false,
+    // What was found stands until the new words are answered: the same
+    // proposal's, never another's.
+    placeholderData: (
+      previous: InfiniteData<FamilyPage, number> | undefined,
+      before,
+    ) =>
+      before?.queryKey[1] === scopeKey &&
+      before.queryKey[2] === decisionId &&
+      before.queryKey[3] === storeId
+        ? previous
+        : undefined,
   });
-  function find(): void {
-    if (blocked) return;
-    setOffset(0);
-    setSearch(text.trim());
-    if (search === text.trim() && offset === 0) void result.refetch();
-  }
+  const found = families.data?.pages.flatMap((page) => page.items) ?? [];
+  // What could not be read, as the catalogue's search says it: never read,
+  // the plate in the list's place; read again and refused, the plate over
+  // what was found; a next page, the plate where «Показати ще» stood.
+  const nextFailed = useNextPageFailed(families);
+  const neverRead = families.error !== null && families.data === undefined;
+  const readAgainFailed =
+    families.error !== null && families.data !== undefined && !nextFailed;
+  const shelf = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (focusAt === null) return;
+    const next =
+      shelf.current?.querySelectorAll<HTMLElement>(".catalog-row")[focusAt];
+    if (next) {
+      next.focus();
+      setFocusAt(null);
+    }
+  });
   return (
     <section aria-label="Пошук наявної моделі">
-      <label>
-        Пошук моделі в каталозі
-        <input
-          maxLength={200}
-          value={text}
-          disabled={blocked}
-          onChange={(e) => {
-            setText(e.target.value);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              find();
-            }
-          }}
-        />
-      </label>
-      <button
-        type="button"
-        className="quiet"
-        disabled={blocked || result.isFetching}
-        onClick={find}
-      >
-        Знайти модель
-      </button>
-      <p className="hint">
-        Пошук за назвою, джерелом або відмінністю. Порожній запит показує всі
-        доступні моделі. Схожі назви не означають однаковий товар.
-      </p>
-      {search !== null &&
-        (result.isPending ? (
-          <p role="status">Шукаємо моделі…</p>
-        ) : result.error ? (
+      <SearchField
+        label="Пошук моделі в каталозі"
+        placeholder="Назва моделі або джерело"
+        value={text}
+        change={setText}
+        inputRef={field}
+        disabled={blocked}
+      />
+      {/* The catalogue's identity: a likeness is not the same goods. */}
+      <p className="hint">Схожі назви не означають однаковий товар.</p>
+      {
+        // Nothing found before, and the new words not read yet: never the
+        // old «Нічого не знайшли» under them.
+        families.isPending ||
+        (families.isPlaceholderData && found.length === 0) ? (
+          // Rows of what is found in grey, one line each; a screen reader
+          // hears it is searched (goods task list after stage 2, P2-2).
+          <Placeholder
+            said="Шукаємо моделі…"
+            rows={3}
+            day={false}
+            rowShape={{
+              list: "catalog-found",
+              row: "catalog-row",
+              meta: false,
+            }}
+          />
+        ) : neverRead ? (
           // The warning's plate, «Спробувати ще раз» (stage 2's audit,
           // goods P1-1).
           <Unread
-            error={result.error}
+            error={families.error}
             held={blocked}
             retry={() => {
-              void result.refetch();
+              void families.refetch();
             }}
           />
         ) : (
           <>
-            {result.data.items.length === 0 && (
-              <p>
-                Моделей не знайдено. Спробуйте іншу назву або перевірте дані
-                нової моделі.
-              </p>
+            {readAgainFailed && (
+              <Unread
+                error={families.error}
+                held={blocked || families.isFetching}
+                retry={() => {
+                  void families.refetch();
+                }}
+              />
             )}
-            {result.data.items.map((family) => (
-              <button
-                key={family.family_id}
-                type="button"
-                className="order-card catalog-card"
-                disabled={blocked || result.isFetching}
-                onClick={() => {
-                  choose(family);
-                }}
+            {found.length === 0 && (
+              <div className="catalog-none">
+                <p role="status">
+                  {asked === ""
+                    ? "Моделей не знайдено."
+                    : `Нічого не знайшли за «${visible(asked)}»`}
+                </p>
+              </div>
+            )}
+            {found.length > 0 && (
+              <div
+                ref={shelf}
+                className="catalog-found"
+                role="group"
+                aria-label="Знайдені моделі"
               >
-                <strong>Обрати модель: {familyLabel(family)}</strong>
-              </button>
-            ))}
-            <div className="toolbar">
-              <button
-                type="button"
-                className="quiet"
-                disabled={blocked || result.isFetching || offset === 0}
-                onClick={() => {
-                  setOffset(Math.max(0, offset - 20));
+                {found.map((family) => (
+                  <button
+                    key={family.family_id}
+                    type="button"
+                    className="catalog-row"
+                    disabled={blocked}
+                    aria-label={`Обрати модель: ${familyLabel(family)}`}
+                    onClick={() => {
+                      hideKeyboard();
+                      choose(family);
+                    }}
+                  >
+                    {familyLabel(family)}
+                  </button>
+                ))}
+              </div>
+            )}
+            {/* A page that failed: its retry alone, where «Показати ще»
+                stood. */}
+            {nextFailed ? (
+              <Unread
+                error={families.error}
+                held={blocked || families.isFetching}
+                retry={() => {
+                  void families.fetchNextPage();
                 }}
-              >
-                Попередні моделі
-              </button>
-              <button
-                type="button"
-                className="quiet"
-                disabled={
-                  blocked ||
-                  result.isFetching ||
-                  !result.data.has_more ||
-                  offset >= 10000
-                }
-                onClick={() => {
-                  setOffset(offset + 20);
-                }}
-              >
-                Наступні моделі
-              </button>
-            </div>
+              />
+            ) : (
+              families.hasNextPage && (
+                <button
+                  type="button"
+                  className="quiet"
+                  disabled={
+                    blocked ||
+                    families.isFetching ||
+                    families.isPlaceholderData ||
+                    readAgainFailed
+                  }
+                  onClick={() => {
+                    // Kept until the page is read: after its retry too.
+                    setFocusAt(found.length);
+                    void families.fetchNextPage();
+                  }}
+                >
+                  Показати ще
+                </button>
+              )
+            )}
           </>
-        ))}
+        )
+      }
     </section>
   );
 }

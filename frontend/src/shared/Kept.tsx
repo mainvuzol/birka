@@ -48,6 +48,7 @@ export function Kept({
   check,
   byItself = true,
   children,
+  after,
 }: {
   /** Its own screen is open. */
   own: boolean;
@@ -57,6 +58,9 @@ export function Kept({
   /** The phone checks it by itself while the server does not answer. */
   byItself?: boolean;
   children: ReactNode;
+  /** What else may be done with it, under its check: an unfinished
+   * creation's cancelling (goods task list after stage 2, P1-4). */
+  after?: ReactNode;
 }): JSX.Element {
   const body = (
     <>
@@ -86,6 +90,7 @@ export function Kept({
       >
         {check.label}
       </button>
+      {after}
     </>
   );
   if (!own) return <Banner kind="kept">{body}</Banner>;

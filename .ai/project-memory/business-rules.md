@@ -9077,3 +9077,77 @@ approval and are not in it. No right, no server rule, no field changes.
   shared failure — В-П1's list named neither section. The app's own
   failure, before anything is sent, keeps the shared words everywhere, as
   in batch 10.
+
+## Chosen in chat — 2026-11-12 (audit after stage 2, batch 16: a catalogue operation kept on the phone in the one form every kept operation has; «Інший колір нашої моделі» searched as it is typed, every model at once, «Показати ще»; goods P1-4, P1-5)
+
+Chosen in chat on 2026-11-12, after batch 15 (#198) was merged: the user
+chose goods P1-4 and P1-5 («P1-4 + P1-5»). The task list marks both
+«нужно утверждение» — P1-4 its words, P1-5 its design. They are built as
+the task list gives them, and what it did not give is a reading for the
+owner. No right, no server rule, no field changes; the catalogue's
+commands, their idempotency and a creation's cancelling stay as they were.
+- **A kept catalogue operation** (P1-4; spec S12, §5 «Корешок» `kept`):
+  «Перевірка каталогу» and the sheet «Нова модель» draw it in the shared
+  `Kept` form, as its own screen's — the stub still attached, «Ще не
+  підтверджено» on it, the phone's checking line («Перевіряємо кожні
+  20 с …» while the server does not answer) — as «Моделі»'s change and the
+  journals' kept operations do. Was → now:
+  - «Незавершена операція каталогу» → «Операцію каталогу ще не
+    підтверджено»;
+  - «Результат ще не підтверджено. Повторна спроба використовує ту саму
+    операцію.» → «Невідомо, чи записано операцію каталогу. Перевірте
+    результат — та сама операція не запишеться двічі.»;
+  - «Повторити ту саму операцію» → «Перевірити результат операції»: the
+    same operation sent again, its key the same, as before;
+  - the line of when and by whom (`keptText`): as before;
+  - a creation's «Якщо створення не вдається, можна скасувати пропозицію.
+    Якщо товар уже збережено, покажемо результат.» and the quiet
+    «Скасувати незавершене створення» stand under the check, as before. The
+    cancelling is still a rejection with the same reason
+    (`CANCEL_CREATION_REASON`). One that finds the model saved shows it
+    added.
+  - A check pressed notes the last check's time, as every kept operation
+    the phone checks by itself.
+  - No stub's title says «Незавершена» any more: frame P1-2's third
+    criterion, which waited for this, is met.
+- **«Інший колір нашої моделі»** (P1-5; spec §5 «Поиск»):
+  - searched as it is typed, from two letters, about 300 ms after the last
+    — no «Знайти модель», no Enter; one letter is every model still, the
+    list standing, nothing asked (review: a blank between, then every
+    model again, then the answer, was a jump);
+  - nothing typed: every model at once, its first page, as the empty search
+    was — the model is two taps away (the kind, then the model);
+  - one line of hint, «Схожі назви не означають однаковий товар.» (the
+    catalogue's identity); «Пошук за назвою, джерелом або відмінністю.
+    Порожній запит показує всі доступні моделі.» is gone;
+  - the shared search field (52, the magnifier, «×»), its name read aloud
+    «Пошук моделі в каталозі», as the label was;
+  - the models as rows of one line; a tap chooses, the keyboard hidden;
+    each heard «Обрати модель: {модель}», as before;
+  - «Показати ще» adds the next twenty under them; «Попередні моделі» and
+    «Наступні моделі» are gone. The server's limit stays: nothing past
+    offset 10 000. The cursor goes to the first model a page brings — never
+    once new words are typed (review). A page that fails says so where
+    «Показати ще» stood, the rows staying; its «Спробувати ще раз» reads
+    that page alone;
+  - while read: three grey rows, a screen reader hearing «Шукаємо моделі…»;
+    a read refused: the warning's plate, as before (P1-1);
+  - found nothing: «Нічого не знайшли за «…»»; «Моделей не знайдено.
+    Спробуйте іншу назву або перевірте дані нової моделі.» is gone;
+  - what is searched (the name, the source, the difference) and the
+    model's family are as before. Nothing is chosen by a likeness.
+- **Revisits** stage 2's batch 10 (a kept operation's sheet says
+  «Незавершена операція каталогу» with «Повторити ту саму операцію»,
+  «Chosen in chat — 2026-11-08 (stage 2 batch 10 …)») and the audit's
+  batch 3 note that the catalogue's stub kept its words until goods P1-4
+  («Chosen in chat — 2026-11-09 (audit after stage 2, batch 3 …)»): the
+  words above replace them. The owner's decisions are not touched.
+- **Decided here** (each a reading for the owner):
+  - the field's placeholder «Назва моделі або джерело» — «Назва, джерело
+    або відмінність» does not fit at 360; the difference is still
+    searched;
+  - a catalogue with no model at all, nothing typed: «Моделей не
+    знайдено.» (the task list gives only «Нічого не знайшли за «…»»);
+  - one letter typed: every model still, as nothing typed (where «Моделі»
+    shows nothing until the second: there nothing typed shows nothing
+    too).

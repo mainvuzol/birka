@@ -1,4 +1,5 @@
 import type { JSX } from "react";
+import { Kept } from "@/shared/Kept";
 import { keptText, useAutoCheck } from "@/shared/reach";
 import {
   CANCEL_CREATION_REASON,
@@ -16,6 +17,11 @@ const base = "/catalog/match-decisions";
  * as the server comes back (ADR-0013 §4.3, G11). An unfinished creation may
  * be cancelled instead. `loaded`: read from the phone's storage as its
  * screen opened, and checked once at once.
+ *
+ * In the one form every kept operation has (goods task list after stage 2,
+ * P1-4): its stub still attached, «Ще не підтверджено» on it, «Перевірити
+ * результат операції» — the same operation, never recorded twice — and the
+ * phone's checking line, as «Моделі»'s change says it.
  */
 export function KeptCatalog({
   loaded,
@@ -38,45 +44,47 @@ export function KeptCatalog({
   ]);
   if (pending === null) return null;
   return (
-    <section className="notice">
-      <h3>Незавершена операція каталогу</h3>
+    <Kept
+      own
+      title="Операцію каталогу ще не підтверджено"
+      busy={busy}
+      check={{
+        label: "Перевірити результат операції",
+        run: () => {
+          void run(pending);
+        },
+      }}
+      after={
+        pending.path.endsWith("/create-product") && (
+          <>
+            <p>
+              Якщо створення не вдається, можна скасувати пропозицію. Якщо товар
+              уже збережено, покажемо результат.
+            </p>
+            <button
+              type="button"
+              className="quiet"
+              disabled={busy}
+              onClick={() => {
+                void run({
+                  path: `${base}/${pending.decisionId}/reject`,
+                  decisionId: pending.decisionId,
+                  body: { reason: CANCEL_CREATION_REASON },
+                  ambiguous: true,
+                });
+              }}
+            >
+              Скасувати незавершене створення
+            </button>
+          </>
+        )
+      }
+    >
       <p>
-        Результат ще не підтверджено. Повторна спроба використовує ту саму
-        операцію.
+        Невідомо, чи записано операцію каталогу. Перевірте результат — та сама
+        операція не запишеться двічі.
       </p>
       <p>{keptText(pending.since, person)}</p>
-      <button
-        type="button"
-        disabled={busy}
-        onClick={() => {
-          void run(pending);
-        }}
-      >
-        Повторити ту саму операцію
-      </button>
-      {pending.path.endsWith("/create-product") && (
-        <>
-          <p>
-            Якщо створення не вдається, можна скасувати пропозицію. Якщо товар
-            уже збережено, покажемо результат.
-          </p>
-          <button
-            type="button"
-            className="quiet"
-            disabled={busy}
-            onClick={() => {
-              void run({
-                path: `${base}/${pending.decisionId}/reject`,
-                decisionId: pending.decisionId,
-                body: { reason: CANCEL_CREATION_REASON },
-                ambiguous: true,
-              });
-            }}
-          >
-            Скасувати незавершене створення
-          </button>
-        </>
-      )}
-    </section>
+    </Kept>
   );
 }
