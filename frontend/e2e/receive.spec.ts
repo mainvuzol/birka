@@ -1333,10 +1333,14 @@ test("a proposal kept on the phone and then refused is said in its own sheet, ne
     .click();
   const sheet = await newModelSheet(page);
   await sheet.getByRole("button", { name: "Далі", exact: true }).click();
-  await expect(sheet.getByText("Незавершена операція каталогу")).toBeVisible();
+  await expect(
+    sheet.getByRole("heading", {
+      name: "Операцію каталогу ще не підтверджено",
+    }),
+  ).toBeVisible();
   // Resent by its button, or by the phone itself as the server answers.
   const again = sheet.getByRole("button", {
-    name: "Повторити ту саму операцію",
+    name: "Перевірити результат операції",
   });
   await expect(async () => {
     if (await again.isVisible()) await again.click({ timeout: 1000 });

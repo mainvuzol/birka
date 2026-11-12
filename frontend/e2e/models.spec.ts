@@ -1564,7 +1564,9 @@ test("a product whose creation answer was lost settles when it was refused", asy
   const sheet = await proposeNew(page, `${name} опис`);
   await fillProduct(sheet, name, colour.typo);
   await addModel(sheet).click();
-  await expect(page.getByText("Незавершена операція каталогу")).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Операцію каталогу ще не підтверджено" }),
+  ).toBeVisible();
   // Pressed — unless the phone, answered meanwhile by another read, resends
   // it by itself first (ADR-0013 §4.3): either way, the same operation.
   const kept = page.getByText(
@@ -1572,11 +1574,13 @@ test("a product whose creation answer was lost settles when it was refused", asy
     { exact: true },
   );
   const pressed = page
-    .getByRole("button", { name: "Повторити ту саму операцію" })
+    .getByRole("button", { name: "Перевірити результат операції" })
     .click()
     .catch(() => undefined);
   await Promise.race([pressed, kept.waitFor()]);
-  await expect(page.getByText("Незавершена операція каталогу")).toHaveCount(0);
+  await expect(
+    page.getByRole("heading", { name: "Операцію каталогу ще не підтверджено" }),
+  ).toHaveCount(0);
   await expect(kept).toBeVisible();
   expect(attempts).toBe(2);
 });
@@ -1653,7 +1657,9 @@ test("a catalogue operation refused for a reason it does not name says it was no
       { exact: true },
     ),
   ).toBeVisible();
-  await expect(page.getByText("Незавершена операція каталогу")).toHaveCount(0);
+  await expect(
+    page.getByRole("heading", { name: "Операцію каталогу ще не підтверджено" }),
+  ).toHaveCount(0);
   await expect(sheet.getByLabel("Назва моделі", { exact: true })).toHaveValue(
     name,
   );
@@ -1698,7 +1704,11 @@ test("a catalogue operation the server failed stays kept, said unconfirmed — n
   const sheet = await proposeNew(page, `${name} опис`);
   await fillProduct(sheet, name, colour.typo);
   await addModel(sheet).click();
-  await expect(sheet.getByText("Незавершена операція каталогу")).toBeVisible();
+  await expect(
+    sheet.getByRole("heading", {
+      name: "Операцію каталогу ще не підтверджено",
+    }),
+  ).toBeVisible();
   await expect(
     sheet.getByText(
       "Операцію каталогу ще не підтверджено: сервер не зміг відповісти. Перевірте результат ще раз — двічі вона не запишеться. Номер запиту: 3f9c2a7e.",
@@ -1707,7 +1717,7 @@ test("a catalogue operation the server failed stays kept, said unconfirmed — n
   ).toBeVisible();
   release();
   await sheet
-    .getByRole("button", { name: "Повторити ту саму операцію" })
+    .getByRole("button", { name: "Перевірити результат операції" })
     .click();
   await expect(
     page.getByText(
@@ -1751,7 +1761,9 @@ test("a kept creation refused stays across tabs, answered on its own proposal al
   let sheet = await createFrom(page, first);
   await fillProduct(sheet, name, colour.typo);
   await addModel(sheet).click();
-  await expect(page.getByText("Незавершена операція каталогу")).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Операцію каталогу ще не підтверджено" }),
+  ).toBeVisible();
   // Pressed — unless the phone, answered meanwhile by another read, resends
   // it by itself first (ADR-0013 §4.3): either way, the same operation.
   const kept = page.getByText(
@@ -1759,7 +1771,7 @@ test("a kept creation refused stays across tabs, answered on its own proposal al
     { exact: true },
   );
   const pressed = page
-    .getByRole("button", { name: "Повторити ту саму операцію" })
+    .getByRole("button", { name: "Перевірити результат операції" })
     .click()
     .catch(() => undefined);
   await Promise.race([pressed, kept.waitFor()]);

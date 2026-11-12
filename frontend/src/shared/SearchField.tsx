@@ -18,6 +18,7 @@ export function SearchField({
   maxLength = 200,
   autoFocus = false,
   inputMode,
+  disabled = false,
 }: {
   label: string;
   placeholder: string;
@@ -31,6 +32,9 @@ export function SearchField({
   autoFocus?: boolean;
   /** The keyboard it asks for: digits where only a number is searched. */
   inputMode?: "tel" | undefined;
+  /** Held while what it is for waits on the server: «Нова модель»'s
+   * search while a catalogue operation is kept. */
+  disabled?: boolean;
 }): JSX.Element {
   return (
     <div className="search-field">
@@ -45,6 +49,7 @@ export function SearchField({
           enterKeyHint="search"
           autoComplete="off"
           inputMode={inputMode}
+          disabled={disabled}
           placeholder={placeholder}
           value={value}
           onChange={(event) => {
@@ -57,6 +62,7 @@ export function SearchField({
           type="button"
           className="search-clear"
           aria-label="Очистити пошук"
+          disabled={disabled}
           onClick={() => {
             change("");
             inputRef.current?.focus();

@@ -243,10 +243,14 @@ test("lost proposal response survives reopening with the same UUID", async ({
     } else await route.continue();
   });
   await sheet.getByRole("button", { name: "Далі", exact: true }).click();
-  // Kept, it is said in the sheet that sent it.
+  // Kept, it is said in the sheet that sent it, as every kept operation
+  // (goods task list after stage 2, P1-4): one check, nothing to cancel.
   await expect(
-    sheet.getByRole("button", { name: "Повторити ту саму операцію" }),
+    sheet.getByRole("button", { name: "Перевірити результат операції" }),
   ).toBeEnabled();
+  await expect(sheet.locator(".stub-notice").getByRole("button")).toHaveText([
+    "Перевірити результат операції",
+  ]);
   await page.close();
   const reopened = await context.newPage();
   await reopened.goto(launch());
@@ -314,7 +318,7 @@ test("a proposal kept on the phone is felt once, a warning; its later checks, lo
   await expect(sheet.getByRole("button", { name: "Далі" })).toHaveCount(0);
   await pressMain(page);
   const again = sheet.getByRole("button", {
-    name: "Повторити ту саму операцію",
+    name: "Перевірити результат операції",
   });
   await expect(again).toBeEnabled();
   const warned = [{ type: "notification", notification_type: "warning" }];
@@ -423,7 +427,7 @@ test("lost alias-feedback response reuses the same evidence UUID after reopening
   );
   await page.getByRole("button", { name: "Так, це його назва" }).click();
   await expect(
-    page.getByRole("button", { name: "Повторити ту саму операцію" }),
+    page.getByRole("button", { name: "Перевірити результат операції" }),
   ).toBeEnabled();
   await page.close();
   const reopened = await context.newPage();
@@ -493,7 +497,7 @@ test("uncertain catalog operation remains recoverable after access denial", asyn
   });
   await sheet.getByRole("button", { name: "Далі", exact: true }).click();
   const retry = sheet.getByRole("button", {
-    name: "Повторити ту саму операцію",
+    name: "Перевірити результат операції",
   });
   await expect(retry).toBeEnabled();
   denied = true;
@@ -533,7 +537,7 @@ test("a catalogue operation kept when its right goes opens its screen, is checke
   });
   await sheet.getByRole("button", { name: "Далі", exact: true }).click();
   await expect(
-    sheet.getByRole("button", { name: "Повторити ту саму операцію" }),
+    sheet.getByRole("button", { name: "Перевірити результат операції" }),
   ).toBeEnabled();
   // The right taken away while the answer is lost.
   await context.route("**/api/v1/me", async (route) => {
@@ -557,19 +561,23 @@ test("a catalogue operation kept when its right goes opens its screen, is checke
     reopened.getByRole("heading", { name: "Перевірка каталогу" }),
   ).toBeVisible();
   await expect(
-    reopened.getByText("Незавершена операція каталогу"),
+    reopened.getByRole("heading", {
+      name: "Операцію каталогу ще не підтверджено",
+    }),
   ).toBeVisible();
   const retry = reopened.getByRole("button", {
-    name: "Повторити ту саму операцію",
+    name: "Перевірити результат операції",
   });
   await expect(retry).toBeEnabled();
   // Answered: settled, and «Ще» opens, its row not shown.
   denied = false;
   await retry.click();
   await expect(reopened.getByRole("navigation", { name: "Ще" })).toBeVisible();
-  await expect(reopened.getByText("Незавершена операція каталогу")).toHaveCount(
-    0,
-  );
+  await expect(
+    reopened.getByRole("heading", {
+      name: "Операцію каталогу ще не підтверджено",
+    }),
+  ).toHaveCount(0);
   await expect(
     reopened.getByRole("button", { name: "Перевірка каталогу", exact: true }),
   ).toHaveCount(0);
@@ -610,7 +618,7 @@ test("create a reviewed product and recover a lost response without duplication"
   );
   await addModel(sheet).click();
   await expect(
-    sheet.getByRole("button", { name: "Повторити ту саму операцію" }),
+    sheet.getByRole("button", { name: "Перевірити результат операції" }),
   ).toBeEnabled();
   await page.close();
   const reopened = await context.newPage();
@@ -710,6 +718,33 @@ test("lost product rejection can be explicitly cancelled without leaving blocked
     },
   );
   await addModel(sheet).click();
+  // In the one form every kept operation has (goods task list after stage
+  // 2, P1-4): its stub, «Ще не підтверджено» on it, what is unknown and
+  // that it is never recorded twice, its check — then, under it, the
+  // creation's cancelling.
+  const stub = sheet.locator(".stub-notice");
+  await expect(stub.locator(".stub-head")).toHaveText("Ще не підтверджено");
+  await expect(stub.getByRole("heading")).toHaveText(
+    "Операцію каталогу ще не підтверджено",
+  );
+  await expect(
+    stub.getByText(
+      "Невідомо, чи записано операцію каталогу. Перевірте результат — та сама операція не запишеться двічі.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await expect(stub.getByRole("button")).toHaveText([
+    "Перевірити результат операції",
+    "Скасувати незавершене створення",
+  ]);
+  await expect(
+    stub.getByText(
+      "Якщо створення не вдається, можна скасувати пропозицію. Якщо товар уже збережено, покажемо результат.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await expect(sheet.getByText(/Повторна спроба|Незавершена/)).toHaveCount(0);
+  await stub.screenshot({ path: "test-results/catalog-kept-stub.png" });
   await sheet
     .getByRole("button", { name: "Скасувати незавершене створення" })
     .click();
@@ -834,8 +869,9 @@ test("search selects an existing family outside preview without creating another
     .getByRole("group", { name: "Яка модель" })
     .getByRole("button", { name: "Інший колір нашої моделі" })
     .click();
+  // Asked as it is typed, no «Знайти модель», no Enter (goods task list
+  // after stage 2, P1-5).
   await sheet.getByLabel("Пошук моделі в каталозі").fill(name);
-  await sheet.getByLabel("Пошук моделі в каталозі").press("Enter");
   const choice = sheet.getByRole("button", {
     name: `Обрати модель: ${name} — Постачальник тестовий`,
     exact: true,
@@ -882,18 +918,15 @@ test("family search empty and failure states keep the manual draft", async ({
   await sheet.getByLabel("Назва моделі", { exact: true }).fill("Ручна назва");
   const kind = sheet.getByRole("group", { name: "Яка модель" });
   await kind.getByRole("button", { name: "Інший колір нашої моделі" }).click();
-  await sheet.getByLabel("Пошук моделі в каталозі").fill(randomUUID());
-  await sheet
-    .getByRole("button", { name: "Знайти модель", exact: true })
-    .click();
-  await expect(sheet.getByText(/Моделей не знайдено/)).toBeVisible();
+  const nothing = randomUUID();
+  await sheet.getByLabel("Пошук моделі в каталозі").fill(nothing);
+  await expect(
+    sheet.getByText(`Нічого не знайшли за «${nothing}»`, { exact: true }),
+  ).toBeVisible();
   await page.route("**/api/v1/catalog/families?**", async (route) => {
     await route.fulfill({ status: 403, json: { code: "PERMISSION_DENIED" } });
   });
   await sheet.getByLabel("Пошук моделі в каталозі").fill("інший пошук");
-  await sheet
-    .getByRole("button", { name: "Знайти модель", exact: true })
-    .click();
   await expect(sheet.getByRole("alert")).toContainText("Немає доступу");
   // The warning's plate, «Спробувати ще раз» — never «Повторити пошук»
   // (audit after stage 2, goods P1-1).
@@ -909,6 +942,160 @@ test("family search empty and failure states keep the manual draft", async ({
   await expect(sheet.getByLabel("Назва моделі", { exact: true })).toHaveValue(
     "Ручна назва",
   );
+});
+
+test("«Інший колір нашої моделі»: every model at once, asked as it is typed from two letters, one line of hint, «Показати ще» adds under the first page, a failed page its retry alone; the model chosen in two taps (goods task list after stage 2, P1-5)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  const family = (name: string) => ({
+    family_id: randomUUID(),
+    concept_name: name,
+    source_name: "Постачальник тестовий",
+    business_category_name: null,
+    garment_type_name: null,
+    distinction_note: null,
+  });
+  const first = Array.from({ length: 20 }, (_, i) =>
+    family(`Модель ${String(i + 1).padStart(2, "0")}`),
+  );
+  const second = [family("Модель 21"), family("Модель 22")];
+  const mohair = Array.from({ length: 20 }, (_, i) =>
+    family(`Мохер ${String(i + 1).padStart(2, "0")}`),
+  );
+  const coats = Array.from({ length: 22 }, (_, i) =>
+    family(`Пальто ${String(i + 1).padStart(2, "0")}`),
+  );
+  const asked: string[] = [];
+  let nextFails = true;
+  let none = false;
+  await page.route("**/api/v1/catalog/families?**", async (route) => {
+    const url = new URL(route.request().url());
+    const query = url.searchParams.get("query") ?? "";
+    const offset = url.searchParams.get("offset") ?? "";
+    asked.push(`${query}@${offset}`);
+    if (query === "" && offset === "0")
+      await route.fulfill({
+        json: none
+          ? { items: [], has_more: false }
+          : { items: first, has_more: true },
+      });
+    else if (query === "" && offset === "20" && nextFails) {
+      nextFails = false;
+      await route.fulfill({ status: 500, json: { code: "INTERNAL_ERROR" } });
+    } else if (query === "" && offset === "20")
+      await route.fulfill({ json: { items: second, has_more: false } });
+    else if (query === "ко")
+      await route.fulfill({
+        json: { items: [family("Кокон")], has_more: false },
+      });
+    else if (query === "мо" && offset === "0")
+      await route.fulfill({ json: { items: mohair, has_more: true } });
+    else if (query === "мо")
+      await route.fulfill({ status: 500, json: { code: "INTERNAL_ERROR" } });
+    else if (query === "па")
+      await route.fulfill({ json: { items: coats, has_more: false } });
+    else await route.fulfill({ json: { items: [], has_more: false } });
+  });
+  await enter(page);
+  const sheet = await create(page, `Інший колір ${randomUUID().slice(0, 8)}`);
+  await sheet.getByRole("button", { name: "Ні, це нова модель" }).click();
+  const kind = sheet.getByRole("group", { name: "Яка модель" });
+  await kind.getByRole("button", { name: "Інший колір нашої моделі" }).click();
+  const search = sheet.getByRole("region", { name: "Пошук наявної моделі" });
+  const found = search
+    .getByRole("group", { name: "Знайдені моделі" })
+    .getByRole("button");
+  // Nothing typed: every model at once, from the first page — nothing to
+  // press first.
+  await expect(found).toHaveCount(20);
+  await expect(found.first()).toHaveText("Модель 01 — Постачальник тестовий");
+  await expect(found.first()).toHaveAccessibleName(
+    "Обрати модель: Модель 01 — Постачальник тестовий",
+  );
+  expect(asked).toEqual(["@0"]);
+  for (const gone of ["Знайти модель", "Попередні моделі", "Наступні моделі"])
+    await expect(
+      sheet.getByRole("button", { name: gone, exact: true }),
+    ).toHaveCount(0);
+  // One line of hint: a likeness is not the same goods.
+  await expect(search.locator(".hint")).toHaveText([
+    "Схожі назви не означають однаковий товар.",
+  ]);
+  await expect(sheet.getByText(/Пошук за назвою|Порожній запит/)).toHaveCount(
+    0,
+  );
+  const field = sheet.getByLabel("Пошук моделі в каталозі");
+  await expect(field).toHaveAttribute(
+    "placeholder",
+    "Назва моделі або джерело",
+  );
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth > innerWidth,
+    ),
+  ).toBe(false);
+  await field.evaluate((element) => {
+    element.scrollIntoView({ block: "start" });
+  });
+  await page.screenshot({
+    path: "test-results/catalog-family-as-typed-360.png",
+  });
+  // «Показати ще»: a page that fails says so where it stood, the rows
+  // stay; its retry reads that page alone, added under the first, the
+  // cursor on the first it brings.
+  await search.getByRole("button", { name: "Показати ще" }).click();
+  const plate = search.locator(".read-failure");
+  await expect(plate.getByRole("button")).toHaveText(["Спробувати ще раз"]);
+  await expect(found).toHaveCount(20);
+  await expect(search.getByRole("button", { name: "Показати ще" })).toHaveCount(
+    0,
+  );
+  await plate.getByRole("button", { name: "Спробувати ще раз" }).click();
+  await expect(found).toHaveCount(22);
+  await expect(found.nth(0)).toHaveText("Модель 01 — Постачальник тестовий");
+  await expect(found.nth(20)).toHaveText("Модель 21 — Постачальник тестовий");
+  await expect(found.nth(20)).toBeFocused();
+  await expect(plate).toHaveCount(0);
+  await expect(search.getByRole("button", { name: "Показати ще" })).toHaveCount(
+    0,
+  );
+  expect(asked).toEqual(["@0", "@20", "@20"]);
+  // One letter is every model still: the list stands, nothing is asked,
+  // never a blank between (review).
+  await field.fill("к");
+  await expect(found).toHaveCount(22);
+  await page.waitForTimeout(700);
+  await expect(found).toHaveCount(22);
+  expect(asked).toEqual(["@0", "@20", "@20"]);
+  // New words after a page pressed for others that failed: the cursor
+  // stays in the field (review).
+  await field.fill("мо");
+  await expect(found.first()).toHaveText("Мохер 01 — Постачальник тестовий");
+  await search.getByRole("button", { name: "Показати ще" }).click();
+  await expect(plate.getByRole("button")).toHaveText(["Спробувати ще раз"]);
+  await field.fill("па");
+  await expect(found).toHaveCount(22);
+  await expect(found.first()).toHaveText("Пальто 01 — Постачальник тестовий");
+  await expect(field).toBeFocused();
+  // Two letters asked once the typing pauses.
+  await field.fill("ко");
+  await expect(found).toHaveText(["Кокон — Постачальник тестовий"]);
+  expect(asked.filter((one) => one.startsWith("к@"))).toEqual([]);
+  expect(asked.slice(3)).toEqual(["мо@0", "мо@20", "па@0", "ко@0"]);
+  // The second tap chooses it.
+  await found.first().click();
+  await expect(sheet.getByText(/^Модель: /)).toHaveText(
+    "Модель: Кокон — Постачальник тестовий",
+  );
+  await expect(search).toHaveCount(0);
+  // A catalogue with no model at all says so, with nothing typed.
+  none = true;
+  await sheet.getByRole("button", { name: "Інша модель" }).click();
+  await expect(
+    sheet.getByText("Моделей не знайдено.", { exact: true }),
+  ).toBeVisible();
+  await expect(sheet.getByText(/Нічого не знайшли/)).toHaveCount(0);
 });
 
 test("at 360 px a proposal is its own screen: its words large, the models offered with «Це вона», none chosen, «Підтвердити: …» docked once one is, «Створити нову» and «Відхилити» — in sight, nothing past the width, in both themes (stage 2, goods task list, P1-1)", async ({
