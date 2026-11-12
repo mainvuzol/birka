@@ -16,6 +16,8 @@ import {
   inOwnWords,
   isConflict,
   recordedNothing,
+  refusalStep,
+  refusedWrite,
 } from "@/shared/api";
 import { Back } from "@/shared/Back";
 import { Eyelet, RecordedMark } from "@/shared/Eyelet";
@@ -173,11 +175,22 @@ export function countRefusalText(
     return `На цей товар є резерв замовлення (${String(details.reserved)} шт.). Якщо кількість не збігається, виправити облік можна після видачі або скасування замовлення.${after}`;
   if (error.status === 422 && typeof details.size_id === "string")
     return `Облік товару з невідомим розміром можна лише зменшити.${after}`;
-  return `${inOwnWords(
-    errorText(error),
-    "Перевірте кількість та спробуйте ще раз.",
-    "Облік змінився — перерахуйте товар і спробуйте ще раз.",
-  )}${after}`;
+  // A kept count refused on resend keeps its words (owner, В-П1 (б): the
+  // kept operations' words stay); one refused as it is pressed says what to
+  // check, or the step — never «спробуйте ще раз».
+  return `${
+    after === ""
+      ? inOwnWords(
+          errorText(error),
+          "Перевірте кількість та спробуйте ще раз.",
+          "Облік змінився — перерахуйте товар і спробуйте ще раз.",
+        )
+      : refusalStep(
+          error,
+          "Перевірте кількість.",
+          "Облік змінився — перерахуйте товар і введіть кількість ще раз.",
+        )
+  }${after}`;
 }
 
 /** What App says of a kept count once it is settled as refused. */
@@ -601,10 +614,11 @@ function StartSheet({
       </p>
       {failure !== null && (
         <p role="alert">
-          {inOwnWords(
-            errorText(failure),
-            "Інвентаризацію не почато. Спробуйте ще раз.",
-            "Інвентаризацію не почато: дані складу змінилися — перегляньте їх і спробуйте ще раз.",
+          {refusedWrite(
+            failure,
+            "Інвентаризацію не почато.",
+            "Перевірте склад.",
+            "Інвентаризацію не почато: дані складу змінилися — перегляньте їх.",
           )}
         </p>
       )}
@@ -1802,10 +1816,11 @@ function FinishSheet({
       </p>
       {failure !== null && (
         <p role="alert">
-          {inOwnWords(
-            errorText(failure),
-            "Інвентаризацію не завершено. Спробуйте ще раз.",
-            "Інвентаризацію не завершено: дані складу змінилися — перегляньте їх і спробуйте ще раз.",
+          {refusedWrite(
+            failure,
+            "Інвентаризацію не завершено.",
+            "Перегляньте підрахунок.",
+            "Інвентаризацію не завершено: дані складу змінилися — перегляньте їх.",
           )}
         </p>
       )}

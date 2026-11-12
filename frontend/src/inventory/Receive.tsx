@@ -3,7 +3,7 @@ import { BackToMore } from "@/shared/More";
 import type { MoreBack } from "@/shared/More";
 import type { JSX } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, errorText, inOwnWords } from "@/shared/api";
+import { api, errorText, refusedWrite } from "@/shared/api";
 import { Unread } from "@/shared/Unread";
 import { Placeholder } from "@/shared/Placeholder";
 import { Eyelet, RecordedMark } from "@/shared/Eyelet";
@@ -48,12 +48,15 @@ const UNITS = 10000;
  * never an order's; the list kept either way. */
 function receiptRefusal(error: unknown): string {
   const said = errorText(error);
-  const own = inOwnWords(
-    said,
-    "Нічого не прийнято. Перевірте рядки та спробуйте ще раз — список збережено.",
-    "Нічого не прийнято: поки ви працювали, дані змінилися. Перевірте рядки та спробуйте ще раз — список збережено.",
+  // What was not done, then the step — never «спробуйте ще раз» on a write
+  // (owner, 2026-11-11, В-П1 (б)).
+  const own = refusedWrite(
+    error,
+    "Нічого не прийнято, список збережено.",
+    "Перевірте рядки.",
+    "Нічого не прийнято, список збережено: поки ви працювали, дані змінилися. Перевірте рядки й натисніть «Записати прихід» ще раз.",
   );
-  return own === said ? `${said} Список збережено — нічого не прийнято.` : own;
+  return own === said ? `${said} Нічого не прийнято, список збережено.` : own;
 }
 
 /** «склад «Основний»»: the name as written, never declined. */

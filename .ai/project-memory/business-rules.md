@@ -8954,3 +8954,126 @@ no sum changes; what is read and how much is as before.
     the stock read before: a screen showing it reads it again, the others
     wait in grey; the till's search reads it again too, as after a
     correction. Before, a receipt refreshed neither.
+
+## Chosen in chat — 2026-11-12 (audit after stage 2, batch 15: the write refusals of the catalogue, «Моделі», prices, receiving, corrections, stocktakes, «Брак», suppliers and stores by В-П1 (б))
+
+Chosen in chat on 2026-11-12 («merged, go next»), after batch 14 (#197)
+was merged: the owner's В-П1 (б) carried to every section it named that
+was not yet rewritten — «The same rule reaches every section» (owner
+decision, 2026-11-11). Goods P1-2…P1-5 and P2-4 wait for the owner's
+approval and are not in it. No right, no server rule, no field changes.
+- **What a refused write says** (owner, В-П1 (б)): what was not done,
+  then the step; never «спробуйте ще раз». By the refusal:
+  - a request the server could not take (422), or one naming nothing
+    (400, 404): «{не зроблено} {що перевірити}»;
+  - a conflict (409): «{не зроблено}: {що змінилося} — перегляньте …»;
+  - the server's own failure (5xx) on a command sent directly, never
+    kept: «{не зроблено} Натисніть ще раз — повторити безпечно. Номер
+    запиту: …» — every such command is the same however often it is sent
+    (a price, a stocktake started or finished, «Брак»'s steps, a supplier
+    added or saved);
+  - a reason the server names, no server, a session ended, no access:
+    their own words, as before.
+- **Was → now**, screen by screen:
+  - «Моделі», a new name: «Назву не змінено. Перевірте поля та спробуйте
+    ще раз.» → «Назву не змінено. Перевірте поля.»; its conflict «… —
+    перегляньте її й спробуйте ще раз.» → «… — перегляньте її.»;
+  - «Моделі», a merge: «Моделі не об’єднано. Спробуйте ще раз.» → «Моделі
+    не об’єднано. Перевірте, яка модель лишається.»; its conflict «… —
+    перегляньте їх і спробуйте ще раз.» → «… — перегляньте їх.»;
+  - «Моделі», retired or brought back: «Модель не прибрано (не
+    повернуто). Спробуйте ще раз.» → «… Перегляньте її картку.»; its
+    conflict «… — перегляньте її й спробуйте ще раз.» → «… — перегляньте
+    її.»;
+  - a catalogue operation («Перевірка каталогу», «Нова модель»), refused as
+    it was pressed: a request naming nothing «Не вдалося виконати операцію.
+    Спробуйте ще раз.» → «Операцію каталогу не записано. Перевірте модель
+    і назву.» (a rejection's sheet: «… Перевірте причину відхилення.»); a
+    request not taken and a conflict it does not name say «Операцію
+    каталогу не записано.» before their words, as a kept one refused did;
+  - a price: «Ціну не збережено. Перевірте суму та спробуйте ще раз.» →
+    «Ціну не збережено. Перевірте суму.»; its conflict unchanged («… —
+    перевірте й збережіть ще раз.»);
+  - «Прийшов товар»: «Нічого не прийнято. Перевірте рядки та спробуйте ще
+    раз — список збережено.» → «Нічого не прийнято, список збережено.
+    Перевірте рядки.»; its conflict «… Перевірте рядки та спробуйте ще раз
+    — список збережено.» → «Нічого не прийнято, список збережено: поки ви
+    працювали, дані змінилися. Перевірте рядки й натисніть «Записати
+    прихід» ще раз.»; a reason the server names: «{чому} Список збережено —
+    нічого не прийнято.» → «{чому} Нічого не прийнято, список збережено.»,
+    the fate in one order everywhere on the screen;
+  - a correction and a count, pressed: «Перевірте кількість та спробуйте
+    ще раз. Нічого не записано.» → «Перевірте кількість. Нічого не
+    записано.»; their conflict «Облік змінився — перерахуйте товар і
+    спробуйте ще раз.» → «Облік змінився — перерахуйте товар і введіть
+    кількість ще раз.»;
+  - a stocktake started: «Інвентаризацію не почато. Спробуйте ще раз.» →
+    «Інвентаризацію не почато. Перевірте склад.»; finished: «… не
+    завершено. Спробуйте ще раз.» → «… не завершено. Перегляньте
+    підрахунок.»; their conflicts lose «і спробуйте ще раз»;
+  - «Брак»: «Не записано. Перевірте дані та спробуйте ще раз.» → «Не
+    записано. Перевірте дані одиниці.»;
+  - borrowed goods marked sold: «Не записано. Перевірте кількість та
+    спробуйте ще раз.» → «Не записано. Перевірте кількість.»;
+  - an invoice's payment, set-off or write-off: «Не записано. Перевірте
+    дані та спробуйте ще раз.» → «Не записано. Перевірте дані
+    накладної.»;
+  - a return to a supplier, or its cancelling: «Не записано. Перевірте
+    повернення та спробуйте ще раз.» → «Не записано. Перевірте
+    повернення.»;
+  - a supplier added: «Постачальника не додано. Перевірте назву й телефон
+    та спробуйте ще раз.» → «… Перевірте назву й телефон.»; its conflict
+    «Постачальника не додано: дані змінилися — спробуйте ще раз.» →
+    «Постачальника не додано: дані змінилися — перегляньте список
+    постачальників.», and the list is read again, as it says (review:
+    before, it was not); a supplier saved: the same, «не збережено»;
+  - a store blocked, opened or archived: «Стан магазину не змінено.
+    Перевірте причину та спробуйте ще раз.» → «… Перевірте причину.»; its
+    conflict «… — перегляньте його й спробуйте ще раз.» → «… —
+    перегляньте його.»;
+  - every conflict above loses its «спробуйте ще раз»; what each screen
+    reads again after it does not change.
+- **Decided here** (each a reading for the owner):
+  - the words of what to check, where the owner gave none: «Перевірте
+    склад.», «Перегляньте підрахунок.», «Перевірте, яка модель
+    лишається.», «Перегляньте її картку.», «Перевірте дані одиниці.»,
+    «Перевірте дані накладної.», «Перевірте модель і назву.», «Перевірте
+    причину відхилення.»;
+  - **the kept operations' words stay** (owner), wherever the pressed
+    words changed — each by a branch of its own, as batch 11's kept
+    return: what a count, a correction, a «Моделі» change, an invoice's
+    payment, set-off or write-off, a return to a supplier, borrowed goods
+    marked sold or a store's state says when it was kept on the phone and
+    the server refuses it later is as it was — «Перевірте кількість та
+    спробуйте ще раз.», «Зміну каталогу не записано. …», «Не записано: дані
+    змінилися — перегляньте їх і спробуйте ще раз.», «Стан магазину не
+    змінено: його змінили — перегляньте його й спробуйте ще раз.» (review);
+  - a catalogue operation still kept on the phone, its outcome unknown — the
+    server's own failure, an answer proving nothing about a resend, a read
+    failing after it was taken — says it as every kept command does:
+    «Операцію каталогу ще не підтверджено: сервер не зміг відповісти
+    (не прийняв запит; відповів, що дані змінилися). Перевірте результат
+    ще раз — двічі вона не запишеться. Номер запиту: …» (owner decisions,
+    2026-10-18 and 2026-10-25; review). Before, it said the shared «Не
+    вдалося виконати операцію. Спробуйте ще раз.» beside its stub, and a
+    request naming nothing would have said «не записано» of what may have
+    been recorded;
+  - a receipt, a count, a correction, a supplier's return or payment,
+    borrowed goods marked sold, a store's state and «Моделі»'s changes
+    answered with a 5xx are kept on the phone, as before, and say the kept
+    operations' words;
+  - the catalogue's «Модель неоднозначна або стан каталогу змінився. …»
+    loses its last clause, «за тимчасового конфлікту повторіть спробу»;
+  - a rejection's sheet, its operation kept and then refused as having
+    recorded nothing, says «Операцію каталогу не записано.» first, as the
+    queue's line above it does.
+- One helper says this everywhere: `refusedWrite` (and, where the fate
+  comes after the step, `refusalStep`) in `frontend/src/shared/api.ts`,
+  built on batch 11's `failedWrite`; «Початкові залишки» moved onto it
+  unchanged.
+- **Not reached by this batch** (a question for the owner): «Каса»'s
+  refusals as pressed (`cash/errors.ts`) and an order's conflict as
+  pressed still end in «спробуйте ще раз», and a 400 or 404 there says the
+  shared failure — В-П1's list named neither section. The app's own
+  failure, before anything is sent, keeps the shared words everywhere, as
+  in batch 10.

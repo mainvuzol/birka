@@ -283,7 +283,11 @@ test("jackets borrowed from another shop are taken at a price, marked sold, and 
   await receiveWayDone(way);
   await refuseOnce(page, "**/api/v1/inventory/receipts", 422);
   await recordReceipt(page, 3).click();
-  await expect(page.getByText(/^Нічого не прийнято\./)).toBeVisible();
+  await expect(
+    page.getByText("Нічого не прийнято, список збережено. Перевірте рядки.", {
+      exact: true,
+    }),
+  ).toBeVisible();
   way = await receiveWay(page);
   await pickSupplier(page, supplier.name, { inside: way });
   await receiveWayDone(way);
@@ -352,7 +356,7 @@ test("jackets borrowed from another shop are taken at a price, marked sold, and 
     .getByRole("button", { name: "Позначити проданим · 2 шт." })
     .click();
   await expect(
-    sheet.getByText("Не записано. Перевірте кількість та спробуйте ще раз.", {
+    sheet.getByText("Не записано. Перевірте кількість.", {
       exact: true,
     }),
   ).toBeVisible();
@@ -362,12 +366,20 @@ test("jackets borrowed from another shop are taken at a price, marked sold, and 
     .getByRole("button", { name: "Позначити проданим · 2 шт." })
     .click();
   await expect(
-    sheet.getByText(
-      "Не записано: дані змінилися — перегляньте їх і спробуйте ще раз.",
-      { exact: true },
-    ),
+    sheet.getByText("Не записано: дані змінилися — перегляньте їх.", {
+      exact: true,
+    }),
   ).toBeVisible();
   await expect.poll(lotReads).toBeGreaterThan(0);
+  // A request naming nothing: what was not done, then what to check —
+  // never «спробуйте ще раз» (owner, В-П1 (б)).
+  await refuseOnce(page, "**/api/v1/supplier-invoices/sold", 404);
+  await sheet
+    .getByRole("button", { name: "Позначити проданим · 2 шт." })
+    .click();
+  await expect(
+    sheet.getByText("Не записано. Перевірте кількість.", { exact: true }),
+  ).toBeVisible();
   await sheet
     .getByRole("button", { name: "Позначити проданим · 2 шт." })
     .click();

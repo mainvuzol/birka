@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import type { JSX, RefObject } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { ApiError, api, errorText, inOwnWords, isConflict } from "@/shared/api";
+import { ApiError, api, refusedWrite, isConflict } from "@/shared/api";
 import { Back } from "@/shared/Back";
 import { Icon } from "@/shared/Icon";
 import { ScreenHeader } from "@/shared/ScreenHeader";
@@ -180,10 +180,11 @@ function SupplierEdit({
       setProblem(
         error instanceof ApiError && error.details.reason === "DUPLICATE"
           ? `«${visible(String(error.details.name))}» уже є у списку.`
-          : inOwnWords(
-              errorText(error),
-              "Постачальника не збережено. Перевірте назву й телефон та спробуйте ще раз.",
-              "Постачальника не збережено: дані змінилися — перегляньте їх і спробуйте ще раз.",
+          : refusedWrite(
+              error,
+              "Постачальника не збережено.",
+              "Перевірте назву й телефон.",
+              "Постачальника не збережено: дані змінилися — перегляньте їх.",
             ),
       );
     } finally {

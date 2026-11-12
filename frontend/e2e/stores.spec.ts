@@ -324,7 +324,7 @@ test("the owner blocks a store; its seller sees only that, and the owner reads i
   await refuseOnce(page, "**/api/v1/stores/*/state", 409);
   await yes.click();
   await expect(sheet.getByRole("alert")).toHaveText(
-    "Стан магазину не змінено: його змінили — перегляньте його й спробуйте ще раз.",
+    "Стан магазину не змінено: його змінили — перегляньте його.",
   );
   // The cursor on why, in the sheet: the button it was on was held
   // (review, 2026-11-07). Felt as an error (spec §4.4).
@@ -334,6 +334,13 @@ test("the owner blocks a store; its seller sees only that, and the owner reads i
     notification_type: "error",
   });
   await expect(why).toHaveValue("Ревізія каси");
+  // A request naming nothing: what was not done, then what to check —
+  // never «спробуйте ще раз» (owner, В-П1 (б)).
+  await refuseOnce(page, "**/api/v1/stores/*/state", 404);
+  await yes.click();
+  await expect(sheet.getByRole("alert")).toHaveText(
+    "Стан магазину не змінено. Перевірте причину.",
+  );
   // While the change is sent, no way out: Telegram's «Назад» and
   // «Скасувати» are held, its answer is said here (navigation task list,
   // P0-4; review, 2026-10-26).
@@ -390,13 +397,13 @@ test("the owner blocks a store; its seller sees only that, and the owner reads i
   await expect(
     page.getByRole("button", { name: "Назад до магазинів" }),
   ).toBeEnabled();
-  // The one refused above, then the same change as a new command.
-  expect(changes.bodies).toHaveLength(2);
+  // The two refused above, then the same change as a new command.
+  expect(changes.bodies).toHaveLength(3);
   expect({
     ...(changes.bodies[0] as object),
     command_id: null,
-  }).toEqual({ ...(changes.bodies[1] as object), command_id: null });
-  expect(changes.bodies.slice(1)).toEqual([
+  }).toEqual({ ...(changes.bodies[2] as object), command_id: null });
+  expect(changes.bodies.slice(2)).toEqual([
     {
       command_id: expect.any(String) as string,
       state: "BLOCKED",
@@ -883,6 +890,44 @@ test("an archived store opens again, and is archived again once empty", async ({
     await history.locator("li").count(),
   );
   await expect(page.locator("details")).toHaveCount(0);
+});
+
+test("a kept change refused on its check as having recorded nothing keeps the kept operations' words (owner, В-П1 (б))", async ({
+  page,
+}) => {
+  await settle(page, fixture.network_market_store_id, "ACTIVE");
+  let first = true;
+  await page.route("**/api/v1/stores/*/state", async (route) => {
+    if (first) {
+      first = false;
+      // Never reached the server.
+      await route.abort("connectionfailed");
+    } else await route.fallback();
+  });
+  await storesSection(page);
+  const market = await storeScreen(page, "Ринок");
+  await market.getByRole("button", { name: "Заблокувати" }).click();
+  const sheet = await stateSheet(page, "Заблокувати «Ринок»?");
+  await sheet.getByLabel(/^Причина/).fill("Перевірка");
+  await sheet.getByRole("button", { name: "Так, заблокувати «Ринок»" }).click();
+  await expect(
+    market.locator(".stub-kept").getByRole("heading", {
+      name: "Зміну стану магазину ще не підтверджено",
+    }),
+  ).toBeVisible();
+  // Changed meanwhile, says the server, having recorded nothing: the kept
+  // change's words, as before — never the words of one just pressed.
+  await refuseOnce(page, "**/api/v1/stores/*/state", 409, { recorded: false });
+  await market
+    .getByRole("button", { name: "Перевірити результат зміни" })
+    .click();
+  await expect(
+    page.getByText(
+      "Стан магазину не змінено: його змінили — перегляньте його й спробуйте ще раз.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await expect(page.locator(".stub-kept")).toHaveCount(0);
 });
 
 test("a change whose answer is lost is resent unchanged, and done once", async ({

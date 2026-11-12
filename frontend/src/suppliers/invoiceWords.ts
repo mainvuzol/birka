@@ -1,4 +1,4 @@
-import { ApiError, errorText, inOwnWords } from "@/shared/api";
+import { ApiError, errorText, inOwnWords, refusedWrite } from "@/shared/api";
 import { money } from "@/orders/types";
 import { visible } from "@/shared/visible";
 import { shortDay } from "@/credits/format";
@@ -71,7 +71,7 @@ export function invoiceName(invoice: Invoice): string {
 
 /** Why an operation was not taken, in this screen's words: here, and under
  * a kept one checked (stage 2, money task list, P0-6). */
-export function refusalText(error: unknown): string {
+export function refusalText(error: unknown, kept = false): string {
   if (error instanceof ApiError) {
     switch (error.details.reason) {
       case "MORE_THAN_OWED":
@@ -92,10 +92,19 @@ export function refusalText(error: unknown): string {
         return "Списане лишається списаним.";
     }
   }
-  return inOwnWords(
-    errorText(error),
-    "Не записано. Перевірте дані та спробуйте ще раз.",
-    "Не записано: дані змінилися — перегляньте їх і спробуйте ще раз.",
+  // A kept one refused later keeps its words (owner, В-П1 (б): the kept
+  // operations' words stay).
+  if (kept)
+    return inOwnWords(
+      errorText(error),
+      "Не записано. Перевірте дані та спробуйте ще раз.",
+      "Не записано: дані змінилися — перегляньте їх і спробуйте ще раз.",
+    );
+  return refusedWrite(
+    error,
+    "Не записано.",
+    "Перевірте дані накладної.",
+    "Не записано: дані змінилися — перегляньте їх.",
   );
 }
 

@@ -1,4 +1,4 @@
-import { ApiError, errorText, inOwnWords } from "@/shared/api";
+import { ApiError, errorText, inOwnWords, refusedWrite } from "@/shared/api";
 import { sizeLabel } from "@/returns/types";
 import { visible } from "@/shared/visible";
 import type { ReturnLine, SupplierReturn } from "./types";
@@ -39,7 +39,7 @@ export function returnedText(result: SupplierReturn): string {
 
 /** Why a return was not taken, in this screen's words: here, and under a
  * kept one checked (stage 2, money task list, P0-6). */
-export function refusalText(error: unknown): string {
+export function refusalText(error: unknown, kept = false): string {
   if (error instanceof ApiError) {
     if (error.code === "INSUFFICIENT_STOCK")
       return "Вільного товару вже менше, ніж ви повертаєте: частину могли продати чи забронювати. Оновіть і перевірте кількість.";
@@ -54,9 +54,18 @@ export function refusalText(error: unknown): string {
         return "Постачальник зарахував це повернення в накладну — спершу скасуйте залік у «Накладних».";
     }
   }
-  return inOwnWords(
-    errorText(error),
-    "Не записано. Перевірте повернення та спробуйте ще раз.",
-    "Не записано: дані повернення змінилися — перегляньте їх і спробуйте ще раз.",
+  // A kept one refused later keeps its words (owner, В-П1 (б): the kept
+  // operations' words stay).
+  if (kept)
+    return inOwnWords(
+      errorText(error),
+      "Не записано. Перевірте повернення та спробуйте ще раз.",
+      "Не записано: дані повернення змінилися — перегляньте їх і спробуйте ще раз.",
+    );
+  return refusedWrite(
+    error,
+    "Не записано.",
+    "Перевірте повернення.",
+    "Не записано: дані повернення змінилися — перегляньте їх.",
   );
 }

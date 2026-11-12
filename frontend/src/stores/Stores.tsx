@@ -8,6 +8,7 @@ import {
   api,
   errorText,
   inOwnWords,
+  refusedWrite,
   unreachable,
 } from "@/shared/api";
 import { Back } from "@/shared/Back";
@@ -186,7 +187,7 @@ export function Stores({
       else {
         if (outcome.kind === "refused") {
           buzz("error");
-          setSaid({ kind: "refused", text: refusalText(outcome.error) });
+          setSaid({ kind: "refused", text: refusalText(outcome.error, true) });
           void cache.invalidateQueries({ queryKey: ["stores"] });
         }
         // Answered or not, the button pressed was held: the cursor to what
@@ -657,7 +658,7 @@ function StateSheet({
   );
 }
 
-function refusalText(error: unknown): string {
+function refusalText(error: unknown, kept = false): string {
   if (error instanceof ApiError) {
     switch (error.details.reason) {
       case "NOT_EMPTY":
@@ -670,9 +671,18 @@ function refusalText(error: unknown): string {
         return "Вкажіть причину.";
     }
   }
-  return inOwnWords(
-    errorText(error),
-    "Стан магазину не змінено. Перевірте причину та спробуйте ще раз.",
-    "Стан магазину не змінено: його змінили — перегляньте його й спробуйте ще раз.",
+  // A kept one refused later keeps its words (owner, В-П1 (б): the kept
+  // operations' words stay).
+  if (kept)
+    return inOwnWords(
+      errorText(error),
+      "Стан магазину не змінено. Перевірте причину та спробуйте ще раз.",
+      "Стан магазину не змінено: його змінили — перегляньте його й спробуйте ще раз.",
+    );
+  return refusedWrite(
+    error,
+    "Стан магазину не змінено.",
+    "Перевірте причину.",
+    "Стан магазину не змінено: його змінили — перегляньте його.",
   );
 }

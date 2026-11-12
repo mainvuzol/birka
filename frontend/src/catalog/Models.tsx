@@ -6,7 +6,14 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { api, ApiError, errorText, inOwnWords, isConflict } from "@/shared/api";
+import {
+  api,
+  ApiError,
+  errorText,
+  inOwnWords,
+  isConflict,
+  refusedWrite,
+} from "@/shared/api";
 import { Unread } from "@/shared/Unread";
 import { visible } from "@/shared/visible";
 import { money } from "@/orders/types";
@@ -685,10 +692,11 @@ function RenameSheet({
           )}
           {refusal && !similar && !sameAs && candidates.length === 0 && (
             <p role="alert">
-              {inOwnWords(
-                errorText(refusal),
-                "Назву не змінено. Перевірте поля та спробуйте ще раз.",
-                "Назву не змінено: модель щойно змінили — перегляньте її й спробуйте ще раз.",
+              {refusedWrite(
+                refusal,
+                "Назву не змінено.",
+                "Перевірте поля.",
+                "Назву не змінено: модель щойно змінили — перегляньте її.",
               )}
             </p>
           )}
@@ -979,10 +987,11 @@ function MergeScreen({
             )}
             {refusal && (
               <p role="alert">
-                {inOwnWords(
-                  errorText(refusal),
-                  "Моделі не об’єднано. Спробуйте ще раз.",
-                  "Моделі не об’єднано: їх щойно змінили — перегляньте їх і спробуйте ще раз.",
+                {refusedWrite(
+                  refusal,
+                  "Моделі не об’єднано.",
+                  "Перевірте, яка модель лишається.",
+                  "Моделі не об’єднано: їх щойно змінили — перегляньте їх.",
                 )}
               </p>
             )}
@@ -1214,6 +1223,8 @@ export function Models({
         // Proven to have recorded nothing: it says so before why (ADR-0008
         // §9; ADR-0013 §1).
         else if (outcome.kind === "refused") {
+          // A kept change keeps its words (owner, В-П1 (б): the kept
+          // operations' words stay).
           setFailure(
             `Зміну каталогу не записано. ${inOwnWords(
               errorText(outcome.error),
@@ -1287,14 +1298,13 @@ export function Models({
       if (error) setFocus("name");
       if (error)
         setFailure(
-          inOwnWords(
-            errorText(error),
+          refusedWrite(
+            error,
+            retired ? "Модель не повернуто." : "Модель не прибрано.",
+            "Перегляньте її картку.",
             retired
-              ? "Модель не повернуто. Спробуйте ще раз."
-              : "Модель не прибрано. Спробуйте ще раз.",
-            retired
-              ? "Модель не повернуто: її щойно змінили — перегляньте її й спробуйте ще раз."
-              : "Модель не прибрано: її щойно змінили — перегляньте її й спробуйте ще раз.",
+              ? "Модель не повернуто: її щойно змінили — перегляньте її."
+              : "Модель не прибрано: її щойно змінили — перегляньте її.",
           ),
         );
     });

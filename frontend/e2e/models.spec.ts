@@ -2,6 +2,7 @@ import {
   test,
   expect,
   addModel,
+  FAILED_REQUEST_ID,
   fillLine,
   leaveNewModel,
   more,
@@ -443,7 +444,25 @@ test("a duplicate is merged after a preview, its stock moving to the model that 
   await refuseOnce(page, "**/api/v1/catalog/models/*/merge", 422);
   await confirmMerge(page, `${name} ${colour.typo}`, `${name} ${colour.right}`);
   await expect(
-    page.getByText("Моделі не об’єднано. Спробуйте ще раз.", { exact: true }),
+    page.getByText("Моделі не об’єднано. Перевірте, яка модель лишається.", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  // Changed meanwhile, or a request naming nothing: never «спробуйте ще
+  // раз» (owner, В-П1 (б)).
+  await refuseOnce(page, "**/api/v1/catalog/models/*/merge", 409);
+  await confirmMerge(page, `${name} ${colour.typo}`, `${name} ${colour.right}`);
+  await expect(
+    page.getByText("Моделі не об’єднано: їх щойно змінили — перегляньте їх.", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await refuseOnce(page, "**/api/v1/catalog/models/*/merge", 404);
+  await confirmMerge(page, `${name} ${colour.typo}`, `${name} ${colour.right}`);
+  await expect(
+    page.getByText("Моделі не об’єднано. Перевірте, яка модель лишається.", {
+      exact: true,
+    }),
   ).toBeVisible();
   await confirmMerge(page, `${name} ${colour.typo}`, `${name} ${colour.right}`);
   await expect(
@@ -683,7 +702,7 @@ test("a rename warns of a similar word, and taking the word in use saves it", as
   await refuseOnce(page, "**/api/v1/catalog/models/*/rename", 422);
   await saveName(sheet).click();
   await expect(
-    sheet.getByText("Назву не змінено. Перевірте поля та спробуйте ще раз.", {
+    sheet.getByText("Назву не змінено. Перевірте поля.", {
       exact: true,
     }),
   ).toBeVisible();
@@ -693,9 +712,16 @@ test("a rename warns of a similar word, and taking the word in use saves it", as
   await saveName(sheet).click();
   await expect(
     sheet.getByText(
-      "Назву не змінено: модель щойно змінили — перегляньте її й спробуйте ще раз.",
+      "Назву не змінено: модель щойно змінили — перегляньте її.",
       { exact: true },
     ),
+  ).toBeVisible();
+  // A request naming nothing: what was not done, then what to check —
+  // never «спробуйте ще раз» (owner, В-П1 (б)).
+  await refuseOnce(page, "**/api/v1/catalog/models/*/rename", 404);
+  await saveName(sheet).click();
+  await expect(
+    sheet.getByText("Назву не змінено. Перевірте поля.", { exact: true }),
   ).toBeVisible();
   await saveName(sheet).click();
   // Done: the sheet gone, the card says it, the cursor on its new name.
@@ -732,13 +758,21 @@ test("a retired model is not received until it is brought back", async ({
   await refuseOnce(page, "**/api/v1/catalog/models/*/retire", 409);
   await way(page, "Прибрати модель");
   await expect(
-    page.getByText(
-      "Модель не прибрано: її щойно змінили — перегляньте її й спробуйте ще раз.",
-      { exact: true },
-    ),
+    page.getByText("Модель не прибрано: її щойно змінили — перегляньте її.", {
+      exact: true,
+    }),
   ).toBeVisible();
   // The card read again, as it says.
   await expect.poll(cardReads).toBeGreaterThan(0);
+  // A request naming nothing: what was not done, then what to check —
+  // never «спробуйте ще раз» (owner, В-П1 (б)).
+  await refuseOnce(page, "**/api/v1/catalog/models/*/retire", 404);
+  await way(page, "Прибрати модель");
+  await expect(
+    page.getByText("Модель не прибрано. Перегляньте її картку.", {
+      exact: true,
+    }),
+  ).toBeVisible();
   await way(page, "Прибрати модель");
   await expect(
     page.getByText(
@@ -783,7 +817,9 @@ test("a retired model is not received until it is brought back", async ({
   await refuseOnce(page, "**/api/v1/catalog/models/*/restore", 422);
   await way(page, "Повернути модель");
   await expect(
-    page.getByText("Модель не повернуто. Спробуйте ще раз.", { exact: true }),
+    page.getByText("Модель не повернуто. Перегляньте її картку.", {
+      exact: true,
+    }),
   ).toBeVisible();
   await way(page, "Повернути модель");
   await expect(
@@ -1335,6 +1371,13 @@ test("a rename whose answer was lost settles when it was refused", async ({
 
 for (const [what, status, said] of [
   ["a form", 422, "Зміну каталогу не записано. Внесіть її ще раз."],
+  // Naming nothing at all: a kept change keeps its words (owner, В-П1 (б):
+  // the kept operations' words stay).
+  [
+    "a request naming nothing",
+    404,
+    "Зміну каталогу не записано. Не вдалося виконати операцію. Спробуйте ще раз.",
+  ],
   [
     "a conflict",
     409,
@@ -1362,7 +1405,12 @@ for (const [what, status, said] of [
         await route.fulfill({
           status,
           json: {
-            code: status === 422 ? "VALIDATION_ERROR" : "CONFLICT",
+            code:
+              status === 422
+                ? "VALIDATION_ERROR"
+                : status === 404
+                  ? "NOT_FOUND"
+                  : "CONFLICT",
             message: "Refused",
             details: { recorded: false },
           },
@@ -1531,6 +1579,143 @@ test("a product whose creation answer was lost settles when it was refused", asy
   await expect(page.getByText("Незавершена операція каталогу")).toHaveCount(0);
   await expect(kept).toBeVisible();
   expect(attempts).toBe(2);
+});
+
+test("a catalogue operation refused for a reason it does not name says it was not recorded, then what to check (owner, В-П1 (б))", async ({
+  page,
+}) => {
+  const name = `Ніщо ${randomUUID().slice(0, 8)}`;
+  const colour = colours();
+  // Answered in turn — the last one set, the first: an ambiguous model,
+  // a request not taken, a conflict it does not name, one naming nothing.
+  await refuseOnce(
+    page,
+    "**/api/v1/catalog/match-decisions/*/create-product",
+    404,
+  );
+  await refuseOnce(
+    page,
+    "**/api/v1/catalog/match-decisions/*/create-product",
+    409,
+  );
+  await refuseOnce(
+    page,
+    "**/api/v1/catalog/match-decisions/*/create-product",
+    422,
+  );
+  // An ambiguous model the server names: its words, never «повторіть
+  // спробу» (owner, В-П1 (б)).
+  await page.route(
+    "**/api/v1/catalog/match-decisions/*/create-product",
+    async (route) => {
+      await route.fulfill({
+        status: 409,
+        json: {
+          code: "CATALOG_AMBIGUOUS",
+          message: "Ambiguous",
+          details: { recorded: false },
+        },
+      });
+    },
+    { times: 1 },
+  );
+  await enter(page, "Перевірка каталогу");
+  const sheet = await proposeNew(page, `${name} опис`);
+  await fillProduct(sheet, name, colour.typo);
+  await addModel(sheet).click();
+  await expect(
+    sheet.getByText(
+      "Модель неоднозначна або стан каталогу змінився. Перевірте обрану модель. Для окремої моделі зі схожою назвою вкажіть її відмінність.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await addModel(sheet).click();
+  // Not taken, or changed in a way it does not name: what was not done
+  // first.
+  await expect(
+    sheet.getByText(
+      "Операцію каталогу не записано. Перевірте введені дані та стан пропозиції.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await addModel(sheet).click();
+  await expect(
+    sheet.getByText(
+      "Операцію каталогу не записано. Каталог або рішення змінилися. Оновіть перегляд. Для застарілої підказки створіть нову пропозицію та перевірте товар заново.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await addModel(sheet).click();
+  // Never «спробуйте ще раз»; nothing kept, the form as it was.
+  await expect(
+    sheet.getByText(
+      "Операцію каталогу не записано. Перевірте модель і назву.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await expect(page.getByText("Незавершена операція каталогу")).toHaveCount(0);
+  await expect(sheet.getByLabel("Назва моделі", { exact: true })).toHaveValue(
+    name,
+  );
+  await addModel(sheet).click();
+  await expect(
+    page.getByText(
+      `Збережений товар: ${name} ${colour.typo}. Розміри: S (ALPHA)`,
+      { exact: true },
+    ),
+  ).toBeVisible();
+});
+
+test("a catalogue operation the server failed stays kept, said unconfirmed — never «не записано» nor «спробуйте ще раз» (review; owner decisions, 2026-10-18)", async ({
+  page,
+}) => {
+  const name = `Збій ${randomUUID().slice(0, 8)}`;
+  const colour = colours();
+  // The server's own failure, then the same operation sent again, held
+  // until the screen is looked at.
+  let calls = 0;
+  let release: () => void = () => undefined;
+  const gate = new Promise<void>((done) => {
+    release = done;
+  });
+  await page.route(
+    "**/api/v1/catalog/match-decisions/*/create-product",
+    async (route) => {
+      calls += 1;
+      if (calls === 1) {
+        await route.fulfill({
+          status: 500,
+          headers: { "X-Request-ID": FAILED_REQUEST_ID },
+          json: { code: "INTERNAL_ERROR", message: "Internal", details: {} },
+        });
+        return;
+      }
+      await gate;
+      await route.continue();
+    },
+  );
+  await enter(page, "Перевірка каталогу");
+  const sheet = await proposeNew(page, `${name} опис`);
+  await fillProduct(sheet, name, colour.typo);
+  await addModel(sheet).click();
+  await expect(sheet.getByText("Незавершена операція каталогу")).toBeVisible();
+  await expect(
+    sheet.getByText(
+      "Операцію каталогу ще не підтверджено: сервер не зміг відповісти. Перевірте результат ще раз — двічі вона не запишеться. Номер запиту: 3f9c2a7e.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  release();
+  await sheet
+    .getByRole("button", { name: "Повторити ту саму операцію" })
+    .click();
+  await expect(
+    page.getByText(
+      `Збережений товар: ${name} ${colour.typo}. Розміри: S (ALPHA)`,
+      { exact: true },
+    ),
+  ).toBeVisible();
+  expect(calls).toBe(2);
 });
 
 test("a kept creation refused stays across tabs, answered on its own proposal alone", async ({

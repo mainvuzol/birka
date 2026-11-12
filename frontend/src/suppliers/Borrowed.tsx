@@ -1,7 +1,14 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { JSX, RefObject } from "react";
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
-import { ApiError, api, errorText, inOwnWords, isConflict } from "@/shared/api";
+import {
+  ApiError,
+  api,
+  errorText,
+  inOwnWords,
+  isConflict,
+  refusedWrite,
+} from "@/shared/api";
 import { Unread } from "@/shared/Unread";
 import { Placeholder } from "@/shared/Placeholder";
 import { money } from "@/orders/types";
@@ -638,7 +645,7 @@ function LotSheet({
 /** Why a mark or a return of borrowed goods was not taken, in this screen's
  * words: here, and under a kept one checked (stage 2, money task list,
  * P0-6). */
-export function refusalText(error: unknown): string {
+export function refusalText(error: unknown, kept = false): string {
   if (error instanceof ApiError) {
     if (error.code === "INSUFFICIENT_STOCK")
       return "На складі цього товару вже менше: можливо, його продали. Позначте проданим.";
@@ -649,9 +656,18 @@ export function refusalText(error: unknown): string {
         return "Для цього товару не вказали домовлену ціну.";
     }
   }
-  return inOwnWords(
-    errorText(error),
-    "Не записано. Перевірте кількість та спробуйте ще раз.",
-    "Не записано: дані змінилися — перегляньте їх і спробуйте ще раз.",
+  // A kept one refused later keeps its words (owner, В-П1 (б): the kept
+  // operations' words stay).
+  if (kept)
+    return inOwnWords(
+      errorText(error),
+      "Не записано. Перевірте кількість та спробуйте ще раз.",
+      "Не записано: дані змінилися — перегляньте їх і спробуйте ще раз.",
+    );
+  return refusedWrite(
+    error,
+    "Не записано.",
+    "Перевірте кількість.",
+    "Не записано: дані змінилися — перегляньте їх.",
   );
 }

@@ -172,7 +172,7 @@ test("a delivery of a known model is received into an explicitly chosen warehous
   await refuseOnce(page, "**/api/v1/inventory/receipts", 422);
   await recordReceipt(page, 5).click();
   await expect(page.getByRole("alert")).toHaveText(
-    "Нічого не прийнято. Перевірте рядки та спробуйте ще раз — список збережено.",
+    "Нічого не прийнято, список збережено. Перевірте рядки.",
   );
   await expect(
     page
@@ -182,7 +182,14 @@ test("a delivery of a known model is received into an explicitly chosen warehous
   await refuseOnce(page, "**/api/v1/inventory/receipts", 409);
   await recordReceipt(page, 5).click();
   await expect(page.getByRole("alert")).toHaveText(
-    "Нічого не прийнято: поки ви працювали, дані змінилися. Перевірте рядки та спробуйте ще раз — список збережено.",
+    "Нічого не прийнято, список збережено: поки ви працювали, дані змінилися. Перевірте рядки й натисніть «Записати прихід» ще раз.",
+  );
+  // A request naming nothing: what was not done, then what to check —
+  // never «спробуйте ще раз» (owner, В-П1 (б)).
+  await refuseOnce(page, "**/api/v1/inventory/receipts", 404);
+  await recordReceipt(page, 5).click();
+  await expect(page.getByRole("alert")).toHaveText(
+    "Нічого не прийнято, список збережено. Перевірте рядки.",
   );
   const posted = page.waitForResponse(
     (r) =>
@@ -194,13 +201,13 @@ test("a delivery of a known model is received into an explicitly chosen warehous
   const response = await posted;
   // The delivery's permanent identity travels with it (ADR-0006), the same
   // through every refusal.
-  expect(sent).toHaveLength(3);
-  expect(sent.map((body) => body.lines.length)).toEqual([1, 1, 1]);
+  expect(sent).toHaveLength(4);
+  expect(sent.map((body) => body.lines.length)).toEqual([1, 1, 1, 1]);
   expect(sent[0]?.command_id).toMatch(/^[0-9a-f-]{36}$/);
   expect(new Set(sent.map((body) => body.command_id)).size).toBe(1);
-  expect(sent[2]?.location_id).toBe(fixture.till_location_id);
-  expect(sent[2]?.notes).toBe("Накладна 17");
-  expect(sent[2]?.lines.map((line) => line.quantity)).toEqual([5]);
+  expect(sent[3]?.location_id).toBe(fixture.till_location_id);
+  expect(sent[3]?.notes).toBe("Накладна 17");
+  expect(sent[3]?.lines.map((line) => line.quantity)).toEqual([5]);
   expect(await response.request().headerValue("Idempotency-Key")).toMatch(
     /^[0-9a-f-]{36}$/,
   );
@@ -404,7 +411,9 @@ test("a definite refusal keeps the list and says nothing was received", async ({
   await expect(page.locator(".order-dock .eyelet-spin")).toHaveCount(1);
   await expect(page.locator(".stub-kept, .banner-kept")).toHaveCount(0);
   answer();
-  await expect(page.getByText(/нічого не прийнято/)).toBeVisible();
+  await expect(
+    page.getByText(/ Нічого не прийнято, список збережено\.$/),
+  ).toBeVisible();
   await expect(page.getByText("2 шт. · Закупівля")).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "Приймання ще не підтверджено" }),

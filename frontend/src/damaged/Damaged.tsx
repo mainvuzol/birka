@@ -6,7 +6,7 @@ import {
   ApiError,
   api,
   errorText,
-  inOwnWords,
+  refusedWrite,
   unreachable,
 } from "@/shared/api";
 import { Placeholder } from "@/shared/Placeholder";
@@ -109,9 +109,10 @@ function refusalText(error: unknown): string {
   return error instanceof ApiError && error.code === "DAMAGED_UNIT_CHANGED"
     ? "Цю одиницю щойно змінив хтось інший. Список оновлено — подивіться ще раз."
     : error instanceof ApiError && !unreachable(error)
-      ? inOwnWords(
-          errorText(error),
-          "Не записано. Перевірте дані та спробуйте ще раз.",
+      ? refusedWrite(
+          error,
+          "Не записано.",
+          "Перевірте дані одиниці.",
           "Не записано: цю одиницю щойно змінили — список оновлено, подивіться ще раз.",
         )
       : `${errorText(error)} Повторне натискання безпечне.`;

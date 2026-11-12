@@ -249,7 +249,24 @@ test("a warehouse is counted cell by cell, each difference applied at once, and 
   );
   await start.getByRole("button", { name: "Почати", exact: true }).click();
   await expect(
-    start.getByText("Інвентаризацію не почато. Спробуйте ще раз.", {
+    start.getByText("Інвентаризацію не почато. Перевірте склад.", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  // The server's own failure, or a request naming nothing: what was not
+  // done, then the step — never «спробуйте ще раз» (owner, В-П1 (б)).
+  await refuseOnce(page, "**/api/v1/stocktakes", 500);
+  await start.getByRole("button", { name: "Почати", exact: true }).click();
+  await expect(
+    start.getByText(
+      "Інвентаризацію не почато. Натисніть ще раз — повторити безпечно. Номер запиту: 3f9c2a7e.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await refuseOnce(page, "**/api/v1/stocktakes", 404);
+  await start.getByRole("button", { name: "Почати", exact: true }).click();
+  await expect(
+    start.getByText("Інвентаризацію не почато. Перевірте склад.", {
       exact: true,
     }),
   ).toBeVisible();
@@ -258,7 +275,7 @@ test("a warehouse is counted cell by cell, each difference applied at once, and 
   await start.getByRole("button", { name: "Почати", exact: true }).click();
   await expect(
     start.getByText(
-      "Інвентаризацію не почато: дані складу змінилися — перегляньте їх і спробуйте ще раз.",
+      "Інвентаризацію не почато: дані складу змінилися — перегляньте їх.",
       { exact: true },
     ),
   ).toBeVisible();
@@ -306,10 +323,9 @@ test("a warehouse is counted cell by cell, each difference applied at once, and 
   await refuseOnce(page, "**/api/v1/stocktakes/*/counts", 422);
   await record(sheet, system - 2).click();
   await expect(
-    sheet.getByText(
-      "Перевірте кількість та спробуйте ще раз. Нічого не записано.",
-      { exact: true },
-    ),
+    sheet.getByText("Перевірте кількість. Нічого не записано.", {
+      exact: true,
+    }),
   ).toBeVisible();
   // The keypad empty, as after any refusal: counted again.
   await expect(sheet.getByLabel("Фактично, шт.")).toHaveValue("");
@@ -466,12 +482,29 @@ test("a warehouse is counted cell by cell, each difference applied at once, and 
     ),
   ).toBeVisible();
   await noUnits(page);
+  // The server's own failure, or a request naming nothing: what was not
+  // done, then the step — never «спробуйте ще раз» (owner, В-П1 (б)).
+  await refuseOnce(page, "**/api/v1/stocktakes/*/finish", 500);
+  await end.getByRole("button", { name: "Так, завершити" }).click();
+  await expect(
+    end.getByText(
+      "Інвентаризацію не завершено. Натисніть ще раз — повторити безпечно. Номер запиту: 3f9c2a7e.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await refuseOnce(page, "**/api/v1/stocktakes/*/finish", 404);
+  await end.getByRole("button", { name: "Так, завершити" }).click();
+  await expect(
+    end.getByText("Інвентаризацію не завершено. Перегляньте підрахунок.", {
+      exact: true,
+    }),
+  ).toBeVisible();
   const recordReads = readsOf(page, /\/api\/v1\/stocktakes\/[^/]+$/);
   await refuseOnce(page, "**/api/v1/stocktakes/*/finish", 409);
   await end.getByRole("button", { name: "Так, завершити" }).click();
   await expect(
     end.getByText(
-      "Інвентаризацію не завершено: дані складу змінилися — перегляньте їх і спробуйте ще раз.",
+      "Інвентаризацію не завершено: дані складу змінилися — перегляньте їх.",
       { exact: true },
     ),
   ).toBeVisible();

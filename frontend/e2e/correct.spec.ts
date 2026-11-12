@@ -185,10 +185,7 @@ test("a stocktake states what the shelf holds, and the ledger takes the differen
   await refuseOnce(page, "**/api/v1/inventory/adjustments", 422);
   await record(page, "−2").click();
   await expect(
-    page.getByText(
-      "Перевірте кількість та спробуйте ще раз. Нічого не записано.",
-      { exact: true },
-    ),
+    page.getByText("Перевірте кількість. Нічого не записано.", { exact: true }),
   ).toBeVisible();
   // Counted again, as the form asks after a refusal.
   await expect(page.getByLabel("Фактично, шт.")).toHaveValue("");
@@ -197,9 +194,17 @@ test("a stocktake states what the shelf holds, and the ledger takes the differen
   await record(page, "−2").click();
   await expect(
     page.getByText(
-      "Облік змінився — перерахуйте товар і спробуйте ще раз. Нічого не записано.",
+      "Облік змінився — перерахуйте товар і введіть кількість ще раз. Нічого не записано.",
       { exact: true },
     ),
+  ).toBeVisible();
+  // A request naming nothing: what was not done, then what to check —
+  // never «спробуйте ще раз» (owner, В-П1 (б)).
+  await page.getByLabel("Фактично, шт.").fill(String(system - 2));
+  await refuseOnce(page, "**/api/v1/inventory/adjustments", 404);
+  await record(page, "−2").click();
+  await expect(
+    page.getByText("Перевірте кількість. Нічого не записано.", { exact: true }),
   ).toBeVisible();
   // «Брак» changes only through returns and its own section: said, never a
   // count to make again (owner decision, 2026-10-01).
@@ -238,13 +243,13 @@ test("a stocktake states what the shelf holds, and the ledger takes the differen
   await expect(here(page)).toHaveText(String(system - 2));
   // The count travels as a change *and* the balance it was worked out from:
   // the refused one first, then the same change as a new command.
-  expect(sent).toHaveLength(4);
-  expect(sent[3]?.command_id).not.toBe(sent[0]?.command_id);
+  expect(sent).toHaveLength(5);
+  expect(sent[4]?.command_id).not.toBe(sent[0]?.command_id);
   expect({ ...sent[0], command_id: null }).toEqual({
-    ...sent[3],
+    ...sent[4],
     command_id: null,
   });
-  expect(sent[3]).toMatchObject({
+  expect(sent[4]).toMatchObject({
     location_id: fixture.count_location_id,
     size_id: fixture.size_id,
     quantity_delta: -2,
