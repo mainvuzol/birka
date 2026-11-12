@@ -729,14 +729,20 @@ export function readsOf(page: Page, path: RegExp): () => number {
  */
 export async function sellsFrom(page: Page, locationId: string): Promise<void> {
   await page.route("**/api/v1/stock-locations?**", async (route) => {
-    const response = await route.fetch();
-    const rows = (await response.json()) as { id: string }[];
-    await route.fulfill({
-      response,
-      json: rows.map((row) =>
-        row.id === locationId ? row : { ...row, can_sell: false },
-      ),
-    });
+    try {
+      const response = await route.fetch();
+      const rows = (await response.json()) as { id: string }[];
+      await route.fulfill({
+        response,
+        json: rows.map((row) =>
+          row.id === locationId ? row : { ...row, can_sell: false },
+        ),
+      });
+    } catch (error) {
+      // A reload while it was read let the read go: nothing is left to
+      // answer (a journey that reloads the till, CI flake 2026-11-12).
+      if (!String(error).includes("Route is already handled")) throw error;
+    }
   });
 }
 

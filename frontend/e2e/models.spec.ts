@@ -1055,7 +1055,9 @@ test("a similar name refused is not left over the queue after another tab", asyn
   // and goes with it.
   await leaveNewModel(sheet);
   await expect(refused).toHaveCount(0);
-  await page.getByRole("button", { name: "← До черги перевірки" }).click();
+  await page
+    .getByRole("button", { name: "Назад до «Перевірка каталогу»" })
+    .click();
   await page.getByRole("button", { name: "Продаж", exact: true }).click();
   await section(page, "Перевірка каталогу");
   await expect(
@@ -1097,7 +1099,9 @@ test("a similar name refused on one proposal is not answered on another", async 
   await addModel(sheet).click();
   await expect(sheet.getByText("Схожа назва вже є")).toBeVisible();
   await leaveNewModel(sheet);
-  await page.getByRole("button", { name: "← До черги перевірки" }).click();
+  await page
+    .getByRole("button", { name: "Назад до «Перевірка каталогу»" })
+    .click();
   sheet = await createFrom(page, second);
   await expect(sheet.getByLabel("Назва моделі", { exact: true })).toBeVisible();
   // Nothing of this proposal was sent: nothing here says its words are like
@@ -1580,7 +1584,9 @@ test("a kept creation refused stays across tabs, answered on its own proposal al
   // attempt: not left behind with the form, nor with the tab.
   await leaveNewModel(sheet);
   await expect(kept).toBeVisible();
-  await page.getByRole("button", { name: "← До черги перевірки" }).click();
+  await page
+    .getByRole("button", { name: "Назад до «Перевірка каталогу»" })
+    .click();
   await expect(kept).toBeVisible();
   await page.getByRole("button", { name: "Продаж", exact: true }).click();
   await section(page, "Перевірка каталогу");
@@ -1598,7 +1604,9 @@ test("a kept creation refused stays across tabs, answered on its own proposal al
   ).toHaveCount(0);
   // Its own proposal, the words it sent: answered there.
   await leaveNewModel(sheet);
-  await page.getByRole("button", { name: "← До черги перевірки" }).click();
+  await page
+    .getByRole("button", { name: "Назад до «Перевірка каталогу»" })
+    .click();
   sheet = await createFrom(page, first);
   await fillProduct(sheet, name, colour.typo);
   await expect(page.getByText("Схожа назва вже є")).toBeVisible();

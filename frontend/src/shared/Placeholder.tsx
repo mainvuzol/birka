@@ -12,6 +12,7 @@ import type { JSX, ReactNode } from "react";
  * list draws it; a store's tag 96;
  * a field 52 under its label; a row of size cells 60; a row of choices;
  * rows in their own list's shape, where a row is not a list's 64;
+ * a size's steps 44 high; a history's thread under its label;
  * and the model tags with their cells, as before.
  */
 export function Placeholder({
@@ -30,6 +31,8 @@ export function Placeholder({
   chips = 0,
   className,
   rowShape,
+  steps = 0,
+  thread,
 }: {
   said: string;
   /** The search field's place, above the tags. */
@@ -68,8 +71,18 @@ export function Placeholder({
   className?: string;
   /** The rows' own class and their list's, where a row is not a list's 64:
    * a supplier's 56 over a line, a return's card in «Зарахувати
-   * повернення» (money task list after stage 2, P1-3). */
-  rowShape?: { list: string; row: string };
+   * повернення» (money task list after stage 2, P1-3). Its meta's line
+   * gone (`meta: false`) or a sticker's place in it (`pill`): a found
+   * model's one line, a proposal's sticker under its words (goods task list
+   * after stage 2, P2-2). */
+  rowShape?: { list: string; row: string; meta?: boolean; pill?: boolean };
+  /** Rows of a size's steps, 44 high — its letters, «−», the count, «+» —
+   * two a line (spec §6.13): «Прийшов товар»'s sizes (goods task list
+   * after stage 2, P2-2). */
+  steps?: number;
+  /** A history's thread under its label (spec §6.21): its days, its round
+   * eyelets, a line and its meta each — «Інвентаризація»'s «Попередні». */
+  thread?: { label: string; rows: number };
 }): JSX.Element {
   const status = (
     <p role="status" className="visually-hidden">
@@ -89,6 +102,53 @@ export function Placeholder({
               </span>
             </div>
           ))}
+        </div>
+      </>
+    );
+  if (steps > 0)
+    return (
+      <>
+        {status}
+        <div className="placeholder" aria-hidden="true">
+          <div className="receive-sizes">
+            {Array.from({ length: steps }, (_, n) => (
+              <div className="receive-size" key={n}>
+                <span className="skeleton skeleton-code" />
+                <span className="skeleton skeleton-step" />
+                <span className="skeleton skeleton-step" />
+                <span className="skeleton skeleton-step" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </>
+    );
+  if (thread !== undefined)
+    return (
+      <>
+        {status}
+        <div className="placeholder" aria-hidden="true">
+          <p className="t-label customer-history-title">
+            <span className="skeleton-line">
+              <span>{thread.label}</span>
+            </span>
+          </p>
+          <div className="timeline">
+            {Array.from({ length: thread.rows }, (_, n) => (
+              <div className="timeline-row" key={n}>
+                <span className="timeline-day">
+                  <span className="skeleton-line">
+                    <span>00.00</span>
+                  </span>
+                </span>
+                <span className="timeline-node skeleton" />
+                <span className="timeline-main">
+                  <span className="skeleton skeleton-name" />
+                  <span className="skeleton skeleton-meta" />
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
       </>
     );
@@ -151,7 +211,13 @@ export function Placeholder({
                 {avatar && !debts && <span className="avatar skeleton" />}
                 <span className="sale-main">
                   <span className="skeleton skeleton-name" />
-                  <span className="skeleton skeleton-meta" />
+                  {rowShape?.pill ? (
+                    <span className="skeleton skeleton-pill" />
+                  ) : (
+                    rowShape?.meta !== false && (
+                      <span className="skeleton skeleton-meta" />
+                    )
+                  )}
                 </span>
                 {debts && <span className="skeleton skeleton-owed" />}
               </div>

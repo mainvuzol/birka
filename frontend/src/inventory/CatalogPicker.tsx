@@ -1,18 +1,28 @@
 import { useEffect, useRef, useState } from "react";
 import type { JSX } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
+import type { InfiniteData } from "@tanstack/react-query";
 import { api } from "@/shared/api";
 import { SearchField } from "@/shared/SearchField";
 import { hideKeyboard } from "@/shared/telegram";
 import { Stub } from "@/shared/Stub";
 import { visible } from "@/shared/visible";
 import { Unread } from "@/shared/Unread";
+import { Placeholder } from "@/shared/Placeholder";
+import { useNextPageFailed } from "@/shared/nextPage";
 import { NewModel } from "@/catalog/NewModel";
 import { useCatalogCommand, useCatalogJournal } from "@/catalog/commands";
 import type { Store } from "@/orders/types";
 import type { ReceivableVariant } from "./receiptTypes";
 
 const pageSize = 20;
+/** The farthest the server reads from (`offset` ≤ 10 000). */
+const LAST_OFFSET = 10000;
+
+interface FoundPage {
+  items: ReceivableVariant[];
+  has_more: boolean;
+}
 
 /** «Модель додано: … Кількість впишіть тут.»: a model added from an empty
  * search, said where its screen chose it (stage 2, goods task list, P0-1). */
@@ -81,7 +91,6 @@ export function CatalogPicker({
   const [asked, setAsked] = useState<string | null>(() =>
     askable(initialSearch),
   );
-  const [offset, setOffset] = useState(0);
   const [adding, setAdding] = useState<string | null>(null);
   // The words a model was added for: their empty answer is not said again,
   // nor its button offered (review).
@@ -91,22 +100,58 @@ export function CatalogPicker({
     const wanted = askable(search);
     if (wanted === asked) return;
     const wait = window.setTimeout(() => {
-      setOffset(0);
       setAsked(wanted);
     }, PAUSE);
     return () => {
       window.clearTimeout(wait);
     };
   }, [search, asked]);
-  const variants = useQuery({
-    queryKey: ["receivable-variants", scopeKey, store.id, asked, offset],
-    queryFn: () =>
-      api<{ items: ReceivableVariant[]; has_more: boolean }>(
-        `/catalog/receivable-variants?store_id=${store.id}&query=${encodeURIComponent(asked ?? "")}&limit=${String(pageSize)}&offset=${String(offset)}`,
+  // «Ще товари» adds the next page under what was found, as the till's list
+  // does (goods task list after stage 2, P2-1): «Попередні» is gone.
+  const variants = useInfiniteQuery({
+    queryKey: ["receivable-variants", scopeKey, store.id, asked],
+    queryFn: ({ pageParam }) =>
+      api<FoundPage>(
+        `/catalog/receivable-variants?store_id=${store.id}&query=${encodeURIComponent(asked ?? "")}&limit=${String(pageSize)}&offset=${String(pageParam)}`,
         token,
       ),
+    initialPageParam: 0,
+    getNextPageParam: (last, pages) =>
+      last.has_more && pages.length * pageSize <= LAST_OFFSET
+        ? pages.length * pageSize
+        : undefined,
     enabled: asked !== null,
     retry: false,
+    // A search typed again keeps what was found in place until the new one
+    // comes, as the till's list does (review): the same store's, never
+    // another's.
+    placeholderData: (
+      previous: InfiniteData<FoundPage, number> | undefined,
+      before,
+    ) =>
+      before?.queryKey[1] === scopeKey && before.queryKey[2] === store.id
+        ? previous
+        : undefined,
+  });
+  const found = variants.data?.pages.flatMap((page) => page.items) ?? [];
+  // What could not be read (as the till's list, sale P1-4): never read, the
+  // plate in the list's place; read again and refused, the plate over what
+  // was found; a next page, the plate where «Ще товари» stood (review).
+  const nextFailed = useNextPageFailed(variants);
+  const neverRead = variants.error !== null && variants.data === undefined;
+  const readAgainFailed =
+    variants.error !== null && variants.data !== undefined && !nextFailed;
+  // «Ще товари» pressed: the cursor goes to the first model it brings.
+  const [focusAt, setFocusAt] = useState<number | null>(null);
+  const shelf = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (focusAt === null) return;
+    const next =
+      shelf.current?.querySelectorAll<HTMLElement>(".catalog-row")[focusAt];
+    if (next) {
+      next.focus();
+      setFocusAt(null);
+    }
   });
   const journal = useCatalogJournal((state) => state.key);
   const kept = useCatalogCommand((state) => state.pending !== null);
@@ -126,9 +171,23 @@ export function CatalogPicker({
         inputRef={field}
       />
       {asked !== null &&
-        (variants.isPending ? (
-          <p role="status">Шукаємо…</p>
-        ) : variants.error ? (
+        // Nothing found before, and the new search not read yet: never the
+        // old «Нічого не знайшли» under the new words.
+        (variants.isPending ||
+        (variants.isPlaceholderData && found.length === 0) ? (
+          // Rows of what is found in grey, one line each (goods task list
+          // after stage 2, P2-2); a screen reader hears it is searched.
+          <Placeholder
+            said="Шукаємо…"
+            rows={3}
+            day={false}
+            rowShape={{
+              list: "catalog-found",
+              row: "catalog-row",
+              meta: false,
+            }}
+          />
+        ) : neverRead ? (
           <Unread
             error={variants.error}
             retry={() => {
@@ -137,34 +196,42 @@ export function CatalogPicker({
           />
         ) : (
           <>
-            {variants.data.items.length === 0 &&
-              offset === 0 &&
-              asked !== addedFor && (
-                <div className="catalog-none">
-                  <p>Нічого не знайшли за «{visible(asked)}»</p>
-                  {mayAdd && (
-                    <button
-                      type="button"
-                      className="quiet"
-                      disabled={kept}
-                      onClick={() => {
-                        hideKeyboard();
-                        // The words as typed, unless more came since.
-                        setAdding(search.trim() === asked ? search : asked);
-                      }}
-                    >
-                      Додати нову модель «{visible(asked)}»
-                    </button>
-                  )}
-                </div>
-              )}
-            {variants.data.items.length > 0 && (
+            {readAgainFailed && (
+              <Unread
+                error={variants.error}
+                held={variants.isFetching}
+                retry={() => {
+                  void variants.refetch();
+                }}
+              />
+            )}
+            {found.length === 0 && asked !== addedFor && (
+              <div className="catalog-none">
+                <p>Нічого не знайшли за «{visible(asked)}»</p>
+                {mayAdd && (
+                  <button
+                    type="button"
+                    className="quiet"
+                    disabled={kept}
+                    onClick={() => {
+                      hideKeyboard();
+                      // The words as typed, unless more came since.
+                      setAdding(search.trim() === asked ? search : asked);
+                    }}
+                  >
+                    Додати нову модель «{visible(asked)}»
+                  </button>
+                )}
+              </div>
+            )}
+            {found.length > 0 && (
               <div
+                ref={shelf}
                 className="catalog-found"
                 role="radiogroup"
                 aria-label="Знайдені товари"
               >
-                {variants.data.items.map((item) => (
+                {found.map((item) => (
                   <button
                     type="button"
                     role="radio"
@@ -183,29 +250,35 @@ export function CatalogPicker({
                 ))}
               </div>
             )}
-            {(offset > 0 || variants.data.has_more) && (
-              <div className="toolbar">
+            {/* A page that failed: its retry alone, where «Ще товари»
+                stood. */}
+            {nextFailed ? (
+              <Unread
+                error={variants.error}
+                held={variants.isFetching}
+                retry={() => {
+                  void variants.fetchNextPage();
+                }}
+              />
+            ) : (
+              variants.hasNextPage && (
                 <button
                   type="button"
                   className="quiet"
-                  disabled={offset === 0}
+                  disabled={
+                    variants.isFetching ||
+                    variants.isPlaceholderData ||
+                    readAgainFailed
+                  }
                   onClick={() => {
-                    setOffset(Math.max(0, offset - pageSize));
-                  }}
-                >
-                  Попередні
-                </button>
-                <button
-                  type="button"
-                  className="quiet"
-                  disabled={!variants.data.has_more}
-                  onClick={() => {
-                    setOffset(offset + pageSize);
+                    // Kept until the page is read: after its retry too.
+                    setFocusAt(found.length);
+                    void variants.fetchNextPage();
                   }}
                 >
                   Ще товари
                 </button>
-              </div>
+              )
             )}
           </>
         ))}

@@ -445,7 +445,7 @@ test("a payment kept on the phone holds S21's «←», and Telegram's «Наза
   expect(await backs(page)).toEqual([true, false]);
 });
 
-test("three ways back on one screen: Telegram's «Назад» is the inner one — the sheet «Нова модель», «← До черги перевірки», then «← Ще»", async ({
+test("three ways back on one screen: Telegram's «Назад» is the inner one — the sheet «Нова модель», «← Перевірка каталогу», then «← Ще»", async ({
   page,
 }) => {
   await hearBack(page);
@@ -476,7 +476,9 @@ test("three ways back on one screen: Telegram's «Назад» is the inner one 
   // The sheet first: closed, its proposal is the screen.
   await pressBack(page);
   await expect(sheet).toHaveCount(0);
-  const inner = page.getByRole("button", { name: "← До черги перевірки" });
+  const inner = page.getByRole("button", {
+    name: "Назад до «Перевірка каталогу»",
+  });
   await expect(inner).toBeVisible();
 
   await pressBack(page);
@@ -490,7 +492,9 @@ test("three ways back on one screen: Telegram's «Назад» is the inner one 
   expect(await backs(page)).toEqual([true, false, true]);
 
   await pressBack(page);
-  await expect(page.getByRole("heading", { name: "Ще", level: 1 })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Ще", level: 1 }),
+  ).toBeVisible();
   await expect.poll(() => backs(page)).toEqual([true, false, true, false]);
 });
 

@@ -45,7 +45,7 @@ import type {
 import { BackToMore } from "@/shared/More";
 import type { MoreBack } from "@/shared/More";
 import { Back } from "@/shared/Back";
-import { BlankTag } from "@/shared/BlankTag";
+import { Empty } from "@/shared/Empty";
 import { Eyelet } from "@/shared/Eyelet";
 import { Icon } from "@/shared/Icon";
 import { ModeSwitch } from "@/shared/ModeSwitch";
@@ -244,9 +244,14 @@ export function Openings({
       />
       <section className="openings">
         {lists.isPending ? (
-          <p role="status">
-            {awaited ? "Завантажуємо список…" : "Завантажуємо списки…"}
-          </p>
+          // The lists' tags in grey, where they come (goods task list after
+          // stage 2, P2-2); «Сьогодні»'s list awaited, its big tag over its
+          // lines (review).
+          awaited ? (
+            <OpeningPlaceholder said="Завантажуємо список…" shape="list" />
+          ) : (
+            <OpeningPlaceholder said="Завантажуємо списки…" shape="lists" />
+          )
         ) : lists.error ? (
           <Unread
             error={lists.error}
@@ -255,13 +260,12 @@ export function Openings({
             }}
           />
         ) : lists.data.items.length === 0 ? (
-          // The five lines of what a list is: one, on a blank tag (P0-6).
-          <BlankTag>
-            <p className="t-row opening-empty">
-              Списки із зошита — рядок за рядком. Поки список чекає, склад не
-              рухається.
-            </p>
-          </BlankTag>
+          // What a list is, on the blank tag of every empty place (P0-6;
+          // goods task list after stage 2, P2-2): its line, its meta.
+          <Empty
+            title="Списки із зошита — рядок за рядком."
+            meta="Поки список чекає, склад не рухається."
+          />
         ) : (
           <div className="tags opening-lists">
             {lists.data.items.map((list) => (
@@ -356,6 +360,70 @@ function ListTag({
         </div>
       </div>
     </article>
+  );
+}
+
+/**
+ * «Початкові залишки» being read (goods task list after stage 2, P2-2;
+ * review): three tags in grey, each the shape of the one to come — a
+ * list's eyelet, its name and meta, its sticker and «Відкрити»; a line's
+ * eyelet, its words, its meta and its verb — in the lists' or the lines'
+ * own place. A list awaited from «Сьогодні»: its big tag over its lines.
+ * The words to a screen reader alone.
+ */
+function OpeningPlaceholder({
+  said,
+  shape,
+}: {
+  said: string;
+  shape: "lists" | "list" | "lines";
+}): JSX.Element {
+  return (
+    <>
+      <p role="status" className="visually-hidden">
+        {said}
+      </p>
+      <div className="placeholder" aria-hidden="true">
+        {shape === "list" && (
+          <div className="tag-hero tag-outline opening-hero">
+            <div className="opening-hero-in">
+              <span className="skeleton-line opening-hero-place">
+                <span>Склад</span>
+              </span>
+              <span className="skeleton skeleton-pill opening-state" />
+              <span className="skeleton-line t-meta">
+                <span>перелічено</span>
+              </span>
+            </div>
+          </div>
+        )}
+        <div
+          className={`tags ${shape === "lists" ? "opening-lists" : "opening-lines"}`}
+        >
+          {[0, 1, 2].map((n) => (
+            <div className="today-tag tag-row tag-outline" key={n}>
+              <div className="today-tag-body">
+                <span className="today-tag-eyelet skeleton" />
+                <span className="skeleton-line t-row">
+                  <span>Список</span>
+                </span>
+                <span className="skeleton-line t-meta">
+                  <span>рядків</span>
+                </span>
+                {shape === "lists" ? (
+                  <div className="opening-tag-foot">
+                    <span className="skeleton skeleton-pill" />
+                    <span className="skeleton skeleton-verb" />
+                  </div>
+                ) : (
+                  <span className="skeleton skeleton-verb" />
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -1553,7 +1621,7 @@ function ListView({
           />
         )}
         {lines.isPending ? (
-          <p role="status">Завантажуємо рядки…</p>
+          <OpeningPlaceholder said="Завантажуємо рядки…" shape="lines" />
         ) : lines.error && items.length === 0 ? null : items.length === 0 ? (
           <p>Тут рядків немає.</p>
         ) : (

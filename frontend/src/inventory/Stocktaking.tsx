@@ -3,6 +3,7 @@ import type { JSX } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/shared/api";
 import { Unread } from "@/shared/Unread";
+import { Placeholder } from "@/shared/Placeholder";
 import { BackToMore } from "@/shared/More";
 import type { MoreBack } from "@/shared/More";
 import { ScreenHeader } from "@/shared/ScreenHeader";
@@ -157,7 +158,9 @@ export function Stocktaking({
           </p>
         )}
         {locations.isPending ? (
-          <p role="status">Завантажуємо склади…</p>
+          // The warehouses' choices in grey, where they come (goods task
+          // list after stage 2, P2-2).
+          <Placeholder said="Завантажуємо склади…" chips={2} />
         ) : locations.error ? (
           <Unread
             error={locations.error}

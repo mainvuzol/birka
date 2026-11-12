@@ -24,6 +24,7 @@ import { Keypad } from "@/shared/Keypad";
 import { ModeSwitch } from "@/shared/ModeSwitch";
 import { CARRIED_TAP, usePanelRoom } from "@/shared/panel";
 import { Placeholder } from "@/shared/Placeholder";
+import { Empty } from "@/shared/Empty";
 import { ScreenHeader } from "@/shared/ScreenHeader";
 import { Sheet } from "@/shared/Sheet";
 import { Stub } from "@/shared/Stub";
@@ -368,7 +369,12 @@ export function Stocktakes({
     // task list, P1-5).
     <section aria-label="Інвентаризація складу" className="stocktakes">
       {list.isPending ? (
-        <p role="status">Завантажуємо інвентаризації…</p>
+        // «Попередні»'s thread in grey (goods task list after stage 2,
+        // P2-2): what a warehouse's stocktakes most often are.
+        <Placeholder
+          said="Завантажуємо інвентаризації…"
+          thread={{ label: "Попередні", rows: 3 }}
+        />
       ) : list.isError ? (
         <Unread
           error={list.error}
@@ -709,7 +715,29 @@ function Differences({
     stocktakeId,
     "differences",
   );
-  if (pages.isPending) return <p role="status">Завантажуємо розбіжності…</p>;
+  if (pages.isPending)
+    // Its lines of differences in grey, as many as will be shown — five at
+    // most, folded — in their own lines' height (goods task list after
+    // stage 2, P2-2; review).
+    return (
+      <>
+        <p role="status" className="visually-hidden">
+          Завантажуємо розбіжності…
+        </p>
+        <ul className="stocktake-differences placeholder" aria-hidden="true">
+          {Array.from(
+            { length: Math.max(1, Math.min(total, FOLDED)) },
+            (_, n) => (
+              <li key={n}>
+                <span className="skeleton-line">
+                  <span>Пальто кокон графіт · M — −1 шт.</span>
+                </span>
+              </li>
+            ),
+          )}
+        </ul>
+      </>
+    );
   if (pages.isError)
     return (
       <Unread
@@ -1125,11 +1153,16 @@ export function Stocktake({
         ) : list.isError ? (
           <Unread error={list.error} retry={reread} />
         ) : items.length === 0 ? (
-          <p className="stocktake-empty">
-            {mode === "uncounted"
-              ? "Усі позиції з залишком пораховано."
-              : "Ще нічого не пораховано."}
-          </p>
+          // Nothing: the blank tag and its one line (goods task list after
+          // stage 2, P2-2).
+          <Empty
+            className="stocktake-empty"
+            title={
+              mode === "uncounted"
+                ? "Усі позиції з залишком пораховано."
+                : "Ще нічого не пораховано."
+            }
+          />
         ) : mode === "uncounted" ? (
           <div className="tags">
             {cards.map((card) => (

@@ -2,9 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import { BackToMore } from "@/shared/More";
 import type { MoreBack } from "@/shared/More";
 import type { JSX } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, errorText, inOwnWords } from "@/shared/api";
 import { Unread } from "@/shared/Unread";
+import { Placeholder } from "@/shared/Placeholder";
 import { Eyelet, RecordedMark } from "@/shared/Eyelet";
 import { Icon } from "@/shared/Icon";
 import { usePanelRoom } from "@/shared/panel";
@@ -123,6 +124,7 @@ export function Receive({
   const [supplierId, setSupplierId] = useState("");
   const supplierDraft = useState(noSupplierDraft);
   const keepsSuppliers = store.permissions.includes("supplier:debt");
+  const cache = useQueryClient();
   const [notes, setNotes] = useState("");
   const [draft, setDraft] = useState<Draft[]>([]);
   const [commandId, setCommandId] = useState(() => crypto.randomUUID());
@@ -338,6 +340,13 @@ export function Receive({
     });
     if (outcome.kind === "done") {
       buzz("success");
+      // What the stock showed before is gone: a model's grid, «Залишки»,
+      // opened again — by «←» from the result, say — read it anew, never
+      // the count before the delivery (goods task list after stage 2,
+      // P2-3); the till's search reads it again, as after a correction
+      // (review).
+      void cache.resetQueries({ queryKey: ["inventory-stock"] });
+      void cache.invalidateQueries({ queryKey: ["sale-stock"] });
       setReceived({ receipt: outcome.result, names: all, warehouse });
       setDraft([]);
       setNotes("");
@@ -390,9 +399,13 @@ export function Receive({
     );
     return (
       <section className="receipt receive-done">
+        {/* The form's «←» — «← Ще», «← {модель}» — and Telegram's «Назад»
+            stay on its result (goods task list after stage 2, P2-3). */}
         <ScreenHeader
           ref={done}
           focusable
+          back={back && <BackToMore back={back} />}
+          pushed={false}
           className="result-title t-sheet"
           title={
             <>
@@ -477,7 +490,11 @@ export function Receive({
         <fieldset disabled={blocked || working}>
           <legend className="visually-hidden">Поставка</legend>
           {locations.isPending ? (
-            <p role="status">Завантажуємо склади…</p>
+            <Placeholder
+              said="Завантажуємо склади…"
+              chips={2}
+              className="receive-place"
+            />
           ) : locations.data === undefined ? (
             <Unread
               error={locations.error}
@@ -560,7 +577,7 @@ export function Receive({
                 blocked={blocked}
               />
               {sizes.isPending ? (
-                <p role="status">Завантажуємо розміри…</p>
+                <Placeholder said="Завантажуємо розміри…" steps={4} />
               ) : sizes.data === undefined ? (
                 <Unread
                   error={sizes.error}

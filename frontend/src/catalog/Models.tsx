@@ -268,6 +268,35 @@ function ModelSearch({
   );
 }
 
+/**
+ * A model being read (goods task list after stage 2, P2-2): its hero tag in
+ * its place — the eyelet, the name's line 42 in grey, ⋯'s place beside it —
+ * under «← Моделі», which stands already. A screen reader hears that it is
+ * read.
+ */
+function ModelPlaceholder(): JSX.Element {
+  return (
+    <>
+      <p role="status" className="visually-hidden">
+        Завантажуємо модель…
+      </p>
+      <section className="model-screen placeholder" aria-hidden="true">
+        <div className="model-hang">
+          <div className="tag-hero tag-outline">
+            <div className="model-hero">
+              <span className="hero-eyelet" />
+              <div className="model-hero-head">
+                <span className="skeleton skeleton-title" />
+                <span className="debt-more" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </>
+  );
+}
+
 /** The button a screen's MainButton is outside Telegram: its words, or its
  * ring while it is asked. */
 function Mimic({
@@ -1337,7 +1366,7 @@ export function Models({
           }}
         />
       </div>
-      {selected && card.isPending && <p role="status">Завантажуємо модель…</p>}
+      {selected && card.isPending && <ModelPlaceholder />}
       {selected && card.isError && (
         <Unread
           error={card.error}

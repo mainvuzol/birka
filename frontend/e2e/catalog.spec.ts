@@ -704,7 +704,9 @@ test("lost product rejection can be explicitly cancelled without leaving blocked
   await expect(
     page.getByText("Причина відхилення:", { exact: false }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "← До черги перевірки" }).click();
+  await page
+    .getByRole("button", { name: "Назад до «Перевірка каталогу»" })
+    .click();
   await expect(
     page.getByRole("button", { name: "Нова пропозиція", exact: true }),
   ).toBeEnabled();
@@ -737,7 +739,9 @@ test("cancelling a lost committed creation shows its saved product", async ({
     }),
   ).toBeVisible();
   await expect(page.getByRole("status")).toHaveText(`Модель додано: ${name}.`);
-  await page.getByRole("button", { name: "← До черги перевірки" }).click();
+  await page
+    .getByRole("button", { name: "Назад до «Перевірка каталогу»" })
+    .click();
   await expect(
     page.getByRole("button", { name: "Нова пропозиція", exact: true }),
   ).toBeEnabled();
@@ -780,7 +784,9 @@ test("creation cancellation accepts another reviewer's terminal rejection", asyn
       exact: true,
     }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "← До черги перевірки" }).click();
+  await page
+    .getByRole("button", { name: "Назад до «Перевірка каталогу»" })
+    .click();
   await expect(
     page.getByRole("button", { name: "Нова пропозиція", exact: true }),
   ).toBeEnabled();

@@ -2,6 +2,7 @@ import {
   test,
   expect,
   expectEmpty,
+  holdReads,
   menu,
   openStore,
   section,
@@ -1450,10 +1451,23 @@ test("each verb opens its section, and its «←» comes back to «Сьогод�
   }
   // The one list waiting for approval: the verb opens it, not the lists
   // (stage 2, goods task list, P0-6). A step back are the lists, and from
-  // them «← Сьогодні».
+  // them «← Сьогодні». Read slowly, the list's big tag over its lines in
+  // grey, never the lists' tags (goods task list after stage 2, P2-2;
+  // review).
+  const listRead = await holdReads(page, "snapshots");
   await waiting(page)
     .getByRole("button", { name: "Переглянути й затвердити", exact: true })
     .click();
+  const awaited = page.locator(".openings .placeholder");
+  await expect(awaited.locator(".opening-hero")).toHaveCount(1);
+  await expect(awaited.locator(".tags.opening-lines > .today-tag")).toHaveCount(
+    3,
+  );
+  await expect(awaited.locator(".tags.opening-lists")).toHaveCount(0);
+  await expect(
+    page.getByRole("status").filter({ hasText: "Завантажуємо список…" }),
+  ).toHaveClass(/visually-hidden/);
+  listRead();
   await expect(
     page.getByRole("heading", { name: "Зошит", exact: true }),
   ).toBeVisible();
