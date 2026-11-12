@@ -9,7 +9,7 @@ import {
   tillWays,
   expectEmpty,
 } from "./fixtures";
-import type { Locator, Page } from "@playwright/test";
+import type { Locator, Page, Route } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 
@@ -745,25 +745,26 @@ test("the owner's write-off behind the ⋯, at the end of a long history, asks w
   expect(sent).toEqual([expect.objectContaining({ reason: "виїхала" })]);
 });
 
+// What was not recorded, then the step — never «спробуйте ще раз» on a
+// write (owner, 2026-11-11, В-П1 (б); audit after stage 2, sale P2-5); a
+// refusal naming nothing at all, what to check, as a 422.
 for (const [kind, status, said] of [
   [
     "payment",
     409,
-    "Внесок не записано. Дані боргу змінилися, поки ви працювали: перевірте залишок і спробуйте ще раз.",
+    "Внесок не записано. Дані боргу змінилися, поки ви працювали: перевірте залишок.",
   ],
-  ["payment", 422, "Внесок не записано. Перевірте суму й спробуйте ще раз."],
+  ["payment", 422, "Внесок не записано. Перевірте суму."],
+  ["payment", 400, "Внесок не записано. Перевірте суму."],
   [
     "write-off",
     409,
-    "Списання не записано. Дані боргу змінилися, поки ви працювали: перевірте залишок і спробуйте ще раз.",
+    "Списання не записано. Дані боргу змінилися, поки ви працювали: перевірте залишок.",
   ],
-  [
-    "write-off",
-    422,
-    "Списання не записано. Перевірте причину й спробуйте ще раз.",
-  ],
+  ["write-off", 422, "Списання не записано. Перевірте причину."],
+  ["write-off", 400, "Списання не записано. Перевірте причину."],
 ] as const)
-  test(`a ${kind} refused with nothing more than a ${String(status)} says what was not recorded in the debt's words, never an order's (P2-2)`, async ({
+  test(`a ${kind} refused with nothing more than a ${String(status)} says what was not recorded in the debt's words, never an order's, nor «спробуйте ще раз» (P2-2; audit after stage 2, sale P2-5)`, async ({
     page,
   }) => {
     const one = debt();
@@ -774,7 +775,12 @@ for (const [kind, status, said] of [
         await route.fulfill({
           status,
           json: {
-            code: status === 409 ? "CONFLICT" : "VALIDATION_ERROR",
+            code:
+              status === 409
+                ? "CONFLICT"
+                : status === 422
+                  ? "VALIDATION_ERROR"
+                  : "BAD_REQUEST",
             message: "Refused",
             details: {},
           },
@@ -788,6 +794,7 @@ for (const [kind, status, said] of [
       await panel(page).getByRole("button", { name: "Готівка" }).click();
     } else await writeOff(page, "1 234,56 грн");
     await expect(page.getByRole("alert")).toHaveText(said);
+    await expect(page.getByRole("alert")).not.toContainText(/спробуйте/i);
     // «Замовлення»'s «+» aside: the debt never says it.
     await expect(page.locator(".debt-detail")).not.toContainText("замовлення");
   });
@@ -1609,6 +1616,274 @@ test.describe("«Продаж» › «Внесок»: a payment on a debt from t
     await expect(
       page.getByRole("navigation", { name: "Розділи" }),
     ).toHaveCount(0);
+  });
+
+  /** Her two debts here — the coat, 2 000 owed; the scarf, 500 — as the
+   * till's list and the sheet's read by her phone answer them; `byPhone`
+   * answers the sheet's own read instead, once given, and the list no
+   * longer has her once `listed` says so. */
+  async function serveTwo(
+    page: Page,
+    one: Debt,
+    byPhone?: (route: Route) => Promise<void>,
+    listed: () => boolean = () => true,
+  ): Promise<void> {
+    const other = aside();
+    await page.route("**/api/v1/credits/customers?**", async (route) => {
+      const url = new URL(route.request().url());
+      if (url.searchParams.get("store_id") !== fixture.store_id) {
+        await route.fulfill({ json: { items: [], has_more: false } });
+        return;
+      }
+      if (byPhone && url.searchParams.get("limit") === "5") {
+        await byPhone(route);
+        return;
+      }
+      if (!listed()) {
+        await route.fulfill({ json: { items: [], has_more: false } });
+        return;
+      }
+      await route.fulfill({
+        json: {
+          items: [
+            {
+              ...customerOf(one, "2500.00"),
+              open_debts: 2,
+              credits: [one, other],
+            },
+          ],
+          has_more: false,
+        },
+      });
+    });
+  }
+
+  test("her two debts at the till: «На який борг вносить?» a sheet over the list, as on her card — four taps, «Внесок», her row, a debt, a way; who and what she owes here one line under its title; none chosen; «← До боргів» back to the list (audit after stage 2, sale P2-4)", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 360, height: 640 });
+    const one = coat();
+    const sent = await serve(page, one, (body) => ({
+      ...one,
+      paid: (Number(one.paid) + Number(body.amount)).toFixed(2),
+      owed: "500.00",
+    }));
+    await serveTwo(page, one);
+    // One: «Внесок».
+    await atTheTill(page);
+    const her = page.getByRole("button", {
+      name: /^Відкрити борг: Оксана Петренко,/,
+    });
+    // Two: her row.
+    await her.click();
+    const which = page.getByRole("dialog", { name: "На який борг вносить?" });
+    await expect(which).toHaveAttribute("data-ready", "");
+    // Over the list, never instead of it: the till stays under it.
+    await expect(
+      page.getByRole("heading", { name: "Продаж", level: 1 }),
+    ).toBeAttached();
+    await expect(her).toBeAttached();
+    // Who, and what she owes this store in all — the server's sum — one
+    // line, read with the title; no card of its own, no phone to call:
+    // she is at the counter.
+    const line = "Оксана Петренко · винні всього 2 500,00 грн";
+    await expect(which.locator(".debts-line")).toHaveText(line);
+    await expect(which).toHaveAccessibleDescription(line);
+    await expect(page.locator(".owed-card")).toHaveCount(0);
+    await expect(which.locator('a[href^="tel:"]')).toHaveCount(0);
+    const debts = which
+      .getByRole("list", { name: "Борги: Оксана Петренко" })
+      .getByRole("button");
+    await expect(debts).toHaveCount(2);
+    await expect(debts.nth(0)).toHaveAccessibleName(
+      "Лоран шоколад · M, винні 2 000,00 грн",
+    );
+    await expect(debts.nth(1)).toHaveAccessibleName(
+      "Шарф «Затишок», винні 500,00 грн",
+    );
+    // Its rows the card's sheet's: the debt's glyph by what is owed, the
+    // set's chevron, no block of their own.
+    await expect(which.locator(".debt-owed svg")).toHaveCount(2);
+    await expect(which.locator("svg.sale-open")).toHaveCount(2);
+    await expect(which.locator(".list-block")).toHaveCount(0);
+    // None chosen beforehand (owner decision, 2026-10-01): the sheet holds
+    // the cursor, no debt does.
+    await expect(which).toBeFocused();
+    await expect(
+      which.locator("[aria-pressed], [aria-current], [aria-selected]"),
+    ).toHaveCount(0);
+    // A sheet by §6.29: the card's colour, 16 round on top, at most 92 %
+    // of the screen, nothing past its width — in both themes.
+    for (const scheme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme: scheme });
+      const card = await page.evaluate(() => {
+        const probe = document.createElement("div");
+        probe.style.background = "var(--card)";
+        document.body.append(probe);
+        const colour = getComputedStyle(probe).backgroundColor;
+        probe.remove();
+        return colour;
+      });
+      await expect(which).toHaveCSS("background-color", card);
+      // The line in pencil, under the title.
+      const pencil = await page.evaluate(() => {
+        const probe = document.createElement("div");
+        probe.style.color = "var(--pencil)";
+        document.body.append(probe);
+        const colour = getComputedStyle(probe).color;
+        probe.remove();
+        return colour;
+      });
+      await expect(which.locator(".debts-line")).toHaveCSS("color", pencil);
+      await expect(which).toHaveCSS("border-top-left-radius", "16px");
+      await expect(which).toHaveCSS("border-bottom-left-radius", "0px");
+      const box = await which.boundingBox();
+      if (!box) throw new Error("not laid out");
+      expect(box.height).toBeLessThanOrEqual(640 * 0.92 + 1);
+      expect(box.x + box.width).toBeLessThanOrEqual(360);
+    }
+    await page.emulateMedia({ colorScheme: "light" });
+
+    // Three: the coat's debt. The sheet is done with; S21 on it, and its
+    // «←» the till's «До боргів» — back to the list, the sheet closed.
+    await debts.nth(0).click();
+    await expect(which).toHaveCount(0);
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+      "Лоран шоколад · M",
+    );
+    await page.getByRole("button", { name: "До боргів" }).click();
+    await expect(
+      page.getByRole("heading", { name: "Продаж", level: 1 }),
+    ).toBeVisible();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await expect(her).toBeVisible();
+    // Again: her row, the coat, the sum keyed in, and four: a way.
+    await her.click();
+    await expect(which).toHaveAttribute("data-ready", "");
+    await debts.nth(0).click();
+    await keyIn(page, "1500");
+    await panel(page).getByRole("button", { name: "Готівка" }).click();
+    const paid = page.locator(".paid-result");
+    await expect(
+      paid.getByRole("heading", { name: "Внесок записано" }),
+    ).toBeFocused();
+    expect(sent).toEqual([
+      expect.objectContaining({ amount: "1500.00", payment_method: "CASH" }),
+    ]);
+    // S22's way back is named as S21's «←»: the list, no sheet over it.
+    await paid
+      .getByRole("button", { name: "До боргів", exact: true })
+      .click();
+    await expect(her).toBeVisible();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+  });
+
+  test("the sheet reads her debts by her phone: refused, it says so over the rows as they were, «Спробувати ще раз» its one way; read again and gone, it closes on the list, which is read again without her (audit after stage 2, sale P2-4; review)", async ({
+    page,
+  }) => {
+    const one = coat();
+    await serve(page, one);
+    let reads = 0;
+    let paidOff = false;
+    const asked: (string | null)[] = [];
+    await serveTwo(
+      page,
+      one,
+      async (route) => {
+        reads += 1;
+        asked.push(new URL(route.request().url()).searchParams.get("status"));
+        // Paid off meanwhile on another phone, from the second read on.
+        paidOff = reads > 1;
+        await route.fulfill(
+          reads === 1
+          ? {
+              status: 500,
+              json: {
+                code: "INTERNAL_ERROR",
+                message: "Внутрішня помилка сервера.",
+                details: {},
+              },
+            }
+            : { json: { items: [], has_more: false } },
+        );
+      },
+      () => !paidOff,
+    );
+    await atTheTill(page);
+    const her = page.getByRole("button", {
+      name: /^Відкрити борг: Оксана Петренко,/,
+    });
+    await her.click();
+    const which = page.getByRole("dialog", { name: "На який борг вносить?" });
+    const unread = which.locator(".read-failure");
+    await expect(unread).toBeVisible();
+    await expect(which.locator(".debts-line")).toHaveText(
+      "Оксана Петренко · винні всього 2 500,00 грн",
+    );
+    await expect(which.getByRole("listitem")).toHaveCount(2);
+    // Once the sheet takes taps: the second of the one that opened it is
+    // let go.
+    await expect(which).toHaveAttribute("data-ready", "");
+    await unread.getByRole("button", { name: "Спробувати ще раз" }).click();
+    await expect(which).toHaveCount(0);
+    // The list under it read again: her row goes with the sheet, never a
+    // row that opens nothing (review).
+    await expect(her).toHaveCount(0);
+    // Only what is still owed, as the till's list reads them.
+    expect(asked.length).toBeGreaterThan(0);
+    expect(asked.every((status) => status === "OPEN")).toBe(true);
+  });
+
+  test("among the stores that do not trade, the sheet names her alone, never a sum: each debt its own store's, said on its row (audit after stage 2, sale P2-4; sections task list, P0-5)", async ({
+    page,
+  }) => {
+    // «Ринок», blocked: its debts are paid at any store that trades.
+    const market = {
+      store_id: randomUUID(),
+      store_name: "Ринок",
+      store_state: "BLOCKED",
+    };
+    const first = coat(market);
+    const debts = [first, { ...aside(), ...market }];
+    await serve(page, coat());
+    await page.route("**/api/v1/credits/customers?**", async (route) => {
+      const url = new URL(route.request().url());
+      const elsewhere = url.searchParams.get("elsewhere") === "true";
+      await route.fulfill({
+        json: {
+          items: elsewhere
+            ? [
+                {
+                  ...customerOf(first, "2500.00"),
+                  open_debts: 2,
+                  credits: debts,
+                },
+              ]
+            : [],
+          has_more: false,
+        },
+      });
+    });
+    await atTheTill(page);
+    const search = page.getByRole("searchbox", { name: "Ім’я або телефон" });
+    await search.fill("0671234567");
+    await page
+      .getByRole("button", {
+        name: "Борг магазину, що зараз не працює? Шукати за цим номером",
+      })
+      .click();
+    await page
+      .getByRole("button", { name: /^Відкрити борг: Оксана Петренко,/ })
+      .click();
+    const which = page.getByRole("dialog", { name: "На який борг вносить?" });
+    await expect(which.locator(".debts-line")).toHaveText("Оксана Петренко");
+    await expect(which).not.toContainText("винні всього");
+    const rows = which.getByRole("button");
+    await expect(rows).toHaveCount(2);
+    await expect(rows.nth(0)).toHaveAccessibleName(
+      "Лоран шоколад · M, винні 2 000,00 грн, магазин «Ринок»",
+    );
+    await expect(rows.nth(1)).toContainText("Магазин «Ринок»");
   });
 
   test("more than is owed darkens the ways and says so in the error's colour, and nothing is sent; the keypad keeps a sum to the kopeck", async ({

@@ -4486,7 +4486,10 @@ span.cash-difference > .difference-sign {
 }
 /* «Відправити» (S18): what is in the parcel, the waybill's field 52 in
    the fold, written as typed, the line under it. */
-.send-parcel {
+.send-parcel,
+/* The till's «На який борг вносить?»: who, and what is owed this store in
+   all, one line under the title (audit after stage 2, sale P2-4). */
+.debts-line {
   margin: 0 0 12px;
   color: var(--pencil);
   overflow-wrap: anywhere;

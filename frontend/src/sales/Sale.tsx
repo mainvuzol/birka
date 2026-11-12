@@ -1,7 +1,13 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { JSX } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, CONFLICT_TEXT, errorText, INVALID_TEXT } from "@/shared/api";
+import {
+  api,
+  CONFLICT_TEXT,
+  errorText,
+  failedWrite,
+  INVALID_TEXT,
+} from "@/shared/api";
 import type { ApiError } from "@/shared/api";
 import { Icon } from "@/shared/Icon";
 import { decimal, kopecks, money } from "@/orders/types";
@@ -1160,7 +1166,7 @@ export function Sale({
                     setFromCatalog(false);
                   }}
                 >
-                  Назад до списку
+                  До списку
                 </button>
               )}
             </>
@@ -1275,7 +1281,7 @@ export function Sale({
         </fieldset>
         {refusal !== null && (
           <p role="alert" ref={refusalRef}>
-            {refusalText(refusal)} Кошик збережено — нічого не продано.
+            {pressedRefusalText(refusal)}
           </p>
         )}
         {shortShown && (
@@ -1570,7 +1576,8 @@ export function Sale({
                   {d.unknownStock && mayReadLabel && !paper && (
                     // Deciding chips 44, «Не читали» chosen as the list's
                     // empty choice was; the same size sent (audit after
-                    // stage 2, sale P2-3). Its words wait for approval.
+                    // stage 2, sale P2-3). «Не читали» seen, the whole
+                    // words heard (owner, 2026-11-11).
                     // Read with its caption and its line's model: two lines
                     // whose size is not known are told apart (review).
                     <div
@@ -1589,11 +1596,12 @@ export function Sale({
                           type="button"
                           className="chip"
                           aria-pressed={!d.fromUnknown}
+                          aria-label="Не читали — продати як «розмір невідомий»"
                           onClick={() => {
                             relabel(index, "");
                           }}
                         >
-                          Не читали — продати як «розмір невідомий»
+                          Не читали
                         </button>
                         {sizes.isPending ? (
                           // Their places while they are read.
@@ -2085,9 +2093,37 @@ function NothingSold({
  * What the till can say about a refusal it knows the cause of. A kept sale
  * refused on resend says it too (`@/cash/errors`, ADR-0013 §8).
  */
-/** A conflict the till knows nothing more of (sale-slice TZ, P2-4). */
-export const TILL_CONFLICT_TEXT =
-  "Дані змінилися, поки ви працювали. Спробуйте ще раз.";
+/** A conflict the till knows nothing more of (sale-slice TZ, P2-4): what
+ * happened alone, never «спробуйте ще раз» — the fate and the step follow
+ * it (owner, 2026-11-11, В-П1 (б); audit after stage 2, sale P2-5). */
+export const TILL_CONFLICT_TEXT = "Дані змінилися, поки ви працювали.";
+
+/** The step after a conflict at the till: the basket is kept, a way is
+ * pressed again (audit after stage 2, sale P2-5). */
+const PRESS_AGAIN_TEXT = "Натисніть спосіб оплати ще раз.";
+
+/** A request the till could not have sent otherwise: what to check. */
+const TILL_INVALID_TEXT = "Перевірте товар, кількість і ціну.";
+
+/** What the basket's fate is, said after every refusal. */
+const BASKET_KEPT_TEXT = "Кошик збережено — нічого не продано.";
+
+/**
+ * A sale refused as it was pressed, said whole: why, its fate, and — for a
+ * conflict that names nothing — the one step; a refusal naming nothing at
+ * all, its fate and what to check (owner, 2026-11-11, В-П1 (б); audit after
+ * stage 2, sale P2-5). Never «спробуйте ще раз» on a write. A kept sale's
+ * words are its own (`@/cash/errors`).
+ */
+function pressedRefusalText(error: unknown): string {
+  const said = refusalText(error);
+  if (said === TILL_CONFLICT_TEXT)
+    return `${said} ${BASKET_KEPT_TEXT} ${PRESS_AGAIN_TEXT}`;
+  return (
+    failedWrite(error, said, BASKET_KEPT_TEXT, TILL_INVALID_TEXT) ??
+    `${said} ${BASKET_KEPT_TEXT}`
+  );
+}
 
 export function refusalText(error: unknown): string {
   const details = (error as Partial<ApiError> | null)?.details ?? {};
@@ -2126,7 +2162,7 @@ export function refusalText(error: unknown): string {
       // the seller sells (sale-slice TZ, P2-4).
       const text = errorText(error);
       if (text === CONFLICT_TEXT) return TILL_CONFLICT_TEXT;
-      if (text === INVALID_TEXT) return "Перевірте товар, кількість і ціну.";
+      if (text === INVALID_TEXT) return TILL_INVALID_TEXT;
       return text;
     }
   }

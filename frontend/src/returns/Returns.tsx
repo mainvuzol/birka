@@ -11,6 +11,7 @@ import {
   INVALID_TEXT,
   api,
   errorText,
+  failedWrite,
 } from "@/shared/api";
 import { Unread } from "@/shared/Unread";
 import { NoCustomerData } from "@/shared/NoCustomerData";
@@ -905,8 +906,7 @@ function ReturnForm({
         )}
         {refusal !== null && (
           <p role="alert" ref={refusalRef}>
-            {refusalText(refusal)}{" "}
-            {mark.paper ? "Нічого не записано." : "Нічого не повернено."}
+            {pressedRefusalText(refusal, mark.paper)}
           </p>
         )}
         {/* Under the thumb (P0-4): what comes back, its sum large, and the
@@ -1022,8 +1022,25 @@ function ReturnForm({
  * list, P2-2; as the till's, owner 2026-10-17).
  */
 export const RETURN_CONFLICT_TEXT =
-  "Дані змінилися, поки ви працювали. Поверніться до списку й спробуйте ще раз.";
-const RETURN_INVALID_TEXT = "Перевірте, що повертають, і спробуйте ще раз.";
+  "Дані змінилися, поки ви працювали. Поверніться до списку й відкрийте продаж знову.";
+/** What happened and the one step, never «спробуйте ще раз» on a write;
+ * «Нічого не повернено.» follows it (owner, 2026-11-11, В-П1 (б); audit
+ * after stage 2, sale P2-5). */
+export const RETURN_INVALID_TEXT = "Перевірте, що повертають.";
+
+/**
+ * A return refused as it was pressed, said whole: why and the step, then
+ * its fate; a refusal naming nothing, its fate and what to check — never
+ * «спробуйте ще раз» on a write (owner, 2026-11-11, В-П1 (б); audit after
+ * stage 2, sale P2-5). A kept return's words are its own (`@/cash/errors`).
+ */
+function pressedRefusalText(error: unknown, paper: boolean): string {
+  const said = refusalText(error);
+  const fate = paper ? "Нічого не записано." : "Нічого не повернено.";
+  return (
+    failedWrite(error, said, fate, RETURN_INVALID_TEXT) ?? `${said} ${fate}`
+  );
+}
 
 /**
  * Why a return was refused. A kept return refused on resend says the same
@@ -1048,6 +1065,11 @@ export function refusalText(error: unknown): string {
       return "Цілий товар цього продажу йде на склад вашого магазину — оберіть його ще раз.";
     if (error.details.reason === "SEARCH_REQUIRED")
       return "Продаж іншого магазину знаходять за назвою товару.";
+    // The warehouse the goods went to, closed meanwhile (a 404 the server
+    // names): the kept return's own words (owner decisions, 2026-10-18),
+    // never what to check in the goods (review; sale P2-5).
+    if (error.details.reason === "WAREHOUSE_UNAVAILABLE")
+      return "Склад, куди йшов цей товар, закрито. Зверніться до менеджера.";
     // Only a sale paid in parts is sent without a way, and the server asks
     // for one once it has worked out that money goes back (ADR-0012 G35).
     if (error.details.reason === "PAYMENT_METHOD_REQUIRED")

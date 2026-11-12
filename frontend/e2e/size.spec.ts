@@ -171,6 +171,8 @@ test("a coat held with its size not known is sold with the size on its label", a
     exact: true,
   });
   await expect(notRead).toHaveAttribute("aria-pressed", "true");
+  // «Не читали» seen, the whole words heard (owner, 2026-11-11; sale P2-3).
+  await expect(notRead).toHaveText("Не читали");
   const sizeL = label.getByRole("button", { name: "L", exact: true });
   await expect(sizeL).toHaveAttribute("aria-pressed", "false");
   for (const chip of await label.getByRole("button").all()) {

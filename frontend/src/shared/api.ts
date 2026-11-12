@@ -273,6 +273,28 @@ export function isConflict(error: unknown): boolean {
  * own, as it may be recorded (`keptUnconfirmed`, `@/cash/errors`). */
 export const FAILED_TEXT = "Не вдалося виконати операцію. Спробуйте ще раз.";
 
+/**
+ * A write the server answered with the shared words of its failure, `said`
+ * as its screen says it, in that screen's own (owner, 2026-11-11, В-П1 (б)):
+ * what was not done first, then the step — never «спробуйте ще раз» on a
+ * write. The server's own failure (5xx) is pressed again, which every
+ * command so sent is safe for, its request's number kept; a refusal naming
+ * nothing (4xx) is refused again as it is, so `check`. Null for any other
+ * answer — and for the phone's own failure — which keeps its words.
+ */
+export function failedWrite(
+  error: unknown,
+  said: string,
+  notDone: string,
+  check?: string,
+): string | null {
+  if (!(error instanceof ApiError) || !said.startsWith(FAILED_TEXT))
+    return null;
+  if (error.status >= 500)
+    return `${notDone} Натисніть ще раз — повторити безпечно.${said.slice(FAILED_TEXT.length)}`;
+  return check === undefined ? notDone : `${notDone} ${check}`;
+}
+
 /** A read that failed, in a store: no answer, `SILENT`; any other, as the
  * place says it (`errorText`, unless it has words of its own). */
 export function readText(

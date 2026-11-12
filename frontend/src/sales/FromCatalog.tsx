@@ -75,10 +75,10 @@ export function FromCatalog({
   const priced = prices.isSuccess || prices.isError;
   return (
     <section className="from-catalog" aria-label="Товар з каталогу">
+      {/* One line: the shortage sheet says the rest at the way of paying
+          (owner, 2026-11-11; audit after stage 2, sale P2-3). */}
       <p className="hint">
-        На складі «{visible(warehouse)}» його немає в обліку. Знайдіть модель і
-        торкніться розміру; коли натиснете, як платить покупець, каса спитає, чи
-        товар на полиці.
+        На складі «{visible(warehouse)}» його немає в обліку.
       </p>
       <CatalogPicker
         store={store}
@@ -133,7 +133,7 @@ export function FromCatalog({
           </div>
         ))}
       <button type="button" className="quiet" onClick={close}>
-        Назад до списку
+        До списку
       </button>
     </section>
   );
