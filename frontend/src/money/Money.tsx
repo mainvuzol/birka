@@ -115,17 +115,32 @@ function drawerLine(
   return countedText(close.data);
 }
 
-/** «Винні 8 400,00 грн · 4 покупці», this store's alone, the count never
- * parted from its word; «Ніхто не винен», as «Сьогодні» says it. */
+/** Customers owe this store something. */
+function owes(debts: StoreDebts): boolean {
+  return debts.customers > 0 && some(debts.owed);
+}
+
+/** «Винні 8 400,00 грн · 4 людини», this store's alone, the count never
+ * parted from its word; «Ніхто не винен» — both as «Сьогодні» says them
+ * (money task list after stage 2, P1-1; В-ГР1 (а)). */
 function debtsText(debts: StoreDebts): string {
-  return debts.customers > 0 && some(debts.owed)
+  return owes(debts)
     ? `Винні ${money(debts.owed)} · ${String(debts.customers)}\u00a0${plural(
         debts.customers,
-        "покупець",
-        "покупці",
-        "покупців",
+        "людина",
+        "людини",
+        "людей",
       )}`
     : "Ніхто не винен";
+}
+
+/** A customers' line in the colour of what it says: a debt's, its twin
+ * «Винні» at its start; «Ніхто не винен» in pencil; nothing while read. */
+function debtsTone(
+  read: UseQueryResult<StoreDebts> | undefined,
+): string | undefined {
+  if (read?.data === undefined) return undefined;
+  return owes(read.data) ? "money-owes" : "money-none";
 }
 
 /** «38 000,00 грн · 3 накладні» this store owes; «Нічого не винні». */
@@ -155,13 +170,16 @@ function readLine<T>(
 /** A store's line in a place: its name, then what the place says of it. */
 function StoreLine({
   store,
+  tone,
   children,
 }: {
   store: Store;
+  /** The colour of what it says: a debt's, or pencil. */
+  tone?: string | undefined;
   children: ReactNode;
 }): JSX.Element {
   return (
-    <li className="money-line">
+    <li className={tone === undefined ? "money-line" : `money-line ${tone}`}>
       <StoreName name={store.name} state={store.state} />
       {": "}
       <span className="money-said">{children}</span>
@@ -175,6 +193,45 @@ interface Way {
   disabled: boolean;
 }
 
+/** The open store's line of «Ви винні постачальникам»: the way to its
+ * «Накладні», which read this store alone — the other stores' lines are no
+ * way (money task list after stage 2, P1-2; Q-1 «if not»). */
+function InvoicesLine({
+  store,
+  read,
+  open,
+  held,
+}: {
+  store: Store;
+  read: UseQueryResult<SupplierDebts> | undefined;
+  open: Way;
+  held: boolean;
+}): JSX.Element {
+  const said = readLine(read, suppliersText, "10em");
+  const mark = store.state === "ACTIVE" ? "" : ` ${stateWords[store.state]}`;
+  return (
+    <li className="money-line">
+      <button
+        type="button"
+        className="money-line-open"
+        disabled={held || open.disabled}
+        onClick={open.go}
+        // What it shows, after where it goes.
+        aria-label={`Накладні магазину «${visible(store.name)}»${mark}${
+          typeof said === "string" ? `: ${said}` : ""
+        }`}
+      >
+        <span>
+          <StoreName name={store.name} state={store.state} />
+          {": "}
+          <span className="money-said">{said}</span>
+        </span>
+        <Icon name="chevron-right" size={16} className="sale-open" />
+      </button>
+    </li>
+  );
+}
+
 /**
  * One place where money is (spec S29): its glyph and name — a way to its
  * screen where there is one — a line a store, how old it is when no longer
@@ -184,6 +241,7 @@ interface Way {
 function Place({
   icon,
   title,
+  glyph,
   open,
   held,
   reads,
@@ -192,6 +250,8 @@ function Place({
 }: {
   icon: IconName;
   title: string;
+  /** The glyph's colour: a debt's, while one is owed. */
+  glyph?: string | undefined;
   /** Its screen: «Покупці», «Накладні». */
   open?: Way | undefined;
   held: boolean;
@@ -215,13 +275,13 @@ function Place({
               disabled={held || open.disabled}
               onClick={open.go}
             >
-              <Icon name={icon} size={16} />
+              <Icon name={icon} size={16} className={glyph} />
               <span>{title}</span>
               <Icon name="chevron-right" size={16} className="sale-open" />
             </button>
           ) : (
             <>
-              <Icon name={icon} size={16} />
+              <Icon name={icon} size={16} className={glyph} />
               <span>{title}</span>
             </>
           )}
@@ -275,6 +335,7 @@ export function Money({
   period,
   choose,
   held,
+  here,
   toCustomers,
   toInvoices,
   toReport,
@@ -290,6 +351,9 @@ export function Money({
   choose: (period: Period) => void;
   /** A first send in flight: its ways wait. */
   held: boolean;
+  /** The open store: its line of «Ви винні постачальникам» first, the way
+   * to its «Накладні». */
+  here: string;
   /** «Покупці», where the open store takes payments on debts. */
   toCustomers?: Way | undefined;
   /** The open store's «Накладні», where its invoices are read. */
@@ -358,7 +422,14 @@ export function Money({
     ? shown.filter((store) => figuresOf(store) !== undefined)
     : shown;
   const owed = shown.filter((store) => debts.has(store.id));
-  const owing = shown.filter((store) => suppliers.has(store.id));
+  const owedNow = owed.some(
+    (store) => debtsTone(debts.get(store.id)) === "money-owes",
+  );
+  // The open store's line first, as in «Покупці»; the others in the
+  // report's order.
+  const owing = shown
+    .filter((store) => suppliers.has(store.id))
+    .sort((a, b) => Number(b.id === here) - Number(a.id === here));
   const cameData = cameIn.data;
   const columns = cameData?.stores ?? [];
   const ways = wayRows.filter(
@@ -465,6 +536,7 @@ export function Money({
           <Place
             icon="owed"
             title="Вам винні клієнти"
+            glyph={owedNow ? "money-owes" : undefined}
             open={toCustomers}
             held={held}
             reads={[...debts.values()]}
@@ -472,7 +544,11 @@ export function Money({
           >
             <ul className="money-lines">
               {owed.map((store) => (
-                <StoreLine key={store.id} store={store}>
+                <StoreLine
+                  key={store.id}
+                  store={store}
+                  tone={debtsTone(debts.get(store.id))}
+                >
                   {readLine(debts.get(store.id), debtsText, "10em")}
                 </StoreLine>
               ))}
@@ -480,20 +556,31 @@ export function Money({
           </Place>
         )}
         {owing.length > 0 && (
+          // Its title no way: «Накладні» read the open store alone, so its
+          // line is (money task list after stage 2, P1-2).
           <Place
             icon="supplier"
             title="Ви винні постачальникам"
-            open={toInvoices}
             held={held}
             reads={[...suppliers.values()]}
             now={now}
           >
             <ul className="money-lines">
-              {owing.map((store) => (
-                <StoreLine key={store.id} store={store}>
-                  {readLine(suppliers.get(store.id), suppliersText, "10em")}
-                </StoreLine>
-              ))}
+              {owing.map((store) =>
+                store.id === here && toInvoices ? (
+                  <InvoicesLine
+                    key={store.id}
+                    store={store}
+                    read={suppliers.get(store.id)}
+                    open={toInvoices}
+                    held={held}
+                  />
+                ) : (
+                  <StoreLine key={store.id} store={store}>
+                    {readLine(suppliers.get(store.id), suppliersText, "10em")}
+                  </StoreLine>
+                ),
+              )}
             </ul>
           </Place>
         )}

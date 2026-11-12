@@ -1181,7 +1181,7 @@ test("a payment whose answer is lost is resent unchanged, and paid once", async 
   await expect(
     page
       .getByRole("article", { name: "Ви винні постачальникам" })
-      .getByRole("button", { name: "Ви винні постачальникам" }),
+      .getByRole("button", { name: /^Накладні магазину / }),
   ).toBeEnabled();
   await expect(
     page
@@ -1633,12 +1633,12 @@ test("a part of an invoice is paid in four taps from «Гроші», a new invoi
   await anInvoice(page, supplierId, "900.00");
   await at(page, hanna);
   const taps = await countTaps(page);
-  // The tab, «Ви винні постачальникам», «Сплатити» on the tag, the dock's
-  // button: the sum typed is not a tap.
+  // The tab, the store's line of «Ви винні постачальникам», «Сплатити» on
+  // the tag, the dock's button: the sum typed is not a tap.
   await menu(page).getByRole("button", { name: "Гроші", exact: true }).click();
   await page
     .getByRole("article", { name: "Ви винні постачальникам" })
-    .getByRole("button", { name: "Ви винні постачальникам" })
+    .getByRole("button", { name: /^Накладні магазину / })
     .click();
   await tag(page, supplier).getByRole("button", { name: "Сплатити" }).click();
   await page.getByLabel("Сума, грн").fill("250");
@@ -1652,14 +1652,15 @@ test("a part of an invoice is paid in four taps from «Гроші», a new invoi
   );
   expect(await taps()).toBe(4);
 
-  // A new invoice: the tab, «Ви винні постачальникам», «+», the field, the
-  // row — the cursor then in the sum — «Записати накладну».
+  // A new invoice: the tab, the store's line of «Ви винні постачальникам»,
+  // «+», the field, the row — the cursor then in the sum — «Записати
+  // накладну».
   await at(page, hanna);
   const newTaps = await countTaps(page);
   await menu(page).getByRole("button", { name: "Гроші", exact: true }).click();
   await page
     .getByRole("article", { name: "Ви винні постачальникам" })
-    .getByRole("button", { name: "Ви винні постачальникам" })
+    .getByRole("button", { name: /^Накладні магазину / })
     .click();
   await page
     .getByRole("button", { name: "Записати накладну", exact: true })
