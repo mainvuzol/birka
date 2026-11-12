@@ -3,6 +3,7 @@ import type { JSX, RefObject } from "react";
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, api, errorText, inOwnWords, isConflict } from "@/shared/api";
 import { Unread } from "@/shared/Unread";
+import { Placeholder } from "@/shared/Placeholder";
 import { money } from "@/orders/types";
 import { sizeLabel } from "@/returns/types";
 import type { Store } from "@/orders/types";
@@ -13,7 +14,8 @@ import { ModeSwitch } from "@/shared/ModeSwitch";
 import { ScreenHeader } from "@/shared/ScreenHeader";
 import { SendingLine } from "@/shared/Sending";
 import { Sheet } from "@/shared/Sheet";
-import { Stub } from "@/shared/Stub";
+import { Perforation, Stub } from "@/shared/Stub";
+import { Sum } from "@/shared/Sum";
 import { usePanelRoom } from "@/shared/panel";
 import { buzz, useMainButton } from "@/shared/telegram";
 import type { JournalOutcome } from "@/shared/journal";
@@ -45,11 +47,6 @@ function lotWhence(lot: Lot): string {
 /** «1 500,00 грн за шт. · взято 3 · продано 1 · повернено 0». */
 function lotCounts(lot: Lot): string {
   return `${lot.unit_cost ? `${money(lot.unit_cost)} за шт. · ` : ""}взято ${String(lot.received)} · продано ${String(lot.sold)} · повернено ${String(lot.returned)}`;
-}
-
-/** What a mark of sold recorded: the debt the server counted. */
-function soldText(done: Extract<Done, { kind: "sold" }>): string {
-  return `Продано ${String(done.quantity)} шт.: у «Накладних» борг «${visible(done.lot.supplier.name)}» ${money(done.invoice.amount)}.`;
 }
 
 /**
@@ -229,6 +226,7 @@ export function Borrowed({
   // The stub's words take the cursor, the button pressed being gone; and
   // the heading once «Готово» is — never as the screen opens.
   const said = useRef<HTMLParagraphElement>(null);
+  const stub = useId();
   const was = useRef(done);
   useEffect(() => {
     if (was.current === done) return;
@@ -264,32 +262,62 @@ export function Borrowed({
     return (
       <>
         {heading}
-        <section className="receipt receive-done">
-          <p className="result-title t-sheet" ref={said} tabIndex={-1}>
+        <section className="receipt receive-done borrowed-done">
+          <p
+            className="result-title t-sheet"
+            ref={said}
+            tabIndex={-1}
+            // Focused, «Продано» is heard with the debt it recorded and
+            // where it is (money task list after stage 2, P2-3; review).
+            aria-describedby={
+              done.kind === "sold" ? `${stub}-sum ${stub}-where` : undefined
+            }
+          >
             <RecordedMark />
             {done.kind === "sold"
-              ? soldText(done)
+              ? `Продано ${String(done.quantity)} шт.`
               : `Повернено постачальнику «${visible(done.lot.supplier.name)}»: ${String(done.quantity)} шт.`}
           </p>
-          <Stub state="recorded">
-            <p className="stub-line">
-              <strong>{lotName(done.lot)}</strong>
-              <br />× {done.quantity}
-            </p>
-            {done.kind === "sold" && openInvoice && (
-              <button
-                type="button"
-                className="quiet set-off-open"
-                disabled={openInvoice.held}
-                onClick={() => {
-                  openInvoice.go(done.invoice);
-                }}
-              >
-                Відкрити накладну
-                <Icon name="chevron-right" size={16} />
-              </button>
-            )}
-          </Stub>
+          {done.kind === "sold" ? (
+            // A debt recorded is money: its sum large, the server's, as
+            // the invoice's own stub (spec §6.30; money task list after
+            // stage 2, P2-3).
+            <Stub state="recorded">
+              <div className="hand-back">
+                <p className="hand-back-sum stub-sum" id={`${stub}-sum`}>
+                  <Sum value={money(done.invoice.amount)} />
+                </p>
+                <p className="stub-say">
+                  {visible(done.lot.supplier.name)} · {lotName(done.lot)} ×{" "}
+                  {done.quantity}
+                </p>
+              </div>
+              <Perforation />
+              <p className="stub-line" id={`${stub}-where`}>
+                Борг «{visible(done.lot.supplier.name)}» — у «Накладних».
+              </p>
+              {openInvoice && (
+                <button
+                  type="button"
+                  className="quiet set-off-open"
+                  disabled={openInvoice.held}
+                  onClick={() => {
+                    openInvoice.go(done.invoice);
+                  }}
+                >
+                  Відкрити накладну
+                  <Icon name="chevron-right" size={16} />
+                </button>
+              )}
+            </Stub>
+          ) : (
+            <Stub state="recorded">
+              <p className="stub-line">
+                <strong>{lotName(done.lot)}</strong>
+                <br />× {done.quantity}
+              </p>
+            </Stub>
+          )}
           {!main && (
             // Outside Telegram, its MainButton as the dock's one button.
             <div className="pay-panel order-dock" ref={dock}>
@@ -326,7 +354,9 @@ export function Borrowed({
           filters
         />
         {lots.isPending ? (
-          <p role="status">Завантажуємо позичене…</p>
+          // Three tags' places, where the first one comes (money task list
+          // after stage 2, P1-3): a long read is seen to be coming.
+          <Placeholder said="Завантажуємо позичене…" lineTags={3} />
         ) : lots.data === undefined ? (
           <Unread
             error={lots.error}
@@ -370,7 +400,9 @@ export function Borrowed({
                 }}
               />
             )}
-            {lots.hasNextPage && (
+            {/* A page that failed is asked again by its own retry, alone
+              (money task list after stage 2, P2-1). */}
+            {lots.hasNextPage && !lots.isFetchNextPageError && (
               <button
                 className="quiet"
                 disabled={lots.isFetching}
@@ -571,7 +603,12 @@ function LotSheet({
             // Held, not disabled: the cursor stays on it.
             aria-disabled={count <= 1}
             onClick={() => {
-              if (count > 1) setCount(count - 1);
+              // ±1 is felt, both ways (spec §6 rule 9; money task list
+              // after stage 2, P2-4).
+              if (count > 1) {
+                setCount(count - 1);
+                buzz("light");
+              }
               setProblem(null);
             }}
           >

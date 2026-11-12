@@ -3,6 +3,7 @@ import type { JSX, ReactNode, RefObject } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ApiError, api } from "@/shared/api";
 import { Unread } from "@/shared/Unread";
+import { Placeholder } from "@/shared/Placeholder";
 import { decimal, kopecks, money } from "@/orders/types";
 import type { Store } from "@/orders/types";
 import { visible } from "@/shared/visible";
@@ -464,7 +465,14 @@ function SetOff({
         магазину
       </p>
       {returns.isPending ? (
-        <p role="status">Завантажуємо повернення…</p>
+        // Three returns' cards in their places (money task list after
+        // stage 2, P1-3).
+        <Placeholder
+          said="Завантажуємо повернення…"
+          rows={3}
+          day={false}
+          rowShape={{ list: "set-off-returns", row: "set-off-return" }}
+        />
       ) : returns.error ? (
         <Unread
           error={returns.error}

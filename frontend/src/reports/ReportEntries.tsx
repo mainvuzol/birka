@@ -15,6 +15,7 @@ import {
 import { Placeholder } from "@/shared/Placeholder";
 import { Unread } from "@/shared/Unread";
 import { visible } from "@/shared/visible";
+import { Empty } from "@/shared/Empty";
 import { minus, query } from "./format";
 import type { Range } from "./format";
 import type { Entries, Entry } from "./types";
@@ -164,7 +165,10 @@ export function ReportEntries({
     ).values(),
   ];
   if (items.length === 0)
-    return <p className="report-empty">Ні продажів, ні повернень.</p>;
+    // Nothing in the period (spec §6.28; money task list after stage 2,
+    // P2-2): the blank tag and its one line; the period is the line of
+    // context's.
+    return <Empty title="Ні продажів, ні повернень." />;
   return (
     <>
       <ul className="timeline report-thread" aria-label="Продажі й повернення">

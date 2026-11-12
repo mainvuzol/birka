@@ -1415,6 +1415,12 @@ for (const [name, theme, scheme] of [
       page.locator(".money-line-open .money-said"),
     ])
       expect(await contrast(part)).toBeGreaterThanOrEqual(4.5);
+    // «Надійшло»'s rows parted by a divider's hairline, never a control's
+    // edge (money task list after stage 2, P2-4).
+    const hairline = await token(page, "--hairline");
+    expect(hairline).not.toBe(await token(page, "--edge"));
+    for (const row of await page.locator(".money-table tbody tr").all())
+      await expect(row).toHaveCSS("border-top-color", hairline);
     await page.screenshot({
       path: `test-results/money-${name}.png`,
       fullPage: true,

@@ -14,6 +14,8 @@ import {
   section,
   sections,
   supplierList,
+  holdReads,
+  under14,
 } from "./fixtures";
 import type { Locator, Page, Request } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
@@ -857,6 +859,159 @@ test("goods returned are set off against an invoice, and their return waits for 
   await expect(
     page.getByRole("list", { name: "Повернення постачальникам" }),
   ).toBeVisible();
+});
+
+test("read slowly, «Зарахувати повернення» holds three returns' cards in grey, and an invoice opened from its return its card's places — the title's, what is owed, two rows of its history; the words to a reader alone; nothing there under 14 (money task list after stage 2, P1-3, P2-4)", async ({
+  page,
+}) => {
+  const supplier = `Повільний ${randomUUID().slice(0, 6)}`;
+  const supplierId = await aSupplier(page, supplier);
+  const headers = await headersOf(page, hanna);
+  const created = await page.request.post("/api/v1/catalog/products", {
+    headers: { ...headers, "Idempotency-Key": randomUUID() },
+    data: {
+      store_id: centre,
+      concept: `Повільне ${randomUUID().slice(0, 8)}`,
+      variant: { color: "сірий" },
+      sizes: [{ system: "ALPHA", code: "L" }],
+    },
+  });
+  const product = (await created.json()) as {
+    product_variant_id: string;
+    sizes: { size_id: string }[];
+  };
+  const goods = {
+    product_variant_id: product.product_variant_id,
+    size_id: product.sizes[0]?.size_id ?? "",
+  };
+  const receipt = await page.request.post("/api/v1/inventory/receipts", {
+    headers: { ...headers, "Idempotency-Key": randomUUID() },
+    data: {
+      store_id: centre,
+      location_id: fixture.network_shared_location_id,
+      command_id: randomUUID(),
+      lines: [{ ...goods, quantity: 1, acquisition_type: "PURCHASE" }],
+      notes: null,
+    },
+  });
+  expect(receipt.status()).toBe(201);
+  const returned = await page.request.post("/api/v1/supplier-returns", {
+    headers,
+    data: {
+      command_id: randomUUID(),
+      store_id: centre,
+      location_id: fixture.network_shared_location_id,
+      supplier_id: supplierId,
+      lines: [{ ...goods, quantity: 1 }],
+      note: null,
+    },
+  });
+  expect(returned.status()).toBe(201);
+  const returnId = ((await returned.json()) as { id: string }).id;
+  const invoiceId = await anInvoice(page, supplierId, "4000.00");
+  const counted = await page.request.post(
+    `/api/v1/supplier-invoices/${invoiceId}/set-offs`,
+    {
+      headers,
+      data: {
+        command_id: randomUUID(),
+        supplier_return_id: returnId,
+        amount: "500.00",
+      },
+    },
+  );
+  expect(counted.status()).toBe(201);
+
+  await invoicesAt(page, hanna);
+  await open(page, supplier);
+  // The card's «Записано …» and its history: 14 at least.
+  expect(await under14(page.locator("section.invoice-detail"))).toEqual([]);
+  const actions = await ways(page);
+  await expect(
+    actions.getByText("Спершу скасуйте її оплати й заліки.", { exact: true }),
+  ).toHaveCSS("font-size", "14px");
+  expect(await under14(actions)).toEqual([]);
+  const returns = await holdReads(page, "supplier-returns");
+  await actions
+    .getByRole("button", { name: "Зарахувати повернення", exact: true })
+    .click();
+  const setOff = await sheet(page, "Зарахувати повернення");
+  const cards = setOff.locator(
+    ".placeholder .set-off-returns > .set-off-return",
+  );
+  await expect(cards).toHaveCount(3);
+  // Each card's grey lines across the card, as its own words would be.
+  expect(
+    (await cards.first().locator(".skeleton-name").boundingBox())?.width ?? 0,
+  ).toBeGreaterThan(100);
+  await expect(
+    setOff.getByRole("status").filter({ hasText: "Завантажуємо повернення…" }),
+  ).toHaveClass(/\bvisually-hidden\b/);
+  returns();
+  await expect(
+    setOff.getByRole("list", { name: "Повернення" }).getByRole("button"),
+  ).toHaveCount(1);
+  await expect(cards).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await expect(setOff).toHaveCount(0);
+
+  // From the return, by its set-off: the invoice is found among its
+  // supplier's, its card's places held meanwhile.
+  await section(page, "Постачальникам");
+  await page
+    .getByRole("list", { name: "Повернення постачальникам" })
+    .getByRole("button", { name: new RegExp(`^${supplier} `) })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: supplier, exact: true }),
+  ).toBeVisible();
+  const why = page.getByText(
+    "Щоб скасувати повернення, спершу скасуйте залік у «Накладних».",
+    { exact: true },
+  );
+  await expect(why).toHaveCSS("font-size", "14px");
+  expect(await under14(page.locator(".supplier-return"))).toEqual([]);
+  const invoices = await holdReads(page, "supplier-invoices");
+  await page
+    .getByRole("list", { name: "Зараховано в накладні" })
+    .getByRole("button", { name: "Відкрити накладну" })
+    .click();
+  const place = page.locator(".invoice-placeholder");
+  await expect(place).toBeVisible();
+  await expect(page.locator(".screen-title .skeleton-title")).toBeVisible();
+  // The line under the title where the card's will be: its ⋯'s place held.
+  const line = page.locator(".store-line");
+  const under = (await line.boundingBox())?.y ?? Number.NaN;
+  await expect(
+    page.getByRole("button", { name: "Назад до «Повернення»" }),
+  ).toBeVisible();
+  await expect(place.locator(".invoice-owed-sum .skeleton-line")).toBeVisible();
+  await expect(place.locator(".invoice-bar")).toBeVisible();
+  await expect(place.locator(".timeline-row")).toHaveCount(2);
+  // Its eyelets round, as the history's own.
+  await expect(place.locator(".timeline-node").first()).toHaveCSS(
+    "border-top-left-radius",
+    "999px",
+  );
+  await expect(
+    page.getByRole("status").filter({ hasText: "Завантажуємо накладну…" }),
+  ).toHaveClass(/\bvisually-hidden\b/);
+  await expect(page.getByText("Завантажуємо накладну…")).toHaveCount(1);
+  await page.screenshot({ path: "test-results/invoice-finding.png" });
+  invoices();
+  await expect(
+    page.getByRole("heading", { name: supplier, level: 1 }),
+  ).toBeVisible();
+  await expect(place).toHaveCount(0);
+  await expect(owes(page).locator(".invoice-owed-sum")).toHaveText(
+    "3 500,00 грн",
+  );
+  await expect(
+    page.getByRole("button", { name: "Дії з накладною" }),
+  ).toBeVisible();
+  expect(
+    Math.abs(((await line.boundingBox())?.y ?? Number.NaN) - under),
+  ).toBeLessThanOrEqual(1);
 });
 
 test("a payment or an invoice recorded by mistake is cancelled, saying why", async ({

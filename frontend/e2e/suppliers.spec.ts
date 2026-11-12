@@ -11,6 +11,8 @@ import {
   rowNamed,
   section,
   sections,
+  holdReads,
+  under14,
 } from "./fixtures";
 import type { Locator, Page, Request } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
@@ -610,6 +612,154 @@ test("in Telegram the supplier's sheet over «Повернути постача�
   await sheet.getByRole("button", { name: "Додати постачальника" }).click();
   await expect(sheet).toHaveCount(0);
   await expect.poll(mainShown).toBe(true);
+});
+
+test("read slowly, the suppliers' sheet and «Список постачальників» hold three rows in grey under a search that stands, «Повернути постачальнику» two warehouses in grey; the words to a reader alone (money task list after stage 2, P1-3)", async ({
+  page,
+}) => {
+  await openAs(page, hanna);
+  await openStore(page, "Центр CENTRE");
+  const suppliers = await holdReads(page, "suppliers");
+  await section(page, "Постачальникам");
+  const said = "Завантажуємо постачальників…";
+  // The returns' filter: its sheet.
+  await page
+    .getByRole("button", {
+      name: "Постачальник Усі постачальники",
+      exact: true,
+    })
+    .click();
+  const sheet = page.getByRole("dialog", { name: "Постачальник" });
+  await expect(sheet).toHaveAttribute("data-ready", "");
+  const inSheet = sheet.locator(".placeholder .supplier-rows > .supplier-row");
+  await expect(inSheet).toHaveCount(3);
+  await expect(
+    sheet.getByRole("searchbox", { name: "Пошук постачальника" }),
+  ).toBeVisible();
+  await expect(sheet.getByRole("status").filter({ hasText: said })).toHaveClass(
+    /\bvisually-hidden\b/,
+  );
+  await page.keyboard.press("Escape");
+  await expect(sheet).toHaveCount(0);
+  // «Список постачальників»: its search stands over the rows' places.
+  await page.getByRole("button", { name: /^Список постачальників/ }).click();
+  await expect(
+    page.getByRole("heading", { name: "Список постачальників" }),
+  ).toBeVisible();
+  // The places under the search field, both there at once.
+  const grey = page.locator(
+    ".supplier-list-screen > .search-field ~ .placeholder .supplier-rows > .supplier-row",
+  );
+  await expect(grey).toHaveCount(3);
+  const search = page.getByRole("searchbox", { name: "Пошук постачальника" });
+  await expect(search).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: said })).toHaveClass(
+    /\bvisually-hidden\b/,
+  );
+  await expect(page.getByText(said)).toHaveCount(1);
+  const field = (await search.boundingBox())?.y ?? Number.NaN;
+  const top = (await grey.first().boundingBox())?.y ?? Number.NaN;
+  suppliers();
+  const first = page
+    .getByRole("list", { name: "Постачальники" })
+    .getByRole("button")
+    .first();
+  await expect(first).toBeVisible();
+  await expect(grey).toHaveCount(0);
+  // Nothing moved: the search where it stood, the first row on the first
+  // grey's place.
+  expect((await search.boundingBox())?.y).toBe(field);
+  expect(
+    Math.abs(((await first.boundingBox())?.y ?? Number.NaN) - top),
+  ).toBeLessThanOrEqual(2);
+
+  // «Повернути постачальнику»: its warehouses as two grey choices.
+  await page
+    .getByRole("button", { name: "Постачальникам", exact: true })
+    .click();
+  const places = await holdReads(page, "stock-locations");
+  await page
+    .locator(".screen-title")
+    .getByRole("button", { name: "Повернути товар постачальнику" })
+    .click();
+  const chips = page.locator(".placeholder.chips.receive-place > .chip");
+  await expect(chips).toHaveCount(2);
+  await expect(
+    page.getByRole("status").filter({ hasText: "Завантажуємо склади…" }),
+  ).toHaveClass(/\bvisually-hidden\b/);
+  places();
+  await expect(
+    page.getByText("Склад «Склад мережі»", { exact: true }),
+  ).toBeVisible();
+  await expect(chips).toHaveCount(0);
+});
+
+test("inside Telegram a size's ±1 on «Повернути постачальнику» is felt both ways, «Менше» held at none is not (money task list after stage 2, P2-4)", async ({
+  page,
+}) => {
+  const coat = await received(page, hanna, fixture.network_centre_store_id, 2);
+  await page.addInitScript(() => {
+    const host = window as unknown as {
+      TelegramWebviewProxy: {
+        postEvent: (event: string, data: string) => void;
+      };
+      told: { event: string; data: { type?: string } | null }[];
+    };
+    host.told = [];
+    host.TelegramWebviewProxy = {
+      postEvent: (event, data) => {
+        host.told.push({
+          event,
+          data: data ? (JSON.parse(data) as { type?: string }) : null,
+        });
+      },
+    };
+  });
+  const impacts = (): Promise<unknown[]> =>
+    page.evaluate(() =>
+      (
+        window as unknown as {
+          told: { event: string; data: { type?: string } | null }[];
+        }
+      ).told
+        .filter(
+          ({ event, data }) =>
+            event === "web_app_trigger_haptic_feedback" &&
+            data?.type === "impact",
+        )
+        .map(({ data }) => data),
+    );
+  await page.goto(
+    `/#${new URLSearchParams({ tgWebAppData: initData(hanna), tgWebAppVersion: "8.0" }).toString()}`,
+  );
+  await openStore(page, "Центр CENTRE");
+  await section(page, "Постачальникам");
+  await page
+    .locator(".screen-title")
+    .getByRole("button", { name: "Повернути товар постачальнику" })
+    .click();
+  await chooseModel(page, coat);
+  const size = page.getByRole("group", { name: /^Розмір M, вільно / });
+  const count = size.getByRole("textbox");
+  // Nothing on the form reads under 14: «вільно N» in the meta's size
+  // (P2-4; review).
+  expect(await under14(page.locator("section.supplier-return-new"))).toEqual(
+    [],
+  );
+  const light = { type: "impact", impact_style: "light" };
+  await size.getByRole("button", { name: "Більше" }).click();
+  await expect(count).toHaveValue("1");
+  await expect.poll(impacts).toEqual([light]);
+  await size.getByRole("button", { name: "Менше" }).click();
+  await expect(count).toHaveValue("0");
+  await expect.poll(impacts).toEqual([light, light]);
+  // Held at none (aria-disabled, the cursor kept on it): nothing changes,
+  // nothing is felt.
+  await size.getByRole("button", { name: "Менше" }).click({ force: true });
+  await expect(count).toHaveValue("0");
+  await size.getByRole("button", { name: "Більше" }).click();
+  await expect(count).toHaveValue("1");
+  await expect.poll(impacts).toEqual([light, light, light]);
 });
 
 test("a supplier is never written twice: the one on the list is picked", async ({

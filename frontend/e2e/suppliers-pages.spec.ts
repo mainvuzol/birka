@@ -1,4 +1,4 @@
-import { test, expect, openStore, section } from "./fixtures";
+import { test, expect, holdReads, openStore, section } from "./fixtures";
 import type { Locator, Page, Route } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -186,8 +186,10 @@ async function enter(page: Page, to: string): Promise<void> {
 
 /**
  * «Показати ще» to the end: twenty a page, the row read twice shown once,
- * the page after forty failing once with what was read standing, and no
- * page asked for more than the server takes.
+ * the page after forty failing once with what was read standing — read
+ * again by its own «Спробувати ще раз» alone, «Показати ще» gone meanwhile
+ * (money task list after stage 2, P2-1) — and no page asked for more than
+ * the server takes.
  */
 async function toTheEnd(
   rows: Locator,
@@ -202,7 +204,9 @@ async function toTheEnd(
   await more.click();
   await expect(failure).toBeVisible();
   await expect(rows).toHaveCount(39);
-  await more.click();
+  await expect(more).toHaveCount(0);
+  await expect(failure.getByRole("button")).toHaveText(["Спробувати ще раз"]);
+  await failure.getByRole("button", { name: "Спробувати ще раз" }).click();
   await expect(rows).toHaveCount(59);
   await expect(failure).toHaveCount(0);
   await more.click();
@@ -287,4 +291,142 @@ test("«Позичене й під реалізацію»: the lots to the sixty
   );
   // Asked as before: what is still on hand.
   expect(asked[0]?.has("on_hand")).toBe(false);
+});
+
+/**
+ * Бірка at «Центр», `to` opened with `path`'s reads held until `answer` —
+ * or ten seconds, should the journey fail before it answers: no read is
+ * left hanging as it ends.
+ */
+async function slowly(
+  page: Page,
+  path: string,
+  to: string,
+  theme?: Record<string, string>,
+): Promise<() => void> {
+  await page.setViewportSize({ width: 360, height: 640 });
+  const hash = new URLSearchParams({ tgWebAppData: initData(hanna) });
+  if (theme) hash.set("tgWebAppThemeParams", JSON.stringify(theme));
+  await page.goto(`/#${hash.toString()}`);
+  await openStore(page, "Центр CENTRE");
+  const answer = await holdReads(page, path);
+  await section(page, to);
+  return answer;
+}
+
+/**
+ * While read: `count` grey places, «Завантажуємо …» said to a reader alone;
+ * answered, the first row where the first grey stood (money task list after
+ * stage 2, P1-3).
+ */
+async function heldThenShown(
+  page: Page,
+  grey: Locator,
+  count: number,
+  said: string,
+  first: Locator,
+  answer: () => void,
+): Promise<void> {
+  await expect(grey).toHaveCount(count);
+  await expect(page.getByRole("status").filter({ hasText: said })).toHaveClass(
+    /\bvisually-hidden\b/,
+  );
+  await expect(page.getByText(said)).toHaveCount(1);
+  await expect(page.locator("html")).toHaveJSProperty("scrollWidth", 360);
+  const top = (await grey.first().boundingBox())?.y ?? Number.NaN;
+  answer();
+  await expect(first).toBeVisible();
+  await expect(grey).toHaveCount(0);
+  await expect(page.getByText(said)).toHaveCount(0);
+  const now = (await first.boundingBox())?.y ?? Number.NaN;
+  expect(Math.abs(now - top)).toBeLessThanOrEqual(2);
+}
+
+for (const [name, theme] of [
+  ["light", { bg_color: "#ffffff", text_color: "#000000" }],
+  ["dark", { bg_color: "#17212b", text_color: "#f5f5f5" }],
+] as const)
+  test(`in the ${name} theme «Накладні» read slowly: three tags in grey where the first comes, «Завантажуємо накладні…» said to a reader alone (money task list after stage 2, P1-3)`, async ({
+    page,
+  }) => {
+    await listed(
+      page,
+      "supplier-invoices",
+      Array.from({ length: 3 }, (_, n) => invoice(n)),
+      invoice(-1),
+    );
+    const answer = await slowly(page, "supplier-invoices", "Накладні", theme);
+    // The total is read on its own: settled before the places are measured.
+    await expect(page.locator(".invoice-total-line")).toBeVisible();
+    const grey = page.locator(
+      "section.invoices .placeholder.order-tags > .order-tag",
+    );
+    // The theme's grey, seen on its ground.
+    const skeleton = await page.evaluate(() => {
+      const probe = document.createElement("i");
+      probe.style.color = "var(--skeleton)";
+      document.body.append(probe);
+      const it = getComputedStyle(probe).color;
+      probe.remove();
+      return it;
+    });
+    const bar = grey.first().locator(".skeleton-name");
+    await expect(bar).toHaveCSS("background-color", skeleton);
+    expect(skeleton).not.toBe(
+      await page.evaluate(
+        () => getComputedStyle(document.body).backgroundColor,
+      ),
+    );
+    await page.screenshot({ path: `test-results/invoices-held-${name}.png` });
+    await heldThenShown(
+      page,
+      grey,
+      3,
+      "Завантажуємо накладні…",
+      page.getByRole("article", { name: /^Постачальник / }).first(),
+      answer,
+    );
+  });
+
+test("«Постачальникам» read slowly: three rows in grey where the first comes, «Завантажуємо повернення…» said to a reader alone (money task list after stage 2, P1-3)", async ({
+  page,
+}) => {
+  await listed(
+    page,
+    "supplier-returns",
+    Array.from({ length: 3 }, (_, n) => sentBack(n)),
+    sentBack(-1),
+  );
+  const answer = await slowly(page, "supplier-returns", "Постачальникам");
+  await heldThenShown(
+    page,
+    page.locator(".supplier-returns .placeholder .sale-row"),
+    3,
+    "Завантажуємо повернення…",
+    page
+      .getByRole("list", { name: "Повернення постачальникам" })
+      .getByRole("button")
+      .first(),
+    answer,
+  );
+});
+
+test("«Позичене й під реалізацію» read slowly: three tags in grey where the first comes, «Завантажуємо позичене…» said to a reader alone (money task list after stage 2, P1-3)", async ({
+  page,
+}) => {
+  await listed(
+    page,
+    "borrowed",
+    Array.from({ length: 3 }, (_, n) => lot(n)),
+    lot(-1),
+  );
+  const answer = await slowly(page, "borrowed", "Позичене й під реалізацію");
+  await heldThenShown(
+    page,
+    page.locator("section.borrowed .placeholder.order-tags > .order-tag"),
+    3,
+    "Завантажуємо позичене…",
+    page.getByRole("list", { name: "Позичене" }).getByRole("article").first(),
+    answer,
+  );
 });

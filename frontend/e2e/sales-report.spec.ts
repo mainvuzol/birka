@@ -8,6 +8,7 @@ import {
   openStore,
   section,
   storeLine,
+  under14,
 } from "./fixtures";
 import type { Locator, Page, Request, Route } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
@@ -838,7 +839,9 @@ test("at 390 × 844 with two stores the switch, «ПРОДАЖІ» and «ГРО�
     .getByRole("button", { name: "Продажі й повернення", exact: true })
     .click();
   await stores(page).getByRole("button", { name: "«Ринок»" }).click();
-  await expect(page.getByText("Ні продажів, ні повернень.")).toBeVisible();
+  // Nothing: the blank tag 64 and its one line (money task list after
+  // stage 2, P2-2).
+  await blank(page, "Ні продажів, ні повернень.");
   // «Гроші», the report's row, «Вчора», its row, its store — «Тиждень»
   // above was another way.
   expect((await taps()) + 1 - 1).toBe(5);
@@ -865,6 +868,18 @@ async function ownReport(
   await openStore(page, "Центр CENTRE");
   await section(page, "Звіт про продажі");
   await expect(table(page)).toBeVisible();
+}
+
+/** Nothing in the period, as every list of stage 2 says it (spec §6.28;
+ * money task list after stage 2, P2-2): the blank tag 64, its one line,
+ * nothing under it. */
+async function blank(page: Page, line: string): Promise<void> {
+  const empty = page.locator(".orders-empty");
+  await expect(empty.locator(".t-row")).toHaveText(line);
+  const mark = empty.locator(".orders-empty-mark");
+  await expect(mark).toBeVisible();
+  expect(Math.round((await mark.boundingBox())?.height ?? 0)).toBe(64);
+  await expect(empty.locator(".t-meta, button")).toHaveCount(0);
 }
 
 /** The WCAG contrast of an element's text against what it is drawn on. */
@@ -981,6 +996,28 @@ for (const [name, theme, scheme] of [
       page.getByRole("button", { name: "Моделі", exact: true }),
     ])
       expect(await contrast(part)).toBeGreaterThanOrEqual(4.5);
+    // Rows apart by a divider's hairline, never a control's edge (money
+    // task list after stage 2, P2-4).
+    const shown = (colour: string): Promise<string> =>
+      page.evaluate((value) => {
+        const probe = document.createElement("i");
+        probe.style.color = value;
+        document.body.append(probe);
+        const it = getComputedStyle(probe).color;
+        probe.remove();
+        return it;
+      }, colour);
+    const hairline = await shown("var(--hairline)");
+    expect(hairline).not.toBe(await shown("var(--edge)"));
+    // Nothing in the table reads under 14 but its column heads and its
+    // sections' capitals (P2-4; review).
+    expect(await under14(table(page))).toEqual([]);
+    const divided = table(page).locator("tbody tr:not(.report-section)");
+    expect(await divided.count()).toBeGreaterThan(3);
+    for (const row of await divided.all()) {
+      await expect(row).toHaveCSS("border-top-width", "1px");
+      await expect(row).toHaveCSS("border-top-color", hairline);
+    }
     await page.screenshot({
       path: `test-results/report-${name}.png`,
       fullPage: true,
@@ -1179,6 +1216,8 @@ test("«Продажі й повернення»: a thread by day, the newest fi
   const old = thread.getByRole("listitem").last();
   await expect(old.locator(".timeline-day")).toHaveText("31.12 2025");
   await expect(old.locator(".timeline-year")).toHaveText("2025");
+  // Its year in the meta's 14, as the whole thread (P2-4; review).
+  expect(await under14(thread)).toEqual([]);
   const typed = thread.getByRole("listitem").nth(2);
   await expect(typed).toContainText("04.11Продаж 1 850,00 грн18:30 · Ліда");
   // Another day: its first entry says it.
@@ -1204,7 +1243,7 @@ test("«Продажі й повернення»: a thread by day, the newest fi
   await expect(
     stores(page).getByRole("button", { name: "«Центр»" }),
   ).toHaveAttribute("aria-pressed", "true");
-  await expect(page.getByText("Нічого не продано.")).toBeVisible();
+  await blank(page, "Нічого не продано.");
   await stores(page).getByRole("button", { name: "Усі", exact: true }).click();
   await expect(
     page.getByRole("list", { name: "Моделі" }).getByRole("listitem"),

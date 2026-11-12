@@ -3,6 +3,7 @@ import type { JSX } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { api } from "@/shared/api";
 import { Unread } from "@/shared/Unread";
+import { Placeholder } from "@/shared/Placeholder";
 import { decimal, kopecks, money } from "@/orders/types";
 import type { Store } from "@/orders/types";
 import { visible } from "@/shared/visible";
@@ -231,7 +232,8 @@ export function Suppliers({
           disabled={false}
         />
         {returns.isPending ? (
-          <p role="status">Завантажуємо повернення…</p>
+          // Three rows' places (money task list after stage 2, P1-3).
+          <Placeholder said="Завантажуємо повернення…" rows={3} day={false} />
         ) : returns.data === undefined ? (
           <Unread
             error={returns.error}
@@ -283,7 +285,9 @@ export function Suppliers({
                 }}
               />
             )}
-            {returns.hasNextPage && (
+            {/* A page that failed is asked again by its own retry, alone
+              (money task list after stage 2, P2-1). */}
+            {returns.hasNextPage && !returns.isFetchNextPageError && (
               <button
                 className="quiet"
                 disabled={returns.isFetching}
