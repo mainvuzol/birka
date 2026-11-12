@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { JSX } from "react";
 import { createPortal } from "react-dom";
-import { errorText, inOwnWords } from "@/shared/api";
+import { errorText, inOwnWords, refusalStep } from "@/shared/api";
 import { visible } from "@/shared/visible";
 import type { ApiError } from "@/shared/api";
 import { Eyelet } from "@/shared/Eyelet";
@@ -383,9 +383,20 @@ export function refusalText(
     return `В обліку вже менше, ніж ви списуєте. Залишки оновлено — перевірте кількість.${after}`;
   if (details.reason === "RESERVED" && typeof details.reserved === "number")
     return `На цей товар є резерв замовлення (${String(details.reserved)} шт.). Виправити облік можна після видачі або скасування замовлення.${after}`;
-  return `${inOwnWords(
-    errorText(error),
-    "Перевірте кількість та спробуйте ще раз.",
-    "Облік змінився — перерахуйте товар і спробуйте ще раз.",
-  )}${after}`;
+  // A kept correction refused on resend keeps its words (owner, В-П1 (б):
+  // the kept operations' words stay, `@/cash/errors`); one refused as it is
+  // pressed says what to check, or the step — never «спробуйте ще раз».
+  return `${
+    after === ""
+      ? inOwnWords(
+          errorText(error),
+          "Перевірте кількість та спробуйте ще раз.",
+          "Облік змінився — перерахуйте товар і спробуйте ще раз.",
+        )
+      : refusalStep(
+          error,
+          "Перевірте кількість.",
+          "Облік змінився — перерахуйте товар і введіть кількість ще раз.",
+        )
+  }${after}`;
 }

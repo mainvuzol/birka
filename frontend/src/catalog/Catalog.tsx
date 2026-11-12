@@ -6,7 +6,7 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { recordedNothing, api } from "@/shared/api";
+import { api } from "@/shared/api";
 import { Eyelet } from "@/shared/Eyelet";
 import { ModeSwitch } from "@/shared/ModeSwitch";
 import { Sheet } from "@/shared/Sheet";
@@ -16,6 +16,7 @@ import { visible } from "@/shared/visible";
 import type { Store } from "@/orders/types";
 import {
   catalogMessage,
+  catalogRefusal,
   forgetCatalogRefusal,
   submitCatalogCommand,
   useCatalogCommand,
@@ -214,11 +215,7 @@ export function Catalog({
           checks it. */}
       {!creating && !making && <KeptCatalog loaded={loaded} run={run} />}
       {error !== null && !creating && !making && (
-        <p role="alert">
-          {kept && recordedNothing(error)
-            ? `Операцію каталогу не записано. ${catalogMessage(error)}`
-            : catalogMessage(error)}
-        </p>
+        <p role="alert">{catalogRefusal(error, kept, pending !== null)}</p>
       )}
       <ScreenHeader
         title={selected ? "Пропозиція" : "Перевірка каталогу"}
@@ -523,6 +520,8 @@ function Detail({
 }): JSX.Element {
   const busy = useCatalogCommand((state) => state.busy);
   const error = useCatalogCommand((state) => state.error);
+  const keptRefusal = useCatalogCommand((state) => state.kept);
+  const stillKept = useCatalogCommand((state) => state.pending !== null);
   const [chosen, setChosen] = useState<string | null>(null);
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState("");
@@ -731,7 +730,16 @@ function Detail({
               foot={<div ref={setFoot} />}
             >
               <p className="t-meta">«{visible(decision.preview.raw_text)}»</p>
-              {error !== null && <p role="alert">{catalogMessage(error)}</p>}
+              {error !== null && (
+                <p role="alert">
+                  {catalogRefusal(
+                    error,
+                    keptRefusal,
+                    stillKept,
+                    "Перевірте причину відхилення.",
+                  )}
+                </p>
+              )}
               <label>
                 Причина відхилення
                 <textarea

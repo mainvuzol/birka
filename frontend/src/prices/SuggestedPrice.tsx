@@ -2,7 +2,7 @@ import { useId, useState } from "react";
 import type { JSX } from "react";
 import { createPortal } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ApiError, api, errorText, inOwnWords, isConflict } from "@/shared/api";
+import { ApiError, api, isConflict, refusedWrite } from "@/shared/api";
 import { Eyelet } from "@/shared/Eyelet";
 import { Keypad } from "@/shared/Keypad";
 import { ModeSwitch } from "@/shared/ModeSwitch";
@@ -241,9 +241,10 @@ function Form({
         if (isConflict(error)) await refetch();
         setProblem(
           error instanceof ApiError
-            ? inOwnWords(
-                errorText(error),
-                "Ціну не збережено. Перевірте суму та спробуйте ще раз.",
+            ? refusedWrite(
+                error,
+                "Ціну не збережено.",
+                "Перевірте суму.",
                 "Ціну не збережено: її щойно змінили — перевірте й збережіть ще раз.",
               )
             : "Немає відповіді сервера. Натисніть ще раз — повторне збереження безпечне.",

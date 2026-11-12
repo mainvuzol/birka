@@ -1,9 +1,4 @@
-import {
-  CONFLICT_TEXT,
-  errorText,
-  failedWrite,
-  inOwnWords,
-} from "@/shared/api";
+import { CONFLICT_TEXT, errorText, refusedWrite } from "@/shared/api";
 import type { StoreState } from "@/orders/types";
 import { visible } from "@/shared/visible";
 import { MAX_PART_LINES, MAX_PART_TEXT_CHARS } from "./stockFile";
@@ -285,11 +280,7 @@ export function listRefusal(
   check: string,
   changed: string = LIST_CHANGED,
 ): string {
-  const said = errorText(error);
-  return (
-    failedWrite(error, said, notDone, check) ??
-    inOwnWords(said, `${notDone} ${check}`, `${notDone} ${changed}`)
-  );
+  return refusedWrite(error, notDone, check, `${notDone} ${changed}`);
 }
 
 /** A conflict a list's screen does not name: its caller reads the list

@@ -7,6 +7,7 @@ import {
   newModelSheet,
   openStore,
   propose,
+  refuseOnce,
   section,
   sizeCell,
   typeSize,
@@ -174,6 +175,19 @@ test("reject proposal and retrieve its preserved reason from history", async ({
   const reject = sheet.getByRole("button", { name: "Відхилити", exact: true });
   await expect(reject).toBeDisabled();
   await sheet.getByLabel("Причина відхилення").fill("Це інша модель");
+  // Refused for a reason it does not name: what was not done, then what to
+  // check — never «спробуйте ще раз» (owner, В-П1 (б)); the reason kept.
+  await refuseOnce(page, "**/api/v1/catalog/match-decisions/*/reject", 404);
+  await reject.click();
+  await expect(
+    sheet.getByText(
+      "Операцію каталогу не записано. Перевірте причину відхилення.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await expect(sheet.getByLabel("Причина відхилення")).toHaveValue(
+    "Це інша модель",
+  );
   const response = page.waitForResponse(
     (r) => r.url().endsWith("/reject") && r.status() === 200,
   );

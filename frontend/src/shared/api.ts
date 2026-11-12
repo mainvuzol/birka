@@ -295,6 +295,52 @@ export function failedWrite(
   return check === undefined ? notDone : `${notDone} ${check}`;
 }
 
+/**
+ * A write refused, in its screen's own words (owner, 2026-11-11, В-П1 (б)):
+ * what was not done, then the step — never «спробуйте ще раз». A request it
+ * could not take (422), or one naming nothing (400, 404): `notDone` and
+ * `check`; a conflict (409): `changed`, whole; the server's own failure
+ * (5xx): `notDone`, and to press again, its request's number kept — every
+ * command so refused is safe to send again (`failedWrite`). Any other
+ * answer — a reason the server named, no server, a session ended, no
+ * access — keeps its own words.
+ */
+export function refusedWrite(
+  error: unknown,
+  notDone: string,
+  check: string,
+  changed: string,
+): string {
+  const said = errorText(error);
+  return (
+    failedWrite(error, said, notDone, check) ??
+    inOwnWords(said, `${notDone} ${check}`, changed)
+  );
+}
+
+/**
+ * Why a stock write was refused as it was pressed, where its screen says the
+ * fate after it — a count, a correction (owner, 2026-11-11, В-П1 (б)): a
+ * request it could not take, or one naming nothing (400, 404), `check`; a
+ * conflict, `changed` — never «спробуйте ще раз». The server's own failure
+ * keeps the shared words: such a command is kept on the phone, never
+ * refused so.
+ */
+export function refusalStep(
+  error: unknown,
+  check: string,
+  changed: string,
+): string {
+  const said = errorText(error);
+  if (
+    error instanceof ApiError &&
+    error.status < 500 &&
+    said.startsWith(FAILED_TEXT)
+  )
+    return check;
+  return inOwnWords(said, check, changed);
+}
+
 /** A read that failed, in a store: no answer, `SILENT`; any other, as the
  * place says it (`errorText`, unless it has words of its own). */
 export function readText(

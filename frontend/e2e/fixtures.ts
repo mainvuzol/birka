@@ -476,17 +476,23 @@ export async function section(page: Page, name: string): Promise<void> {
     .click();
 }
 
+/** The server's own failure's number, as `refuseOnce`'s 500 carries it:
+ * a screen quotes its first eight characters. */
+export const FAILED_REQUEST_ID = "3f9c2a7e-1b2c-4d5e-8f90-a1b2c3d4e5f6";
+
 /**
  * The next command sent to `pattern` — never a read of it — refused once,
- * for a reason no screen names: its form (422) or a conflict (409); the
- * shared words for those speak of an order, and every screen says its own
- * (owner decisions, 2026-10-24 and 2026-10-25). `details` as the server
- * would add them, e.g. `{ recorded: false }`.
+ * for a reason no screen names: its form (422), a conflict (409), a
+ * request naming nothing (404), or the server's own failure (500, under
+ * `FAILED_REQUEST_ID`); the shared words for those speak of an order or say
+ * «спробуйте ще раз», and every screen says its own (owner decisions,
+ * 2026-10-24, 2026-10-25 and 2026-11-11, В-П1 (б)). `details` as the
+ * server would add them, e.g. `{ recorded: false }`.
  */
 export async function refuseOnce(
   page: Page,
   pattern: string,
-  status: 422 | 409,
+  status: 422 | 409 | 404 | 500,
   details: Record<string, unknown> = {},
 ): Promise<void> {
   let used = false;
@@ -496,6 +502,18 @@ export async function refuseOnce(
       return;
     }
     used = true;
+    if (status === 500) {
+      await route.fulfill({
+        status,
+        headers: { "X-Request-ID": FAILED_REQUEST_ID },
+        json: {
+          code: "INTERNAL_ERROR",
+          message: "Внутрішня помилка сервера.",
+          details,
+        },
+      });
+      return;
+    }
     await route.fulfill({
       status,
       json:
@@ -505,7 +523,9 @@ export async function refuseOnce(
               message: "Request failed validation",
               details,
             }
-          : { code: "CONFLICT", message: "Conflict", details },
+          : status === 404
+            ? { code: "NOT_FOUND", message: "Not found", details }
+            : { code: "CONFLICT", message: "Conflict", details },
     });
   });
 }

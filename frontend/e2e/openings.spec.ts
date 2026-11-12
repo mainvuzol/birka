@@ -1574,7 +1574,9 @@ test("nothing is received into a warehouse while its list waits, and it is once 
       { exact: false },
     ),
   ).toBeVisible();
-  await expect(page.getByText(/нічого не прийнято/)).toBeVisible();
+  await expect(
+    page.getByText(/ Нічого не прийнято, список збережено\.$/),
+  ).toBeVisible();
 
   await section(page, "Початкові залишки");
   await page

@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import type { JSX } from "react";
 import { createPortal } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ApiError, api, recordedNothing } from "@/shared/api";
+import { ApiError, api } from "@/shared/api";
 import { Eyelet } from "@/shared/Eyelet";
 import { ModeSwitch } from "@/shared/ModeSwitch";
 import { Sheet } from "@/shared/Sheet";
@@ -13,7 +13,7 @@ import { Unread } from "@/shared/Unread";
 import type { Store } from "@/orders/types";
 import type { ReceivableVariant, SizeOption } from "@/inventory/receiptTypes";
 import {
-  catalogMessage,
+  catalogRefusal,
   forgetCatalogRefusal,
   submitCatalogCommand,
   useCatalogCommand,
@@ -412,9 +412,7 @@ export function NewModel({
             operation's refused elsewhere (review). */}
         {error !== null && ours && (
           <p role="alert" className="new-model-refusal">
-            {kept && recordedNothing(error)
-              ? `Операцію каталогу не записано. ${catalogMessage(error)}`
-              : catalogMessage(error)}
+            {catalogRefusal(error, kept, pending !== null)}
           </p>
         )}
         {step === "raw" ? (

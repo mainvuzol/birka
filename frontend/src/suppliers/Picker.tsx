@@ -8,7 +8,7 @@ import type {
 } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { UseQueryResult } from "@tanstack/react-query";
-import { ApiError, api, errorText, inOwnWords } from "@/shared/api";
+import { ApiError, api, isConflict, refusedWrite } from "@/shared/api";
 import { Unread } from "@/shared/Unread";
 import { Placeholder } from "@/shared/Placeholder";
 import type { Store } from "@/orders/types";
@@ -345,14 +345,19 @@ export function SupplierPicker({
           `«${visible(String(error.details.name))}» уже є у списку — обрано його.`,
         );
         take(String(error.details.supplier_id));
-      } else
+      } else {
+        // Changed meanwhile: the list it says to look at is read again.
+        if (isConflict(error))
+          await cache.invalidateQueries({ queryKey: ["suppliers", store.id] });
         setProblem(
-          inOwnWords(
-            errorText(error),
-            "Постачальника не додано. Перевірте назву й телефон та спробуйте ще раз.",
-            "Постачальника не додано: дані змінилися — спробуйте ще раз.",
+          refusedWrite(
+            error,
+            "Постачальника не додано.",
+            "Перевірте назву й телефон.",
+            "Постачальника не додано: дані змінилися — перегляньте список постачальників.",
           ),
         );
+      }
     } finally {
       setBusy(false);
     }

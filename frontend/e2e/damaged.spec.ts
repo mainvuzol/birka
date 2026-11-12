@@ -318,9 +318,24 @@ test("a damaged coat waits under «Чекають», is taken for inspection in 
   await refuseOnce(page, "**/api/v1/damaged-units/*/take", 422);
   await unit.getByRole("button", { name: "Взяти на перевірку" }).click();
   await expect(
-    page.getByText("Не записано. Перевірте дані та спробуйте ще раз.", {
+    page.getByText("Не записано. Перевірте дані одиниці.", {
       exact: true,
     }),
+  ).toBeVisible();
+  // The server's own failure, or a request naming nothing: what was not
+  // done, then the step — never «спробуйте ще раз» (owner, В-П1 (б)).
+  await refuseOnce(page, "**/api/v1/damaged-units/*/take", 500);
+  await unit.getByRole("button", { name: "Взяти на перевірку" }).click();
+  await expect(
+    page.getByText(
+      "Не записано. Натисніть ще раз — повторити безпечно. Номер запиту: 3f9c2a7e.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await refuseOnce(page, "**/api/v1/damaged-units/*/take", 404);
+  await unit.getByRole("button", { name: "Взяти на перевірку" }).click();
+  await expect(
+    page.getByText("Не записано. Перевірте дані одиниці.", { exact: true }),
   ).toBeVisible();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await unit.getByRole("button", { name: "Взяти на перевірку" }).click();

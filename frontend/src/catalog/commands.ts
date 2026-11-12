@@ -3,10 +3,12 @@ import {
   api,
   ApiError,
   errorText,
+  failedWrite,
   recordedNothing,
   refusedOutright,
 } from "@/shared/api";
 import { isSince, sinceOf } from "@/shared/reach";
+import { keptUnconfirmed, twiceOf } from "@/cash/errors";
 import { buzz } from "@/shared/telegram";
 import type { Decision } from "./types";
 export interface Command {
@@ -56,6 +58,10 @@ export const useCatalogJournal = create<{
   key: string | null;
   person: string;
 }>(() => ({ key: null, person: "" }));
+/** A conflict, and a request not taken, the catalogue does not name. */
+const CATALOG_CHANGED =
+  "Каталог або рішення змінилися. Оновіть перегляд. Для застарілої підказки створіть нову пропозицію та перевірте товар заново.";
+const CATALOG_INVALID = "Перевірте введені дані та стан пропозиції.";
 /** Why the catalogue refused, in the shop's words. */
 export function catalogMessage(error: unknown): string {
   // Correcting the catalogue (owner decision, 2026-10-03) says its own.
@@ -67,12 +73,50 @@ export function catalogMessage(error: unknown): string {
   if (error instanceof ApiError && error.code === "IDEMPOTENCY_CONFLICT")
     return "Для цієї операції або назви вже збережено інше рішення. Оновіть перегляд; зберігати відповідь ще раз не потрібно.";
   if (error instanceof ApiError && error.code === "CATALOG_AMBIGUOUS")
-    return "Модель неоднозначна або стан каталогу змінився. Перевірте обрану модель. Для окремої моделі зі схожою назвою вкажіть її відмінність; за тимчасового конфлікту повторіть спробу.";
-  if (error instanceof ApiError && error.status === 409)
-    return "Каталог або рішення змінилися. Оновіть перегляд. Для застарілої підказки створіть нову пропозицію та перевірте товар заново.";
-  if (error instanceof ApiError && error.status === 422)
-    return "Перевірте введені дані та стан пропозиції.";
+    return "Модель неоднозначна або стан каталогу змінився. Перевірте обрану модель. Для окремої моделі зі схожою назвою вкажіть її відмінність.";
+  if (error instanceof ApiError && error.status === 409) return CATALOG_CHANGED;
+  if (error instanceof ApiError && error.status === 422) return CATALOG_INVALID;
   return errorText(error);
+}
+
+/** What a catalogue operation refused said first: what was not done. */
+const NOT_RECORDED = "Операцію каталогу не записано.";
+
+/**
+ * Why a catalogue operation was answered as it was, in its words.
+ * - `held`: the phone still keeps it, its outcome unknown — the server's
+ *   own failure, an answer proving nothing about a resend, a read after it
+ *   was taken: as every kept command says it, «… ще не підтверджено …»,
+ *   never «не записано» or «спробуйте ще раз» (owner decisions, 2026-10-18,
+ *   2026-10-25); a reason the server named, its own words.
+ * - `kept`, refused as having recorded nothing on a resend: «Операцію
+ *   каталогу не записано.» before why — the kept operations' words stay
+ *   (owner, В-П1 (б)).
+ * - Refused as it was pressed, nothing recorded: what was not done first —
+ *   a request not taken, a conflict it does not name; one naming nothing
+ *   (400, 404), then `check` — never the shared «Спробуйте ще раз» (owner,
+ *   2026-11-11, В-П1 (б)).
+ */
+export function catalogRefusal(
+  error: unknown,
+  kept: boolean,
+  held: boolean,
+  check = "Перевірте модель і назву.",
+): string {
+  const said = catalogMessage(error);
+  if (held)
+    return keptUnconfirmed(error, "Операцію каталогу", twiceOf("вона")) ?? said;
+  if (kept) return recordedNothing(error) ? `${NOT_RECORDED} ${said}` : said;
+  if (!(error instanceof ApiError)) return said;
+  // A request not taken, or a conflict it does not name: what was not done
+  // first; a reason the server named, its own words.
+  if (said === CATALOG_CHANGED || said === CATALOG_INVALID)
+    return `${NOT_RECORDED} ${said}`;
+  return (
+    (error.status < 500
+      ? failedWrite(error, said, NOT_RECORDED, check)
+      : null) ?? said
+  );
 }
 /**
  * The form a refusal answered is left. A first attempt refused kept nothing,

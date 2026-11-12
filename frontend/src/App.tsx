@@ -1608,8 +1608,8 @@ function Workspace({
           error: outcome.error,
           said:
             attempt.body.kind === "sold"
-              ? borrowedRefusalText(outcome.error)
-              : invoiceRefusalText(outcome.error),
+              ? borrowedRefusalText(outcome.error, true)
+              : invoiceRefusalText(outcome.error, true),
         });
         suppliersRead();
       }
@@ -1630,8 +1630,8 @@ function Workspace({
             error: outcome.error,
             // Borrowed goods sent back say it as their section does.
             said: attempt.body.stock_lot_id
-              ? borrowedRefusalText(outcome.error)
-              : supplierRefusalText(outcome.error),
+              ? borrowedRefusalText(outcome.error, true)
+              : supplierRefusalText(outcome.error, true),
           });
           suppliersRead();
         }

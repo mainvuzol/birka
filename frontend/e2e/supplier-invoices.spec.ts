@@ -9,6 +9,7 @@ import {
   more,
   openStore,
   pickSupplier,
+  readsOf,
   refuseOnce,
   rowNamed,
   section,
@@ -423,10 +424,37 @@ test("an invoice is recorded on its own screen and paid in parts until it is set
   await refuseOnce(page, "**/api/v1/suppliers", 422);
   await suppliers.getByRole("button", { name: "Додати постачальника" }).click();
   await expect(
+    suppliers.getByText("Постачальника не додано. Перевірте назву й телефон.", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  // Changed meanwhile, the server's own failure, a request naming
+  // nothing: never «спробуйте ще раз» (owner, В-П1 (б)).
+  const listReads = readsOf(page, /\/api\/v1\/suppliers$/);
+  await refuseOnce(page, "**/api/v1/suppliers", 409);
+  await suppliers.getByRole("button", { name: "Додати постачальника" }).click();
+  await expect(
     suppliers.getByText(
-      "Постачальника не додано. Перевірте назву й телефон та спробуйте ще раз.",
+      "Постачальника не додано: дані змінилися — перегляньте список постачальників.",
       { exact: true },
     ),
+  ).toBeVisible();
+  // The list it says to look at, read again.
+  await expect.poll(listReads).toBeGreaterThan(0);
+  await refuseOnce(page, "**/api/v1/suppliers", 500);
+  await suppliers.getByRole("button", { name: "Додати постачальника" }).click();
+  await expect(
+    suppliers.getByText(
+      "Постачальника не додано. Натисніть ще раз — повторити безпечно. Номер запиту: 3f9c2a7e.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await refuseOnce(page, "**/api/v1/suppliers", 404);
+  await suppliers.getByRole("button", { name: "Додати постачальника" }).click();
+  await expect(
+    suppliers.getByText("Постачальника не додано. Перевірте назву й телефон.", {
+      exact: true,
+    }),
   ).toBeVisible();
   await suppliers.getByRole("button", { name: "Додати постачальника" }).click();
   await expect(suppliers).toHaveCount(0);
@@ -490,9 +518,17 @@ test("an invoice is recorded on its own screen and paid in parts until it is set
   await refuseOnce(page, "**/api/v1/supplier-invoices/*/payments", 409);
   await payButton(page).click();
   await expect(page.getByRole("alert")).toHaveText(
-    "Не записано: дані змінилися — перегляньте їх і спробуйте ще раз.",
+    "Не записано: дані змінилися — перегляньте їх.",
   );
   // The sum kept: pressed again.
+  await expect(payButton(page)).toHaveText("Сплатити 999,50 грн");
+  // A request naming nothing: what was not done, then what to check —
+  // never «спробуйте ще раз» (owner, В-П1 (б)).
+  await refuseOnce(page, "**/api/v1/supplier-invoices/*/payments", 404);
+  await payButton(page).click();
+  await expect(page.getByRole("alert")).toHaveText(
+    "Не записано. Перевірте дані накладної.",
+  );
   await expect(payButton(page)).toHaveText("Сплатити 999,50 грн");
   await payButton(page).click();
   await expect(
@@ -556,14 +592,14 @@ test("an invoice is recorded on its own screen and paid in parts until it is set
   await expectGlyphBeside(page.locator(".invoice-closed .sticker"));
   await expect(payOnCard(page)).toHaveCount(0);
   await expect(history(page).getByRole("listitem")).toHaveCount(3);
-  // The one refused above, then the same payment as a new command, then
+  // The two refused above, then the same payment as a new command, then
   // the rest.
-  expect(paid.bodies).toHaveLength(3);
+  expect(paid.bodies).toHaveLength(4);
   expect({ ...(paid.bodies[0] as object), command_id: null }).toEqual({
-    ...(paid.bodies[1] as object),
+    ...(paid.bodies[2] as object),
     command_id: null,
   });
-  expect(paid.bodies.slice(1)).toEqual([
+  expect(paid.bodies.slice(2)).toEqual([
     { command_id: expect.any(String) as string, amount: "999.50" },
     { command_id: expect.any(String) as string, amount: "3000.00" },
   ]);
@@ -686,7 +722,7 @@ test("goods returned are set off against an invoice, and their return waits for 
     .getByRole("button", { name: "Зарахувати 1 200,00 грн", exact: true })
     .click();
   await expect(setOff.getByRole("alert")).toHaveText(
-    "Не записано: дані змінилися — перегляньте їх і спробуйте ще раз.",
+    "Не записано: дані змінилися — перегляньте їх.",
   );
   await expect(returns).toHaveAttribute("aria-pressed", "true");
   await expect(
@@ -1489,6 +1525,47 @@ test("a kept payment refused on its check says why in the invoices' words, and f
   await expect(
     page.getByRole("button", { name: "Продаж", exact: true }),
   ).toBeEnabled();
+});
+
+test("a kept payment refused on its check for a conflict it does not name keeps the kept operations' words (owner, В-П1 (б))", async ({
+  page,
+}) => {
+  const supplier = `Збережені ${randomUUID().slice(0, 6)}`;
+  await anInvoice(page, await aSupplier(page, supplier), "500.00");
+  let first = true;
+  await page.route("**/api/v1/supplier-invoices/*/payments", async (route) => {
+    if (first) {
+      first = false;
+      // Never reached the server.
+      await route.abort("connectionfailed");
+    } else await route.fallback();
+  });
+  await invoicesAt(page, hanna);
+  await open(page, supplier);
+  await payOnCard(page).click();
+  await keyIn(page, "100");
+  await payButton(page).click();
+  await expect(page.locator(".stub-notice .stub-kept")).toBeVisible();
+  // Changed meanwhile, says the server, having recorded nothing: the kept
+  // payment's words, as before — never the words of one just pressed.
+  await refuseOnce(page, "**/api/v1/supplier-invoices/*/payments", 409, {
+    recorded: false,
+  });
+  await back(page, "Накладна").click();
+  await sections(page)
+    .getByRole("button", { name: "Гроші", exact: true })
+    .click();
+  await page
+    .locator(".banner-kept")
+    .getByRole("button", { name: "Перевірити результат оплати" })
+    .click();
+  await expect(
+    page.getByRole("alert").filter({
+      hasText:
+        "Не записано: дані змінилися — перегляньте їх і спробуйте ще раз.",
+    }),
+  ).toBeVisible();
+  await expect(page.locator(".banner-kept, .banner-recorded")).toHaveCount(0);
 });
 
 // --- «Накладні» as tags (stage 2, money task list, P0-1, P0-3) --------------

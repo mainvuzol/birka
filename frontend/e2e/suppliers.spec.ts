@@ -307,15 +307,21 @@ test("goods go back to a supplier from a warehouse, and come back when it is can
   await refuseOnce(page, "**/api/v1/supplier-returns", 409);
   await sendBack(page, 2).click();
   await expect(
-    page.getByText(
-      "Не записано: дані повернення змінилися — перегляньте їх і спробуйте ще раз.",
-      { exact: true },
-    ),
+    page.getByText("Не записано: дані повернення змінилися — перегляньте їх.", {
+      exact: true,
+    }),
   ).toBeVisible();
   await expect.poll(stockReads).toBeGreaterThan(0);
   const listed = page.getByRole("region", { name: "У поверненні" });
   await expect(listed).toContainText(coat.model);
   await expect(listed).toContainText("2 шт.");
+  // A request naming nothing: what was not done, then what to check —
+  // never «спробуйте ще раз» (owner, В-П1 (б)).
+  await refuseOnce(page, "**/api/v1/supplier-returns", 404);
+  await sendBack(page, 2).click();
+  await expect(
+    page.getByText("Не записано. Перевірте повернення.", { exact: true }),
+  ).toBeVisible();
   await sendBack(page, 2).click();
   // Its stub: what went back, from where; «Готово» back to the list.
   await expect(
@@ -327,13 +333,13 @@ test("goods go back to a supplier from a warehouse, and come back when it is can
     "склад «Склад мережі»",
   );
   await page.getByRole("button", { name: "Готово", exact: true }).click();
-  // The one refused above, then the same return as a new command.
-  expect(sent.bodies).toHaveLength(2);
+  // The two refused above, then the same return as a new command.
+  expect(sent.bodies).toHaveLength(3);
   expect({ ...(sent.bodies[0] as object), command_id: null }).toEqual({
-    ...(sent.bodies[1] as object),
+    ...(sent.bodies[2] as object),
     command_id: null,
   });
-  expect(sent.bodies.slice(1)).toEqual([
+  expect(sent.bodies.slice(2)).toEqual([
     {
       command_id: expect.any(String) as string,
       store_id: fixture.network_centre_store_id,
@@ -381,10 +387,9 @@ test("goods go back to a supplier from a warehouse, and come back when it is can
   await ask.getByRole("button", { name: "Так, скасувати повернення" }).click();
   await expect(ask).toHaveCount(0);
   await expect(
-    page.getByText(
-      "Не записано: дані повернення змінилися — перегляньте їх і спробуйте ще раз.",
-      { exact: true },
-    ),
+    page.getByText("Не записано: дані повернення змінилися — перегляньте їх.", {
+      exact: true,
+    }),
   ).toBeVisible();
   await expect.poll(cancelReads).toBeGreaterThan(0);
   await page.getByRole("button", { name: "Скасувати повернення" }).click();
@@ -426,21 +431,37 @@ test("goods go back to a supplier from a warehouse, and come back when it is can
   await refuseOnce(page, "**/api/v1/suppliers/*", 422);
   await edit.getByRole("button", { name: "Зберегти" }).click();
   await expect(
-    edit.getByText(
-      "Постачальника не збережено. Перевірте назву й телефон та спробуйте ще раз.",
-      { exact: true },
-    ),
+    edit.getByText("Постачальника не збережено. Перевірте назву й телефон.", {
+      exact: true,
+    }),
   ).toBeVisible();
   const supplierReads = readsOf(page, /\/api\/v1\/suppliers$/);
   await refuseOnce(page, "**/api/v1/suppliers/*", 409);
   await edit.getByRole("button", { name: "Зберегти" }).click();
   await expect(
     edit.getByText(
-      "Постачальника не збережено: дані змінилися — перегляньте їх і спробуйте ще раз.",
+      "Постачальника не збережено: дані змінилися — перегляньте їх.",
       { exact: true },
     ),
   ).toBeVisible();
   await expect.poll(supplierReads).toBeGreaterThan(0);
+  // The server's own failure, or a request naming nothing: what was not
+  // done, then the step — never «спробуйте ще раз» (owner, В-П1 (б)).
+  await refuseOnce(page, "**/api/v1/suppliers/*", 500);
+  await edit.getByRole("button", { name: "Зберегти" }).click();
+  await expect(
+    edit.getByText(
+      "Постачальника не збережено. Натисніть ще раз — повторити безпечно. Номер запиту: 3f9c2a7e.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await refuseOnce(page, "**/api/v1/suppliers/*", 404);
+  await edit.getByRole("button", { name: "Зберегти" }).click();
+  await expect(
+    edit.getByText("Постачальника не збережено. Перевірте назву й телефон.", {
+      exact: true,
+    }),
+  ).toBeVisible();
   // Saved: the list shows it as it is now; nothing deletes a supplier.
   await edit.getByLabel("Телефон").fill("067 000 00 01");
   await edit.getByRole("button", { name: "Зберегти" }).click();

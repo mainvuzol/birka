@@ -305,7 +305,7 @@ test("the owner sets the shared price where goods arrive, and the store's own ov
   await expect(page.getByRole("button", { name: "Скасувати" })).toBeVisible();
   await save(page, "2 000,00").click();
   await expect(
-    page.getByText("Ціну не збережено. Перевірте суму та спробуйте ще раз.", {
+    page.getByText("Ціну не збережено. Перевірте суму.", {
       exact: true,
     }),
   ).toBeVisible();
@@ -320,6 +320,21 @@ test("the owner sets the shared price where goods arrive, and the store's own ov
   ).toBeVisible();
   await expect.poll(priceReads).toBeGreaterThan(0);
   await page.getByLabel("Нова ціна, грн").fill("2000");
+  // The server's own failure, or a request naming nothing: what was not
+  // done, then the step — never «спробуйте ще раз» (owner, В-П1 (б)).
+  await refuseOnce(page, "**/api/v1/catalog/prices", 500);
+  await save(page, "2 000,00").click();
+  await expect(
+    page.getByText(
+      "Ціну не збережено. Натисніть ще раз — повторити безпечно. Номер запиту: 3f9c2a7e.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await refuseOnce(page, "**/api/v1/catalog/prices", 404);
+  await save(page, "2 000,00").click();
+  await expect(
+    page.getByText("Ціну не збережено. Перевірте суму.", { exact: true }),
+  ).toBeVisible();
   await save(page, "2 000,00").click();
   await expect(
     page.getByText("Ціна продажу: 2 000,00 грн — спільна для всіх магазинів"),
