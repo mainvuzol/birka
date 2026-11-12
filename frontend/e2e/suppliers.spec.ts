@@ -910,6 +910,17 @@ test("a return whose answer is lost is resent unchanged, and takes the goods onc
       name: "Перевірити результат повернення",
     }),
   ).toBeVisible();
+  // On «Гроші», the open store's way to «Накладні» is held too (money task
+  // list after stage 2, P1-2).
+  await sections(page)
+    .getByRole("button", { name: "Гроші", exact: true })
+    .click();
+  const invoices = page
+    .getByRole("article", { name: "Ви винні постачальникам" })
+    .getByRole("button", { name: /^Накладні магазину / });
+  await expect(invoices).toBeDisabled();
+  // Held, it still reads: nothing faded over its money (review).
+  await expect(invoices).toHaveCSS("opacity", "1");
   // Written down before it was sent: a reload still knows what to ask about.
   await page.reload();
   await openStore(page, "Центр CENTRE");

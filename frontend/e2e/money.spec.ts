@@ -439,6 +439,27 @@ function moneyRow(page: Page, name: string | RegExp): Locator {
     .getByRole("button", { name });
 }
 
+/** A token's colour in the theme drawn. */
+async function token(page: Page, name: string): Promise<string> {
+  return page.evaluate((name) => {
+    const probe = document.createElement("span");
+    probe.style.color = `var(${name})`;
+    document.body.append(probe);
+    const colour = getComputedStyle(probe).color;
+    probe.remove();
+    return colour;
+  }, name);
+}
+
+async function colour(element: Locator): Promise<string> {
+  return element.evaluate((node) => getComputedStyle(node).color);
+}
+
+/** A place's glyph, before its title. */
+function glyph(page: Page, name: string): Locator {
+  return place(page, name).locator(".money-place-title .icon").first();
+}
+
 const weekdays = [
   "Неділя",
   "Понеділок",
@@ -521,13 +542,38 @@ test("the owner's fourth tab is «Гроші»: each place on its own, a line a 
     "«Ринок»: 0,00 грн",
   ]);
   await expect(lines(page, "Вам винні клієнти")).toHaveText([
-    "«Центр»: Винні 8 400,00 грн · 4 покупці",
-    "«Ринок»: Винні 2 600,00 грн · 2 покупці",
+    "«Центр»: Винні 8 400,00 грн · 4 людини",
+    "«Ринок»: Винні 2 600,00 грн · 2 людини",
   ]);
   await expect(lines(page, "Ви винні постачальникам")).toHaveText([
     "«Центр»: 38 000,00 грн · 3 накладні",
     "«Ринок»: 9 500,00 грн · 1 накладна",
   ]);
+  // What customers owe in a debt's colour, its twins «Винні» and the
+  // place's glyph; what is owed to suppliers in ink, its glyph too (money
+  // task list after stage 2, P1-1).
+  const owedColour = await token(page, "--owed");
+  const ink = await token(page, "--ink");
+  for (const line of await lines(page, "Вам винні клієнти").all())
+    expect(await colour(line)).toBe(owedColour);
+  expect(await colour(glyph(page, "Вам винні клієнти"))).toBe(owedColour);
+  for (const line of await lines(page, "Ви винні постачальникам").all())
+    expect(await colour(line)).toBe(ink);
+  expect(await colour(glyph(page, "Ви винні постачальникам"))).toBe(ink);
+  // «Накладні» read the open store alone: its line is the one way, the
+  // place's title none (P1-2).
+  const owing = place(page, "Ви винні постачальникам");
+  const invoices = owing.getByRole("button");
+  await expect(invoices).toHaveCount(1);
+  await expect(invoices).toHaveAccessibleName(
+    "Накладні магазину «Центр»: 38 000,00 грн · 3 накладні",
+  );
+  await expect(invoices.locator("svg.sale-open")).toHaveCount(1);
+  await expect(invoices).not.toContainText("›");
+  expect((await invoices.boundingBox())?.height).toBeGreaterThanOrEqual(44);
+  expect((await invoices.boundingBox())?.width).toBe(
+    (await owing.locator(".money-lines").boundingBox())?.width,
+  );
   await expect(page.locator(".money-rule")).toHaveText(
     "Кожне місце окремо — ніколи не складаємо в одну суму.",
   );
@@ -561,7 +607,7 @@ test("the owner's fourth tab is «Гроші»: each place on its own, a line a 
   ]);
   await expect(moneyRow(page, /./)).toHaveText([
     "Звіт про продажі",
-    "Закриття",
+    "Закриття · Центр",
     "Каса · Центр",
   ]);
   // Their chevron the set's 16 in pencil, never a «›» (audit after stage 2,
@@ -621,7 +667,7 @@ test("«Ще» › «Гроші» keeps only the suppliers' — «Постача
     ).toHaveCount(0);
 });
 
-test("each way from «Гроші» comes back with «← Гроші»: «Покупці», «Накладні», «Каса · Центр», «Закриття» — the tab marked on each", async ({
+test("each way from «Гроші» comes back with «← Гроші»: «Покупці», «Накладні» from the open store's line, «Каса · Центр», «Закриття · Центр» — the tab marked on each", async ({
   page,
 }) => {
   await me(page);
@@ -638,12 +684,12 @@ test("each way from «Гроші» comes back with «← Гроші»: «Пок�
     ],
     [
       place(page, "Ви винні постачальникам").getByRole("button", {
-        name: "Ви винні постачальникам",
+        name: /^Накладні магазину «Центр»/,
       }),
       "Накладні",
     ],
     [moneyRow(page, "Каса · Центр"), "Каса"],
-    [moneyRow(page, "Закриття"), "Закриття"],
+    [moneyRow(page, "Закриття · Центр"), "Закриття"],
   ] as const) {
     await open.click();
     await expect(
@@ -657,6 +703,116 @@ test("each way from «Гроші» comes back with «← Гроші»: «Пок�
     ).toBeVisible();
     await expect(tab).toBeFocused();
   }
+});
+
+test("from «Ринок», «Ви винні постачальникам» puts its line first, the one way, to «Ринок»'s own «Накладні»; «Центр»'s is a line without one; «Закриття · Ринок» opens «Ринок»'s closes; a manager of one store is two taps from «Накладні» (money task list after stage 2, P1-2)", async ({
+  page,
+}) => {
+  await me(page);
+  await s29(page);
+  await page.goto(owner());
+  await openStore(page, "Ринок");
+  await menu(page).getByRole("button", { name: "Гроші", exact: true }).click();
+  const owing = place(page, "Ви винні постачальникам");
+  await expect(owing.locator(".money-line")).toHaveText([
+    "«Ринок»: 9 500,00 грн · 1 накладна",
+    "«Центр»: 38 000,00 грн · 3 накладні",
+  ]);
+  await expect(owing.getByRole("button")).toHaveCount(1);
+  await expect(
+    owing.locator(".money-line").first().getByRole("button"),
+  ).toHaveAccessibleName(
+    "Накладні магазину «Ринок»: 9 500,00 грн · 1 накладна",
+  );
+  // The other places keep the report's order.
+  await expect(lines(page, "Вам винні клієнти")).toHaveText([
+    /^«Центр»: /,
+    /^«Ринок»: /,
+  ]);
+  await expect(moneyRow(page, /./)).toHaveText([
+    "Звіт про продажі",
+    "Закриття · Ринок",
+    "Каса · Ринок",
+  ]);
+  const read = (path: string) =>
+    page.waitForRequest((request) => {
+      const url = new URL(request.url());
+      return url.pathname === path;
+    });
+  const invoices = read("/api/v1/supplier-invoices");
+  await owing.getByRole("button").click();
+  await expect(
+    page.getByRole("heading", { name: "Накладні", exact: true }),
+  ).toBeVisible();
+  expect(new URL((await invoices).url()).searchParams.get("store_id")).toBe(
+    market,
+  );
+  await page.getByRole("button", { name: "Назад до «Гроші»" }).click();
+  const closes = read("/api/v1/cash/closes");
+  await moneyRow(page, "Закриття · Ринок").click();
+  await expect(
+    page.getByRole("heading", { name: "Закриття", exact: true }),
+  ).toBeVisible();
+  expect(new URL((await closes).url()).searchParams.get("store_id")).toBe(
+    market,
+  );
+
+  // A manager of one store: the tab and the line, as the tab and the title
+  // were.
+  await page.goto("about:blank");
+  await onMoney(
+    page,
+    launch(fixture.network_centre_manager_telegram_user_id, "Марко"),
+  );
+  // Counted from another tab: the tab, then the line.
+  await menu(page)
+    .getByRole("button", { name: "Сьогодні", exact: true })
+    .click();
+  await page.evaluate(() => {
+    const host = window as unknown as { taps: number };
+    host.taps = 0;
+    document.addEventListener(
+      "click",
+      (event) => {
+        if ((event.target as Element).closest("button")) host.taps += 1;
+      },
+      true,
+    );
+  });
+  await menu(page).getByRole("button", { name: "Гроші", exact: true }).click();
+  await expect(lines(page, "Ви винні постачальникам")).toHaveText([
+    "«Центр»: 38 000,00 грн · 3 накладні",
+  ]);
+  await place(page, "Ви винні постачальникам")
+    .getByRole("button", { name: /^Накладні магазину «Центр»/ })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Накладні", exact: true }),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(() => (window as unknown as { taps: number }).taps),
+  ).toBe(2);
+});
+
+test("nobody owing in any store: each line «Ніхто не винен» in pencil, the place's glyph in ink — a debt's colour only where one is (money task list after stage 2, P1-1)", async ({
+  page,
+}) => {
+  await me(page);
+  await s29(page);
+  await debts(page, centre, "0.00", 0);
+  await debts(page, market, "0.00", 0);
+  await onMoney(page);
+  await expect(lines(page, "Вам винні клієнти")).toHaveText([
+    "«Центр»: Ніхто не винен",
+    "«Ринок»: Ніхто не винен",
+  ]);
+  const pencil = await token(page, "--pencil");
+  for (const line of await lines(page, "Вам винні клієнти").all())
+    expect(await colour(line)).toBe(pencil);
+  expect(await colour(glyph(page, "Вам винні клієнти"))).toBe(
+    await token(page, "--ink"),
+  );
+  await expect(page.locator(".money-owes")).toHaveCount(0);
 });
 
 /** «Центр» and «Ринок»'s drawers as given, nothing taken out today. */
@@ -760,12 +916,19 @@ test("a place that cannot be read keeps its plate with «Спробувати щ
     "«Центр»: не вдалося прочитати",
     "«Ринок»: 9 500,00 грн · 1 накладна",
   ]);
+  // The way stays, saying what it shows.
+  await expect(
+    owing.getByRole("button", {
+      name: "Накладні магазину «Центр»: не вдалося прочитати",
+      exact: true,
+    }),
+  ).toBeEnabled();
   const retry = owing.getByRole("button", { name: "Спробувати ще раз" });
   await expect(retry).toBeVisible();
   // The others stand, each with its own figures.
   await expect(lines(page, "Вам винні клієнти")).toHaveText([
-    "«Центр»: Винні 8 400,00 грн · 4 покупці",
-    "«Ринок»: Винні 2 600,00 грн · 2 покупці",
+    "«Центр»: Винні 8 400,00 грн · 4 людини",
+    "«Ринок»: Винні 2 600,00 грн · 2 людини",
   ]);
   await expect(lines(page, "Картка сьогодні · звірте з чеком")).toHaveCount(2);
   await expect(
@@ -1072,6 +1235,11 @@ test("a store that does not trade is the report's column with its mark, and a li
   await expect(lines(page, "Вам винні клієнти").nth(2)).toHaveText(
     "«Старий» в архіві: Ніхто не винен",
   );
+  // Nobody owing, in pencil, as «Сьогодні» says it (money task list after
+  // stage 2, P1-1).
+  expect(await colour(lines(page, "Вам винні клієнти").nth(2))).toBe(
+    await token(page, "--pencil"),
+  );
   await expect(lines(page, "Ви винні постачальникам").nth(2)).toHaveText(
     "«Старий» в архіві: Нічого не винні",
   );
@@ -1203,6 +1371,16 @@ for (const [name, theme, scheme] of [
       await page.evaluate(() => document.documentElement.dataset.theme),
     ).toBe(scheme);
     await expect(table(page)).toHaveCount(5);
+    // What customers owe in this theme's debt colour, the place's glyph
+    // too (money task list after stage 2, P1-1; review).
+    const owedColour = await token(page, "--owed");
+    const owing = lines(page, "Вам винні клієнти").first();
+    await expect(owing).toHaveClass(/\bmoney-owes\b/);
+    expect(await colour(owing)).toBe(owedColour);
+    expect(await colour(glyph(page, "Вам винні клієнти"))).toBe(owedColour);
+    expect(owedColour).toBe(
+      scheme === "dark" ? "rgb(255, 157, 110)" : "rgb(161, 56, 14)",
+    );
     // A place's row, its chevron the set's 16, never a «›» (audit after
     // stage 2, frame P2-2).
     await expect(
@@ -1228,7 +1406,13 @@ for (const [name, theme, scheme] of [
       page.locator(".money-table tbody td").first(),
       page.locator(".money-total td").first(),
       page.locator(".money-outside").first(),
-      moneyRow(page, "Закриття"),
+      moneyRow(page, "Закриття · Центр"),
+      // A debt's colour, and the open store's way (money task list after
+      // stage 2, P1-1, P1-2).
+      lines(page, "Вам винні клієнти").first().locator(".money-store"),
+      lines(page, "Вам винні клієнти").first().locator(".money-said"),
+      page.locator(".money-line-open .money-store"),
+      page.locator(".money-line-open .money-said"),
     ])
       expect(await contrast(part)).toBeGreaterThanOrEqual(4.5);
     await page.screenshot({

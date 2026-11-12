@@ -6033,6 +6033,43 @@ button.money-place-open {
 .money-line {
   overflow-wrap: anywhere;
 }
+/* What customers owe in a debt's colour, its twins «Винні» at the line's
+   start and the place's glyph; «Ніхто не винен» in pencil — as «Сьогодні»
+   says both. Never what is owed to suppliers (money task list after stage
+   2, P1-1). */
+.money-line.money-owes,
+.money-place-title .icon.money-owes {
+  color: var(--owed);
+}
+.money-line.money-none {
+  color: var(--pencil);
+}
+/* The open store's line of «Ви винні постачальникам», the way to its
+   «Накладні»: 44 high, its chevron at the end (P1-2). */
+button.money-line-open {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 44px;
+  margin: -4px 0 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+.money-line-open .sale-open {
+  flex: none;
+  margin-left: auto;
+}
+/* Held, it still reads: nothing faded over its money, its words in
+   pencil, as a held row's (review). */
+button.money-line-open:disabled {
+  opacity: 1;
+  color: var(--pencil);
+}
 .money-store {
   font-weight: 600;
 }

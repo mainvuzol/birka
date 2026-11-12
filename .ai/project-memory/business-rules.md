@@ -8725,3 +8725,52 @@ that the sale task list closes. No right, no server rule, no field changes.
   says the rest at the way of paying); «До списку» for «Назад до списку»,
   both ways back from it; the label's chip shows «Не читали», a reader
   hearing «Не читали — продати як «розмір невідомий»».
+
+## Chosen in chat — 2026-11-12 (audit after stage 2, batch 12: «Гроші»'s «Вам винні клієнти» in a debt's colour and «людини», as «Сьогодні» says it; «Ви винні постачальникам» the open store's line the way to its «Накладні», the title none; «Закриття · {магазин}»; money P1-1, P1-2)
+
+Chosen in chat on 2026-11-12 («Yes, money first»), after batch 11 (#194)
+was merged: the money task list after stage 2 starts with P1-1 and P1-2,
+both on «Гроші». No right, no server rule, no field and no sum changes.
+- **What customers owe** (P1-1; §4 «Долг», S29 №9; В-ГР1 (а)):
+  - a store's line where customers owe something (`customers > 0` and a
+    debt not «0,00») is drawn whole in the debt's colour, `owed`, as the
+    day-tag's line on «Сьогодні»: the store's name, «Винні», the sum and
+    the people. Its twin is «Винні» at the line's start;
+  - its words: «Винні 8 400,00 грн · 4 людини» (`людина / людини /
+    людей`, the count never parted from its word) — «покупці» is gone;
+  - «Ніхто не винен» in pencil, as «Сьогодні» says it;
+  - **Decided here:** the place's glyph `owed` takes the debt's colour
+    while at least one store's line does; with nobody owing anywhere it
+    stays in ink, so the colour is only where a debt is. The glyph is
+    drawn once, at the place, never again on each line (S29 №9);
+  - «Ви винні постачальникам», its glyph and its lines stay in ink: `owed`
+    is for customers alone (§4);
+  - while a store's line is read or could not be read, it has no colour of
+    its own.
+- **The suppliers' way and «Закриття»** (P1-2; S29 №10, №18; Q-1 «if
+  not»):
+  - «Ви винні постачальникам» is a title, no way: «Накладні» read the open
+    store alone, while the place shows every store;
+  - the open store's line, where its `supplier:debt` is, is the way to its
+    «Накладні»: the place's whole width, 44 high, the set's chevron at its
+    end. It comes first; the other stores' lines follow in the report's
+    order and are lines, no way (Q-1 «if not»). With one store, the line
+    is the way: as many taps as the title was;
+  - heard «Накладні магазину «Центр»: 38 000,00 грн · 3 накладні» — what
+    it shows after where it goes; while read, the name alone; not read,
+    «…: не вдалося прочитати», the way kept (the place's plate with
+    «Спробувати ще раз» under it, as before). An open store that does not
+    trade has no `supplier:debt` (its rights as shown), so its line is
+    never the way; should that change, its mark is heard too (review);
+  - held as the title was: while a first send is in flight, and while
+    another section's kept operation waits (`otherThanInvoices`). Held, it
+    still reads: nothing faded over its money, its words in pencil, as a
+    held row's (review);
+  - without `supplier:debt` in the open store, every line is a line;
+  - «Вам винні клієнти» keeps its way on the title: «Покупці» show every
+    store's block, the open one first;
+  - «Закриття» on «Гроші» is «Закриття · {магазин}», the open store's name
+    without quotes, as «Каса · {магазин}» beside it. **The words wait for
+    the owner's approval** (the task marks them so); the «Закриття» button
+    on «Каса» itself does not change;
+  - after a «yes» to Q-1, every line gets its «›» (S29 whole) — not here.

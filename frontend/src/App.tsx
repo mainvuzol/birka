@@ -3887,6 +3887,7 @@ function Workspace({
             period={moneyPeriod}
             choose={setMoneyPeriod}
             held={sending}
+            here={store.id}
             toCustomers={
               canSeeCredits
                 ? { go: fromMoneyTo("credits"), disabled: otherThanCredit }
@@ -3907,7 +3908,9 @@ function Workspace({
             rows={[
               {
                 key: "closes",
-                label: "Закриття",
+                // The open store's, named as «Каса · …» is (money task list
+                // after stage 2, P1-2).
+                label: `Закриття · ${visible(store.name)}`,
                 icon: "clock",
                 disabled: otherThanCash,
                 open: fromMoneyTo("closes"),

@@ -17,7 +17,7 @@ export function Icon({
 }: {
   name: IconName;
   size?: 24 | 20 | 16 | 12;
-  className?: string;
+  className?: string | undefined;
 }): JSX.Element {
   return (
     <svg

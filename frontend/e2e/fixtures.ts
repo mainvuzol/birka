@@ -158,7 +158,7 @@ const tabs = ["Продаж", "Замовлення", "Каса"];
 
 /** The screens «Гроші» opens for whoever has it, by the way to each there
  * («Усе на бірці» sections task list, P0-7): «Каса · {магазин}», the report's
- * row, the suppliers' place. */
+ * row, the open store's line of the suppliers' place. */
 const fromMoney: Record<string, (page: Page) => Locator> = {
   Каса: (page) =>
     page
@@ -168,10 +168,12 @@ const fromMoney: Record<string, (page: Page) => Locator> = {
     page
       .getByRole("navigation", { name: "Гроші" })
       .getByRole("button", { name: "Звіт про продажі" }),
+  // The open store's line: «Накладні» read it alone (money task list after
+  // stage 2, P1-2).
   Накладні: (page) =>
     page
       .getByRole("article", { name: "Ви винні постачальникам" })
-      .getByRole("button", { name: "Ви винні постачальникам" }),
+      .getByRole("button", { name: /^Накладні магазину / }),
 };
 
 /** «Ще»'s rows by the screen they open, where a journey still calls it by
