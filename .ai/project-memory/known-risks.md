@@ -1627,3 +1627,30 @@ every branch, on an advisory published after the last run that passed it:
   local CI's offline builds find them.
 - **What remains:** the server takes it at its next image build, after the
   merge — a deploy, which is the owner's.
+
+## opentelemetry-api moved to 1.45.2 — 2026-11-13
+
+The Python audit in CI was found failing on 2026-11-13, on PR #203, on an
+advisory published that day (16:43 UTC), after the last run that passed it:
+- **`opentelemetry-api` 1.45.1** (GHSA-mf5v-w3w3-f6cg, medium): extracting
+  trace context from a crafted `traceparent` value — a trace-context prefix,
+  a long run of whitespace and an embedded newline — backtracks its regex in
+  quadratic time, and can hold an asyncio worker. A conforming HTTP header
+  cannot carry the newline; other carriers (JSON, such as MCP's metadata)
+  can. Fixed in 1.45.2, which refuses a value over 512 characters first.
+
+- **What it reached:** nothing on the server today, as with 1.45.0's
+  advisory: nothing in the backend imports OpenTelemetry, no SDK is
+  installed and no tracer provider set up, so no trace context is ever
+  extracted, from a header or anything else.
+  The audit fails all the same, and an SDK added later would reach it.
+- **What moved:** `opentelemetry-api` 1.45.1 → 1.45.2 in both Python locks,
+  with the hashes of both files PyPI holds for it (the wheel and the
+  sdist, from PyPI's own listing of the version), nothing else: its one
+  requirement, `typing-extensions>=4.5.0`, is unchanged and met by the
+  pinned 4.16.0. Nothing was downloaded on the work machine: CI installs
+  the lock with `--require-hashes` and its lock test checks the installed
+  set; the local check environment still holds 1.45.1 until it is
+  refreshed (its lock test says so, and only that).
+- **What remains:** the server takes it at its next image build, after the
+  merge — a deploy, which is the owner's.

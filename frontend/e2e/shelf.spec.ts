@@ -1,6 +1,7 @@
 import {
   test,
   expect,
+  dockOnMenu,
   expectStub,
   fillLine,
   openStore,
@@ -215,9 +216,9 @@ test("a basket with nothing on the shelf records the shortage and sells nothing:
   await expect(
     page.getByRole("heading", { name: "Продажу немає" }),
   ).toBeVisible();
-  await expect(page.locator(".nothing-sold > p").first()).toHaveText(
-    "Нічого з кошика не було на полиці.",
-  );
+  await expect(
+    page.locator(".nothing-sold .result-body > p").first(),
+  ).toHaveText("Нічого з кошика не було на полиці.");
   // The shortage the server recorded, on a stub torn off, its eyelet
   // filled (spec §6.30, P3).
   const stub = page.locator(".nothing-sold .stub");
@@ -229,7 +230,7 @@ test("a basket with nothing on the shelf records the shortage and sells nothing:
   await expect(stub.locator(".line")).toHaveCount(1);
   await expect(stub.locator(".line span")).toHaveText("Знято з обліку: 1 шт.");
   // What to do, one line under it.
-  const hint = page.locator(".nothing-sold > .hint");
+  const hint = page.locator(".nothing-sold .result-body > .hint");
   await expect(hint).toHaveText("Перевірте склад із менеджером.");
   const line = await hint.evaluate((node) =>
     parseFloat(getComputedStyle(node).lineHeight),
@@ -246,6 +247,9 @@ test("a basket with nothing on the shelf records the shortage and sells nothing:
   expect(Math.round(docked?.x ?? 0)).toBe(16);
   expect(Math.round((docked?.x ?? 0) + (docked?.width ?? 0))).toBe(344);
   await expect(page.locator("html")).toHaveJSProperty("scrollWidth", 360);
+  // At the menu's top however short, the page still (audit 2026-11-13, sale
+  // P1-2).
+  await dockOnMenu(page);
   await page.screenshot({ path: "test-results/nothing-sold-360.png" });
   // In both themes the slip and the dock white on the paper.
   for (const scheme of ["light", "dark"] as const) {

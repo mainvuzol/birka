@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { JSX, ReactNode } from "react";
 import { money } from "@/orders/types";
 import { paperText } from "@/sales/paperMark";
@@ -7,8 +7,12 @@ import { methodHow } from "@/shared/payment";
 import type { TillMethod } from "@/shared/payment";
 import { Sum } from "@/shared/Sum";
 import { RecordedMark } from "@/shared/Eyelet";
-import { Stub, WaySticker } from "@/shared/Stub";
+import { Perforation, Stub, WaySticker } from "@/shared/Stub";
 import { useMainButton } from "@/shared/telegram";
+import { OwedSum } from "@/shared/OwedSum";
+import { ResultScreen } from "@/shared/ResultScreen";
+import { ScreenHeader } from "@/shared/ScreenHeader";
+import { visible } from "@/shared/visible";
 import { Sticker } from "@/shared/Sticker";
 import type { Credit } from "./types";
 
@@ -21,29 +25,8 @@ const waySays: Record<TillMethod, string> = {
   TRANSFER: "Перевірте, що переказ надійшов",
 };
 
-/**
- * A payment's or a write-off's result (credits task list, P0-5): what was
- * done, the way with what to do, the sum large, and what is owed after — the
- * sum as sent and taken, what is owed from the server's answer. From paper,
- * the money was taken already: never «Проведіть», the paper's mark as the
- * history says it.
- *
- * `kept`: a command whose answer was lost, confirmed later (P1-2) — the same
- * block, compact, «… записано один раз», the way alone over the sum, and
- * `said` shown: what to do only if nobody did meanwhile; what was taken, how,
- * heard before it, where the eye reads the pill and the sum.
- */
-export function Paid({
-  kind,
-  amount,
-  way,
-  paper,
-  credit,
-  said,
-  kept = false,
-  total,
-  next,
-}: {
+/** The props of a payment's or a write-off's result. */
+interface PaidProps {
   kind: "payment" | "write-off";
   /** The payment as sent and taken; for a write-off, what was written off. */
   amount: string;
@@ -69,26 +52,46 @@ export function Paid({
    * a debt opened from their card.
    */
   next?: { back: () => void; backTo: string; debt: () => void };
+}
+
+/**
+ * A payment's or a write-off's result (credits task list, P0-5): what was
+ * done, the way with what to do, the sum large, and what is owed after — the
+ * sum as sent and taken, what is owed from the server's answer. From paper,
+ * the money was taken already: never «Проведіть», the paper's mark as the
+ * history says it.
+ *
+ * Its own result's screen (spec S22; audit 2026-11-13, sale P1-1): the title
+ * with its check where the debt's was, no «←» and no Telegram «Назад»; the
+ * stub, and the screen's one main at the menu's top.
+ *
+ * `kept`: a command whose answer was lost, confirmed later (P1-2) — the same
+ * block, compact, «… записано один раз», the way alone over the sum, and
+ * `said` shown: what to do only if nobody did meanwhile; what was taken, how,
+ * heard before it, where the eye reads the pill and the sum.
+ */
+export function Paid(props: PaidProps): JSX.Element {
+  return props.kept ? <PaidKept {...props} /> : <PaidScreen {...props} />;
+}
+
+/** The way, what to do with the money, the sum large, and the sentence. */
+function HandBack({
+  kind,
+  amount,
+  way,
+  paper,
+  said,
+  kept,
+  sentence,
+}: Pick<PaidProps, "kind" | "amount" | "way" | "paper" | "said"> & {
+  kept: boolean;
+  sentence: string;
 }): JSX.Element {
-  const heading = useRef<HTMLHeadingElement>(null);
-  const sentence = useId();
-  useEffect(() => {
-    if (kept) return;
-    heading.current?.focus();
-    heading.current?.scrollIntoView({ block: "nearest" });
-  }, [kept]);
   const payment = kind === "payment";
   // Seen in the sentence already, from paper and once confirmed later.
   const shown = kept || (payment && paper !== null);
   const firstDays = paper?.first_days === true;
-  const title = payment
-    ? kept
-      ? "Внесок записано один раз"
-      : "Внесок записано"
-    : kept
-      ? "Списання записано один раз"
-      : "Борг списано";
-  const handBack = (
+  return (
     <div className="hand-back">
       {payment &&
         (paper ? (
@@ -132,87 +135,164 @@ export function Paid({
       </p>
     </div>
   );
-  const owed = !shown && payment && (
+}
+
+/** What is left on the debt, read, in the debt's colour (sale P2-3). */
+function Owed({ credit }: { credit: Credit }): JSX.Element {
+  return (
     <p className="paid-owed stub-line" aria-hidden="true">
-      {credit.status === "SETTLED"
-        ? "Борг сплачено повністю."
-        : `Залишок боргу ${money(credit.owed)}`}
+      {credit.status === "SETTLED" ? (
+        "Борг сплачено повністю."
+      ) : (
+        <>
+          Залишок боргу <OwedSum value={credit.owed} />
+        </>
+      )}
     </p>
   );
+}
+
+/** Confirmed later, in its notice: compact, «… записано один раз». */
+function PaidKept(props: PaidProps): JSX.Element {
+  const sentence = useId();
+  const payment = props.kind === "payment";
   return (
-    <div className={`paid-result${kept ? " kept" : ""}`}>
-      <h3
-        ref={heading}
-        tabIndex={-1}
-        aria-describedby={sentence}
-        className={kept ? undefined : "result-title"}
-      >
-        {!kept && <RecordedMark />}
-        {title}
+    <div className="paid-result kept">
+      <h3 aria-describedby={sentence}>
+        {payment ? "Внесок записано один раз" : "Списання записано один раз"}
       </h3>
-      {kept ? (
-        <>
-          {handBack}
-          {owed}
-        </>
-      ) : (
-        // Its stub (spec S22; «Усе на бірці» task list, P0-2): knotted once
-        // nothing is left on the debt.
-        <Stub state={credit.status === "SETTLED" ? "settled" : "recorded"}>
-          {handBack}
-          {owed}
-          {total}
-        </Stub>
-      )}
-      {next &&
-        (payment ? (
-          <PaymentNext {...next} />
-        ) : (
-          <div className="result-next">
-            <button type="button" className="primary" onClick={next.back}>
-              {next.backTo}
-            </button>
-            <button type="button" className="quiet" onClick={next.debt}>
-              Відкрити борг
-            </button>
-          </div>
-        ))}
+      <HandBack {...props} kept sentence={sentence} />
     </div>
   );
 }
 
-/**
- * Where to go from a payment's result (spec S22): «Відкрити борг» is
- * Telegram's MainButton where it is there — the screen's one action, never
- * one that pays («Усе на бірці» task list, P1-2) — else the screen's own.
- */
-function PaymentNext({
-  back,
-  backTo,
-  debt,
-}: {
-  back: () => void;
-  backTo: string;
-  debt: () => void;
-}): JSX.Element {
-  const main = useMainButton("Відкрити борг", debt);
+function PaidScreen({
+  kind,
+  amount,
+  way,
+  paper,
+  credit,
+  said,
+  total,
+  next,
+}: PaidProps): JSX.Element {
+  const heading = useRef<HTMLHeadingElement>(null);
+  const sentence = useId();
+  const payment = kind === "payment";
+  // A payment's «Відкрити борг» is Telegram's MainButton where it is there
+  // — the screen's one action, never one that pays («Усе на бірці» task
+  // list, P1-2) — and the way back a quiet one under the stub; else the way
+  // back is the screen's main, in its dock, «Відкрити борг» quiet (audit
+  // after stage 2, frame P1-1, sale P1-5; audit 2026-11-13, sale P1-1). A
+  // write-off's two stay the screen's own.
+  const main = useMainButton(
+    "Відкрити борг",
+    () => {
+      next?.debt();
+    },
+    { shown: payment && next !== undefined },
+  );
+  const telegrams = payment && main;
+  useEffect(() => {
+    heading.current?.focus();
+  }, []);
+  // From paper, the sentence says what is left: not said twice.
+  const shown = payment && paper !== null;
+  // What she took (spec S22 №6): the debt's first good and «+ ще N», as the
+  // debt's title said them; the rest on a tap.
+  const [firstGood, ...moreGoods] = credit.goods.map(visible);
+  const [allGoods, setAllGoods] = useState(false);
+  const goodsList = useRef<HTMLUListElement>(null);
+  useEffect(() => {
+    if (allGoods) goodsList.current?.focus();
+  }, [allGoods]);
+  const title = payment ? "Внесок записано" : "Борг списано";
   return (
-    <div className="result-next">
-      {/* The main only where Telegram's is not: there, «Відкрити борг»
-          is, and the way back a quiet one under the stub — one main on
-          the screen (audit after stage 2, frame P1-1, sale P1-5). */}
-      <button
-        type="button"
-        className={main ? "quiet" : "primary"}
-        onClick={back}
-      >
-        {backTo}
-      </button>
-      {!main && (
-        <button type="button" className="quiet" onClick={debt}>
-          Відкрити борг
-        </button>
-      )}
-    </div>
+    <ResultScreen
+      className="paid-result"
+      dock={
+        next &&
+        !telegrams && (
+          <button type="button" className="primary" onClick={next.back}>
+            {next.backTo}
+          </button>
+        )
+      }
+    >
+      <ScreenHeader
+        ref={heading}
+        focusable
+        describedBy={sentence}
+        className="result-title t-sheet"
+        title={
+          <>
+            <RecordedMark />
+            {title}
+          </>
+        }
+      />
+      {/* Its stub (spec S22; «Усе на бірці» task list, P0-2): knotted once
+          nothing is left on the debt. */}
+      <Stub state={credit.status === "SETTLED" ? "settled" : "recorded"}>
+        <HandBack
+          kind={kind}
+          amount={amount}
+          way={way}
+          paper={paper}
+          said={said}
+          kept={false}
+          sentence={sentence}
+        />
+        {payment && (
+          <>
+            <Perforation />
+            {firstGood !== undefined && (
+              <p className="stub-line paid-goods">
+                {firstGood}
+                {moreGoods.length > 0 && !allGoods && (
+                  <>
+                    {" "}
+                    <button
+                      type="button"
+                      className="more-goods"
+                      aria-expanded={false}
+                      onClick={() => {
+                        setAllGoods(true);
+                      }}
+                    >
+                      + ще {moreGoods.length}
+                    </button>
+                  </>
+                )}
+              </p>
+            )}
+            {allGoods && moreGoods.length > 0 && (
+              <ul
+                ref={goodsList}
+                className="debt-goods"
+                aria-label="Товари боргу"
+                tabIndex={-1}
+              >
+                {[firstGood, ...moreGoods].map((good, index) => (
+                  <li key={index}>{good}</li>
+                ))}
+              </ul>
+            )}
+            {!shown && <Owed credit={credit} />}
+            {total}
+          </>
+        )}
+      </Stub>
+      {next &&
+        (telegrams ? (
+          <button type="button" className="quiet paid-more" onClick={next.back}>
+            {next.backTo}
+          </button>
+        ) : (
+          <button type="button" className="quiet paid-more" onClick={next.debt}>
+            Відкрити борг
+          </button>
+        ))}
+    </ResultScreen>
   );
 }

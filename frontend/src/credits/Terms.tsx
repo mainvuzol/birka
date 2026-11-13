@@ -9,6 +9,7 @@ import { hideKeyboard } from "@/shared/telegram";
 import { visible } from "@/shared/visible";
 import { phoneDigits, wholePhone } from "./types";
 import type { CustomerPage } from "./types";
+import { OwedSum } from "@/shared/OwedSum";
 
 /**
  * Paying in parts, as the seller states it (owner decisions, 2026-10-01): the
@@ -180,7 +181,9 @@ function NumberDebt({
       className={`hint number-debt${wholePhone(phone) ? " reserved" : ""}`}
     >
       {found && owed > 0n ? (
-        <span className="owing">За номером уже винні {money(found.owed)}</span>
+        <span className="owing">
+          За номером уже винні <OwedSum value={found.owed} />
+        </span>
       ) : writtenOff !== null &&
         writtenOff !== undefined &&
         !away.isPending &&
@@ -327,7 +330,7 @@ export function TermsFields({
           </label>
           {paid !== null && paid > 0n && paid < total && (
             <p>
-              Лишиться винен <strong>{money(decimal(total - paid))}</strong>
+              Лишиться винен <OwedSum value={decimal(total - paid)} />
             </p>
           )}
         </div>

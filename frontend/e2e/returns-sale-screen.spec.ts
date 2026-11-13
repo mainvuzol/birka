@@ -2,7 +2,9 @@ import {
   test,
   expect,
   countTaps,
+  dockOnMenu,
   expectGlyphBeside,
+  expectOwed,
   expectPlate,
   expectStub,
   fromPaper,
@@ -825,7 +827,44 @@ test("without «Брак» and the till, the result offers no section to open, s
   await expect(page.getByRole("button", { name: "Ще повернення" })).toHaveCount(
     0,
   );
+  // The screen's one way on, its main in the dock at the menu's top (audit
+  // 2026-11-13, sale P1-2).
+  const dock = await dockOnMenu(page);
+  await expect(dock.getByRole("button")).toHaveCount(1);
+  await expect(
+    dock.getByRole("button", { name: "До списку", exact: true }),
+  ).toHaveClass(/\bprimary\b/);
   await page.getByRole("button", { name: "До списку", exact: true }).click();
+  await expect(page.getByRole("article")).toHaveCount(1);
+});
+
+test("a return's result at 360 × 640: «Новий продаж» the dock's one main at the menu's top, as the receipt's; «Ще повернення» quiet under the hint (audit 2026-11-13, sale P1-2)", async ({
+  page,
+}) => {
+  const coat = line("Лоран шоколад");
+  await oneSale(page, [coat]);
+  await opened(page);
+  await returnUnits(page, { intact: 1 });
+  await panelOf(page)
+    .getByRole("button", { name: "Повернути покупцю 3 000,00 грн готівкою" })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Повернення записано" }),
+  ).toBeFocused();
+  const dock = await dockOnMenu(page);
+  await expect(dock.getByRole("button")).toHaveCount(1);
+  await expect(dock.getByRole("button", { name: "Новий продаж" })).toHaveClass(
+    /\bprimary\b/,
+  );
+  await expect(page.locator("main button.primary:visible")).toHaveCount(1);
+  // Another return, quiet, under the hint of a mistake's mending.
+  const more = page.locator(
+    ".return-result .result-body > .return-mistake + button.quiet",
+  );
+  await expect(more).toHaveText("Ще повернення");
+  await noSideScroll(page);
+  await page.screenshot({ path: "test-results/return-result-dock-360.png" });
+  await more.click();
   await expect(page.getByRole("article")).toHaveCount(1);
 });
 
@@ -927,6 +966,9 @@ test("paid in parts, a sale that suggests no way is returned without one (G35), 
     page.getByText("Борг покупця зменшено на 3 000,00 грн."),
   ).toBeVisible();
   await expect(page.getByText("Покупець ще винен 1 000,00 грн.")).toBeVisible();
+  // What is still owed, in the debt's colour with its arrow (audit
+  // 2026-11-13, sale P2-3).
+  await expectOwed(page.locator(".return-result"), "1 000,00 грн");
   await expect(page.getByText(/Поверніть/)).toHaveCount(0);
 });
 

@@ -68,10 +68,10 @@ export function SaleLinks({
 /**
  * «Клієнт забрав» recorded (orders task list, P0-3): «Продаж записано»,
  * the way with what to do, the sum taken large — the order's, or in parts
- * the part paid now — and what is owed, all from the server's answer; «До
- * замовлень», and the receipt's two quiet ways on. A sale, so its stub torn
- * off as the till's receipt is (spec §6.30; stage 2, orders task list,
- * P1-2).
+ * the part paid now — and what is owed, all from the server's answer; the
+ * receipt's two quiet ways on, «До замовлень» the card's dock (audit
+ * 2026-11-13, frame P2-9). A sale, so its stub torn off as the till's
+ * receipt is (spec §6.30; stage 2, orders task list, P1-2).
  *
  * `kept`: a «Клієнт забрав» whose answer was lost, confirmed later — «…
  * записано один раз», the way alone, never «Проведіть»: a card may have
@@ -80,13 +80,11 @@ export function SaleLinks({
 export function Collected({
   order,
   kept,
-  back,
   fixWay,
   returnSale,
 }: {
   order: Order;
   kept: boolean;
-  back: () => void;
   fixWay?: (() => void) | undefined;
   returnSale?: (() => void) | undefined;
 }): JSX.Element {
@@ -144,12 +142,7 @@ export function Collected({
         {/* Said in ink: what to do at the terminal, or not. */}
         {kept && way === "CARD" && <p>{chargeOnce(taken)}</p>}
       </Stub>
-      <div className="result-next">
-        <button type="button" className="primary" onClick={back}>
-          До замовлень
-        </button>
-        <SaleLinks fixWay={fixWay} returnSale={returnSale} />
-      </div>
+      <SaleLinks fixWay={fixWay} returnSale={returnSale} />
     </div>
   );
 }

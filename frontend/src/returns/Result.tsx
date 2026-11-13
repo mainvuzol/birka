@@ -11,6 +11,8 @@ import { visible } from "@/shared/visible";
 import { paperText } from "@/sales/paperMark";
 import { isRecord } from "@/shared/journal";
 import { ScreenHeader } from "@/shared/ScreenHeader";
+import { OwedSum } from "@/shared/OwedSum";
+import { ResultScreen } from "@/shared/ResultScreen";
 import { Sticker } from "@/shared/Sticker";
 import { useBackOnSale } from "./places";
 import { sizeLabel } from "./types";
@@ -306,9 +308,13 @@ export function Result({
         </p>
       )}
       <p className="stub-line">
-        {(kopecks(credit.owed_after) ?? 0n) > 0n
-          ? `Покупець ще винен ${money(credit.owed_after)}.`
-          : "Покупець більше нічого не винен."}
+        {(kopecks(credit.owed_after) ?? 0n) > 0n ? (
+          <>
+            Покупець ще винен <OwedSum value={credit.owed_after} />.
+          </>
+        ) : (
+          "Покупець більше нічого не винен."
+        )}
       </p>
     </>
   );
@@ -368,7 +374,28 @@ export function Result({
       </div>
     );
   return (
-    <section className="return-result receipt">
+    // «Новий продаж» under the thumb, at the menu's top, as the receipt's;
+    // without the till, the way to the list there (spec §6.5; audit
+    // 2026-11-13, sale P1-2).
+    <ResultScreen
+      className="return-result receipt"
+      dock={
+        next.sell ? (
+          <button
+            type="button"
+            className="primary"
+            disabled={next.blocked}
+            onClick={next.sell}
+          >
+            Новий продаж
+          </button>
+        ) : (
+          <button type="button" className="primary" onClick={next.more}>
+            До списку
+          </button>
+        )
+      }
+    >
       <ScreenHeader
         ref={heading}
         focusable
@@ -400,23 +427,13 @@ export function Result({
           store.permissions.includes("damaged:handle"),
         )}
       </p>
-      {/* «Новий продаж» under the thumb; another return and the list,
-          quiet (spec §6.5). */}
-      <div className="result-next">
-        {next.sell && (
-          <button
-            type="button"
-            className="primary"
-            disabled={next.blocked}
-            onClick={next.sell}
-          >
-            Новий продаж
-          </button>
-        )}
-        <button type="button" className="quiet" onClick={next.more}>
-          {next.sell ? "Ще повернення" : "До списку"}
+      {/* Another return, quiet under the hint, as the receipt's
+          «Оформити повернення» (sale P1-2). */}
+      {next.sell && (
+        <button type="button" className="quiet return-more" onClick={next.more}>
+          Ще повернення
         </button>
-      </div>
-    </section>
+      )}
+    </ResultScreen>
   );
 }

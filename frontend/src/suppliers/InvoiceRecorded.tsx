@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import type { JSX } from "react";
+import type { JSX, ReactNode } from "react";
 import { money } from "@/orders/types";
 import { RecordedMark } from "@/shared/Eyelet";
 import { Perforation, Stub } from "@/shared/Stub";
@@ -12,14 +12,13 @@ import type { Invoice } from "./types";
  * What an invoice's operation recorded, as its stub (spec §6.30, S22; stage
  * 2, money task list, P0-1, P0-2): the title with its check, the sum large,
  * the supplier, a perforation, and what is left — knotted once nothing is.
- * «Готово», Telegram's MainButton where it is there, to the invoice's card.
+ * «Готово» is the screen's (`useRecordedDone`).
  */
 export function InvoiceRecorded({
   title,
   invoice,
   sum,
   line,
-  next,
 }: {
   title: string;
   invoice: Invoice;
@@ -27,14 +26,12 @@ export function InvoiceRecorded({
   sum: string;
   /** «Ганна · накладна від 14.10». */
   line: string;
-  next: () => void;
 }): JSX.Element {
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
     heading.current?.focus();
     heading.current?.scrollIntoView({ block: "nearest" });
   }, []);
-  const main = useMainButton("Готово", next);
   const settled = invoice.status === "SETTLED";
   return (
     <div className="paid-result invoice-result">
@@ -52,13 +49,30 @@ export function InvoiceRecorded({
         <Perforation />
         <p className="paid-owed stub-line">{restText(invoice)}</p>
       </Stub>
-      {!main && (
-        <div className="result-next">
-          <button type="button" className="primary" onClick={next}>
-            Готово
-          </button>
-        </div>
-      )}
     </div>
+  );
+}
+
+/**
+ * The record's «Готово», to the invoice's card, once there is a record:
+ * Telegram's MainButton where it is there; outside it, the MainButton's
+ * place in the result's dock at the menu's top (spec §6.4, §6.5; audit
+ * 2026-11-13, frame P2-9) — what this answers, for `ResultScreen`'s `dock`.
+ * The screen's header and «←» stay the ones they were: the host keeps its
+ * one tree, the result only turned on in it.
+ */
+export function useRecordedDone(next: (() => void) | null): ReactNode {
+  const main = useMainButton(
+    "Готово",
+    () => {
+      next?.();
+    },
+    { shown: next !== null },
+  );
+  if (next === null || main) return null;
+  return (
+    <button type="button" className="main-mimic" onClick={next}>
+      Готово
+    </button>
   );
 }

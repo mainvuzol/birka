@@ -3,6 +3,7 @@ import {
   expect,
   basketDone,
   basketSheet,
+  dockOnMenu,
   fillLine,
   menu,
   openStore,
@@ -278,6 +279,48 @@ test("at 360 px the receipt lies on the paper: its section no card, its stub the
   await expect(next).toHaveCSS("font-weight", "700");
   await expect(page.locator("main button.primary:visible")).toHaveCount(1);
   await expect(page.locator("html")).toHaveJSProperty("scrollWidth", 360);
+  // One line, and still under the thumb: at the menu's top, where the pay
+  // ways were (audit 2026-11-13, sale P1-2). At 640 the day's line, the
+  // stub, «Змінити спосіб оплати» and the return's hint are taller than
+  // the screen over the menu: the dock sticks there.
+  await dockOnMenu(page, { scrolls: true });
+});
+
+test("a long receipt's dock sticks on the menu's top while it scrolls, and ends there, nothing of the receipt under it (audit 2026-11-13, sale P1-2)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  await stubList(page);
+  await stubSale(page, {
+    items: Array.from({ length: 6 }, () => item({ size: "M" })),
+  });
+  await onTheTill(page);
+  await tapSize(page, fixture.variant_id, fixture.size_id);
+  await pay(page, "Готівка").click();
+  await expect(
+    page.getByRole("heading", { name: "Продаж записано" }),
+  ).toBeVisible();
+  await expect(page.locator(".receipt .line")).toHaveCount(6);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollHeight > window.innerHeight,
+    ),
+  ).toBe(true);
+  await dockOnMenu(page, { scrolls: true });
+  for (const share of [0.3, 1]) {
+    await page.evaluate((part) => {
+      window.scrollTo(0, document.documentElement.scrollHeight * part);
+    }, share);
+    await dockOnMenu(page, { scrolls: true });
+  }
+  // At its end, the receipt's last word over the dock, never under it.
+  const [said, dock] = await page.evaluate(() => [
+    document.querySelector(".receipt > .result-body")?.getBoundingClientRect()
+      .bottom ?? Infinity,
+    document.querySelector(".receipt > .result-dock")?.getBoundingClientRect()
+      .top ?? 0,
+  ]);
+  expect(said).toBeLessThanOrEqual(dock);
 });
 
 test("an answer stored before the server named sizes and coats is read from the basket, without numbers", async ({

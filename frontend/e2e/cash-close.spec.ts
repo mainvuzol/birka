@@ -1,6 +1,7 @@
 import {
   closeSheet,
   confirmClose,
+  dockOnMenu,
   test,
   expect,
   menu,
@@ -633,6 +634,11 @@ test("the close's figures are the server's: «Мало бути» and «Пора
   await expect(
     page.getByLabel("Чому не збігається? (обов’язково)"),
   ).toHaveCount(0);
+  // «Готово» the screen's main, in its dock at the menu's top, as every
+  // result's (audit 2026-11-13, frame P2-9).
+  const dock = await dockOnMenu(page, { scrolls: true });
+  await expect(dock.getByRole("button")).toHaveText("Готово");
+  await expect(dock.getByRole("button")).toHaveClass(/\bprimary\b/);
   await page.getByRole("button", { name: "Готово" }).click();
   await expect(page.locator(".cash-context")).toHaveText(
     /^Сьогодні закрито о \d{2}:\d{2} · Оля$/,

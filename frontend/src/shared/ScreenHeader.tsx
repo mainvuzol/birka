@@ -57,6 +57,8 @@ export const ScreenHeader = forwardRef<
     wraps?: boolean;
     /** Its heading takes the focus as the screen opens. */
     focusable?: boolean;
+    /** Heard with the heading as focus comes: a result's one sentence. */
+    describedBy?: string | undefined;
     className?: string;
     /** What the line names first, where it is not the store: «Сьогодні»'s
      * day, for whoever reads the network there; a new order's one
@@ -85,6 +87,7 @@ export const ScreenHeader = forwardRef<
     aside,
     wraps = false,
     focusable = false,
+    describedBy,
     className,
     lead,
     after,
@@ -110,6 +113,7 @@ export const ScreenHeader = forwardRef<
           <h1
             ref={ref}
             tabIndex={focusable ? -1 : undefined}
+            aria-describedby={describedBy}
             className={
               [pushed ? "t-title-l" : "", className ?? ""]
                 .filter(Boolean)

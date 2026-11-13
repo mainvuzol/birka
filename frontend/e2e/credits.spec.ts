@@ -3,6 +3,7 @@ import {
   expect,
   basketDone,
   basketSheet,
+  expectOwed,
   expectStub,
   fillLine,
   fromPaper,
@@ -336,6 +337,12 @@ test("a sale paid in parts leaves the rest owed, and «Покупці» takes it
   await expect(page.locator(".number-debt")).toHaveText("");
   await page.getByLabel("Сплачує зараз, грн").fill("1000");
   await expect(page.getByText("Лишиться винен 2 000,00 грн")).toBeVisible();
+  // What will be left, in the debt's colour with its arrow (audit
+  // 2026-11-13, sale P2-3).
+  await expectOwed(
+    page.locator("p").filter({ hasText: /^Лишиться винен/ }),
+    "2 000,00 грн",
+  );
   // The keyboard's «Готово» after the sum closes the sheet (P0-5).
   await page.getByLabel("Сплачує зараз, грн").press("Enter");
   // The way is for the part paid now.
@@ -352,6 +359,8 @@ test("a sale paid in parts leaves the rest owed, and «Покупці» takes it
     sum: "Зараз 1 000,00 грн",
   });
   await expect(page.getByText("Покупець винен 2 000,00 грн")).toBeVisible();
+  // On the receipt too (sale P2-3).
+  await expectOwed(page.locator(".receipt .stub"), "2 000,00 грн");
   // Where the next payments go: the row's button (owner decision after
   // #141, 2026-10-26).
   await expect(
@@ -964,6 +973,8 @@ test("the till says what a number already owes, and still sells in parts as the 
   await expect(owes.locator(".owing")).toHaveText(
     "За номером уже винні 2 000,00 грн",
   );
+  // Its sum with the debt's arrow, as a list's row (sale P2-3).
+  await expectOwed(owes, "2 000,00 грн");
   expect(await lines(owes)).toBe(1);
   expect((await sum.boundingBox())?.y).toBe(before?.y);
   // Another digit is another number: the line goes at once — never the
@@ -1180,7 +1191,7 @@ test("the till says a number's debt was written off, and says nothing when the d
     }).observe(node, { subtree: true, childList: true, characterData: true });
   });
   await page.getByLabel("Телефон покупця").fill("067 123 45 67");
-  await expect(said.locator("span")).toHaveText([
+  await expect(said.locator(":scope > span")).toHaveText([
     "За номером уже винні 123 456,00 грн",
     "Винні 1 500,00 грн магазину «Ринок»",
   ]);
@@ -1201,7 +1212,7 @@ test("the till says a number's debt was written off, and says nothing when the d
   // Owed only there: its line alone, in the room kept.
   answer = "nothing here";
   await page.getByLabel("Телефон покупця").fill("+38 067 123 45 67");
-  await expect(said.locator("span")).toHaveText([
+  await expect(said.locator(":scope > span")).toHaveText([
     "Винні 1 500,00 грн магазину «Ринок»",
   ]);
   expect(await lines(said)).toBe(1);
@@ -1223,7 +1234,7 @@ test("the till says a number's debt was written off, and says nothing when the d
     const writtenOffHere = bothAnswered(page, typed);
     await page.getByLabel("Телефон покупця").fill(typed);
     await writtenOffHere;
-    await expect(said.locator("span")).toHaveText([
+    await expect(said.locator(":scope > span")).toHaveText([
       "Винні 1 500,00 грн магазину «Ринок»",
     ]);
     expect(await lines(said)).toBe(1);
@@ -1292,7 +1303,7 @@ test("the till says a number's debt was written off, and says nothing when the d
   // Not waited for once they fail: at once, well before the moment and a
   // half a slow answer is given.
   await page.getByLabel("Телефон покупця").fill("067.123.45.67");
-  await expect(said.locator("span")).toHaveText(
+  await expect(said.locator(":scope > span")).toHaveText(
     ["За номером уже винні 123 456,00 грн"],
     { timeout: 1000 },
   );
@@ -1301,7 +1312,7 @@ test("the till says a number's debt was written off, and says nothing when the d
   awayDelay = 5000;
   const slow = bothAnswered(page, "+380671234567");
   await page.getByLabel("Телефон покупця").fill("+380671234567");
-  await expect(said.locator("span")).toHaveText(
+  await expect(said.locator(":scope > span")).toHaveText(
     ["За номером уже винні 123 456,00 грн"],
     { timeout: 3000 },
   );
