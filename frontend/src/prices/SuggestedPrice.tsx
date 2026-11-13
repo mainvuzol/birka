@@ -1,5 +1,5 @@
-import { useId, useState } from "react";
-import type { JSX } from "react";
+import { useId, useRef, useState } from "react";
+import type { JSX, RefObject } from "react";
 import { createPortal } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, api, isConflict, refusedWrite } from "@/shared/api";
@@ -7,6 +7,8 @@ import { Eyelet } from "@/shared/Eyelet";
 import { Keypad } from "@/shared/Keypad";
 import { ModeSwitch } from "@/shared/ModeSwitch";
 import { Placeholder } from "@/shared/Placeholder";
+import { Sheet } from "@/shared/Sheet";
+import { Toast } from "@/shared/Toast";
 import { Unread } from "@/shared/Unread";
 import { buzz, useMainButton } from "@/shared/telegram";
 import { visible } from "@/shared/visible";
@@ -24,6 +26,13 @@ import type { AppliesTo, Prices } from "./types";
  * store's own; holding it organization-wide, or in every store, also the
  * shared one — the server says which (`may_set_shared`).
  *
+ * On receiving, as on a model's detail (goods task list after stage 2,
+ * P1-3): a row, «Ціна продажу 2 000,00 грн» — whose price it is, the
+ * sheet's switch says —, and the quiet «Змінити ціну», which opens the same
+ * sheet, named by the model, its MainButton «Зберегти · …» the one there is
+ * while it stands (`editing`: the screen puts its own away). Saved, the
+ * sheet closes and a toast says so; what was counted stays.
+ *
  * A change states the price the screen showed, so nobody overwrites one they
  * have not seen; saving twice is safe.
  */
@@ -32,73 +41,147 @@ export function SuggestedPrice({
   token,
   scopeKey,
   variantId,
+  name,
   blocked,
+  editing,
+  edit,
 }: {
   store: Store;
   token: string;
   scopeKey: string;
   variantId: string;
+  /** The model's name: the sheet's title, and the toast's. */
+  name: string;
   blocked: boolean;
+  /** Its sheet is open: the screen's MainButton is put away under it. */
+  editing: boolean;
+  edit: (open: boolean) => void;
 }): JSX.Element {
-  const [editing, setEditing] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const [saved, setSaved] = useState(0);
   const prices = usePrices(store, token, scopeKey, variantId);
   const maySet = store.permissions.includes("catalog:set_price");
+  const opener = useRef<HTMLButtonElement>(null);
 
   return (
-    <div className="price">
-      {prices.isPending ? (
-        // A field row in grey where the price comes (audit after stage 2,
-        // frame P1-4).
-        <Placeholder said="Завантажуємо ціну продажу…" field tags={0} />
-      ) : prices.error ? (
-        // The warning's plate (stage 2's audit, goods P1-1).
-        <Unread
-          error={prices.error}
-          retry={() => {
-            void prices.refetch();
-          }}
-        />
-      ) : (
-        <>
-          <p>
-            Ціна продажу: <strong>{describe(prices.data, store)}</strong>
-          </p>
-          {saved && !editing && <p role="status">Ціну збережено.</p>}
-          {maySet &&
-            (editing ? (
-              <PriceEditor
-                store={store}
-                token={token}
-                scopeKey={scopeKey}
-                variantId={variantId}
-                blocked={blocked}
-                onDone={() => {
-                  setEditing(false);
-                  setSaved(true);
-                }}
-                onCancel={() => {
-                  setEditing(false);
-                }}
-              />
-            ) : (
+    <>
+      <div className="price">
+        {prices.isPending ? (
+          // A field row in grey where the price comes (audit after stage 2,
+          // frame P1-4).
+          <Placeholder said="Завантажуємо ціну продажу…" field tags={0} />
+        ) : prices.error ? (
+          // The warning's plate (stage 2's audit, goods P1-1).
+          <Unread
+            error={prices.error}
+            retry={() => {
+              void prices.refetch();
+            }}
+          />
+        ) : (
+          <>
+            <p className="t-row">
+              Ціна продажу{" "}
+              <span className="model-price">{suggested(prices.data)}</span>
+            </p>
+            {maySet && (
               <button
+                ref={opener}
                 type="button"
                 className="quiet"
+                aria-haspopup="dialog"
                 disabled={blocked}
                 onClick={() => {
-                  setEditing(true);
-                  setSaved(false);
+                  setSaved(0);
+                  edit(true);
                 }}
               >
-                {prices.data.suggested_price === null
-                  ? "Задати ціну продажу"
-                  : "Змінити ціну продажу"}
+                Змінити ціну
               </button>
-            ))}
-        </>
+            )}
+          </>
+        )}
+      </div>
+      {editing && (
+        <PriceSheet
+          store={store}
+          token={token}
+          scopeKey={scopeKey}
+          variantId={variantId}
+          name={name}
+          blocked={blocked}
+          fallback={opener}
+          close={() => {
+            edit(false);
+          }}
+          done={() => {
+            edit(false);
+            setSaved((times) => times + 1);
+          }}
+        />
       )}
-    </div>
+      {saved > 0 && !editing && (
+        <Toast
+          key={saved}
+          text={`Ціну продажу збережено: ${visible(name)}.`}
+          gone={() => {
+            setSaved(0);
+          }}
+        />
+      )}
+    </>
+  );
+}
+
+/**
+ * A price's sheet (spec S23 №3): named by the model, `PriceEditor` in it, its
+ * own button in the foot outside Telegram; kept open while a price is saved
+ * — its answer is the sheet's to say. A model's detail and receiving open
+ * the same.
+ */
+export function PriceSheet({
+  store,
+  token,
+  scopeKey,
+  variantId,
+  name,
+  blocked,
+  fallback,
+  close,
+  done,
+}: {
+  store: Store;
+  token: string;
+  scopeKey: string;
+  variantId: string;
+  name: string;
+  blocked: boolean;
+  fallback?: RefObject<HTMLElement> | undefined;
+  close: () => void;
+  done: (prices: Prices) => void;
+}): JSX.Element {
+  const [foot, setFoot] = useState<HTMLDivElement | null>(null);
+  const [saving, setSaving] = useState(false);
+  return (
+    <Sheet
+      title={visible(name)}
+      close={() => {
+        if (!saving) close();
+      }}
+      {...(fallback ? { fallback } : {})}
+      // The form's own button, outside Telegram, kept in view under it.
+      foot={<div ref={setFoot} />}
+    >
+      <PriceEditor
+        store={store}
+        token={token}
+        scopeKey={scopeKey}
+        variantId={variantId}
+        blocked={blocked}
+        foot={foot}
+        onSaving={setSaving}
+        onDone={done}
+      />
+    </Sheet>
   );
 }
 
@@ -107,12 +190,12 @@ export function SuggestedPrice({
  *
  * Drawn in the tag's system (stage 2, goods task list, P1-4): «Для всіх
  * магазинів · Лише «{магазин}»» where both may be set; the sum on the app's
- * keypad, with its comma; «Прибрати ціну «{магазин}»» quiet. Its one button,
- * «Зберегти · 3 600,00 грн», is Telegram's MainButton in a sheet — outside
- * Telegram its own, in `foot` —; on a screen, which may have a MainButton
- * of its own («Записати прихід»), the form's own, with «Скасувати».
+ * keypad, with its comma; «Прибрати ціну «{магазин}»» quiet. It stands in
+ * `PriceSheet` (goods task list after stage 2, P1-3): its one button,
+ * «Зберегти · 3 600,00 грн», is Telegram's MainButton — outside Telegram
+ * its own, in `foot` —, and «Назад» closes the sheet.
  */
-export function PriceEditor({
+function PriceEditor({
   store,
   token,
   scopeKey,
@@ -121,21 +204,18 @@ export function PriceEditor({
   foot,
   onSaving,
   onDone,
-  onCancel,
 }: {
   store: Store;
   token: string;
   scopeKey: string;
   variantId: string;
   blocked: boolean;
-  /** In a sheet: its foot, where the form's own button stands outside
-   * Telegram, null until it is drawn. None on a screen. */
-  foot?: HTMLElement | null | undefined;
-  /** Whether a price is being saved: a sheet keeps it open till it is. */
-  onSaving?: (saving: boolean) => void;
+  /** Its sheet's foot, where the form's own button stands outside
+   * Telegram, null until it is drawn. */
+  foot: HTMLElement | null;
+  /** Whether a price is being saved: the sheet keeps it open till it is. */
+  onSaving: (saving: boolean) => void;
   onDone: (prices: Prices) => void;
-  /** On a screen: «Скасувати». In a sheet, «Назад» closes it. */
-  onCancel?: (() => void) | undefined;
 }): JSX.Element {
   const prices = usePrices(store, token, scopeKey, variantId);
   if (prices.isPending)
@@ -161,9 +241,8 @@ export function PriceEditor({
         await prices.refetch();
       }}
       foot={foot}
-      {...(onSaving ? { onSaving } : {})}
+      onSaving={onSaving}
       onDone={onDone}
-      onCancel={onCancel}
     />
   );
 }
@@ -179,7 +258,6 @@ function Form({
   foot,
   onSaving,
   onDone,
-  onCancel,
 }: {
   store: Store;
   token: string;
@@ -188,10 +266,9 @@ function Form({
   blocked: boolean;
   prices: Prices;
   refetch: () => Promise<void>;
-  foot: HTMLElement | null | undefined;
-  onSaving?: (saving: boolean) => void;
+  foot: HTMLElement | null;
+  onSaving: (saving: boolean) => void;
   onDone: (prices: Prices) => void;
-  onCancel: (() => void) | undefined;
 }): JSX.Element {
   const cache = useQueryClient();
   // A store with its own price is changing that one; otherwise whoever may
@@ -212,7 +289,7 @@ function Form({
 
   async function save(price: string | null): Promise<void> {
     setBusy(true);
-    onSaving?.(true);
+    onSaving(true);
     setProblem("");
     try {
       const result = await api<Prices>("/catalog/prices", token, {
@@ -252,7 +329,7 @@ function Form({
       }
     } finally {
       setBusy(false);
-      onSaving?.(false);
+      onSaving(false);
     }
   }
 
@@ -269,17 +346,11 @@ function Form({
     if (!ready) return;
     void save(decimal(cents));
   };
-  // In a sheet, Telegram's MainButton; on a screen, which may have its own,
-  // the form's own button.
-  const inSheet = foot !== undefined;
-  // Telegram's, only where it was put up: on a screen inside Telegram the
-  // form's own button stands (review, 2026-11-07).
-  const main =
-    useMainButton(words, press, {
-      shown: inSheet,
-      progress: busy,
-      active: ready,
-    }) && inSheet;
+  // Telegram's MainButton, the sheet's one button.
+  const main = useMainButton(words, press, {
+    progress: busy,
+    active: ready,
+  });
   const own = (
     <button
       type="button"
@@ -300,8 +371,6 @@ function Form({
   );
 
   return (
-    // On a screen it is named, as its fieldset named it; in a sheet the
-    // sheet's title does (review, 2026-11-07).
     <div className="price-form" role="group" aria-label="Змінити ціну продажу">
       {mayShare ? (
         // For all stores or for this one: seen at once and one tap, two
@@ -370,22 +439,9 @@ function Form({
         </button>
       )}
       {!main &&
-        (foot === undefined ? (
-          <div className="count-foot">{own}</div>
-        ) : (
-          // A sheet's foot not there yet: it comes at once, the button in it.
-          foot && createPortal(own, foot)
-        ))}
-      {onCancel && (
-        <button
-          type="button"
-          className="quiet"
-          disabled={busy}
-          onClick={onCancel}
-        >
-          Скасувати
-        </button>
-      )}
+        // Its sheet's foot not there yet: it comes at once, the button in it.
+        foot &&
+        createPortal(own, foot)}
     </div>
   );
 }
@@ -415,13 +471,12 @@ function priceKey(
   return ["catalog-price", scopeKey, storeId, variantId];
 }
 
-/** What the till suggests here, and where that price comes from. */
-function describe(prices: Prices, store: Store): string {
-  if (prices.store_price !== null)
-    return `${money(prices.store_price)} — ціна магазину «${visible(store.name)}»`;
-  if (prices.shared_price !== null)
-    return `${money(prices.shared_price)} — спільна для всіх магазинів`;
-  return "не задана";
+/** What the till suggests here, as the server says it; whose it is, the
+ * sheet's switch says (P1-3). */
+function suggested(prices: Prices): string {
+  return prices.suggested_price === null
+    ? "не задана"
+    : money(prices.suggested_price);
 }
 
 /** A price as the input field takes it: "1850,50". */

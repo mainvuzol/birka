@@ -6998,8 +6998,13 @@ section.receive-list {
   align-self: center;
   margin-top: 0;
 }
-.stocktake-found .cells {
-  margin: 12px 0;
+/* «Знайшли товар…» (goods task list after stage 2, P1-2): its one line
+   under the title, the model chosen, and its sizes' cells. */
+.found-goods > .hint {
+  margin: 0 0 12px;
+}
+.found-cells {
+  margin: 4px 0 12px;
 }
 /* The count's sheet: the balance and the warehouse, the keypad for
    pieces, and «3 → 1 · −2» as it is typed — a shortage in the warning's

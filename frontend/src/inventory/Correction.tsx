@@ -51,12 +51,11 @@ function signedPieces(delta: number): string {
  * Drawn in the tag's system (stage 2, goods task list, P1-3): the reason a
  * chip; «Додати · Списати» where the way is asked; the number on the app's
  * keypad of pieces, the line over it saying what the ledger holds and what
- * it becomes, «В обліку 3 → 1 · −2»; the note folded. Its one button,
- * «Записати · −2 шт.», is Telegram's MainButton in a sheet — outside
- * Telegram its own, in `foot`, where the sheet keeps it in view —; on a
- * screen, which may have a MainButton of its own, the form's own under it.
- * «Назад» leaves it, closing its sheet; `onCancel`, where it stands on a
- * screen, is its «Скасувати».
+ * it becomes, «В обліку 3 → 1 · −2»; the note folded. It stands in a sheet
+ * — a model's «Виправити залишок», a stocktake's «Знайшли товар…» (goods
+ * task list after stage 2, P1-2) —: its one button, «Записати · −2 шт.», is
+ * Telegram's MainButton — outside Telegram its own, in `foot`, where the
+ * sheet keeps it in view —, and «Назад» leaves it, closing its sheet.
  */
 export function Correction({
   store,
@@ -68,7 +67,6 @@ export function Correction({
   place,
   foot,
   onDone,
-  onCancel,
   onRefused,
   onLost,
 }: {
@@ -80,12 +78,10 @@ export function Correction({
   target: Target;
   /** The warehouse's name, where the screen does not say it. */
   place?: string | undefined;
-  /** Where its own button stands outside Telegram: a sheet's foot, null
-   * until it is drawn. None, under the form. */
-  foot?: HTMLElement | null | undefined;
+  /** Where its own button stands outside Telegram: its sheet's foot, null
+   * until it is drawn. */
+  foot: HTMLElement | null;
   onDone: (corrected: Corrected) => void;
-  /** On a screen, not a sheet: «Скасувати». */
-  onCancel?: (() => void) | undefined;
   /** The balances may be stale: read them again. */
   onRefused: () => void;
   /** The answer lost: the app's notice, kept over every screen, settles
@@ -203,17 +199,12 @@ export function Correction({
   const press = (): void => {
     void send();
   };
-  // In a sheet, Telegram's MainButton; on a screen, which may have its own,
-  // the form's own button.
-  const inSheet = foot !== undefined;
-  // Telegram's, only where it was put up: on a screen inside Telegram the
-  // form's own button stands (review, 2026-11-07).
-  const main =
-    useMainButton(words, press, {
-      shown: inSheet && reason !== null,
-      progress: busy,
-      active: ready,
-    }) && inSheet;
+  // Telegram's MainButton, once a reason is chosen.
+  const main = useMainButton(words, press, {
+    shown: reason !== null,
+    progress: busy,
+    active: ready,
+  });
   const own = (
     <button
       type="button"
@@ -234,8 +225,6 @@ export function Correction({
   );
 
   return (
-    // On a screen it is named, as its fieldset named it; in a sheet the
-    // sheet's title does (review, 2026-11-07).
     <div
       className="correction"
       role="group"
@@ -343,22 +332,9 @@ export function Correction({
       )}
       {!main &&
         reason !== null &&
-        (foot === undefined ? (
-          <div className="count-foot">{own}</div>
-        ) : (
-          // A sheet's foot not there yet: it comes at once, the button in it.
-          foot && createPortal(own, foot)
-        ))}
-      {onCancel && (
-        <button
-          type="button"
-          className="quiet"
-          disabled={busy}
-          onClick={onCancel}
-        >
-          Скасувати
-        </button>
-      )}
+        // Its sheet's foot not there yet: it comes at once, the button in it.
+        foot &&
+        createPortal(own, foot)}
     </div>
   );
 }

@@ -75,6 +75,7 @@ export function CatalogPicker({
   onVariant,
   initialSearch = "",
   adds = false,
+  autoFocus = false,
 }: {
   store: Store;
   token: string;
@@ -85,6 +86,10 @@ export function CatalogPicker({
   /** A new model may be added here from an empty search (В-Г1 (а)); never
    * at the till (В-Г2 (а)). */
   adds?: boolean;
+  /** Mounted by a tap on a screen that is its search: the cursor in its
+   * field at once, the keyboard with it («Знайшли товар…», goods task list
+   * after stage 2, P1-2). */
+  autoFocus?: boolean;
 }): JSX.Element {
   const [search, setSearch] = useState(initialSearch);
   // What the line reads is asked at once; what is typed, after a pause.
@@ -96,6 +101,8 @@ export function CatalogPicker({
   // nor its button offered (review).
   const [addedFor, setAddedFor] = useState<string | null>(null);
   const field = useRef<HTMLInputElement>(null);
+  // «Ще товари» pressed: the cursor goes to the first model it brings.
+  const [focusAt, setFocusAt] = useState<number | null>(null);
   useEffect(() => {
     const wanted = askable(search);
     if (wanted === asked) return;
@@ -141,8 +148,6 @@ export function CatalogPicker({
   const neverRead = variants.error !== null && variants.data === undefined;
   const readAgainFailed =
     variants.error !== null && variants.data !== undefined && !nextFailed;
-  // «Ще товари» pressed: the cursor goes to the first model it brings.
-  const [focusAt, setFocusAt] = useState<number | null>(null);
   const shelf = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (focusAt === null) return;
@@ -167,8 +172,15 @@ export function CatalogPicker({
         label="Пошук у каталозі"
         placeholder="Назва моделі або колір"
         value={search}
-        change={setSearch}
+        change={(next) => {
+          // Typed: a page pressed before takes no cursor from the field,
+          // as it is typed or once its words are asked (review of the
+          // audit's batches 16 and 17).
+          setFocusAt(null);
+          setSearch(next);
+        }}
         inputRef={field}
+        autoFocus={autoFocus}
       />
       {asked !== null &&
         // Nothing found before, and the new search not read yet: never the

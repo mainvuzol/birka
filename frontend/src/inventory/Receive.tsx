@@ -136,6 +136,9 @@ export function Receive({
   // «Як надійшов»'s sheet, open; the price it holds, said wrong on
   // «Готово».
   const [details, setDetails] = useState(false);
+  // The price's sheet, open: the screen's MainButton put away under it
+  // (goods task list after stage 2, P1-3).
+  const [pricing, setPricing] = useState(false);
   const [costWrong, setCostWrong] = useState(false);
   const [received, setReceived] = useState<{
     receipt: Receipt;
@@ -374,7 +377,7 @@ export function Receive({
   // The screen's one action, Telegram's: put away under the sheet and once
   // the delivery is recorded.
   const main = useMainButton(words, press, {
-    shown: !received && !details,
+    shown: !received && !details && !pricing,
     progress: busy,
     active: ready,
   });
@@ -577,7 +580,10 @@ export function Receive({
                 token={token}
                 scopeKey={journalKey}
                 variantId={variant.product_variant_id}
+                name={variant.display_name}
                 blocked={blocked}
+                editing={pricing}
+                edit={setPricing}
               />
               {sizes.isPending ? (
                 <Placeholder said="Завантажуємо розміри…" steps={4} />

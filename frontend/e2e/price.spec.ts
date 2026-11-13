@@ -7,6 +7,7 @@ import {
   openModel,
   openStore,
   readsOf,
+  receiveInto,
   receiveModel,
   refuseOnce,
   section,
@@ -281,82 +282,117 @@ test("a store's price set on a model's detail is what its till suggests", async 
   expect(sent[0]?.lines[0]?.unit_price).toBe("1850.50");
 });
 
-test("the owner sets the shared price where goods arrive, and the store's own overrides it", async ({
+test("the owner sets the shared price where goods arrive, and the store's own overrides it: a row as on a model's detail, «Змінити ціну», the model's sheet, a toast; what was counted stays (goods task list after stage 2, P1-3)", async ({
   page,
 }) => {
   const priced = await model(page, await token(page));
   await enter(page, owner, "Приймання");
   await receiveModel(page, priced.name);
-  await expect(page.getByText("Ціна продажу: не задана")).toBeVisible();
+  const row = page.locator(".receive .price > p");
+  await expect(row).toHaveText("Ціна продажу не задана");
+  // One way to the price, its words as on the model's detail.
+  await expect(page.getByRole("button", { name: /ціну продажу/ })).toHaveCount(
+    0,
+  );
+  // Counted before the price: kept after it.
+  const m = page.getByRole("group", { name: "Розмір M" });
+  await m.getByRole("button", { name: "Більше" }).click();
+  await m.getByRole("button", { name: "Більше" }).click();
 
-  await page.getByRole("button", { name: "Задати ціну продажу" }).click();
+  let sheet = await priceSheet(page, priced.name);
   // The same price first as before, one tap away from the other (stage 2,
-  // admin task list, P1-2).
-  await expect(scope(page, "ORGANIZATION")).toHaveAttribute(
+  // admin task list, P1-2); whose price it is, the switch says.
+  await expect(scope(sheet, "ORGANIZATION")).toHaveAttribute(
     "aria-pressed",
     "true",
   );
-  await expect(scope(page, "STORE")).toHaveAttribute("aria-pressed", "false");
-  await page.getByLabel("Нова ціна, грн").fill("2000");
+  await expect(scope(sheet, "STORE")).toHaveAttribute("aria-pressed", "false");
+  // The keypad in the sheet alone; no «Скасувати» — «Назад» leaves.
+  await expect(page.locator(".receive .keypad")).toHaveCount(0);
+  await expect(sheet.getByRole("button", { name: "Скасувати" })).toHaveCount(0);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth > innerWidth,
+    ),
+  ).toBe(false);
+  await page.screenshot({
+    path: "test-results/receive-price-sheet.png",
+    fullPage: true,
+  });
+  await sheet.getByLabel("Нова ціна, грн").fill("2000");
   // Refused once for a reason the screen does not name: its own words,
   // never an order's (owner decision, 2026-10-25).
   await refuseOnce(page, "**/api/v1/catalog/prices", 422);
-  // On a screen, the form's own button under it, and «Скасувати».
-  await expect(page.getByRole("button", { name: "Скасувати" })).toBeVisible();
-  await save(page, "2 000,00").click();
+  await save(sheet, "2 000,00").click();
   await expect(
-    page.getByText("Ціну не збережено. Перевірте суму.", {
+    sheet.getByText("Ціну не збережено. Перевірте суму.", {
       exact: true,
     }),
   ).toBeVisible();
   const priceReads = readsOf(page, /\/api\/v1\/catalog\/prices$/);
   await refuseOnce(page, "**/api/v1/catalog/prices", 409);
-  await save(page, "2 000,00").click();
+  await save(sheet, "2 000,00").click();
   await expect(
-    page.getByText(
+    sheet.getByText(
       "Ціну не збережено: її щойно змінили — перевірте й збережіть ще раз.",
       { exact: true },
     ),
   ).toBeVisible();
   await expect.poll(priceReads).toBeGreaterThan(0);
-  await page.getByLabel("Нова ціна, грн").fill("2000");
+  await sheet.getByLabel("Нова ціна, грн").fill("2000");
   // The server's own failure, or a request naming nothing: what was not
   // done, then the step — never «спробуйте ще раз» (owner, В-П1 (б)).
   await refuseOnce(page, "**/api/v1/catalog/prices", 500);
-  await save(page, "2 000,00").click();
+  await save(sheet, "2 000,00").click();
   await expect(
-    page.getByText(
+    sheet.getByText(
       "Ціну не збережено. Натисніть ще раз — повторити безпечно. Номер запиту: 3f9c2a7e.",
       { exact: true },
     ),
   ).toBeVisible();
   await refuseOnce(page, "**/api/v1/catalog/prices", 404);
-  await save(page, "2 000,00").click();
+  await save(sheet, "2 000,00").click();
   await expect(
-    page.getByText("Ціну не збережено. Перевірте суму.", { exact: true }),
+    sheet.getByText("Ціну не збережено. Перевірте суму.", { exact: true }),
   ).toBeVisible();
-  await save(page, "2 000,00").click();
+  await save(sheet, "2 000,00").click();
+  // Saved: the sheet closes, a toast says it, the row shows it; the sizes
+  // counted are as they were.
+  await expect(sheet).toHaveCount(0);
+  await expect(page.locator(".toast")).toHaveText(
+    new RegExp(`^Ціну продажу збережено: ${priced.name}.*\\.$`),
+  );
+  await expect(row).toHaveText("Ціна продажу 2 000,00 грн");
+  await expect(page.getByText(/Ціна продажу:/)).toHaveCount(0);
+  await expect(m.getByLabel("M, шт.")).toHaveValue("2");
   await expect(
-    page.getByText("Ціна продажу: 2 000,00 грн — спільна для всіх магазинів"),
-  ).toBeVisible();
+    page.getByRole("button", { name: "Змінити ціну", exact: true }),
+  ).toBeFocused();
 
-  await page.getByRole("button", { name: "Змінити ціну продажу" }).click();
-  await scope(page, "STORE").click();
+  sheet = await priceSheet(page, priced.name);
+  await scope(sheet, "STORE").click();
   await expect(
-    page.getByText("Зараз: своєї ціни немає, діє спільна 2 000,00 грн."),
+    sheet.getByText("Зараз: своєї ціни немає, діє спільна 2 000,00 грн."),
   ).toBeVisible();
-  await page.getByLabel("Нова ціна, грн").fill("1900");
-  await save(page, "1 900,00").click();
-  await expect(
-    page.getByText("Ціна продажу: 1 900,00 грн — ціна магазину «Основний»"),
-  ).toBeVisible();
+  await sheet.getByLabel("Нова ціна, грн").fill("1900");
+  await save(sheet, "1 900,00").click();
+  await expect(sheet).toHaveCount(0);
+  await expect(row).toHaveText("Ціна продажу 1 900,00 грн");
 
   // Removing the store's own price brings the shared one back.
-  await page.getByRole("button", { name: "Змінити ціну продажу" }).click();
-  await expect(scope(page, "STORE")).toHaveAttribute("aria-pressed", "true");
-  await page.getByRole("button", { name: "Прибрати ціну «Основний»" }).click();
+  sheet = await priceSheet(page, priced.name);
+  await expect(scope(sheet, "STORE")).toHaveAttribute("aria-pressed", "true");
+  await sheet.getByRole("button", { name: "Прибрати ціну «Основний»" }).click();
+  await expect(sheet).toHaveCount(0);
+  await expect(row).toHaveText("Ціна продажу 2 000,00 грн");
+  await expect(m.getByLabel("M, шт.")).toHaveValue("2");
+  // Then the delivery is recorded as counted (review).
+  await receiveInto(page, "Каса-склад");
+  await page
+    .getByRole("button", { name: "Записати прихід · 2 шт.", exact: true })
+    .click();
   await expect(
-    page.getByText("Ціна продажу: 2 000,00 грн — спільна для всіх магазинів"),
+    page.getByRole("heading", { name: /^Прийшло 2 шт\./ }),
   ).toBeVisible();
 });
 
@@ -767,10 +803,10 @@ test("whoever does not set prices sees them and is offered no change", async ({
 
   await section(page, "Приймання");
   await receiveModel(page, priced.name);
-  await expect(
-    page.getByText("Ціна продажу: 1 850,00 грн — ціна магазину «Основний»"),
-  ).toBeVisible();
-  await expect(page.getByRole("button", { name: /ціну продажу/ })).toHaveCount(
-    0,
+  await expect(page.locator(".receive .price > p")).toHaveText(
+    "Ціна продажу 1 850,00 грн",
   );
+  await expect(
+    page.getByRole("button", { name: "Змінити ціну", exact: true }),
+  ).toHaveCount(0);
 });

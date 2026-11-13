@@ -87,9 +87,6 @@ export function FamilySearch({
     const wanted = askable(text);
     if (wanted === asked) return;
     const wait = window.setTimeout(() => {
-      // New words: a page pressed for the old ones takes no cursor from
-      // the field (review).
-      setFocusAt(null);
       setAsked(wanted);
     }, PAUSE);
     return () => {
@@ -145,7 +142,13 @@ export function FamilySearch({
         label="Пошук моделі в каталозі"
         placeholder="Назва моделі або джерело"
         value={text}
-        change={setText}
+        change={(next) => {
+          // Typed: a page pressed before takes no cursor from the field,
+          // as it is typed or once its words are asked (review, batches 16
+          // and 17).
+          setFocusAt(null);
+          setText(next);
+        }}
         inputRef={field}
         disabled={blocked}
       />
