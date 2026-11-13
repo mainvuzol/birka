@@ -732,7 +732,9 @@ export function Cash({
                 </button>
               </div>
             )}
-            <div className="cash-rows">
+            {/* On a list's white block, as «Гроші» and «Ще» (spec §6.8;
+                audit 2026-11-13, orders-cash P1-2). */}
+            <div className="cash-rows list-block">
               {takesOut && (
                 <Row
                   title="Видати з каси"
@@ -870,7 +872,7 @@ function Row({
           {hint}
         </span>
       </span>
-      <Icon name="chevron-right" size={16} />
+      <Icon name="chevron-right" size={16} className="sale-open" />
     </button>
   );
 }
@@ -1105,7 +1107,12 @@ function CorrectStep({
             {!valid ? (
               <p>Оберіть день.</p>
             ) : events.isPending ? (
-              <Placeholder said="Завантажуємо операції…" rows={3} day={false} />
+              <Placeholder
+                said="Завантажуємо операції…"
+                rows={3}
+                day={false}
+                block
+              />
             ) : events.error ? (
               <Unread
                 error={events.error}
@@ -1119,7 +1126,7 @@ function CorrectStep({
               // hint, not an empty place.
               <Empty title="Цього дня грошових операцій не було." />
             ) : (
-              <ul className="fix-list" aria-label="Операції дня">
+              <ul className="fix-list list-block" aria-label="Операції дня">
                 {events.data.items.map((event) => (
                   <li key={`${event.target}:${event.target_id}`}>
                     {/* What, when and who, its sum beside them; the goods,

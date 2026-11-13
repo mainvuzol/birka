@@ -1363,6 +1363,26 @@ html {
 .till-tray .pay-ways button[aria-disabled="true"] {
   opacity: 0.45;
 }
+/* A way's refusal in the tray, where «Ще надсилаємо…» stood (audit
+   2026-11-13, sale P1-3): the error's colour and its crossed circle 16,
+   14/500 — no plate of its own, the tray is its plate. */
+.till-tray .tray-refused {
+  margin: 0 0 10px;
+  padding: 0 0 0 22px;
+  border-radius: 0;
+  background: none;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 19px;
+}
+.till-tray .tray-refused::before {
+  top: 1.5px;
+  left: 0;
+  width: 16px;
+  height: 16px;
+  -webkit-mask-size: 16px 16px;
+  mask-size: 16px 16px;
+}
 
 /* A sheet over the screen (spec §6.29; P0-5): the card rising from the
    bottom over the menu, its handle, the scrim behind; 560 px at most, as
@@ -1882,11 +1902,19 @@ html {
 button.sale-row:not(:disabled):active {
   background-color: var(--fold);
 }
-button.sale-row:disabled :is(.sale-goods, .debt-name, .more-label) {
+button.sale-row:disabled
+  :is(.sale-goods, .debt-name, .more-label, .cash-row-title) {
   color: var(--pencil);
 }
-/* …and nothing faded over it: what it is still reads (review). */
-button.sale-row:disabled:has(.sale-goods, .debt-name, .more-label) {
+/* …and nothing faded over it: what it is still reads (review) — «Каса»'s
+   rows too while its write is on its way (audit 2026-11-13, orders-cash
+   P1-2). */
+button.sale-row:disabled:has(
+    .sale-goods,
+    .debt-name,
+    .more-label,
+    .cash-row-title
+  ) {
   opacity: 1;
 }
 .sale-main {
@@ -4800,6 +4828,21 @@ span.cash-difference > .difference-sign {
 .list-block > :last-child > .sale-row {
   background-image: none;
 }
+/* No rows, no block. */
+.list-block:empty {
+  display: none;
+}
+/* A day nobody closed, among «Закриття»'s rows on their block: the same
+   sides and hairline (audit 2026-11-13, orders-cash P1-2). */
+.list-block > .close-unclosed {
+  padding: 12px 16px;
+  border-bottom: 0;
+  background: linear-gradient(var(--hairline), var(--hairline)) left 16px
+    bottom / calc(100% - 16px) 1px no-repeat;
+}
+.list-block > .close-unclosed:last-child {
+  background-image: none;
+}
 /* A store's debts on the customer's card lie on that block's own white,
    never a block in a block: the rows the card's width, their sides its 16
    (review). */
@@ -4922,7 +4965,12 @@ span.cash-difference > .difference-sign {
 .switch-row input:disabled {
   cursor: not-allowed;
 }
-.switch-row input:disabled ~ span {
+/* Taking no tap, its words still read, in pencil, nothing faded over them;
+   the switch itself dimmed (audit 2026-11-13, sale P2-6; review). */
+.switch-row input:disabled ~ .switch-label {
+  color: var(--pencil);
+}
+.switch-row input:disabled ~ .switch-track {
   opacity: 0.45;
 }
 @media (prefers-reduced-motion: reduce) {

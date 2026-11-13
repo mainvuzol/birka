@@ -203,7 +203,7 @@ export function FixStep({
         {kept}
         <p className="cash-context">Ваші операції після останнього закриття</p>
         {mine.isPending ? (
-          <Placeholder said="Завантажуємо…" rows={3} day={false} />
+          <Placeholder said="Завантажуємо…" rows={3} day={false} block />
         ) : mine.error ? (
           <Unread
             error={mine.error}
@@ -216,7 +216,7 @@ export function FixStep({
           // stage 2, P2-3).
           <Empty title="Після останнього закриття ви ще нічого не провели." />
         ) : (
-          <ul className="fix-list" aria-label="Ваші операції">
+          <ul className="fix-list list-block" aria-label="Ваші операції">
             {mine.data.items.map((event) => (
               <li key={event.target_id}>
                 <button

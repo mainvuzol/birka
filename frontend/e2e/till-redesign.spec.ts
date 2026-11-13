@@ -496,6 +496,26 @@ test("an unreadable kept invoice holds the till, as it holds the other tabs", as
     page.getByRole("searchbox", { name: "Знайти модель" }),
   ).toBeDisabled();
   await expect(page.getByLabel("Вношу продаж з паперу")).toBeDisabled();
+  // Its words still read, in pencil, nothing faded over them; the switch
+  // itself dimmed (audit 2026-11-13, sale P2-6; review).
+  expect(
+    await page
+      .locator("label.switch-row", { hasText: "Вношу продаж з паперу" })
+      .evaluate((node) => {
+        const probe = document.createElement("span");
+        probe.style.color = "var(--pencil)";
+        document.body.append(probe);
+        const pencil = getComputedStyle(probe).color;
+        probe.remove();
+        const words = node.querySelector(".switch-label") ?? node;
+        const track = node.querySelector(".switch-track") ?? node;
+        return [
+          getComputedStyle(words).opacity,
+          getComputedStyle(words).color === pencil,
+          getComputedStyle(track).opacity,
+        ];
+      }),
+  ).toEqual(["1", true, "0.45"]);
 });
 
 // --- P0-5: Telegram's dark theme -------------------------------------------------

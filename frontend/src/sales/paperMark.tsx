@@ -6,6 +6,7 @@ import { api } from "@/shared/api";
 import { Banner } from "@/shared/Banner";
 import { Icon } from "@/shared/Icon";
 import { Sheet } from "@/shared/Sheet";
+import { SwitchRow } from "@/shared/SwitchRow";
 import { visible } from "@/shared/visible";
 import { Unread } from "@/shared/Unread";
 import type { Store } from "@/orders/types";
@@ -209,22 +210,7 @@ export function PaperSwitch({
   on: boolean;
   turn: (on: boolean) => void;
 }): JSX.Element {
-  return (
-    <label className="switch-row">
-      <input
-        type="checkbox"
-        role="switch"
-        checked={on}
-        onChange={(event) => {
-          turn(event.target.checked);
-        }}
-      />
-      <span className="switch-label">{label}</span>
-      <span className="switch-track" aria-hidden="true">
-        <span className="switch-knob" />
-      </span>
-    </label>
-  );
+  return <SwitchRow label={label} on={on} turn={turn} />;
 }
 
 /**

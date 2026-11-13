@@ -444,14 +444,12 @@ test("while the warehouses are read, the switch row stands under the search's pl
   expect(Math.abs(come.y - waiting.y)).toBeLessThanOrEqual(8);
 });
 
-test("an answer refused for its own reason under a long list is brought into view, the basket kept", async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 360, height: 640 });
-  // «Лоран шоколад» first, and seven models more under it.
+/** «Лоран шоколад» first, and `more` models under it: a list longer than
+ * the screen. */
+async function longList(page: Page, more: number): Promise<void> {
   const models = [
     fixture.variant_id,
-    ...Array.from({ length: 7 }, () => randomUUID()),
+    ...Array.from({ length: more }, () => randomUUID()),
   ];
   await page.route("**/api/v1/catalog/stock-options?**", async (route) => {
     await route.fulfill({
@@ -472,6 +470,264 @@ test("an answer refused for its own reason under a long list is brought into vie
       },
     });
   });
+}
+
+/** A finger's tap where `button` stands, the page as it is: a locator's
+ * click would first scroll the sticky tray's button "into view", moving the
+ * page under a long list as no finger does. Returns where it stood. */
+async function tapInPlace(
+  page: Page,
+  button: Locator,
+): Promise<{ x: number; y: number; width: number; height: number }> {
+  await expect(button).toBeEnabled();
+  const box = await button.boundingBox();
+  if (box === null) throw new Error("not drawn");
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  return box;
+}
+
+/** The WCAG contrast of an element's text against what it is drawn on. */
+async function contrast(element: Locator): Promise<number> {
+  return element.evaluate((node) => {
+    const rgb = (value: string): number[] =>
+      (value.match(/[\d.]+/g) ?? []).map(Number);
+    const luminance = ([r, g, b]: number[]): number => {
+      const channel = (c: number): number => {
+        const v = c / 255;
+        return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+      };
+      return (
+        0.2126 * channel(r ?? 0) +
+        0.7152 * channel(g ?? 0) +
+        0.0722 * channel(b ?? 0)
+      );
+    };
+    let ground: Element | null = node;
+    let background = "rgba(0, 0, 0, 0)";
+    while (ground) {
+      background = getComputedStyle(ground).backgroundColor;
+      const alpha = rgb(background)[3];
+      if (alpha === undefined || alpha > 0) break;
+      ground = ground.parentElement;
+    }
+    const fore = luminance(rgb(getComputedStyle(node).color));
+    const back = luminance(rgb(background));
+    return (Math.max(fore, back) + 0.05) / (Math.min(fore, back) + 0.05);
+  });
+}
+
+for (const scheme of ["light", "dark"] as const)
+  test(`in the ${scheme} theme a way refused is said in the tray, over the ways, in the error's colour and its crossed circle 16 — the page not moved, the ways where they were; the basket emptied, it goes with the tray (audit 2026-11-13, sale P1-3)`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 360, height: 640 });
+    await page.emulateMedia({ colorScheme: scheme });
+    // One line in the basket, ten tags in the list.
+    await longList(page, 9);
+    let sales = 0;
+    await page.route("**/api/v1/sales", async (route) => {
+      sales += 1;
+      await route.fulfill({
+        status: 409,
+        json: {
+          code: "IDEMPOTENCY_CONFLICT",
+          message:
+            "This idempotency key was already used with a different request",
+          details: {},
+        },
+      });
+    });
+    await onTheTill(page);
+    await cell(page).click();
+    await expect(tray(page)).toBeVisible();
+    await expect(page.locator(".model-tag")).toHaveCount(10);
+    await page.evaluate(() => {
+      window.scrollTo(0, 0);
+    });
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollHeight > window.innerHeight,
+      ),
+    ).toBe(true);
+    expect(await page.evaluate(() => window.scrollY)).toBe(0);
+    const before = await tapInPlace(page, pay(page, "Готівка"));
+    const refused = tray(page).getByRole("alert");
+    await expect(refused).toHaveText(
+      "Дані змінилися, поки ви працювали. Кошик збережено — нічого не продано. Натисніть спосіб оплати ще раз.",
+    );
+    expect(sales).toBe(1);
+    // The page's one refusal, where «Ще надсилаємо…» stood: between
+    // «Разом» and the ways; over the tray only the terminal's hint.
+    await expect(page.getByRole("alert")).toHaveCount(1);
+    await expect(
+      tray(page).locator(".pay-total + .tray-refused + .pay-ways"),
+    ).toHaveCount(1);
+    // Nothing moved: the page where it stood, the ways where they were.
+    expect(await page.evaluate(() => window.scrollY)).toBe(0);
+    const after = await pay(page, "Готівка").boundingBox();
+    if (after === null) throw new Error("not drawn");
+    expect(Math.abs(after.y - before.y)).toBeLessThanOrEqual(1);
+    await expect(refused).toBeInViewport({ ratio: 1 });
+    // The error's own: its colour, its crossed circle 16, 14/500, no plate
+    // — the tray is its plate; four lines at most at 360 px.
+    const danger = await page.evaluate(() => {
+      const probe = document.createElement("span");
+      probe.style.color = "var(--danger)";
+      document.body.append(probe);
+      const said = getComputedStyle(probe).color;
+      probe.remove();
+      return said;
+    });
+    expect(
+      await refused.evaluate((node) => {
+        const style = getComputedStyle(node);
+        const sign = getComputedStyle(node, "::before");
+        return [
+          style.color,
+          style.fontSize,
+          style.fontWeight,
+          style.backgroundColor,
+          sign.width,
+          sign.height,
+          sign.maskImage.startsWith("url("),
+          sign.maskSize,
+        ];
+      }),
+    ).toEqual([
+      danger,
+      "14px",
+      "500",
+      "rgba(0, 0, 0, 0)",
+      "16px",
+      "16px",
+      true,
+      "16px 16px",
+    ]);
+    expect((await refused.boundingBox())?.height ?? 0).toBeLessThanOrEqual(
+      4 * 19,
+    );
+    expect(await contrast(refused)).toBeGreaterThanOrEqual(4.5);
+    await page.screenshot({
+      path: `test-results/till-tray-refused-${scheme}.png`,
+    });
+    // The basket emptied: the tray goes, and what it said with it; the next
+    // coat's tray says nothing of a basket gone.
+    await tray(page).locator(".tray-basket").click();
+    const basket = page.getByRole("dialog", { name: "Кошик" });
+    await expect(basket).toHaveAttribute("data-ready", "");
+    await basket
+      .getByRole("button", { name: /^Прибрати Лоран шоколад/ })
+      .click();
+    await expect(basket).toHaveCount(0);
+    await expect(tray(page)).toHaveCount(0);
+    await expect(page.getByRole("alert")).toHaveCount(0);
+    await cell(page).click();
+    await expect(tray(page)).toBeVisible();
+    await expect(page.getByRole("alert")).toHaveCount(0);
+  });
+
+test("what the terms need, the basket's sheet closed over it, is said in the tray over the ways, never under the list (audit 2026-11-13, sale P1-3)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  await longList(page, 9);
+  let sales = 0;
+  await page.route("**/api/v1/sales", async (route) => {
+    sales += 1;
+    await route.abort();
+  });
+  await onTheTill(page);
+  await cell(page).click();
+  await tray(page).locator(".tray-basket").click();
+  const basket = page.getByRole("dialog", { name: "Кошик" });
+  await expect(basket).toHaveAttribute("data-ready", "");
+  await basket.getByLabel("Оплата частинами").check();
+  await basket.getByRole("button", { name: "Готово", exact: true }).click();
+  await expect(basket).toHaveCount(0);
+  await page.evaluate(() => {
+    window.scrollTo(0, 0);
+  });
+  // Pressed with no name: the sheet opens on what is missing.
+  const before = await tapInPlace(page, pay(page, "Готівка"));
+  await expect(basket).toBeVisible();
+  await expect(basket.getByRole("alert")).toHaveText(
+    "Вкажіть ім’я покупця, який платить частинами.",
+  );
+  // Said in the sheet alone while it is open.
+  await expect(page.getByRole("alert")).toHaveCount(1);
+  await page.keyboard.press("Escape");
+  await expect(basket).toHaveCount(0);
+  // Closed over it: said in the tray, the page's only one.
+  const said = tray(page).getByRole("alert");
+  await expect(said).toHaveText(
+    "Вкажіть ім’я покупця, який платить частинами.",
+  );
+  await expect(page.getByRole("alert")).toHaveCount(1);
+  await expect(
+    tray(page).locator(".pay-total + .tray-refused + .pay-ways"),
+  ).toHaveCount(1);
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
+  const after = await pay(page, "Готівка").boundingBox();
+  if (after === null) throw new Error("not drawn");
+  expect(Math.abs(after.y - before.y)).toBeLessThanOrEqual(1);
+  expect(sales).toBe(0);
+});
+
+test("a way refused, then pressed with the terms unmet: the tray says only what the terms need — one line, never the old «натисніть ще раз»; the terms turned off, it says nothing (audit 2026-11-13, sale P1-3; review)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  await longList(page, 9);
+  let sales = 0;
+  await page.route("**/api/v1/sales", async (route) => {
+    sales += 1;
+    await route.fulfill({
+      status: 409,
+      json: {
+        code: "IDEMPOTENCY_CONFLICT",
+        message:
+          "This idempotency key was already used with a different request",
+        details: {},
+      },
+    });
+  });
+  await onTheTill(page);
+  await cell(page).click();
+  await tapInPlace(page, pay(page, "Готівка"));
+  const said = tray(page).getByRole("alert");
+  await expect(said).toContainText("Натисніть спосіб оплати ще раз.");
+  expect(sales).toBe(1);
+  await tray(page).locator(".tray-basket").click();
+  const basket = page.getByRole("dialog", { name: "Кошик" });
+  await expect(basket).toHaveAttribute("data-ready", "");
+  await basket.getByLabel("Оплата частинами").check();
+  await basket.getByRole("button", { name: "Готово", exact: true }).click();
+  await expect(basket).toHaveCount(0);
+  // Pressed again, nothing to send: the old refusal is no longer so.
+  await tapInPlace(page, pay(page, "Готівка"));
+  await expect(basket).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(basket).toHaveCount(0);
+  await expect(said).toHaveText(
+    "Вкажіть ім’я покупця, який платить частинами.",
+  );
+  await expect(page.getByRole("alert")).toHaveCount(1);
+  expect(sales).toBe(1);
+  // The terms changed — paid at once after all: what they needed goes.
+  await tray(page).locator(".tray-basket").click();
+  await expect(basket).toHaveAttribute("data-ready", "");
+  await basket.getByLabel("Оплата частинами").uncheck();
+  await basket.getByRole("button", { name: "Готово", exact: true }).click();
+  await expect(basket).toHaveCount(0);
+  await expect(page.getByRole("alert")).toHaveCount(0);
+});
+
+test("an answer refused for its own reason under a long list is said in the tray, over the ways, the basket kept (audit 2026-11-13, sale P1-3)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  // «Лоран шоколад» first, and seven models more under it.
+  await longList(page, 7);
   const answers = [
     {
       code: "INSUFFICIENT_STOCK",
@@ -505,16 +761,22 @@ test("an answer refused for its own reason under a long list is brought into vie
   });
   await onTheTill(page);
   await coats(page, 3);
-  await pay(page, "Готівка").click();
-  await (await shortage(page))
+  const before = await tapInPlace(page, pay(page, "Готівка"));
+  await (
+    await shortage(page)
+  )
     .getByRole("button", { name: "Товар на місці — продати 3 · Готівка" })
     .click();
-  const refused = page.getByRole("alert");
+  const refused = tray(page).getByRole("alert");
   await expect(refused).toContainText(
     "Частина цих одиниць у резерві замовлення",
   );
   await expect(refused).toContainText("Кошик збережено — нічого не продано.");
+  await expect(page.getByRole("alert")).toHaveCount(1);
   await expect(refused).toBeInViewport({ ratio: 1 });
+  const after = await pay(page, "Готівка").boundingBox();
+  if (after === null) throw new Error("not drawn");
+  expect(Math.abs(after.y - before.y)).toBeLessThanOrEqual(1);
   await expect(tray(page).locator(".tray-count")).toHaveText("Кошик · 3");
 });
 

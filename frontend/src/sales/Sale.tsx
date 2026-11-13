@@ -624,6 +624,9 @@ export function Sale({
     // and the first days' day and time go together (owner decision,
     // 2026-10-16): the buttons wait, and so does this.
     if (paper && (firstDays === null || paperProblem !== null)) return;
+    // A way pressed is a new try: the last one's refusal is said no more,
+    // whatever stops this one (audit 2026-11-13, sale P1-3; review).
+    setRefusal(null);
     // The buttons wait for every price; a sale is never sent without one.
     // What is missing is said in the basket's sheet, where it is typed.
     if (draft.some((d) => d.line.unit_price === "")) {
@@ -863,13 +866,15 @@ export function Sale({
     paperAsked.current = false;
     paperRef.current?.scrollIntoView({ block: "nearest" });
   }, [paper]);
-  // A refusal stands where the till's page ends, under a long list: brought
-  // into view, clear of the tray (review, 2026-10-30).
-  const refusalRef = useRef<HTMLParagraphElement>(null);
+  // A refusal is said in the tray, over the ways pressed again, the page
+  // never moved to it (audit 2026-11-13, sale P1-3). An emptied basket
+  // takes the tray, and what it said, with it: the next coat's tray says
+  // nothing of a basket gone.
   useEffect(() => {
-    if (refusal !== null)
-      refusalRef.current?.scrollIntoView({ block: "nearest" });
-  }, [refusal]);
+    if (draft.length > 0) return;
+    setRefusal(null);
+    setValidation("");
+  }, [draft.length]);
   // An empty basket closes its sheet, and the next coat does not open it.
   // Emptied in the sheet, the cursor goes to the search, where the next
   // model is found: the tray goes with the basket.
@@ -1263,9 +1268,6 @@ export function Sale({
               </>
             )
           )}
-          {validation && !sheetShown && !shortShown && (
-            <p role="alert">{validation}</p>
-          )}
           {draft.length === 0 &&
             (locationId || (searchAll && ready.length > 0)) &&
             !waiting &&
@@ -1281,11 +1283,6 @@ export function Sale({
             />
           )}
         </fieldset>
-        {refusal !== null && (
-          <p role="alert" ref={refusalRef}>
-            {pressedRefusalText(refusal)}
-          </p>
-        )}
         {shortShown && (
           // The shelf's question as a sheet over the till (spec §4.3, S09;
           // «Усе на бірці» task list, P0-5), in the same words. Closed,
@@ -1681,7 +1678,13 @@ export function Sale({
               {mayCredit && (
                 <TermsFields
                   value={credit}
-                  change={setCredit}
+                  // The terms changed take what they needed with them, as
+                  // «Клієнт забрав»'s do (audit 2026-11-13, sale P1-3;
+                  // review).
+                  change={(next) => {
+                    setCredit(next);
+                    setValidation("");
+                  }}
                   total={total}
                   // One line at 360 px (credits task list, P1-5), and where
                   // the next payments are taken: the till's «Внесок» («Усе
@@ -1756,6 +1759,21 @@ export function Sale({
                 )}
               </p>
               <SendingLine busy={pressing !== null} />
+              {/* Where «Ще надсилаємо…» stood while it was sent: a way's
+                  refusal, or what the terms need with the sheet closed,
+                  over the ways to press again — the tray rising by it, the
+                  ways where they were, the page not moved (audit
+                  2026-11-13, sale P1-3). */}
+              {refusal !== null && (
+                <p role="alert" className="tray-refused">
+                  {pressedRefusalText(refusal)}
+                </p>
+              )}
+              {validation && !sheetShown && !shortShown && (
+                <p role="alert" className="tray-refused">
+                  {validation}
+                </p>
+              )}
               <div className="pay-ways">
                 {tillMethods.map((way) => (
                   <button
