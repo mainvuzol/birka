@@ -1,6 +1,8 @@
 import {
   test,
   expect,
+  dockOnMenu,
+  expectOwed,
   expectStub,
   openStore,
   toTill,
@@ -528,6 +530,56 @@ test("«Внесок» on a debt opens S21 on it: the sum keyed in, a way, the r
   await expect(
     paid.getByText("Залишок боргу 777,00 грн", { exact: true }),
   ).toBeVisible();
+  // In the debt's colour, with its arrow (audit 2026-11-13, sale P2-3).
+  await expectOwed(paid, "777,00 грн");
+  // Its own result's screen (spec S22; audit 2026-11-13, sale P1-1): its
+  // title the page's one heading where the coat stood, no «←»; the stub in
+  // the spec's order — the way, what to do, the sum, the perforation, what
+  // she took, what is left, what she owes the store in all.
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+    "Внесок записано",
+  );
+  await expect(page.locator(".screen-header .back")).toHaveCount(0);
+  const order = [
+    ".way-pill",
+    ".stub-say",
+    ".stub-sum",
+    ".perforation",
+    ".paid-goods",
+    ".paid-owed",
+    ".paid-total",
+  ];
+  expect(
+    await paid
+      .locator(".stub")
+      .evaluate(
+        (stub, names) =>
+          [...stub.querySelectorAll(names.join(", "))].map((node) =>
+            names.find((name) => node.matches(name)),
+          ),
+        order,
+      ),
+  ).toEqual(order);
+  await expect(paid.locator(".paid-goods")).toHaveText(
+    "Лоран шоколад · M + ще 1",
+  );
+  // Outside Telegram, the way back the screen's one main, in its dock at
+  // the menu's top, nothing to scroll; «Відкрити борг» quiet under the stub.
+  await dockOnMenu(page);
+  // «+ ще 1»: every good, where the line was; the result longer than the
+  // screen now, its dock sticking on the menu.
+  await paid.getByRole("button", { name: "+ ще 1" }).click();
+  await expect(
+    paid.getByRole("list", { name: "Товари боргу" }).getByRole("listitem"),
+  ).toHaveText(["Лоран шоколад · M", "Альпака сіра · L"]);
+  await expect(paid.getByRole("list", { name: "Товари боргу" })).toBeFocused();
+  const dock = await dockOnMenu(page, { scrolls: true });
+  await expect(dock.getByRole("button")).toHaveText("Оксана Петренко");
+  await expect(dock.getByRole("button")).toHaveClass(/\bprimary\b/);
+  await expect(paid.locator(".result-body > .paid-more")).toHaveText(
+    "Відкрити борг",
+  );
+  await expect(page.locator("main button.primary:visible")).toHaveCount(1);
   expect(sent).toEqual([
     {
       amount: "400.00",
@@ -743,6 +795,98 @@ test("the owner's write-off behind the ⋯, at the end of a long history, asks w
   await expect(page.getByText("Борг списано: 1 234,56 грн.")).toBeAttached();
   await expect(sheet).toHaveCount(0);
   expect(sent).toEqual([expect.objectContaining({ reason: "виїхала" })]);
+  // Its own result's screen (audit 2026-11-13, sale P1-1): «✓ Борг списано»
+  // the page's one heading, no «←», no ⋯; the way back the screen's main in
+  // its dock at the menu's top, «Відкрити борг» quiet under the stub.
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+    "Борг списано",
+  );
+  await expect(done.locator(".result-title .recorded-mark")).toHaveCount(1);
+  await expect(page.locator(".screen-header .back")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Дії з боргом" })).toHaveCount(
+    0,
+  );
+  const dock = await dockOnMenu(page);
+  await expect(dock.getByRole("button")).toHaveText("Оксана Петренко");
+  await expect(dock.getByRole("button")).toHaveClass(/\bprimary\b/);
+  await expect(page.locator("main button.primary:visible")).toHaveCount(1);
+  await done.locator(".result-body > .paid-more").click();
+  await expect(
+    page.getByRole("heading", { name: "Оксана Петренко", level: 1 }),
+  ).toBeFocused();
+  await expect(page.locator(".paid-result")).toHaveCount(0);
+});
+
+test("inside Telegram a write-off's result keeps its own way back: the dock's main, «Відкрити борг» quiet under the stub, Telegram's MainButton put away with the debt's «Внесок» (owner, 2026-10-18; audit 2026-11-13, sale P1-1)", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const host = window as unknown as {
+      TelegramWebviewProxy: {
+        postEvent: (event: string, data: string) => void;
+      };
+      mains: unknown[];
+    };
+    host.mains = [];
+    host.TelegramWebviewProxy = {
+      postEvent: (event, data) => {
+        if (event === "web_app_setup_main_button")
+          host.mains.push(JSON.parse(data));
+      },
+    };
+  });
+  const one = debt();
+  await serveDebt(page, one);
+  await page.route(`**/api/v1/credits/${one.id}/write-off`, async (route) => {
+    await route.fulfill({
+      json: {
+        ...one,
+        status: "WRITTEN_OFF",
+        owed: "0.00",
+        written_off: "1234.56",
+        closed_at: `${String(thisYear)}-10-16T09:00:00Z`,
+      },
+    });
+  });
+  const mains = (): Promise<{ is_visible: boolean; text?: string }[]> =>
+    page.evaluate(
+      () =>
+        (
+          window as unknown as {
+            mains: { is_visible: boolean; text?: string }[];
+          }
+        ).mains,
+    );
+  await opened(page, undefined, "8.0");
+  // The debt's «Внесок» is Telegram's.
+  await expect
+    .poll(async () => (await mains()).at(-1))
+    .toEqual(expect.objectContaining({ is_visible: true, text: "Внесок" }));
+  await page.getByRole("button", { name: "Дії з боргом" }).click();
+  const menu = page.getByRole("dialog", { name: "Лоран шоколад · M + ще 1" });
+  await expect(menu).toHaveAttribute("data-ready", "");
+  await menu.getByRole("button", { name: "Списати борг" }).click();
+  const sheet = page.getByRole("dialog", { name: "Списати борг" });
+  await expect(sheet).toHaveAttribute("data-ready", "");
+  await sheet.getByLabel("Чому списуємо").fill("виїхала");
+  await sheet.getByRole("button", { name: /^Так, списати/ }).click();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+    "Борг списано",
+  );
+  // In Telegram too, the screen's two its own: the way back the dock's
+  // main, «Відкрити борг» quiet — never Telegram's MainButton.
+  const dock = await dockOnMenu(page);
+  await expect(dock.getByRole("button")).toHaveText("Оксана Петренко");
+  await expect(dock.getByRole("button")).toHaveClass(/\bprimary\b/);
+  await expect(
+    page.locator(".paid-result .result-body > .paid-more"),
+  ).toHaveText("Відкрити борг");
+  await expect
+    .poll(async () => (await mains()).at(-1))
+    .toEqual({ is_visible: false });
+  expect(
+    (await mains()).filter((main) => main.text === "Відкрити борг"),
+  ).toEqual([]);
 });
 
 // What was not recorded, then the step — never «спробуйте ще раз» on a

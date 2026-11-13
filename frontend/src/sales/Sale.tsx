@@ -33,6 +33,8 @@ import { Sum } from "@/shared/Sum";
 import { visible } from "@/shared/visible";
 import { Placeholder } from "@/shared/Placeholder";
 import { ScreenHeader } from "@/shared/ScreenHeader";
+import { ResultScreen } from "@/shared/ResultScreen";
+import { OwedSum } from "@/shared/OwedSum";
 import { Unread } from "@/shared/Unread";
 import { Empty } from "@/shared/Empty";
 import { Sticker } from "@/shared/Sticker";
@@ -1893,7 +1895,16 @@ function Receipt({
         ? paid && `${paid.charAt(0).toUpperCase()}${paid.slice(1)}.`
         : (waySays[way] ?? null);
   return (
-    <section className="receipt">
+    // «Новий продаж» under the thumb, at the menu's top however short the
+    // receipt (spec §6.5; audit 2026-11-13, sale P1-2).
+    <ResultScreen
+      className="receipt"
+      dock={
+        <button type="button" className="primary" onClick={next}>
+          Новий продаж
+        </button>
+      }
+    >
       <ScreenHeader
         className="result-title t-sheet"
         title={
@@ -1938,7 +1949,7 @@ function Receipt({
               Разом за товар <strong>{money(receipt.total)}</strong>
             </p>
             <p className="stub-line">
-              Покупець винен <strong>{money(receipt.credit.owed)}</strong>
+              Покупець винен <OwedSum value={receipt.credit.owed} />
             </p>
             {/* Where the next payments are taken: the sections' task list's
                 В5 (а), one word with it («Усе на бірці» task list, P0-4),
@@ -2031,13 +2042,7 @@ function Receipt({
           </button>
         </p>
       )}
-      {/* Under the thumb, as the pay ways were (spec §6.5). */}
-      <div className="result-dock">
-        <button type="button" className="primary" onClick={next}>
-          Новий продаж
-        </button>
-      </div>
-    </section>
+    </ResultScreen>
   );
 }
 
@@ -2055,37 +2060,38 @@ function NothingSold({
   next: () => void;
 }): JSX.Element {
   return (
-    <>
+    // Under the thumb, as the receipt's, at the menu's top (spec §6.5;
+    // audit 2026-11-13, sale P1-2).
+    <ResultScreen
+      className="nothing-sold"
+      dock={
+        <button type="button" className="primary" onClick={next}>
+          Новий продаж
+        </button>
+      }
+    >
       <ScreenHeader pushed title="Продажу немає" />
-      <section className="nothing-sold">
-        <p>Нічого з кошика не було на полиці.</p>
-        <Settled own>
-          <h3>Нестачу записано</h3>
-          {shelf.lines.map((line) => (
-            <div
-              className="line"
-              key={`${line.source_location_id}:${line.product_variant_id}:${line.size_id}`}
-            >
-              <strong>
-                {visible(line.display_name)} · {sizeLabel(line.size)}
-              </strong>
-              <span>
-                {line.removed > 0
-                  ? `Знято з обліку: ${String(line.removed)} шт.`
-                  : "Облік і так не мав цих одиниць — нічого не знято."}
-              </span>
-            </div>
-          ))}
-        </Settled>
-        <p className="hint">Перевірте склад із менеджером.</p>
-        {/* Under the thumb, as the receipt's (spec §6.5). */}
-        <div className="result-dock">
-          <button type="button" className="primary" onClick={next}>
-            Новий продаж
-          </button>
-        </div>
-      </section>
-    </>
+      <p>Нічого з кошика не було на полиці.</p>
+      <Settled own>
+        <h3>Нестачу записано</h3>
+        {shelf.lines.map((line) => (
+          <div
+            className="line"
+            key={`${line.source_location_id}:${line.product_variant_id}:${line.size_id}`}
+          >
+            <strong>
+              {visible(line.display_name)} · {sizeLabel(line.size)}
+            </strong>
+            <span>
+              {line.removed > 0
+                ? `Знято з обліку: ${String(line.removed)} шт.`
+                : "Облік і так не мав цих одиниць — нічого не знято."}
+            </span>
+          </div>
+        ))}
+      </Settled>
+      <p className="hint">Перевірте склад із менеджером.</p>
+    </ResultScreen>
   );
 }
 

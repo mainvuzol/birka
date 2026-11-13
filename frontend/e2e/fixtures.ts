@@ -1325,3 +1325,51 @@ export async function removePart(
   await sheet.getByRole("button", { name: "Так, прибрати" }).click();
   return sheet;
 }
+
+/**
+ * A result's main under the thumb (spec §6.5; audit 2026-11-13, frame P2-9,
+ * sale P1-2): its dock's bottom on the menu's top (±1 px) — or on the
+ * screen's foot where the menu stands aside — as the result is first seen,
+ * and a result the screen holds whole never scrolls. Its one button the
+ * screen's main.
+ */
+export async function dockOnMenu(
+  page: Page,
+  { scrolls = false }: { scrolls?: boolean } = {},
+): Promise<Locator> {
+  const dock = page.locator(".result-screen > .result-dock");
+  await expect(dock).toHaveCount(1);
+  await expect(dock).toBeInViewport({ ratio: 1 });
+  const [bottom, floor, page_, seen] = await dock.evaluate((node) => {
+    const menu = document.querySelector("nav.tab-bar");
+    return [
+      node.getBoundingClientRect().bottom,
+      menu ? menu.getBoundingClientRect().top : window.innerHeight,
+      document.documentElement.scrollHeight,
+      window.innerHeight,
+    ];
+  });
+  expect(Math.abs(bottom - floor)).toBeLessThanOrEqual(1);
+  if (!scrolls) expect(page_).toBeLessThanOrEqual(seen);
+  return dock;
+}
+
+/**
+ * What is still owed, as a list's row says it (spec §4; audit 2026-11-13,
+ * sale P2-3): the sum in the debt's colour, its minus arrow before it — one
+ * such in `scope`.
+ */
+export async function expectOwed(scope: Locator, sum: string): Promise<void> {
+  const left = scope.locator(".owed-left");
+  await expect(left).toHaveText(sum);
+  await expect(left.locator("svg.icon")).toHaveCount(1);
+  const [colour, owed] = await left.evaluate((node) => {
+    const probe = document.createElement("i");
+    probe.style.color = "var(--owed)";
+    node.append(probe);
+    const want = getComputedStyle(probe).color;
+    probe.remove();
+    return [getComputedStyle(node).color, want];
+  });
+  expect(colour).toBe(owed);
+}

@@ -1,6 +1,7 @@
 import {
   test,
   expect,
+  dockOnMenu,
   expectGlyphBeside,
   expectStub,
   openStore,
@@ -1378,6 +1379,18 @@ test("«Клієнт забрав»: its sheet of five ways in two rows, each th
   await expect(passed(page).last()).toHaveText("Клієнт забрав");
   await expect(page.locator(".knot-string .knot-loop")).toHaveCount(1);
   await noMain(page);
+  // The card the sale's result now: «До замовлень» its main, in the dock at
+  // the menu's top; the receipt's quiet ways under the stub (audit
+  // 2026-11-13, frame P2-9).
+  const dock = await dockOnMenu(page, { scrolls: true });
+  await expect(dock.getByRole("button")).toHaveText("До замовлень");
+  await expect(dock.getByRole("button")).toHaveClass(/\bprimary\b/);
+  await expect(page.locator("main button.primary:visible")).toHaveCount(1);
+  await expect(
+    page
+      .locator(".order-collected > .return-offer")
+      .getByRole("button", { name: "Оформити повернення" }),
+  ).toHaveClass("quiet");
   await page.screenshot({ path: "test-results/order-collected-card.png" });
   // «← До замовлень» over the title, and the order seen again: a line.
   await page
@@ -1394,6 +1407,9 @@ test("«Клієнт забрав»: its sheet of five ways in two rows, each th
   await page.locator(".order-row").first().click();
   await expect(page.getByText("Продаж записано · Картка")).toBeVisible();
   await expect(page.locator(".order-collected")).toHaveCount(0);
+  // Seen later, a card again: no result's dock (audit 2026-11-13, frame
+  // P2-9).
+  await expect(page.locator(".result-screen, .result-dock")).toHaveCount(0);
 });
 
 test("«Клієнт забрав» is four taps from the menu: «Замовлення», «Прибув на пошту», its row's «Клієнт забрав» and its way (orders task list, P0-3; «Усе на бірці» sections task list, P0-1)", async ({
@@ -3170,7 +3186,9 @@ test("«Клієнт забрав» by each of its five ways is a sale's stub to
     await expect(done.locator(".way-pill svg.icon")).toHaveCount(glyph ? 1 : 0);
     if (glyph) await expectGlyphBeside(done.locator(".way-pill"));
     await expect(
-      done.getByRole("button", { name: "До замовлень", exact: true }),
+      page
+        .locator(".result-screen > .result-dock")
+        .getByRole("button", { name: "До замовлень", exact: true }),
     ).toBeVisible();
   }
 });

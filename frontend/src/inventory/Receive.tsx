@@ -13,6 +13,7 @@ import { Sheet } from "@/shared/Sheet";
 import { Stub } from "@/shared/Stub";
 import { visible } from "@/shared/visible";
 import { ScreenHeader } from "@/shared/ScreenHeader";
+import { ResultScreen } from "@/shared/ResultScreen";
 import { buzz, useAskBeforeClosing, useMainButton } from "@/shared/telegram";
 import { decimal, kopecks, money } from "@/orders/types";
 import type { Location, Store } from "@/orders/types";
@@ -404,7 +405,22 @@ export function Receive({
       0,
     );
     return (
-      <section className="receipt receive-done">
+      // «Прийняти ще» under the thumb, at the menu's top, as every
+      // result's (spec §6.5; audit 2026-11-13, frame P2-9).
+      <ResultScreen
+        className="receipt receive-done"
+        dock={
+          <button
+            type="button"
+            className="primary"
+            onClick={() => {
+              setReceived(null);
+            }}
+          >
+            Прийняти ще
+          </button>
+        }
+      >
         {/* The form's «←» — «← Ще», «← {модель}» — and Telegram's «Назад»
             stay on its result (goods task list after stage 2, P2-3). */}
         <ScreenHeader
@@ -450,18 +466,7 @@ export function Receive({
             </p>
           )}
         </Stub>
-        <div className="result-next">
-          <button
-            type="button"
-            className="primary"
-            onClick={() => {
-              setReceived(null);
-            }}
-          >
-            Прийняти ще
-          </button>
-        </div>
-      </section>
+      </ResultScreen>
     );
   }
 

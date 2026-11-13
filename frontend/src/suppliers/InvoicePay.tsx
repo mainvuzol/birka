@@ -9,12 +9,13 @@ import { Banner } from "@/shared/Banner";
 import { Eyelet } from "@/shared/Eyelet";
 import { Keypad } from "@/shared/Keypad";
 import { usePanelRoom } from "@/shared/panel";
+import { ResultScreen } from "@/shared/ResultScreen";
 import { ScreenHeader } from "@/shared/ScreenHeader";
 import { SendingLine } from "@/shared/Sending";
 import { useAskBeforeClosing } from "@/shared/telegram";
 import { shortDay } from "@/credits/format";
 import { InvoiceOwed } from "./InvoiceOwed";
-import { InvoiceRecorded } from "./InvoiceRecorded";
+import { InvoiceRecorded, useRecordedDone } from "./InvoiceRecorded";
 import type { Command, Sent } from "./invoiceWords";
 import type { Invoice } from "./types";
 
@@ -107,8 +108,22 @@ export function InvoicePay({
     });
   }
 
+  // Recorded: a result's screen in the same tree — its header and «←» as
+  // they were, «Готово» at the menu's top (audit 2026-11-13, frame P2-9).
+  const recordedDone = useRecordedDone(
+    paid
+      ? () => {
+          done(paid.invoice);
+        }
+      : null,
+  );
   return (
-    <>
+    <ResultScreen
+      as="div"
+      on={paid !== null}
+      className={paid ? "invoice-result-screen" : undefined}
+      dock={recordedDone}
+    >
       <ScreenHeader
         title={visible(invoice.supplier.name)}
         back={
@@ -125,9 +140,6 @@ export function InvoicePay({
             invoice={paid.invoice}
             sum={paid.amount}
             line={`${visible(paid.invoice.supplier.name)} · накладна від ${shortDay(paid.invoice.at)}`}
-            next={() => {
-              done(paid.invoice);
-            }}
           />
         ) : (
           <>
@@ -196,6 +208,6 @@ export function InvoicePay({
           </>
         )}
       </section>
-    </>
+    </ResultScreen>
   );
 }

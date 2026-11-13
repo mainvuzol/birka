@@ -1,4 +1,11 @@
-import { Fragment, useEffect, useId, useRef, useState } from "react";
+import {
+  Fragment,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import type { JSX } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -342,10 +349,12 @@ export function Debt({
   const overLine = useId();
   const [history, setHistory] = useState(false);
   const historyList = useId();
-  // The menu steps aside while the payment's form stands (spec S21).
+  // The menu steps aside while the payment's form stands (spec S21), and is
+  // back before the result is painted: its dock on the menu from the first
+  // frame (audit 2026-11-13, sale P1-2).
   const task = till?.task;
   const tasking = takes && paid === null;
-  useEffect(() => {
+  useLayoutEffect(() => {
     task?.(tasking);
   }, [task, tasking]);
   useEffect(
@@ -551,6 +560,10 @@ export function Debt({
     />
   );
 
+  // Recorded: its own result's screen, in place of the debt's — no «←»,
+  // nothing of the form (spec S22; audit 2026-11-13, sale P1-1).
+  if (paidResult) return paidResult;
+
   if (till)
     // The till's payment (spec S21): what they took for a title, who and
     // where under it; what is owed large; the history on a tap; the sum on
@@ -581,157 +594,141 @@ export function Debt({
         <section className="credits debt-detail debt-till">
           {/* From paper: its banner at the top, as the till's (stage 2,
               orders task list, P0-4). */}
-          {takes && !paidResult && (
-            <PaperBanner mark={paperMark} what="payment" />
-          )}
+          {takes && <PaperBanner mark={paperMark} what="payment" />}
           {goods}
-          {paidResult || (
-            <>
-              {elsewhere && (
-                <p className="notice">
-                  Продано в «{visible(credit.store_name)}» (
-                  {credit.store_state === "ARCHIVED" ? "закрито" : "заблоковано"}
-                  ). Внесок приймаєте ви, борг — за «{visible(credit.store_name)}».
-                </p>
-              )}
-              {credit.status === "OPEN" ? (
-                <div className="owed-card" role="group" aria-label="Скільки винні">
-                  <p className="owed-what">
-                    <Icon name="owed" size={20} />
-                    Винні
-                  </p>
-                  <p className="owed-sum">
-                    <Sum value={money(credit.owed)} />
-                  </p>
-                  <div className="debt-bar" aria-hidden="true">
-                    <span style={{ width: `${String(closedShare(credit))}%` }} />
-                  </div>
-                  <p className="owed-count">
-                    {paidText(credit)}
-                    {lastPaid(credit)}
-                  </p>
-                </div>
-              ) : (
-                <div className="debt-closed">
-                  <p>
-                    <Sticker
-                      tone={
-                        credit.status === "WRITTEN_OFF" ? "neutral" : "paid"
-                      }
-                    >
-                      {statusLabels[credit.status]}
-                    </Sticker>
-                    {credit.closed_at && ` Закрито ${shortDay(credit.closed_at)}`}
-                  </p>
-                  <p className="hint">{paidText(credit)}</p>
-                </div>
-              )}
-              {credit.entries.length > 0 && (
-                // In place, on a tap: it never pushes the ways down (spec
-                // S21).
-                <button
-                  type="button"
-                  className="quiet history-toggle"
-                  aria-expanded={history}
-                  aria-controls={history ? historyList : undefined}
-                  onClick={() => {
-                    setHistory(!history);
-                  }}
+          {elsewhere && (
+            <p className="notice">
+              Продано в «{visible(credit.store_name)}» (
+              {credit.store_state === "ARCHIVED" ? "закрито" : "заблоковано"}
+              ). Внесок приймаєте ви, борг — за «{visible(credit.store_name)}».
+            </p>
+          )}
+          {credit.status === "OPEN" ? (
+            <div className="owed-card" role="group" aria-label="Скільки винні">
+              <p className="owed-what">
+                <Icon name="owed" size={20} />
+                Винні
+              </p>
+              <p className="owed-sum">
+                <Sum value={money(credit.owed)} />
+              </p>
+              <div className="debt-bar" aria-hidden="true">
+                <span style={{ width: `${String(closedShare(credit))}%` }} />
+              </div>
+              <p className="owed-count">
+                {paidText(credit)}
+                {lastPaid(credit)}
+              </p>
+            </div>
+          ) : (
+            <div className="debt-closed">
+              <p>
+                <Sticker
+                  tone={credit.status === "WRITTEN_OFF" ? "neutral" : "paid"}
                 >
-                  Історія · {number(credit.entries.length)}{" "}
-                  <Icon name="chevron-right" size={16} />
-                </button>
-              )}
-              {history && <History credit={credit} id={historyList} />}
-              {takes && (
-                // From paper, over the keypad, as on the debt.
-                <fieldset className="pay-in" disabled={blocked || working}>
-                  <legend className="visually-hidden">Внесок з паперу</legend>
-                  <PaperFields
-                    mark={paperMark}
-                    what="payment"
-                    storeId={store.id}
-                  />
-                </fieldset>
-              )}
-              {problem && (
-                <p role="alert" ref={said}>
-                  {problem}
-                </p>
-              )}
-              {takes && (
-                <div
-                  className="pay-panel till-dock"
-                  role="group"
-                  aria-label="Внесок"
-                  ref={panelRef}
-                >
-                  <Keypad
-                    label="Сума, грн"
-                    value={amount}
-                    change={(sum) => {
-                      setAmount(sum);
+                  {statusLabels[credit.status]}
+                </Sticker>
+                {credit.closed_at && ` Закрито ${shortDay(credit.closed_at)}`}
+              </p>
+              <p className="hint">{paidText(credit)}</p>
+            </div>
+          )}
+          {credit.entries.length > 0 && (
+            // In place, on a tap: it never pushes the ways down (spec
+            // S21).
+            <button
+              type="button"
+              className="quiet history-toggle"
+              aria-expanded={history}
+              aria-controls={history ? historyList : undefined}
+              onClick={() => {
+                setHistory(!history);
+              }}
+            >
+              Історія · {number(credit.entries.length)}{" "}
+              <Icon name="chevron-right" size={16} />
+            </button>
+          )}
+          {history && <History credit={credit} id={historyList} />}
+          {takes && (
+            // From paper, over the keypad, as on the debt.
+            <fieldset className="pay-in" disabled={blocked || working}>
+              <legend className="visually-hidden">Внесок з паперу</legend>
+              <PaperFields mark={paperMark} what="payment" storeId={store.id} />
+            </fieldset>
+          )}
+          {problem && (
+            <p role="alert" ref={said}>
+              {problem}
+            </p>
+          )}
+          {takes && (
+            <div
+              className="pay-panel till-dock"
+              role="group"
+              aria-label="Внесок"
+              ref={panelRef}
+            >
+              <Keypad
+                label="Сума, грн"
+                value={amount}
+                change={(sum) => {
+                  setAmount(sum);
+                  setProblem(null);
+                }}
+                disabled={blocked || working}
+                invalid={over}
+                {...(overSaid ? { describedBy: overLine } : {})}
+                aside={
+                  <button
+                    type="button"
+                    className="quiet keypad-all"
+                    disabled={blocked || working}
+                    onClick={() => {
+                      setAmount(asInput(credit.owed));
                       setProblem(null);
                     }}
-                    disabled={blocked || working}
-                    invalid={over}
-                    {...(overSaid ? { describedBy: overLine } : {})}
-                    aside={
-                      <button
-                        type="button"
-                        className="quiet keypad-all"
-                        disabled={blocked || working}
-                        onClick={() => {
-                          setAmount(asInput(credit.owed));
-                          setProblem(null);
-                        }}
-                      >
-                        Увесь залишок {money(credit.owed)}
-                      </button>
-                    }
-                  />
-                  {overSaid && (
-                    <p id={overLine} className="pay-over" role="alert">
-                      {overText(credit.owed)}
-                    </p>
-                  )}
-                  <SendingLine busy={pressing !== null} />
-                  <div className="pay-ways">
-                    {tillMethods.map((way) => (
-                      <button
-                        key={way}
-                        type="button"
-                        className={
-                          pressing === null
-                            ? undefined
-                            : pressing === way
-                              ? "pressed"
-                              : "stepped-back"
-                        }
-                        disabled={
-                          blocked ||
-                          working ||
-                          !paperMark.ready ||
-                          !typed ||
-                          over
-                        }
-                        onClick={() => {
-                          pay(way);
-                        }}
-                      >
-                        {pressing === way && <Eyelet state="spin" size={20} />}
-                        {paperMark.paper
-                          ? `З паперу · ${methodLabels[way]}`
-                          : methodLabels[way]}
-                      </button>
-                    ))}
-                  </div>
-                  {paperMark.paper && (
-                    <p className="pay-seller">{takenBy(paperMark)}</p>
-                  )}
-                </div>
+                  >
+                    Увесь залишок {money(credit.owed)}
+                  </button>
+                }
+              />
+              {overSaid && (
+                <p id={overLine} className="pay-over" role="alert">
+                  {overText(credit.owed)}
+                </p>
               )}
-            </>
+              <SendingLine busy={pressing !== null} />
+              <div className="pay-ways">
+                {tillMethods.map((way) => (
+                  <button
+                    key={way}
+                    type="button"
+                    className={
+                      pressing === null
+                        ? undefined
+                        : pressing === way
+                          ? "pressed"
+                          : "stepped-back"
+                    }
+                    disabled={
+                      blocked || working || !paperMark.ready || !typed || over
+                    }
+                    onClick={() => {
+                      pay(way);
+                    }}
+                  >
+                    {pressing === way && <Eyelet state="spin" size={20} />}
+                    {paperMark.paper
+                      ? `З паперу · ${methodLabels[way]}`
+                      : methodLabels[way]}
+                  </button>
+                ))}
+              </div>
+              {paperMark.paper && (
+                <p className="pay-seller">{takenBy(paperMark)}</p>
+              )}
+            </div>
           )}
         </section>
       </>
@@ -757,43 +754,41 @@ export function Debt({
           </Back>
         }
         aside={
-          paid === null && (
-            <DebtActions
-              store={store}
-              token={token}
-              journalKey={journalKey}
-              blocked={blocked}
-              credit={credit}
-              {...rights}
-              changed={changed}
-              holding={setErasing}
-              written={(result) => {
-                setDone(null);
-                setProblem(null);
-                setPaid({
-                  kind: "write-off",
-                  amount: result.written_off,
-                  way: null,
-                  paper: null,
-                  credit: result,
-                  said: `Борг списано: ${money(result.written_off)}.`,
-                });
-                changed(result);
-              }}
-              erased={(result) => {
-                setProblem(null);
-                setDone(erasedText(result));
-                changed(result.credit);
-                // The customer is erased in every store of the network.
-                void cache.invalidateQueries({ queryKey: ["credits"] });
-              }}
-              refused={(text) => {
-                setDone(null);
-                tell(text);
-              }}
-              opened={setActing}
-            />
-          )
+          <DebtActions
+            store={store}
+            token={token}
+            journalKey={journalKey}
+            blocked={blocked}
+            credit={credit}
+            {...rights}
+            changed={changed}
+            holding={setErasing}
+            written={(result) => {
+              setDone(null);
+              setProblem(null);
+              setPaid({
+                kind: "write-off",
+                amount: result.written_off,
+                way: null,
+                paper: null,
+                credit: result,
+                said: `Борг списано: ${money(result.written_off)}.`,
+              });
+              changed(result);
+            }}
+            erased={(result) => {
+              setProblem(null);
+              setDone(erasedText(result));
+              changed(result.credit);
+              // The customer is erased in every store of the network.
+              void cache.invalidateQueries({ queryKey: ["credits"] });
+            }}
+            refused={(text) => {
+              setDone(null);
+              tell(text);
+            }}
+            opened={setActing}
+          />
         }
       />
       <section className="credits debt-detail">
@@ -826,70 +821,66 @@ export function Debt({
           з {shortDay(credit.opened_at)}
         </p>
         {goods}
-        {paidResult || (
-          <>
-            {elsewhere && (
-              <p className="notice">
-                Продано в «{visible(credit.store_name)}» (
-                {credit.store_state === "ARCHIVED" ? "закрито" : "заблоковано"}).
-                Внесок приймаєте ви, борг — за «{visible(credit.store_name)}».
-              </p>
-            )}
-            {credit.status === "OPEN" ? (
-              // What they owe, first and large (P0-3): «скільки я ще винна?».
-              <div className="owed-card" role="group" aria-label="Скільки винні">
-                <p className="owed-what">Винні</p>
-                <p className="owed-sum">
-                  <Sum value={money(credit.owed)} />
-                </p>
-                <div className="debt-bar" aria-hidden="true">
-                  <span style={{ width: `${String(closedShare(credit))}%` }} />
-                </div>
-                <p className="owed-count">{paidText(credit)}</p>
-              </div>
-            ) : (
-              <div className="debt-closed">
-                <p>
-                  <Sticker
-                    tone={credit.status === "WRITTEN_OFF" ? "neutral" : "paid"}
-                  >
-                    {statusLabels[credit.status]}
-                  </Sticker>
-                  {credit.closed_at && ` Закрито ${shortDay(credit.closed_at)}`}
-                </p>
-                <p className="hint">{paidText(credit)}</p>
-              </div>
-            )}
-            {credit.status === "OPEN" && takenAt !== undefined && (
-              // Another store's debt: paid where it was sold (spec S20).
-              <p className="hint">Внесок приймає «{visible(takenAt)}»</p>
-            )}
-            {done && (
-              <p role="status" ref={result}>
-                {done}
-              </p>
-            )}
-            {problem && (
-              <p role="alert" ref={said}>
-                {problem}
-              </p>
-            )}
-            <h3>Історія</h3>
-            <History credit={credit} />
-            {takes && deposit && !main && (
-              // Outside Telegram, its MainButton as the dock's one button.
-              <div className="pay-panel order-dock" ref={panelRef}>
-                <button
-                  type="button"
-                  className="main-mimic"
-                  disabled={blocked || working}
-                  onClick={deposit}
-                >
-                  Внесок
-                </button>
-              </div>
-            )}
-          </>
+        {elsewhere && (
+          <p className="notice">
+            Продано в «{visible(credit.store_name)}» (
+            {credit.store_state === "ARCHIVED" ? "закрито" : "заблоковано"}).
+            Внесок приймаєте ви, борг — за «{visible(credit.store_name)}».
+          </p>
+        )}
+        {credit.status === "OPEN" ? (
+          // What they owe, first and large (P0-3): «скільки я ще винна?».
+          <div className="owed-card" role="group" aria-label="Скільки винні">
+            <p className="owed-what">Винні</p>
+            <p className="owed-sum">
+              <Sum value={money(credit.owed)} />
+            </p>
+            <div className="debt-bar" aria-hidden="true">
+              <span style={{ width: `${String(closedShare(credit))}%` }} />
+            </div>
+            <p className="owed-count">{paidText(credit)}</p>
+          </div>
+        ) : (
+          <div className="debt-closed">
+            <p>
+              <Sticker
+                tone={credit.status === "WRITTEN_OFF" ? "neutral" : "paid"}
+              >
+                {statusLabels[credit.status]}
+              </Sticker>
+              {credit.closed_at && ` Закрито ${shortDay(credit.closed_at)}`}
+            </p>
+            <p className="hint">{paidText(credit)}</p>
+          </div>
+        )}
+        {credit.status === "OPEN" && takenAt !== undefined && (
+          // Another store's debt: paid where it was sold (spec S20).
+          <p className="hint">Внесок приймає «{visible(takenAt)}»</p>
+        )}
+        {done && (
+          <p role="status" ref={result}>
+            {done}
+          </p>
+        )}
+        {problem && (
+          <p role="alert" ref={said}>
+            {problem}
+          </p>
+        )}
+        <h3>Історія</h3>
+        <History credit={credit} />
+        {takes && deposit && !main && (
+          // Outside Telegram, its MainButton as the dock's one button.
+          <div className="pay-panel order-dock" ref={panelRef}>
+            <button
+              type="button"
+              className="main-mimic"
+              disabled={blocked || working}
+              onClick={deposit}
+            >
+              Внесок
+            </button>
+          </div>
         )}
       </section>
     </>

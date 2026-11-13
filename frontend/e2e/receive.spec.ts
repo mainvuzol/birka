@@ -3,6 +3,7 @@ import {
   expect,
   addModel,
   countTaps,
+  dockOnMenu,
   leaveNewModel,
   more,
   newModelSheet,
@@ -233,6 +234,11 @@ test("a delivery of a known model is received into an explicitly chosen warehous
     path: "test-results/receive-mobile.png",
     fullPage: true,
   });
+  // One line, and «Прийняти ще» under the thumb, the screen's main in its
+  // dock at the menu's top (audit 2026-11-13, frame P2-9).
+  const dock = await dockOnMenu(page);
+  await expect(dock.getByRole("button")).toHaveText("Прийняти ще");
+  await expect(dock.getByRole("button")).toHaveClass(/\bprimary\b/);
   // «Прийняти ще»: the warehouse and the model kept, nothing counted.
   await page.getByRole("button", { name: "Прийняти ще" }).click();
   await expect(

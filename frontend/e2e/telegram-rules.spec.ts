@@ -612,11 +612,13 @@ test("S21 and S22: a sum typed asks before closing, wiped or taken lets go; the 
   await expect(
     page.getByRole("button", { name: "Відкрити борг", exact: true }),
   ).toHaveCount(0);
-  await expect(page.locator(".result-next button")).toHaveCount(1);
-  // The way back quiet under the stub: one main on the screen, Telegram's —
-  // no button of the app's in the main's colour (audit after stage 2, sale
-  // P1-5).
-  await expect(page.locator(".result-next button")).toHaveClass("quiet");
+  // The way back quiet under the stub, and no dock: one main on the screen,
+  // Telegram's — no button of the app's in the main's colour (audit after
+  // stage 2, sale P1-5; audit 2026-11-13, sale P1-1).
+  const backTo = page.locator(".paid-result .paid-more");
+  await expect(backTo).toHaveCount(1);
+  await expect(backTo).toHaveClass(/\bquiet\b/);
+  await expect(page.locator(".paid-result .result-dock")).toHaveCount(0);
   expect(await inMainColour(page)).toBe(0);
 
   // Telegram's theme turns dark: the button in the dark's colours.
@@ -687,12 +689,16 @@ test("where Telegram names no version, it is told none of this: the result's «�
     .getByRole("group", { name: "Внесок", exact: true })
     .getByRole("button", { name: "Готівка" })
     .click();
-  // The screen's one main, the way back; «Відкрити борг» quiet (sale P1-5).
+  // The screen's one main, the way back, in its dock; «Відкрити борг»
+  // quiet under the stub (sale P1-5; audit 2026-11-13, sale P1-1).
   await expect(
     page.getByRole("heading", { name: "Внесок записано" }),
   ).toBeVisible();
-  await expect(page.locator(".result-next button").first()).toHaveClass(
+  await expect(page.locator(".paid-result .result-dock button")).toHaveClass(
     "primary",
+  );
+  await expect(page.locator(".paid-result .paid-more")).toHaveText(
+    "Відкрити борг",
   );
   expect(await inMainColour(page)).toBe(1);
   await page

@@ -1260,12 +1260,13 @@ section.backups {
   border-radius: var(--r-sheet);
   box-shadow: var(--shadow-2);
 }
-/* The panel's height, kept clear wherever the page scrolls to
-   (`shared/panel.ts`), and the menu's under it. */
+/* The panel's height — or a result's dock's — kept clear wherever the page
+   scrolls to (`shared/panel.ts`), and the menu's under it. */
 html {
   scroll-padding-top: var(--find-h, 0px);
   scroll-padding-bottom: calc(
-    var(--pay-panel-h, 0px) + var(--menu-h, 0px) + 12px
+    var(--pay-panel-h, 0px) + var(--result-dock-h, 0px) + var(--menu-h, 0px) +
+      12px
   );
 }
 .pay-what {
@@ -2267,6 +2268,18 @@ button.sale-row:disabled:has(.sale-goods, .debt-name, .more-label) {
   -webkit-user-select: none;
   user-select: none;
 }
+/* What is still owed, in the debt's colour with its minus arrow, as a
+   list's row says it (spec §4; audit 2026-11-13, sale P2-3): on the
+   receipt, the return's, S22 and in the basket. */
+.owed-left {
+  font-weight: 700;
+  color: var(--owed);
+  white-space: nowrap;
+}
+.owed-left .icon {
+  margin-right: 2px;
+  vertical-align: -3px;
+}
 /* What the customer owes the store in all, under what is left on this
    debt (spec S22). */
 .paid-total {
@@ -2620,7 +2633,7 @@ section.credits.customer-card {
 }
 /* A payment's result (credits task list, P0-5), and once confirmed later,
    compact (P1-2): the return's result block, its sum large. */
-.paid-result:not(.kept) {
+.paid-result:not(.kept, .result-screen) {
   margin-top: 18px;
 }
 .paid-result h3:focus,
@@ -2977,12 +2990,6 @@ section.credits.customer-card {
 }
 .return-goods p {
   margin: 6px 0;
-}
-.result-next {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-top: 18px;
 }
 /* Read by a screen reader, never seen. */
 .visually-hidden {
@@ -4518,6 +4525,7 @@ span.cash-difference > .difference-sign {
 /* The MainButton's place outside Telegram (spec §6.4): 50 high, radius
    10, the primary; turning while the server is asked. */
 .order-dock .main-mimic,
+.result-dock .main-mimic,
 .sheet-foot .main-mimic {
   display: flex;
   align-items: center;
@@ -5384,6 +5392,36 @@ button.stepped-back:disabled {
 .result-dock button {
   width: 100%;
   min-height: 52px;
+}
+/* A result's screen (spec §5 «Док дій», §6.3, §6.5; audit 2026-11-13, frame
+   P2-9, sale P1-2): at least as tall as what shows over the menu — Telegram's
+   stable height, never `100vh` — from main's top, with no section's margin
+   over it; what it says one block, the dock its last, at the menu's top on
+   a short result and sticking there on a long one. Its foot takes main's
+   own 40 px: a short result never scrolls, and a long one ends with its
+   dock on the menu. A banner over it moves it down by the banner. */
+.result-screen {
+  display: flex;
+  flex-direction: column;
+  margin-top: 0;
+  min-height: calc(
+    var(--tg-viewport-stable-height, 100dvh) - 24px -
+      env(safe-area-inset-top) - var(--menu-h, 0px)
+  );
+  margin-bottom: calc(
+    var(--menu-h, 0px) - 40px - var(--menu-h, env(safe-area-inset-bottom))
+  );
+}
+.result-screen[hidden] {
+  display: none;
+}
+.result-screen > .result-body {
+  flex: 1 0 auto;
+}
+/* The dock's own margin is the gap over it: the last line's would add to it
+   inside the block. */
+.result-screen > .result-body > :last-child {
+  margin-bottom: 0;
 }
 .stub .hand-back {
   margin: 0;

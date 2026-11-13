@@ -423,6 +423,18 @@ test("S21 shows Telegram's «Назад»; while its payment is in flight its «
   await expect(
     page.getByRole("heading", { name: "Внесок записано" }),
   ).toBeVisible();
+  // Recorded: its own result's screen (spec S22; audit 2026-11-13, sale
+  // P1-1) — its title the page's one heading, no «←», and Telegram's «Назад»
+  // hidden; pressed anyway, nothing.
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+    "Внесок записано",
+  );
+  await expect(page.locator(".screen-header .back")).toHaveCount(0);
+  await expect.poll(async () => (await backs(page)).at(-1)).toBe(false);
+  await pressAndSettle(page);
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Внесок записано" }),
+  ).toBeVisible();
 });
 
 test("a payment kept on the phone holds S21's «←», and Telegram's «Назад» stays hidden; pressed, nothing", async ({

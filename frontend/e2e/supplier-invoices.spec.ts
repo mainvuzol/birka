@@ -2,6 +2,7 @@ import {
   test,
   expect,
   countTaps,
+  dockOnMenu,
   expectEmpty,
   expectGlyphBeside,
   grn,
@@ -313,10 +314,12 @@ function result(page: Page): Locator {
   return page.locator(".invoice-result");
 }
 
-/** «Готово» under a result: outside Telegram, the screen's own. */
+/** «Готово» under a result: outside Telegram, the screen's own — the
+ * MainButton's place in the dock at the menu's top (audit 2026-11-13, frame
+ * P2-9). */
 async function done(page: Page): Promise<void> {
-  await result(page)
-    .locator(".result-next")
+  await page
+    .locator(".invoice-result-screen .result-dock")
     .getByRole("button", { name: "Готово" })
     .click();
 }
@@ -492,6 +495,15 @@ test("an invoice is recorded on its own screen and paid in parts until it is set
       note: "накладна № 7",
     },
   ]);
+  // Outside Telegram, «Готово» in the MainButton's place — 50 high, 10
+  // round — in the dock at the menu's top; the screen's «←» as it was
+  // (spec §6.4; audit 2026-11-13, frame P2-9).
+  const dock = await dockOnMenu(page);
+  const ready = dock.getByRole("button", { name: "Готово" });
+  await expect(ready).toHaveClass("main-mimic");
+  await expect(ready).toHaveCSS("min-height", "50px");
+  await expect(ready).toHaveCSS("border-top-left-radius", "10px");
+  await expect(back(page, "Накладні")).toBeVisible();
   // «Готово»: its card — the supplier its title, what is owed large.
   await done(page);
   await expect(
@@ -2002,7 +2014,7 @@ test("inside Telegram «Сплатити» is its MainButton on the card, never 
   await expect
     .poll(() => mainButton(page))
     .toMatchObject({ is_visible: true, text: "Готово" });
-  await expect(result(page).locator(".result-next")).toHaveCount(0);
+  await expect(page.locator(".result-dock")).toHaveCount(0);
   await expect
     .poll(async () =>
       (await told(page, "web_app_setup_closing_behavior")).at(-1),

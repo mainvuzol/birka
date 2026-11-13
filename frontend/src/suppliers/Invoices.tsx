@@ -19,6 +19,7 @@ import { Eyelet } from "@/shared/Eyelet";
 import { Icon } from "@/shared/Icon";
 import { ModeSwitch } from "@/shared/ModeSwitch";
 import { usePanelRoom } from "@/shared/panel";
+import { ResultScreen } from "@/shared/ResultScreen";
 import { ScreenHeader } from "@/shared/ScreenHeader";
 import { SendingLine } from "@/shared/Sending";
 import { Sum } from "@/shared/Sum";
@@ -33,7 +34,7 @@ import { SupplierFilter, SupplierPicker } from "./Picker";
 import { InvoiceActions, EntryCancel } from "./InvoiceActions";
 import { InvoiceOwed, Progress } from "./InvoiceOwed";
 import { InvoicePay } from "./InvoicePay";
-import { InvoiceRecorded } from "./InvoiceRecorded";
+import { InvoiceRecorded, useRecordedDone } from "./InvoiceRecorded";
 import { InvoiceSticker } from "./InvoiceSticker";
 import { InvoiceTag } from "./InvoiceTag";
 import { entryLabels, refusalText } from "./invoiceWords";
@@ -812,8 +813,22 @@ function NewInvoice({
     });
   }
 
+  // Recorded: a result's screen in the same tree — its header and «←» as
+  // they were, «Готово» at the menu's top (audit 2026-11-13, frame P2-9).
+  const recordedDone = useRecordedDone(
+    recorded
+      ? () => {
+          opened(recorded);
+        }
+      : null,
+  );
   return (
-    <>
+    <ResultScreen
+      as="div"
+      on={recorded !== null}
+      className={recorded ? "invoice-result-screen" : undefined}
+      dock={recordedDone}
+    >
       <ScreenHeader
         title="Нова накладна"
         back={
@@ -830,9 +845,6 @@ function NewInvoice({
             invoice={recorded}
             sum={recorded.amount}
             line={`${visible(recorded.supplier.name)} · ${money(recorded.amount)}`}
-            next={() => {
-              opened(recorded);
-            }}
           />
         ) : (
           <>
@@ -901,7 +913,7 @@ function NewInvoice({
           </>
         )}
       </section>
-    </>
+    </ResultScreen>
   );
 }
 

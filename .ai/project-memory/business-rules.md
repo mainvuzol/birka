@@ -9361,3 +9361,76 @@ says so, and what was refused is said where it was pressed.
     old place: then back on it, still without a scroll (review);
   - each refusal its own: a second is said and brought to the cursor as
     the first was (review: it was silent).
+
+## Chosen in chat — 2026-11-13 (audit 2026-11-13, batch 2: every result's main in a dock at the menu's top; «Внесок записано» and «Борг списано» their own result's screens, no «←»; what is still owed in the debt's colour with its arrow; sale P1-1, P1-2, P2-3, frame P2-9)
+
+Chosen here on 2026-11-13, after batch 1 (#202) was merged («merged, go
+next»): the next points in the audit's own order — the sale task list's
+«Партия 1 «Итог под пальцем»» (P1-2 → P1-1, with P2-3), and the frame's
+P2-9, which asks to be built with sale P1-2. Built as the task lists give
+them; what they did not give is a reading for the owner. No right, no server
+rule, no sum, no word changes; what is recorded, and how, is as before.
+- **A result's screen** (frame P2-9, sale P1-2; spec §5 «Док дій», §6.3,
+  §6.5):
+  - at least as tall as what shows over the menu (Telegram's stable height,
+    never `100vh`); its main the last thing on it, in the dock: on the
+    menu's top on a short result, sticking there while a long one scrolls,
+    and ending there — before, a short result's dock (or its main) stood
+    under its text mid-screen, and a long one ended 40 px over the menu;
+  - the results: the till's receipt, «Продажу немає», the return's, S22 and
+    «Борг списано», the cash close's, receiving's, «Клієнт забрав» (the
+    order's card, while it says the sale), an invoice's and its payment's;
+  - the mains as they were: «Новий продаж», «Готово», «Прийняти ще», «До
+    замовлень»; an invoice's «Готово» Telegram's MainButton, outside
+    Telegram in its place in the dock (50 high, 10 round);
+  - a result's quiet ways under its stub, in its flow, as the receipt's
+    «Змінити спосіб оплати» and «Оформити повернення»: the return's «Ще
+    повернення» under the hint of a mistake's mending, «Клієнт забрав»'s
+    two;
+  - a return without the till: «До списку» the dock's one button, the
+    screen's main (before: a quiet button under the hint).
+- **Decided here:**
+  - the screen's height is counted from main's top: a banner over a result
+    (a kept operation's, an outage's) lets the page scroll by its height, the
+    dock still on the menu as the result is first seen;
+  - the MainButton's place in any result's dock is 50/10, as in an order's
+    dock and a sheet's foot — so «Перевірка каталогу»'s outside-Telegram
+    button is 50/10 too (frame P2-5, item 4, the same rule);
+  - not touched: «Продано N шт.» (Borrowed) and a supplier's return's
+    result, whose «Готово» stands in the pay panel's dock — not named by
+    the task list; and «Перевірка каталогу»'s dock, a step, not a result.
+- **«Внесок записано» and «Борг списано»** (sale P1-1; spec S22):
+  - their own result's screen in the debt's place: «✓ Внесок записано» /
+    «✓ Борг списано» the page's heading (before: a small heading under the
+    coat's title); no «←», no Telegram «Назад», no ⋯; the line under it the
+    store's and the person's, as the receipt's;
+  - the payment's stub in S22's order: the way, what to do with the money,
+    the sum, a perforation, what she took — the debt's first good and «+ ще
+    N», every good on a tap, in the stub —, what is left, «Усього винні
+    магазину «…»»; knotted when nothing is left, as before; a write-off's
+    stub as it was;
+  - in Telegram, a payment's «Відкрити борг» is its MainButton, and the way
+    back quiet under the stub, no dock; outside Telegram, the way back
+    («До боргів», or her name) the dock's main, «Відкрити борг» quiet under
+    the stub; a write-off: the way back the dock's main, «Відкрити борг»
+    quiet, in Telegram too (both kept, owner 2026-10-18);
+  - unchanged: the sentence a screen reader hears with the title as focus
+    comes to it, the success buzz, the menu shown, every sum the server's;
+    a payment confirmed later is the compact block in its notice, as
+    before.
+  - Decided here: the debt's own line («Оксана · «Центр» · з 01.10») is not
+    on the result — the task list gives it the receipt's; her name stays on
+    the way back when the debt was opened from her card.
+  - A reading for the owner: a write-off opened from «Борги» no longer
+    names the customer anywhere on its screen — before, her name was the
+    debt's title over «Борг списано»; now the title is «Борг списано», the
+    stub the sum, and «До боргів» the way back. Her name on the write-off's
+    stub, if the owner wants it, is one line.
+- **What is still owed** (sale P2-3; spec §4): its sum in the debt's colour,
+  700, the debt's minus arrow 16 before it, as a list's row says it — on the
+  receipt in parts («Покупець винен …»), the return's («Покупець ще винен
+  …»), S22 («Залишок боргу …»), the basket («Лишиться винен …»; «За номером
+  уже винні …», whose line was in the colour already, its arrow added); the
+  words as they were (В13-П2 open); «Борг сплачено повністю.» and «Покупець
+  більше нічого не винен.» without it; the till's tray untouched until its
+  screenshot. Contrast on the card 6.8:1 light, 8.61:1 dark.

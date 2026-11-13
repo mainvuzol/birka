@@ -9,6 +9,7 @@ import { Back } from "@/shared/Back";
 import { Eyelet } from "@/shared/Eyelet";
 import { Icon } from "@/shared/Icon";
 import { ScreenHeader } from "@/shared/ScreenHeader";
+import { ResultScreen } from "@/shared/ResultScreen";
 import { Stub } from "@/shared/Stub";
 import { Toast } from "@/shared/Toast";
 import { askPopup, buzz, popupHere, useMainButton } from "@/shared/telegram";
@@ -459,8 +460,23 @@ function Card({
         }
       : null;
   const title = titleOf(order);
+  // Collected (spec S11's way; audit 2026-11-13, frame P2-9): the card is
+  // the sale's result, «До замовлень» its main under the thumb, at the
+  // menu's top; the receipt's two quiet ways under its stub.
+  const result = Boolean(order.sale_id) && collected !== null;
   return (
-    <div hidden={away}>
+    <ResultScreen
+      as="div"
+      on={result}
+      hidden={away}
+      dock={
+        result && (
+          <button type="button" className="primary" onClick={back}>
+            До замовлень
+          </button>
+        )
+      }
+    >
       <ScreenHeader
         ref={heading}
         className="order-title"
@@ -566,7 +582,6 @@ function Card({
             <Collected
               order={order}
               kept={collected === "kept"}
-              back={back}
               fixWay={fixWay}
               returnSale={returnSale}
             />
@@ -748,7 +763,7 @@ function Card({
           }}
         />
       )}
-    </div>
+    </ResultScreen>
   );
 }
 

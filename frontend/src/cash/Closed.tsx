@@ -12,6 +12,7 @@ import { useMainButton } from "@/shared/telegram";
 import { visible } from "@/shared/visible";
 import { Back } from "@/shared/Back";
 import { ScreenHeader } from "@/shared/ScreenHeader";
+import { ResultScreen } from "@/shared/ResultScreen";
 import { Unread } from "@/shared/Unread";
 import { Sticker } from "@/shared/Sticker";
 import { DoneLine } from "./DoneLine";
@@ -490,7 +491,19 @@ export function Closed({
     heading.current?.focus();
   }, []);
   return (
-    <>
+    // «Готово» under the thumb, at the menu's top, as every result's (spec
+    // §6.5; audit 2026-11-13, frame P2-9); a reason owed in its place.
+    <ResultScreen
+      as="div"
+      className="cash-close-result"
+      dock={
+        owedId === null && (
+          <button type="button" className="primary" onClick={finish}>
+            Готово
+          </button>
+        )
+      }
+    >
       <ScreenHeader
         ref={heading}
         focusable
@@ -537,16 +550,10 @@ export function Closed({
         )}
         <DoneLine text={done} />
         {problem && <p role="alert">{problem}</p>}
-        {owedId !== null ? (
+        {owedId !== null && (
           <ReasonForm key={owedId} disabled={disabled} send={sendReason} />
-        ) : (
-          <div className="result-next">
-            <button type="button" className="primary" onClick={finish}>
-              Готово
-            </button>
-          </div>
         )}
       </section>
-    </>
+    </ResultScreen>
   );
 }
