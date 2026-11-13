@@ -9151,3 +9151,85 @@ commands, their idempotency and a creation's cancelling stay as they were.
   - one letter typed: every model still, as nothing typed (where «Моделі»
     shows nothing until the second: there nothing typed shows nothing
     too).
+
+## Chosen in chat — 2026-11-13 (audit after stage 2, batch 17: «Знайшли товар, якого немає в списку» one screen for the stocktake's entry and its count, the model's sizes as cells, the count's or the correction's sheet over it; receiving's price a row and the model's sheet; goods P1-2, P1-3)
+
+Chosen here on 2026-11-13, after batch 16 (#199) was merged («merged, go
+next»): every point left of the goods task list waits for the owner's
+approval, as P1-4 and P1-5 did when the user chose them; P1-2 and P1-3 are
+the next in the task list's own order (§8). They are built as the task list
+gives them, and what it did not give is a reading for the owner. No right, no
+server rule, no field, no count changes; what is recorded is as before.
+- **«Знайшли товар, якого немає в списку»** (P1-2; spec §5 «Ячейка
+  размера», «Поиск», §6.3, §6.4):
+  - one screen for both places — the stocktake's entry and its count, two
+    forms before —, titled «Товар, якого немає в списку», under «←
+    Інвентаризація» and Telegram's «Назад», back where it was opened; the
+    menu aside, as a task's screen;
+  - under the title one line, «Якщо товар уже є в обліку цього складу,
+    сервер скаже, скільки саме.»; «Знайдіть модель у каталозі й оберіть
+    розмір. …» is gone;
+  - the catalogue's search as before, «Додати нову модель «…»» and the sheet
+    «Нова модель» over the screen, its words kept;
+  - a model chosen: its name and «Змінити», as receiving shows it; the
+    organization's sizes as cells 60 × 60, in its order — the `<select>`
+    «Розмір» / «Оберіть розмір» is gone; a cell tapped hides the keyboard;
+  - at the count: a cell says «в обліку N» as the list read it — 0 where it
+    holds none, as before —, and a tap opens the count's sheet at once
+    (before: the size chosen, then a cell). Recorded: back to the count, its
+    toast, the cursor on «Знайшли товар…». Four taps and the number:
+    «Знайшли товар…», the model, the cell, the sheet's button;
+  - at the entry: a cell tapped opens the correction's sheet, «{модель} ·
+    {розмір}», «Склад «…»» in it, Telegram's MainButton «Записати · +2 шт.»
+    its one button (outside Telegram the sheet's own) — before, the form
+    on the screen with its own button beside the MainButton «Почати
+    інвентаризацію». Recorded: back to the entry, «Коригування записано: …
+    облік 0 → 2.» on a stub, as a model's detail says it (before, a line).
+    Five taps and the number: «Знайшли товар…», the model, the cell, the
+    reason, the MainButton;
+  - no «Скасувати» and no MainButton of the screen's own: «←» and
+    Telegram's «Назад» leave it, as «Назад» leaves the sheets.
+  - Recorded as before: a correction at the entry, its reasons the same; a
+    count at the count; a size the warehouse holds after all refused by the
+    server, which says how many, and counted against that.
+- **Receiving's price** (P1-3; spec S24 №5, S23 №3, §6.4):
+  - «Ціна продажу: X — спільна для всіх магазинів» / «… — ціна магазину
+    «…»» → «Ціна продажу X», the store's own price or the shared one, as on
+    a model's detail; whose price it is, the sheet's switch says;
+  - «Задати ціну продажу» / «Змінити ціну продажу» → «Змінити ціну», quiet,
+    for `catalog:set_price` as before;
+  - it opens the model's price sheet — the same as on a model's detail, now
+    one component (`PriceSheet`): named by the model, the keypad in it
+    alone, Telegram's MainButton «Зберегти · …»; «Записати прихід» put away
+    while it stands, as under «Як надійшов»; no «Скасувати» — «Назад»
+    closes it, nothing saved;
+  - saved: the sheet closes, a toast «Ціну продажу збережено: {модель}.»
+    (before, «Ціну збережено.» under the form), the row shows the new price;
+    the sizes counted stay;
+  - whose price, who changes it, «Цю ціну щойно змінив хтось інший» and
+    the refusals by В-П1 (б): as before.
+- **In passing:** «Пошук у каталозі» — a page pressed and not yet read, or
+  failed, no longer takes the cursor from the field once something is typed
+  (the review of batch 16 found it there, older than it); «Інший колір нашої
+  моделі» resets it as a key is pressed too, not only once the words are
+  asked (this batch's review).
+- **From the review:** «Знайшли товар…» on the entry stands for the
+  warehouse it was opened for, while it may be found there: that warehouse
+  gone — paused, its right taken, another the only one now — and the screen
+  goes with its sheet, the menu back, never to come back by itself.
+- **Revisits** stage 2's batch 9 («Chosen in chat — 2026-11-07 (stage 2
+  batch 9: …)»): the correction on a screen — a stocktake's «Знайшли
+  товар…» — kept its own button and «Скасувати», never the MainButton; and
+  the price's form on receiving kept its own button and «Скасувати» beside
+  «Записати прихід». Both now stand in sheets; the owner's decisions are
+  not touched.
+- **Decided here** (each a reading for the owner):
+  - «← Інвентаризація» over the screen from both places; a reader hears
+    «Назад до інвентаризації» from the entry, «Назад до інвентаризації
+    складу «…»» from the count;
+  - at the entry a cell is its size alone — what the ledger holds, the
+    sheet says («В обліку 0»);
+  - the cursor in the search as the screen opens, the keyboard with it;
+  - the model chosen shown as receiving shows it, the search gone with it;
+  - the correction's stub over «Знайшли товар…» on the entry, where its line
+    stood, the cursor on «Знайшли товар…».

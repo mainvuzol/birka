@@ -42,7 +42,7 @@ import { visible } from "@/shared/visible";
 import { keptUnconfirmed, twiceOf } from "@/cash/errors";
 import { shortDay, shortTime } from "@/credits/format";
 import type { Location, Store } from "@/orders/types";
-import { AddedStub, CatalogPicker } from "./CatalogPicker";
+import { FoundGoods } from "./FoundGoods";
 import { submitCount, useCountCommand } from "./stocktakeCommands";
 import type {
   CountResult,
@@ -949,6 +949,13 @@ export function Stocktake({
     window.scrollTo(0, 0);
     result.current?.focus();
   }, [done]);
+  // «Знайшли товар…» left by «←» or Telegram's «Назад»: the cursor where
+  // it was pressed (goods task list after stage 2, P1-2).
+  const wasFinding = useRef(false);
+  useEffect(() => {
+    if (wasFinding.current && !finding) finder.current?.focus();
+    wasFinding.current = finding;
+  }, [finding]);
   // Finished: the stub's one way on, Telegram's.
   const leave = useMainButton(
     "До інвентаризації",
@@ -1111,145 +1118,168 @@ export function Stocktake({
   const waiting =
     list.isPending || (mode === "uncounted" && canReceive && sizes.isPending);
 
+  // A size found, as the list read it: «в обліку 0» where it holds none.
+  const foundTarget = (variant: ReceivableVariant, size: SizeOption): Target =>
+    fresh({
+      key: `${variant.product_variant_id}:${size.size_id}`,
+      product_variant_id: variant.product_variant_id,
+      size_id: size.size_id,
+      name: variant.display_name,
+      size: size.code,
+      sizeIsUnknown: false,
+      quantity: 0,
+      reserved: 0,
+    });
+
   return (
     <>
-      <ScreenHeader
-        ref={heading}
-        focusable
-        wraps
-        title={`Інвентаризація · «${visible(location.name)}»`}
-        context={`Почато ${since(shown.started_at)} · ${visible(shown.started_by)}`}
-        back={
-          <Back go={onLeave} label="Назад до інвентаризації">
-            <span aria-hidden="true">← </span>Інвентаризація
-          </Back>
-        }
-        aside={
-          <button
-            type="button"
-            className="quiet"
-            aria-haspopup="dialog"
-            disabled={blocked}
-            onClick={() => {
-              void current.refetch();
-              setFailure(null);
-              setAsked(true);
-            }}
-          >
-            Завершити
-          </button>
-        }
-      />
-      <section className="stocktake" aria-label="Інвентаризація">
-        <ModeSwitch
-          label="Які позиції"
-          filters
-          className="stocktake-modes"
-          modes={[
-            {
-              mode: "uncounted",
-              label: `Не пораховані ${String(shown.sums.unchecked_positions)}`,
+      {finding ? (
+        // Goods the list does not show, on their own screen; a size tapped,
+        // the count's sheet over it (P1-2).
+        <FoundGoods
+          store={store}
+          token={token}
+          scopeKey={scopeKey}
+          blocked={blocked}
+          back={{
+            go: () => {
+              setFinding(false);
             },
-            {
-              mode: "counted",
-              label: `Пораховані ${String(shown.sums.counted_positions)}`,
-            },
-          ]}
-          current={mode}
-          choose={setMode}
-          disabled={false}
+            label: `Назад до інвентаризації складу «${visible(location.name)}»`,
+          }}
+          ledger={foundTarget}
+          pick={(variant, size) => {
+            count([foundTarget(variant, size)], 0, true);
+          }}
         />
-        {waiting ? (
-          <Placeholder
-            said="Завантажуємо позиції…"
-            {...(mode === "uncounted" ? { tags: 2 } : { rows: 3, day: false })}
-          />
-        ) : list.isError ? (
-          <Unread error={list.error} retry={reread} />
-        ) : items.length === 0 ? (
-          // Nothing: the blank tag and its one line (goods task list after
-          // stage 2, P2-2).
-          <Empty
-            className="stocktake-empty"
-            title={
-              mode === "uncounted"
-                ? "Усі позиції з залишком пораховано."
-                : "Ще нічого не пораховано."
+      ) : (
+        <>
+          <ScreenHeader
+            ref={heading}
+            focusable
+            wraps
+            title={`Інвентаризація · «${visible(location.name)}»`}
+            context={`Почато ${since(shown.started_at)} · ${visible(shown.started_by)}`}
+            back={
+              <Back go={onLeave} label="Назад до інвентаризації">
+                <span aria-hidden="true">← </span>Інвентаризація
+              </Back>
+            }
+            aside={
+              <button
+                type="button"
+                className="quiet"
+                aria-haspopup="dialog"
+                disabled={blocked}
+                onClick={() => {
+                  void current.refetch();
+                  setFailure(null);
+                  setAsked(true);
+                }}
+              >
+                Завершити
+              </button>
             }
           />
-        ) : mode === "uncounted" ? (
-          <div className="tags">
-            {cards.map((card) => (
-              <CountCard
-                key={card.variantId}
-                card={card}
-                disabled={blocked}
-                pick={(at) => {
-                  count(card.cells, at);
-                }}
+          <section className="stocktake" aria-label="Інвентаризація">
+            <ModeSwitch
+              label="Які позиції"
+              filters
+              className="stocktake-modes"
+              modes={[
+                {
+                  mode: "uncounted",
+                  label: `Не пораховані ${String(shown.sums.unchecked_positions)}`,
+                },
+                {
+                  mode: "counted",
+                  label: `Пораховані ${String(shown.sums.counted_positions)}`,
+                },
+              ]}
+              current={mode}
+              choose={setMode}
+              disabled={false}
+            />
+            {waiting ? (
+              <Placeholder
+                said="Завантажуємо позиції…"
+                {...(mode === "uncounted"
+                  ? { tags: 2 }
+                  : { rows: 3, day: false })}
               />
-            ))}
-          </div>
-        ) : (
-          <ul className="counted-rows" aria-label="Пораховані позиції">
-            {items.map(
-              (item) =>
-                item.count && (
-                  <CountedRow
-                    key={keyOf(item)}
-                    position={item}
-                    count={item.count}
+            ) : list.isError ? (
+              <Unread error={list.error} retry={reread} />
+            ) : items.length === 0 ? (
+              // Nothing: the blank tag and its one line (goods task list after
+              // stage 2, P2-2).
+              <Empty
+                className="stocktake-empty"
+                title={
+                  mode === "uncounted"
+                    ? "Усі позиції з залишком пораховано."
+                    : "Ще нічого не пораховано."
+                }
+              />
+            ) : mode === "uncounted" ? (
+              <div className="tags">
+                {cards.map((card) => (
+                  <CountCard
+                    key={card.variantId}
+                    card={card}
                     disabled={blocked}
-                    recount={() => {
-                      count([targetOf(item)], 0);
+                    pick={(at) => {
+                      count(card.cells, at);
                     }}
                   />
-                ),
+                ))}
+              </div>
+            ) : (
+              <ul className="counted-rows" aria-label="Пораховані позиції">
+                {items.map(
+                  (item) =>
+                    item.count && (
+                      <CountedRow
+                        key={keyOf(item)}
+                        position={item}
+                        count={item.count}
+                        disabled={blocked}
+                        recount={() => {
+                          count([targetOf(item)], 0);
+                        }}
+                      />
+                    ),
+                )}
+              </ul>
             )}
-          </ul>
-        )}
-        {list.hasNextPage && !waiting && !list.isError && (
-          // A next page asked while the list is read again from its top
-          // would cancel that read and be read from where the old pages
-          // ended, past a position that moved up (review, 2026-11-07).
-          <button
-            type="button"
-            className="quiet stocktake-more"
-            disabled={list.isFetching}
-            onClick={() => {
-              void list.fetchNextPage();
-            }}
-          >
-            Показати ще
-          </button>
-        )}
-        {finding ? (
-          <FoundGoods
-            store={store}
-            token={token}
-            scopeKey={scopeKey}
-            disabled={blocked}
-            pick={(target) => {
-              count([target], 0, true);
-            }}
-            onCancel={() => {
-              setFinding(false);
-            }}
-          />
-        ) : (
-          <button
-            ref={finder}
-            type="button"
-            className="quiet"
-            disabled={blocked}
-            onClick={() => {
-              setFinding(true);
-            }}
-          >
-            Знайшли товар, якого немає в списку
-          </button>
-        )}
-      </section>
+            {list.hasNextPage && !waiting && !list.isError && (
+              // A next page asked while the list is read again from its top
+              // would cancel that read and be read from where the old pages
+              // ended, past a position that moved up (review, 2026-11-07).
+              <button
+                type="button"
+                className="quiet stocktake-more"
+                disabled={list.isFetching}
+                onClick={() => {
+                  void list.fetchNextPage();
+                }}
+              >
+                Показати ще
+              </button>
+            )}
+            <button
+              ref={finder}
+              type="button"
+              className="quiet"
+              disabled={blocked}
+              onClick={() => {
+                setFinding(true);
+              }}
+            >
+              Знайшли товар, якого немає в списку
+            </button>
+          </section>
+        </>
+      )}
       {counting && targets && (
         <CountSheet
           key={counting.times}
@@ -1825,114 +1855,5 @@ function FinishSheet({
         </p>
       )}
     </Sheet>
-  );
-}
-
-/**
- * Goods on the shelf that the list does not show, because the system holds
- * none of them here: found in the catalogue, their size chosen, and their
- * cell, «в обліку 0», counted in the same sheet against zero. If it holds
- * some after all, the server says how many, and the sheet counts against
- * that.
- */
-function FoundGoods({
-  store,
-  token,
-  scopeKey,
-  disabled,
-  pick,
-  onCancel,
-}: {
-  store: Store;
-  token: string;
-  scopeKey: string;
-  disabled: boolean;
-  pick: (target: Target) => void;
-  onCancel: () => void;
-}): JSX.Element {
-  const [variant, setVariant] = useState<ReceivableVariant | null>(null);
-  const [added, setAdded] = useState<string | null>(null);
-  const [sizeId, setSizeId] = useState("");
-  const sizes = useQuery({
-    queryKey: ["receive-sizes", scopeKey, store.id],
-    queryFn: () =>
-      api<SizeOption[]>(`/catalog/sizes?store_id=${store.id}`, token),
-    retry: false,
-  });
-  const size = sizes.data?.find((option) => option.size_id === sizeId);
-  const target: Target | null =
-    variant && size
-      ? {
-          key: `${variant.product_variant_id}:${size.size_id}`,
-          product_variant_id: variant.product_variant_id,
-          size_id: size.size_id,
-          name: variant.display_name,
-          size: size.code,
-          sizeIsUnknown: false,
-          quantity: 0,
-          reserved: 0,
-        }
-      : null;
-  return (
-    <section
-      className="notice stocktake-found"
-      aria-label="Товар, якого немає в списку"
-    >
-      <h3>Товар, якого немає в списку</h3>
-      <p className="hint">
-        Знайдіть модель у каталозі й оберіть розмір. Якщо товар уже є в обліку
-        цього складу, сервер скаже, скільки саме.
-      </p>
-      <CatalogPicker
-        store={store}
-        token={token}
-        scopeKey={scopeKey}
-        variant={variant}
-        onVariant={(picked, said) => {
-          setVariant(picked);
-          setAdded(said ?? null);
-        }}
-        adds
-      />
-      <AddedStub said={added} />
-      <label>
-        Розмір
-        <select
-          value={sizeId}
-          onChange={(event) => {
-            setSizeId(event.target.value);
-          }}
-        >
-          <option value="">Оберіть розмір</option>
-          {(sizes.data ?? []).map((option) => (
-            <option key={option.size_id} value={option.size_id}>
-              {visible(option.code)}
-            </option>
-          ))}
-        </select>
-      </label>
-      {sizes.isError && (
-        <Unread
-          error={sizes.error}
-          retry={() => {
-            void sizes.refetch();
-          }}
-        />
-      )}
-      {target && (
-        <div className="cells">
-          <CountCell
-            cell={target}
-            disabled={disabled}
-            pick={() => {
-              pick(target);
-            }}
-          />
-        </div>
-      )}
-      <button type="button" className="quiet" onClick={onCancel}>
-        Скасувати
-      </button>
-    </section>
   );
 }

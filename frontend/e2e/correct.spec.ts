@@ -4,6 +4,7 @@ import {
   addModel,
   countTaps,
   gridCell,
+  menu,
   more,
   newModelSheet,
   openModel,
@@ -419,7 +420,7 @@ test("a count made against a balance that has since moved is refused, and asks f
   await page.unrouteAll({ behavior: "ignoreErrors" });
 });
 
-test("goods the system holds none of are found in the catalogue and counted from zero; inside Telegram the form on «Інвентаризація» keeps its own button, never the MainButton, which is the screen's (stage 2, goods task list, P1-3)", async ({
+test("goods the system holds none of are found on their own screen and counted from zero: inside Telegram five taps — «Знайшли товар…», the model, a size's cell, the reason and the correction sheet's MainButton, the one there is — then the stub on the entry (goods task list after stage 2, P1-2)", async ({
   page,
 }) => {
   const sent = adjustments(page);
@@ -428,7 +429,7 @@ test("goods the system holds none of are found in the catalogue and counted from
       TelegramWebviewProxy: {
         postEvent: (event: string, data: string) => void;
       };
-      mains: { text?: string }[];
+      mains: { text?: string; is_visible?: boolean; is_active?: boolean }[];
     };
     host.mains = [];
     host.TelegramWebviewProxy = {
@@ -438,17 +439,61 @@ test("goods the system holds none of are found in the catalogue and counted from
       },
     };
   });
+  const main = async (): Promise<{
+    text?: string;
+    is_visible?: boolean;
+    is_active?: boolean;
+  } | null> =>
+    (
+      await page.evaluate(
+        () =>
+          (
+            window as unknown as {
+              mains: {
+                text?: string;
+                is_visible?: boolean;
+                is_active?: boolean;
+              }[];
+            }
+          ).mains,
+      )
+    ).at(-1) ?? null;
   await login(page, "8.0");
   await section(page, "Інвентаризація");
   await stocktaking(page);
-  await page
-    .getByRole("button", { name: "Знайшли товар, якого немає в списку" })
-    .click();
+  const finder = page.getByRole("button", {
+    name: "Знайшли товар, якого немає в списку",
+  });
+  // The entry's one action, Telegram's (review: said before it goes).
+  await expect.poll(main).toMatchObject({
+    is_visible: true,
+    text: "Почати інвентаризацію",
+  });
+  const taps = await countTaps(page);
+  await finder.click();
+  // A screen of its own, the menu aside, no MainButton of its own: the
+  // entry's «Почати інвентаризацію» goes with the entry.
+  await expect(
+    page.getByRole("heading", {
+      level: 1,
+      name: "Товар, якого немає в списку",
+    }),
+  ).toBeVisible();
+  await expect(menu(page)).toHaveCount(0);
+  await expect.poll(main).toMatchObject({ is_visible: false });
   await page.getByLabel("Пошук у каталозі").fill("лоран");
   await page.getByRole("radio", { name: /Лоран шоколад/ }).click();
-  await page
-    .getByRole("combobox", { name: "Розмір" })
-    .selectOption({ label: "L" });
+  // At the entry a cell is its size: what the ledger holds, the sheet says.
+  const found = page.getByRole("region", {
+    name: "Товар, якого немає в списку",
+  });
+  await found
+    .getByRole("group", { name: "Розмір" })
+    .getByRole("button", { name: "L", exact: true })
+    .click();
+  const sheet = page.getByRole("dialog", { name: /Лоран шоколад.* · L$/ });
+  await expect(sheet).toHaveAttribute("data-ready", "");
+  await expect(sheet.getByText("Склад «Склад перерахунку»")).toBeVisible();
   await expect(live(page)).toHaveText("В обліку 0");
   // Nothing to write off where nothing is held.
   await expect(page.getByRole("group", { name: "Причина" })).toHaveText(
@@ -456,21 +501,37 @@ test("goods the system holds none of are found in the catalogue and counted from
   );
   await reason(page, "Перерахунок").click();
   await type(page, 2);
-  await expect(page.locator(".correction .count-foot")).toHaveText(
-    "Записати · +2 шт.",
-  );
-  await record(page, "+2").click();
+  // Telegram's MainButton, the one there is: none of the form's own.
+  await expect.poll(main).toMatchObject({
+    is_visible: true,
+    is_active: true,
+    text: "Записати · +2 шт.",
+  });
+  await expect(record(page, "+2")).toHaveCount(0);
+  await page.evaluate(() => {
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        data: JSON.stringify({ eventType: "main_button_pressed" }),
+        source: window.parent,
+      }),
+    );
+  });
 
-  await expect(page.getByRole("status")).toContainText(
-    "L — Перерахунок, облік 0 → 2.",
+  // Back on the entry: a stub says it, as on a model's detail, and the
+  // cursor is on «Знайшли товар…» under it.
+  await expect(sheet).toHaveCount(0);
+  await expect(found).toHaveCount(0);
+  const stub = page
+    .getByRole("status")
+    .filter({ hasText: /^Коригування записано/ });
+  await expect(stub).toHaveText(
+    /^Коригування записано: Лоран шоколад.* · L — Перерахунок, облік 0 → 2\.$/,
   );
-  expect(
-    (
-      await page.evaluate(
-        () => (window as unknown as { mains: { text?: string }[] }).mains,
-      )
-    ).filter((one) => one.text?.startsWith("Записати")),
-  ).toEqual([]);
+  await expect(stub.locator(".stub.stub-recorded")).toBeVisible();
+  await expect(finder).toBeFocused();
+  // «Знайшли товар…», the model, the cell, the reason and the number's one
+  // key; the fifth tap is Telegram's MainButton.
+  expect(await taps()).toBe(4 + 1);
   expect(sent[0]).toMatchObject({ quantity_delta: 2, expected_quantity: 0 });
   // The model's grid holds it now.
   await section(page, "Продаж");
@@ -510,17 +571,24 @@ test("goods the catalogue has not are added from the empty search of «Знай�
   await expect(
     page.getByRole("status").filter({ hasText: /^Модель додано/ }),
   ).toHaveText(`Модель додано: ${name}. Кількість впишіть тут.`);
-  // The empty answer goes with the model added, and its button: no second
-  // proposal of the same words (review).
-  await expect(page.getByText(`Обрано: ${name}`)).toBeVisible();
+  // The model added is chosen: its name, and the search, its empty answer
+  // and its button gone with it.
+  const found = page.getByRole("region", {
+    name: "Товар, якого немає в списку",
+  });
+  await expect(found.locator(".receive-model p")).toHaveText(name);
   await expect(page.getByText(/^Нічого не знайшли/)).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: /^Додати нову модель/ }),
   ).toHaveCount(0);
-  // Its size typed there is one to count here (review).
-  await page
-    .getByRole("combobox", { name: "Розмір" })
-    .selectOption({ label: "62" });
+  // Its size typed there is a cell to count here (review).
+  await found
+    .getByRole("group", { name: "Розмір" })
+    .getByRole("button", { name: "62", exact: true })
+    .click();
+  await expect(
+    page.getByRole("dialog", { name: `${name} · 62` }),
+  ).toHaveAttribute("data-ready", "");
   await expect(live(page)).toHaveText("В обліку 0");
 });
 
@@ -545,15 +613,27 @@ test("found goods that turn out to be held are counted against what is held", as
   await page.getByLabel("Пошук у каталозі").fill("лоран");
   await page.getByRole("radio", { name: /Лоран шоколад/ }).click();
   await page
-    .getByRole("combobox", { name: "Розмір" })
-    .selectOption({ label: "M" });
+    .getByRole("region", { name: "Товар, якого немає в списку" })
+    .getByRole("group", { name: "Розмір" })
+    .getByRole("button", { name: "M", exact: true })
+    .click();
+  const fix = page.getByRole("dialog", { name: /Лоран шоколад.* · M$/ });
+  await expect(fix).toHaveAttribute("data-ready", "");
   await reason(page, "Перерахунок").click();
   await type(page, 1);
   await record(page, "+1").click();
-  await expect(page.getByRole("alert")).toContainText(
+  await expect(fix.getByRole("alert")).toContainText(
     `уже є в обліку цього складу: ${String(held)} шт.`,
   );
   await expect(live(page)).toHaveText(`В обліку ${String(held)}`);
+  // The sheet closed, «← Інвентаризація», then «← {модель}».
+  await fix.press("Escape");
+  await expect(fix).toHaveCount(0);
+  await page.getByRole("button", { name: "Назад до інвентаризації" }).click();
+  // Back on the entry, the cursor on «Знайшли товар…» where it was pressed.
+  await expect(
+    page.getByRole("button", { name: "Знайшли товар, якого немає в списку" }),
+  ).toBeFocused();
   await page.getByRole("button", { name: `Назад до «${name}»` }).click();
   await expect(here(page)).toHaveText(String(held));
 });

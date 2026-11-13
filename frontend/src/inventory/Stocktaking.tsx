@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { JSX } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/shared/api";
@@ -7,15 +7,16 @@ import { Placeholder } from "@/shared/Placeholder";
 import { BackToMore } from "@/shared/More";
 import type { MoreBack } from "@/shared/More";
 import { ScreenHeader } from "@/shared/ScreenHeader";
+import { Sheet } from "@/shared/Sheet";
+import { Stub } from "@/shared/Stub";
 import { visible } from "@/shared/visible";
 import type { Location, Store } from "@/orders/types";
-import { AddedStub, CatalogPicker } from "./CatalogPicker";
 import { Correction } from "./Correction";
-import type { Corrected } from "./Correction";
+import type { Corrected, Target } from "./Correction";
+import { FoundGoods } from "./FoundGoods";
 import { Stocktake, Stocktakes } from "./Stocktake";
 import { useAdjustmentCommand } from "./adjustmentCommands";
 import { reasonLabels } from "./adjustmentTypes";
-import type { ReceivableVariant, SizeOption } from "./receiptTypes";
 import { useCountCommand } from "./stocktakeCommands";
 import type { StocktakeRecord } from "./stocktakeTypes";
 
@@ -60,8 +61,13 @@ export function Stocktaking({
   const [chosen, setChosen] = useState("");
   const [lost, setLost] = useState(false);
   const [counting, setCounting] = useState<StocktakeRecord | null>(null);
-  const [finding, setFinding] = useState(false);
+  // «Знайшли товар…» open, for the warehouse it was opened for.
+  const [findingAt, setFindingAt] = useState<string | null>(null);
+  // «Знайшли товар…»'s size tapped: its correction, in a sheet.
+  const [fixing, setFixing] = useState<Target | null>(null);
+  const [fixFoot, setFixFoot] = useState<HTMLDivElement | null>(null);
   const [found, setFound] = useState<Corrected | null>(null);
+  const finder = useRef<HTMLButtonElement>(null);
   // A correction and a count each wait for the other to settle.
   const adjustment = useAdjustmentCommand();
   const countCommand = useCountCommand();
@@ -93,6 +99,13 @@ export function Stocktaking({
   );
   const only = fixable.length === 1 ? fixable[0] : undefined;
   const selected = fixable.find((location) => location.id === chosen) ?? only;
+  // It stands for its warehouse alone, and while it may be found: another
+  // the only one now, or the right gone, and it is gone with its sheet —
+  // never back by itself (review).
+  const finding =
+    selected !== undefined &&
+    findingAt === selected.id &&
+    store.permissions.includes("inventory:receive");
 
   useEffect(() => {
     // Revocation clears the selection; later access never restores it
@@ -111,12 +124,37 @@ export function Stocktaking({
       setChosen("");
       setLost(true);
       setCounting(null);
-      setFinding(false);
+      setFindingAt(null);
+      setFixing(null);
     }
   }, [chosen, locations.isSuccess, locations.data]);
+  useEffect(() => {
+    if (findingAt !== null && !finding) {
+      setFindingAt(null);
+      setFixing(null);
+    }
+  }, [findingAt, finding]);
+
+  // «Знайшли товар…» is a task's screen: the menu aside while it stands
+  // (goods task list after stage 2, P1-2).
+  useEffect(() => {
+    if (!finding) return;
+    task?.(true);
+    return () => {
+      task?.(false);
+    };
+  }, [finding, task]);
+  // Left — by «←», Telegram's «Назад» or a correction recorded — the cursor
+  // goes to «Знайшли товар…» where it was pressed, the stub over it.
+  const wasFinding = useRef(false);
+  useEffect(() => {
+    if (wasFinding.current && !finding) finder.current?.focus();
+    wasFinding.current = finding;
+  }, [finding]);
 
   function done(result: Corrected): void {
-    setFinding(false);
+    setFixing(null);
+    setFindingAt(null);
     setFound(result);
     void cache.invalidateQueries({ queryKey: ["inventory-stock"] });
   }
@@ -146,6 +184,75 @@ export function Stocktaking({
           });
         }}
       />
+    );
+
+  // Goods the list does not show, on their screen; a size tapped, the
+  // correction's sheet over it, Telegram's MainButton its one button
+  // (P1-2).
+  if (selected && finding)
+    return (
+      <>
+        <FoundGoods
+          key={selected.id}
+          store={store}
+          token={token}
+          scopeKey={scopeKey}
+          blocked={correcting}
+          back={{
+            go: () => {
+              setFindingAt(null);
+              setFixing(null);
+            },
+            label: "Назад до інвентаризації",
+          }}
+          pick={(variant, size) => {
+            setFixing({
+              product_variant_id: variant.product_variant_id,
+              size_id: size.size_id,
+              name: variant.display_name,
+              size: size.code,
+              sizeIsUnknown: false,
+              quantity: 0,
+            });
+          }}
+        />
+        {fixing && (
+          <Sheet
+            title={`${visible(fixing.name)} · ${visible(fixing.size)}`}
+            close={() => {
+              // The form's answer is waited for: it is the screen's to say.
+              if (!adjustment.busy) setFixing(null);
+            }}
+            fallback={finder}
+            // The form's own button, outside Telegram, kept in view under
+            // it.
+            foot={<div ref={setFixFoot} />}
+          >
+            <Correction
+              key={`${fixing.product_variant_id}:${fixing.size_id}`}
+              store={store}
+              token={token}
+              journalKey={journalKey}
+              blocked={correcting}
+              locationId={selected.id}
+              place={selected.name}
+              foot={fixFoot}
+              target={fixing}
+              onDone={done}
+              onRefused={() => {
+                void cache.invalidateQueries({
+                  queryKey: ["inventory-stock"],
+                });
+              }}
+              // Settled from the app's notice, which the sheet would cover,
+              // as on a model's detail.
+              onLost={() => {
+                setFixing(null);
+              }}
+            />
+          </Sheet>
+        )}
+      </>
     );
 
   return (
@@ -189,7 +296,7 @@ export function Stocktaking({
                       setChosen(location.id);
                       setLost(false);
                       setCounting(null);
-                      setFinding(false);
+                      setFindingAt(null);
                       setFound(null);
                     }}
                   >
@@ -208,169 +315,40 @@ export function Stocktaking({
                   location={selected}
                   onCount={(record) => {
                     setCounting(record);
-                    setFinding(false);
+                    setFindingAt(null);
                     setFound(null);
                   }}
                 />
                 {found && (
-                  <p role="status">
-                    Коригування записано: {visible(found.target.name)} ·{" "}
-                    {visible(found.target.size)} — {reasonLabels[found.reason]},
-                    облік {found.adjustment.quantity_before} →{" "}
-                    {found.adjustment.quantity_after}.
-                  </p>
+                  // Its stub, as a model's detail says a correction (P1-2).
+                  <section className="notice stub-notice" role="status">
+                    <Stub state="recorded">
+                      <p>
+                        {`Коригування записано: ${visible(found.target.name)} · ${visible(found.target.size)} — ${reasonLabels[found.reason]}, облік ${String(found.adjustment.quantity_before)} → ${String(found.adjustment.quantity_after)}.`}
+                      </p>
+                    </Stub>
+                  </section>
                 )}
-                {store.permissions.includes("inventory:receive") &&
-                  (finding ? (
-                    <FoundGoods
-                      key={selected.id}
-                      store={store}
-                      token={token}
-                      scopeKey={scopeKey}
-                      journalKey={journalKey}
-                      blocked={correcting}
-                      locationId={selected.id}
-                      onDone={done}
-                      onCancel={() => {
-                        setFinding(false);
-                      }}
-                      onRefused={() => {
-                        void cache.invalidateQueries({
-                          queryKey: ["inventory-stock"],
-                        });
-                      }}
-                    />
-                  ) : (
-                    <button
-                      type="button"
-                      className="quiet"
-                      disabled={blocked}
-                      onClick={() => {
-                        setFinding(true);
-                        setFound(null);
-                      }}
-                    >
-                      Знайшли товар, якого немає в списку
-                    </button>
-                  ))}
+                {store.permissions.includes("inventory:receive") && (
+                  <button
+                    ref={finder}
+                    type="button"
+                    className="quiet"
+                    disabled={blocked}
+                    onClick={() => {
+                      setFindingAt(selected.id);
+                      setFixing(null);
+                      setFound(null);
+                    }}
+                  >
+                    Знайшли товар, якого немає в списку
+                  </button>
+                )}
               </>
             )}
           </>
         )}
       </section>
     </>
-  );
-}
-
-/**
- * Goods on the shelf that the system holds none of here.
- *
- * Offered as a count against zero, so if the model and size turn out to be
- * held after all — received meanwhile, say — the server refuses it as
- * `STOCK_CHANGED` and says how many, and the form carries on as an ordinary
- * stocktake against that. "Size not known" is never offered: the
- * organization's sizes exclude it.
- */
-function FoundGoods({
-  store,
-  token,
-  scopeKey,
-  journalKey,
-  blocked,
-  locationId,
-  onDone,
-  onCancel,
-  onRefused,
-}: {
-  store: Store;
-  token: string;
-  scopeKey: string;
-  journalKey: string;
-  blocked: boolean;
-  locationId: string;
-  onDone: (corrected: Corrected) => void;
-  onCancel: () => void;
-  onRefused: () => void;
-}): JSX.Element {
-  const [variant, setVariant] = useState<ReceivableVariant | null>(null);
-  const [added, setAdded] = useState<string | null>(null);
-  const [sizeId, setSizeId] = useState("");
-  const sizes = useQuery({
-    queryKey: ["receive-sizes", scopeKey, store.id],
-    queryFn: () =>
-      api<SizeOption[]>(`/catalog/sizes?store_id=${store.id}`, token),
-    retry: false,
-  });
-  const size = sizes.data?.find((option) => option.size_id === sizeId);
-
-  return (
-    <section className="notice">
-      <h3>Товар, якого немає в списку</h3>
-      <p className="hint">
-        Знайдіть модель у каталозі й оберіть розмір. Якщо товар уже є в обліку
-        цього складу, сервер скаже, скільки саме.
-      </p>
-      <CatalogPicker
-        store={store}
-        token={token}
-        scopeKey={scopeKey}
-        variant={variant}
-        onVariant={(picked, said) => {
-          setVariant(picked);
-          setAdded(said ?? null);
-        }}
-        adds
-      />
-      <AddedStub said={added} />
-      <label>
-        Розмір
-        <select
-          value={sizeId}
-          onChange={(event) => {
-            setSizeId(event.target.value);
-          }}
-        >
-          <option value="">Оберіть розмір</option>
-          {(sizes.data ?? []).map((option) => (
-            <option key={option.size_id} value={option.size_id}>
-              {visible(option.code)}
-            </option>
-          ))}
-        </select>
-      </label>
-      {sizes.error && (
-        <Unread
-          error={sizes.error}
-          retry={() => {
-            void sizes.refetch();
-          }}
-        />
-      )}
-      {variant && size ? (
-        <Correction
-          key={`${variant.product_variant_id}:${size.size_id}`}
-          store={store}
-          token={token}
-          journalKey={journalKey}
-          blocked={blocked}
-          locationId={locationId}
-          target={{
-            product_variant_id: variant.product_variant_id,
-            size_id: size.size_id,
-            name: variant.display_name,
-            size: size.code,
-            sizeIsUnknown: false,
-            quantity: 0,
-          }}
-          onDone={onDone}
-          onCancel={onCancel}
-          onRefused={onRefused}
-        />
-      ) : (
-        <button type="button" className="quiet" onClick={onCancel}>
-          Скасувати
-        </button>
-      )}
-    </section>
   );
 }

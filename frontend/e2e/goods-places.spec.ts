@@ -402,18 +402,26 @@ test("«Прийшов товар» read slowly: two warehouses' choices in grey
     items: [found(31), found(32)],
     has_more: false,
   });
-  let failed = false;
+  let failed = 0;
   await page.route(
     "**/api/v1/catalog/receivable-variants?**",
     async (route) => {
       const url = new URL(route.request().url());
       if (url.searchParams.get("query") === `${word}0`)
         return retyped.answer(route);
+      // Other words, as many models as reach the failed page's place.
+      if (url.searchParams.get("query") === `${word}9`)
+        return route.fulfill({
+          json: {
+            items: Array.from({ length: 22 }, (_, n) => found(n + 41)),
+            has_more: false,
+          },
+        });
       if (url.searchParams.get("query") !== word) return route.fallback();
       if (url.searchParams.get("offset") === "0")
         return firstPage.answer(route);
-      if (!failed) {
-        failed = true;
+      if (failed < 2) {
+        failed += 1;
         return route.fulfill({ status: 503, json: { detail: "later" } });
       }
       return route.fulfill({
@@ -453,6 +461,20 @@ test("«Прийшов товар» read slowly: two warehouses' choices in grey
   const retry = page.getByRole("button", { name: "Спробувати ще раз" });
   await expect(retry).toHaveCount(1);
   await expect(more).toHaveCount(0);
+  await expect(radios).toHaveCount(20);
+  // Other words typed after a page failed: their rows reach its place, and
+  // the cursor stays in the field (the review of the audit's batch 16).
+  const field = page.getByLabel("Пошук у каталозі");
+  await field.fill(`${word}9`);
+  await expect(radios).toHaveCount(22);
+  await expect(radios.first()).toHaveText(`${word} 41`);
+  await expect(field).toBeFocused();
+  // Back to the first words, their page pressed and failed again.
+  await field.fill(word);
+  await expect(radios.first()).toHaveText(`${word} 1`);
+  await expect(more).toHaveCount(1);
+  await more.click();
+  await expect(retry).toHaveCount(1);
   await expect(radios).toHaveCount(20);
   await retry.click();
   await expect(radios).toHaveCount(23);

@@ -13,7 +13,7 @@ import { Stub } from "@/shared/Stub";
 import { visible } from "@/shared/visible";
 import { money } from "@/orders/types";
 import type { Location, StockOption, Store } from "@/orders/types";
-import { PriceEditor } from "@/prices/SuggestedPrice";
+import { PriceSheet } from "@/prices/SuggestedPrice";
 import { Correction } from "./Correction";
 import type { Corrected } from "./Correction";
 import { reasonLabels } from "./adjustmentTypes";
@@ -205,7 +205,6 @@ export function Model({
   const [sheet, setSheet] = useState<"price" | "correct" | "more" | null>(null);
   const [editing, setEditing] = useState<StockOption | null>(null);
   const [fixFoot, setFixFoot] = useState<HTMLDivElement | null>(null);
-  const [priceFoot, setPriceFoot] = useState<HTMLDivElement | null>(null);
   const [said, setSaid] = useState<Said | null>(null);
   // A correction and a count each wait for the other to settle, as on
   // «Залишки».
@@ -219,8 +218,6 @@ export function Model({
     adjustment.pending !== null ||
     count.busy ||
     count.pending !== null;
-  // A price being saved keeps its sheet: its answer is the sheet's to say.
-  const [saving, setSaving] = useState(false);
   const canReceive = store.permissions.includes("inventory:receive");
   const canAdjust = store.permissions.includes("inventory:adjust");
   const canPrice = store.permissions.includes("catalog:set_price");
@@ -574,28 +571,21 @@ export function Model({
         )}
       </section>
       {sheet === "price" && (
-        <Sheet
-          title={visible(name)}
+        <PriceSheet
+          store={store}
+          token={token}
+          scopeKey={scopeKey}
+          variantId={opened.variantId}
+          name={name}
+          blocked={blocked}
           close={() => {
-            if (!saving) setSheet(null);
+            setSheet(null);
           }}
-          // The form's own button, outside Telegram, kept in view under it.
-          foot={<div ref={setPriceFoot} />}
-        >
-          <PriceEditor
-            store={store}
-            token={token}
-            scopeKey={scopeKey}
-            variantId={opened.variantId}
-            blocked={blocked}
-            foot={priceFoot}
-            onSaving={setSaving}
-            onDone={() => {
-              setSheet(null);
-              setSaid({ kind: "priced", name });
-            }}
-          />
-        </Sheet>
+          done={() => {
+            setSheet(null);
+            setSaid({ kind: "priced", name });
+          }}
+        />
       )}
       {sheet === "correct" && (
         <Sheet

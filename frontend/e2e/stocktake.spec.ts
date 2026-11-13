@@ -2,6 +2,7 @@ import {
   test,
   expect,
   gridCell,
+  countTaps,
   leaveNewModel,
   menu,
   more,
@@ -353,14 +354,42 @@ test("a warehouse is counted cell by cell, each difference applied at once, and 
     }),
   ).toBeFocused();
 
-  // Goods the list does not show: found, their cell counted against
-  // nothing.
-  await counting(page)
-    .getByRole("button", { name: "Знайшли товар, якого немає в списку" })
+  // Goods the list does not show: a screen of their own, the menu still
+  // aside, the cursor in the catalogue's search; one line under the title,
+  // no list's wheel, no «Скасувати» (goods task list after stage 2, P1-2).
+  const finder = counting(page).getByRole("button", {
+    name: "Знайшли товар, якого немає в списку",
+  });
+  await finder.click();
+  const found = page.getByRole("region", {
+    name: "Товар, якого немає в списку",
+  });
+  await expect(
+    page.getByRole("heading", {
+      level: 1,
+      name: "Товар, якого немає в списку",
+    }),
+  ).toBeVisible();
+  await expect(counting(page)).toHaveCount(0);
+  await expect(menu(page)).toHaveCount(0);
+  await expect(page.getByLabel("Пошук у каталозі")).toBeFocused();
+  await expect(found.locator("p.hint")).toHaveText(
+    "Якщо товар уже є в обліку цього складу, сервер скаже, скільки саме.",
+  );
+  await expect(page.getByRole("combobox")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Скасувати" })).toHaveCount(0);
+  // «← Інвентаризація» back to the count, the cursor where it was pressed.
+  await page
+    .getByRole("button", {
+      name: "Назад до інвентаризації складу «Склад інвентаризації»",
+    })
     .click();
+  await expect(finder).toBeFocused();
+  await expect(found).toHaveCount(0);
   // One the catalogue has not is added from here, in the sheet «Нова
-  // модель» over the form; left, the form is as it was (stage 2, goods task
-  // list, P0-1).
+  // модель» over the screen; left, the screen is as it was (stage 2, goods
+  // task list, P0-1).
+  await finder.click();
   const missing = `Немає в каталозі ${randomUUID().slice(0, 8)}`;
   await page.getByLabel("Пошук у каталозі").fill(missing);
   await page
@@ -370,28 +399,52 @@ test("a warehouse is counted cell by cell, each difference applied at once, and 
   await expect(adding.getByLabel("Як записано")).toHaveValue(missing);
   await leaveNewModel(adding);
   await expect(page.getByLabel("Пошук у каталозі")).toHaveValue(missing);
+  await page
+    .getByRole("button", {
+      name: "Назад до інвентаризації складу «Склад інвентаризації»",
+    })
+    .click();
+  await expect(finder).toBeFocused();
+  // Four taps and the number: «Знайшли товар…», the model, the cell, the
+  // number's one key, the sheet's button.
+  const taps = await countTaps(page);
+  await finder.click();
   await page.getByLabel("Пошук у каталозі").fill("лоран");
   await page.getByRole("radio", { name: /Лоран шоколад/ }).click();
-  await page
-    .getByRole("combobox", { name: "Розмір" })
-    .selectOption({ label: "L" });
-  const found = page.getByRole("region", {
-    name: "Товар, якого немає в списку",
+  // The model chosen: its name, and the organisation's sizes as cells, each
+  // saying what the ledger holds as the list read it.
+  await expect(found.locator(".receive-model p")).toHaveText(/Лоран шоколад/);
+  const sizes = found.getByRole("group", { name: "Розмір" });
+  await expect(sizes.getByRole("button").first()).toHaveAccessibleName(
+    /^\S+, в обліку 0$/,
+  );
+  const box = await sizes
+    .getByRole("button", { name: "L, в обліку 0", exact: true })
+    .boundingBox();
+  expect(Math.round(box?.width ?? 0)).toBeGreaterThanOrEqual(60);
+  expect(Math.round(box?.height ?? 0)).toBeGreaterThanOrEqual(60);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth > innerWidth,
+    ),
+  ).toBe(false);
+  await page.screenshot({
+    path: "test-results/stocktake-found-goods.png",
+    fullPage: true,
   });
-  await found.getByRole("button", { name: "L, в обліку 0" }).click();
+  await sizes
+    .getByRole("button", { name: "L, в обліку 0", exact: true })
+    .click();
   const foundSheet = await countSheet(page);
   await type(foundSheet, 1);
   await expect(foundSheet.getByText("0 → 1 · +1")).not.toHaveClass(/\bshort\b/);
   await record(foundSheet, 1).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(toast(page)).toHaveText(/ · L — облік 0 → 1 \(\+1\)$/);
-  // The form goes with it, and the cursor to what stands in its place.
+  // Back on the count, the cursor on «Знайшли товар…» where it was pressed.
   await expect(found).toHaveCount(0);
-  await expect(
-    counting(page).getByRole("button", {
-      name: "Знайшли товар, якого немає в списку",
-    }),
-  ).toBeFocused();
+  await expect(finder).toBeFocused();
+  expect(await taps()).toBe(4 + 1);
 
   // «Пораховані», newest first, each with whom and when.
   await modes(page).getByRole("button", { name: "Пораховані 2" }).click();
@@ -437,15 +490,12 @@ test("a warehouse is counted cell by cell, each difference applied at once, and 
   await modes(page)
     .getByRole("button", { name: /^Не пораховані \d+$/ })
     .click();
-  await counting(page)
-    .getByRole("button", { name: "Знайшли товар, якого немає в списку" })
-    .click();
+  await finder.click();
   await page.getByLabel("Пошук у каталозі").fill("лоран");
   await page.getByRole("radio", { name: /Лоран шоколад/ }).click();
-  await page
-    .getByRole("combobox", { name: "Розмір" })
-    .selectOption({ label: "M" });
-  await found.getByRole("button", { name: "M, в обліку 0" }).click();
+  await found
+    .getByRole("button", { name: "M, в обліку 0", exact: true })
+    .click();
   const held = await countSheet(page);
   await type(held, 1);
   await record(held, 1).click();

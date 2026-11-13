@@ -916,24 +916,53 @@ test("inside Telegram the MainButton records it: held at nothing counted, put aw
   await expect
     .poll(async () => (await told("web_app_setup_closing_behavior")).at(-1))
     .toEqual({ need_confirmation: true });
-  // The price's form on the screen keeps its own button: the MainButton
-  // stays «Записати прихід» (stage 2, goods task list, P1-4).
-  await page
-    .getByRole("button", { name: /^(Задати|Змінити) ціну продажу$/ })
-    .click();
-  const price = page.getByRole("group", { name: "Змінити ціну продажу" });
+  // The price in its sheet: its MainButton the one there is, «Записати
+  // прихід» put away under it, none of the form's own; Telegram's «Назад»
+  // leaves it, nothing saved, and «Записати прихід» is back with the
+  // count (goods task list after stage 2, P1-3).
+  // Its price read again as the sheet opens, and refused: the plate in the
+  // sheet and no MainButton of its form — «Записати прихід» still put away
+  // under it (review).
+  let refused = false;
+  await page.route("**/api/v1/catalog/prices?*", async (route) => {
+    if (!refused && route.request().method() === "GET") {
+      refused = true;
+      await route.fulfill({
+        status: 503,
+        json: { code: "UNAVAILABLE", message: "No" },
+      });
+      return;
+    }
+    await route.fallback();
+  });
+  await page.getByRole("button", { name: "Змінити ціну", exact: true }).click();
+  const price = page.getByRole("dialog", { name: /Лоран шоколад/ });
+  await expect(price).toHaveAttribute("data-ready", "");
+  await expect(price.locator(".read-failure")).toBeVisible();
+  await expect.poll(main).toMatchObject({ is_visible: false });
+  await price.getByRole("button", { name: "Спробувати ще раз" }).click();
   await price
     .locator(".keypad-keys")
     .getByRole("button", { name: "5", exact: true })
     .click();
-  await expect(
-    price.getByRole("button", { name: "Зберегти · 5,00 грн" }),
-  ).toBeVisible();
+  await expect.poll(main).toMatchObject({
+    is_visible: true,
+    is_active: true,
+    text: "Зберегти · 5,00\u00a0грн",
+  });
+  await expect(price.getByRole("button", { name: /^Зберегти/ })).toHaveCount(0);
+  await page.evaluate(() => {
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        data: JSON.stringify({ eventType: "back_button_pressed" }),
+        source: window.parent,
+      }),
+    );
+  });
+  await expect(price).toHaveCount(0);
   await expect
     .poll(main)
     .toMatchObject({ is_visible: true, text: "Записати прихід · 1 шт." });
-  await price.getByRole("button", { name: "Скасувати" }).click();
-  await expect(price).toHaveCount(0);
   // Under the sheet it is put away, and back once the sheet closes.
   const sheet = await receiveWay(page);
   await expect.poll(main).toMatchObject({ is_visible: false });
