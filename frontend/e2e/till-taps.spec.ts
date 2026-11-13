@@ -221,6 +221,10 @@ test("paid in parts, in five taps: the search, its size, the tray's row, «Оп�
   await page.locator(".till-tray .tray-basket").click();
   const sheet = page.getByRole("dialog", { name: "Кошик" });
   await expect(sheet).toHaveAttribute("data-ready", "");
+  // A switch row, as the paper's (audit 2026-11-13, sale P2-6).
+  await expect(
+    sheet.getByRole("switch", { name: "Оплата частинами" }),
+  ).toBeVisible();
   await sheet.getByLabel("Оплата частинами").check();
   // The cursor in the name, and the keyboard's key on to the next field.
   await expect(sheet.getByLabel("Ім’я покупця")).toBeFocused();

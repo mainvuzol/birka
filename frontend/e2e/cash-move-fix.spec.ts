@@ -2,6 +2,8 @@ import {
   test,
   expect,
   expectGlyphBeside,
+  expectListBlock,
+  listRow,
   moveSheet,
   openStore,
   section,
@@ -790,6 +792,25 @@ test("cash taken out and unanswered, its sheet closed while its row waits for th
   await page.locator(".sheet-scrim").click({ position: { x: 20, y: 20 } });
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(row).toBeDisabled();
+  // Seen with nothing over it: the row waits unfaded, its title in pencil
+  // (audit 2026-11-13, orders-cash P1-2; review).
+  expect(
+    await row.evaluate((node) => {
+      const probe = document.createElement("span");
+      probe.style.color = "var(--pencil)";
+      document.body.append(probe);
+      const pencil = getComputedStyle(probe).color;
+      probe.remove();
+      const title = node.querySelector(".cash-row-title") ?? node;
+      return [
+        getComputedStyle(node).opacity,
+        getComputedStyle(title).color === pencil,
+      ];
+    }),
+  ).toEqual(["1", true]);
+  expect(await contrast(row.locator(".cash-row-title"))).toBeGreaterThanOrEqual(
+    4.5,
+  );
   await expect(
     page.getByRole("heading", { name: "Каса", exact: true }),
   ).toBeFocused();
@@ -1056,6 +1077,86 @@ async function contrast(element: Locator): Promise<number> {
     return (Math.max(fore, back) + 0.05) / (Math.min(fore, back) + 0.05);
   });
 }
+
+for (const [name, theme] of [
+  ["light", { bg_color: "#ffffff", text_color: "#000000" }],
+  ["dark", { bg_color: "#17212b", text_color: "#f5f5f5" }],
+] as const)
+  test(`in the ${name} theme «Каса»'s rows and the seller's operations lie on a list's white block; while cash taken out is on its way, «Каса»'s rows take no tap and nothing fades — their titles in pencil, at 4.5:1 (audit 2026-11-13, orders-cash P1-2)`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 360, height: 640 });
+    let answer = (): void => undefined;
+    const state: Parameters<typeof stub>[1] = {
+      now: drawer(),
+      method: { ...sale },
+    };
+    const server = await stub(page, state);
+    await open(page, { theme });
+    await cash(page);
+    const block = page.locator(".cash-rows");
+    const rows = block.locator(".cash-row");
+    await expect(
+      rows.filter({ hasText: "Змінити спосіб оплати" }),
+    ).toBeVisible();
+    await expectListBlock(block, rows);
+    await listRow(page, rows.first(), ".cash-row-title");
+    await listRow(page, rows.last(), ".cash-row-title");
+    const pencil = await page.evaluate(() => {
+      const probe = document.createElement("span");
+      probe.style.color = "var(--pencil)";
+      document.body.append(probe);
+      const said = getComputedStyle(probe).color;
+      probe.remove();
+      return said;
+    });
+    // «Видати з каси» on its way: the rows behind its sheet take no tap,
+    // their titles in pencil, nothing faded over them.
+    state.hold = new Promise<void>((done) => {
+      answer = done;
+    });
+    await page
+      .getByRole("button", { name: "Видати з каси", exact: true })
+      .click();
+    const out = await moveSheet(page, "Видати з каси");
+    await out
+      .getByRole("group", { name: "Кому чи на що" })
+      .getByRole("button", { name: "Витрати", exact: true })
+      .click();
+    await sum(page).fill("150");
+    await moveButton(page).click();
+    await expect.poll(() => server.sent.movements?.length).toBe(1);
+    const change = rows.filter({ hasText: "Змінити спосіб оплати" });
+    await expect(change).toBeDisabled();
+    for (const row of await rows.all()) {
+      await expect(row).toBeDisabled();
+      expect(
+        await row.evaluate((node) => [
+          getComputedStyle(node).opacity,
+          getComputedStyle(node.querySelector(".cash-row-title") ?? node).color,
+        ]),
+      ).toEqual(["1", pencil]);
+      expect(
+        await contrast(row.locator(".cash-row-title")),
+      ).toBeGreaterThanOrEqual(4.5);
+    }
+    await page.screenshot({
+      path: `test-results/cash-rows-waiting-${name}.png`,
+    });
+    answer();
+    await expect(
+      page.getByText("Записано: Витрати, 150,00 грн.", { exact: true }),
+    ).toBeVisible();
+    await expect(change).toBeEnabled();
+    // The seller's own operations, on the same block.
+    await change.click();
+    const mine = page.getByRole("list", { name: "Ваші операції" });
+    await expect(mine.getByRole("listitem")).toHaveCount(3);
+    await expectListBlock(mine, mine.locator(".fix-row"));
+    await listRow(page, mine.locator(".fix-row").first(), ".cash-row-title");
+    await listRow(page, mine.locator(".fix-row").last(), ".cash-row-title");
+    await page.screenshot({ path: `test-results/cash-rows-mine-${name}.png` });
+  });
 
 for (const [name, theme] of [
   ["light", { bg_color: "#ffffff", text_color: "#000000" }],

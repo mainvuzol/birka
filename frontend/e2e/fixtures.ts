@@ -1259,6 +1259,51 @@ export async function listRow(
   await expect(row).toBeVisible();
 }
 
+/**
+ * A list on its white block (spec §6.8; audit after stage 2, frame P0-1;
+ * audit 2026-11-13, orders-cash P1-2): the card's white, 4 round; its rows'
+ * sides 16, a hairline under each from 16, none under the last. `rows`, top
+ * to bottom, are every row of the block — whatever their kind.
+ */
+export async function expectListBlock(
+  block: Locator,
+  rows: Locator,
+): Promise<void> {
+  const card = await block.evaluate(() => {
+    const probe = document.createElement("span");
+    probe.style.color = "var(--card)";
+    document.body.append(probe);
+    const said = getComputedStyle(probe).color;
+    probe.remove();
+    return said;
+  });
+  expect(
+    await block.evaluate((node) => [
+      getComputedStyle(node).backgroundColor,
+      getComputedStyle(node).borderTopLeftRadius,
+    ]),
+  ).toEqual([card, "4px"]);
+  const all = await rows.all();
+  expect(all.length).toBeGreaterThan(0);
+  for (const [n, row] of all.entries())
+    expect(
+      await row.evaluate((node) => {
+        const style = getComputedStyle(node);
+        return [
+          style.paddingLeft,
+          style.paddingRight,
+          style.backgroundImage === "none"
+            ? "none"
+            : `${style.backgroundPositionX} ${style.backgroundSize}`,
+        ];
+      }),
+    ).toEqual([
+      "16px",
+      "16px",
+      n === all.length - 1 ? "none" : "16px calc(100% - 16px) 1px",
+    ]);
+}
+
 /** The shared empty place (spec §6.28; audit after stage 2, frame P2-1):
  * the blank tag 64 square in the edge, its one line 17/600 in ink — one
  * markup wherever nothing is yet. */

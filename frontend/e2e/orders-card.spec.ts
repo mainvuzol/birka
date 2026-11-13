@@ -1339,7 +1339,10 @@ test("«Клієнт забрав»: its sheet of five ways in two rows, each th
     expect((await way.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
     await expect(way).toBeInViewport({ ratio: 1 });
   }
-  await expect(taking.getByLabel("Оплата частинами")).toBeVisible();
+  // A switch row, as the till's (audit 2026-11-13, sale P2-6).
+  await expect(
+    taking.getByRole("switch", { name: "Оплата частинами" }),
+  ).toBeVisible();
   // One line above them, never the drawer's words.
   await expect(
     taking.getByText("Продаж записуємо, коли покупець забрав товар.", {

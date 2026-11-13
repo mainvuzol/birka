@@ -9434,3 +9434,91 @@ rule, no sum, no word changes; what is recorded, and how, is as before.
   words as they were (В13-П2 open); «Борг сплачено повністю.» and «Покупець
   більше нічого не винен.» without it; the till's tray untouched until its
   screenshot. Contrast on the card 6.8:1 light, 8.61:1 dark.
+
+## Chosen in chat — 2026-11-13 (audit 2026-11-13, batch 3: a way's refusal said in the till's tray over the ways, the page never moved; «Оплата частинами» a switch row; «Каса»'s rows and lists on a list's white block, nothing faded while its write is on its way; sale P1-3, P2-6, orders-cash P1-2)
+
+Chosen here on 2026-11-13, after batch 2 (#203) was merged («merged, go
+next»): the P1s left that wait on no owner's answer, in their task lists'
+own order — the sale list's «Партия 2 «Касса»» (P1-3 with P2-6), and the
+orders-cash list's P1-2, next after P1-1. Built as the task lists give them;
+what they did not give is decided here or a reading for the owner. No right,
+no server rule, no sum, no word changes; what is sold, kept and recorded,
+and how, is as before.
+- **A way's refusal at the till** (sale P1-3; spec §5 «Док дій», §2 P7,
+  S09):
+  - said in the tray, in its own flow between «Разом» and the ways — the
+    place the task list gives «Ще надсилаємо…», which is drawn over the
+    tray while a press is sent; what the terms need, once the basket's
+    sheet is closed over it, in the same place; one at a time. Before: a
+    paragraph after
+    the till's list, the page scrolled to it; this replaces the chat's
+    choice of 2026-10-30 («brought into view where it stands at the page's
+    end, clear of the tray») — a chat choice, not the owner's;
+  - its look: the error's colour and crossed circle 16, 14/500, no plate of
+    its own — the tray is its plate; read aloud (`role="alert"`), one error
+    buzz, as before; over the tray only the terminal's hint;
+  - under a long list the tray rises by it: the ways where they were (±1
+    px), the page not moved;
+  - it goes as before: a way pressed again, the paper switch turned; the
+    basket's sheet and the shelf's question keep their own refusals.
+  - Decided here (review): a way pressed takes the last refusal away at
+    once, before anything is checked — a press stopped by the terms says
+    only what they need, never the old «Натисніть спосіб оплати ще раз»;
+    the terms changed in the basket's sheet take what they needed with
+    them, as «Клієнт забрав»'s do.
+  - Decided here: an emptied basket takes the tray, and what it said, with
+    it — a coat added after starts a tray that says nothing (before, the
+    refusal stood under the list, about a basket gone, until a way was
+    pressed).
+  - Decided here: a sheet closed gives the cursor back to the button that
+    opened it without moving the page when that button is on what sticks
+    — the tray, a dock: Chromium scrolled the page by ≈ 300 px to where a
+    sticky button would stand unstuck, every time the basket's sheet
+    closed over a long list. A cell under the tray is still brought into
+    view, as before.
+  - A reading for the owner: at 360 px a long refusal takes more than the
+    four lines the task list asks — «Частина цих одиниць у резерві
+    замовлення…» five, «Цього товару вже немає в обліку…» (from paper) six,
+    the tray then 302 px of 640; the conflict's three. The words are the
+    owner's (В-П1 (б)) and are not cut.
+  - A reading: on a short list — the tray standing in the page's flow
+    under the last tag, a search narrowed to one model — the tray grows
+    down, the ways moving by the refusal's lines, as they moved by the
+    plate over the tray before. A tray on the menu's top whatever the list
+    is changes the till's layout beyond this task.
+- **«Оплата частинами»** (sale P2-6; spec S10 п. 7, §6.15): a switch row, as
+  «Вношу продаж з паперу» on the same till — its words on the left, the
+  switch on the right, the whole 44 row its target, read aloud as a switch;
+  turned on, the cursor goes to the customer's name, as before. One
+  component for both (`SwitchRow`), in the till's basket sheet and in
+  «Клієнт забрав»'s sheet, which share the terms' fields: its five ways
+  still on the screen at 360 × 640, none chosen. A switch that takes no
+  tap (a sale on its way, a store stopped) keeps its words in pencil,
+  nothing faded over them; the switch itself dimmed (decided here,
+  review) — before, the paper switch's words faded to 45 %.
+  - A reading for the owner: «Зніміть «Оплата частинами»» (a sale paid in
+    full) was written for a tick; a switch is «вимкніть». The words are
+    unchanged here.
+- **«Каса»'s rows and lists** (orders-cash P1-2; spec §6.8, S25 №6–№7):
+  - «Каса»'s rows, the seller's own operations, a day's operations and
+    «Закриття» lie on a list's white block, as «Гроші», «Покупці» and «Ще»:
+    the card's white, 4 round, a hairline round it in the light theme;
+    the rows' sides 16, a hairline under each from 16, none under the last;
+    a day nobody closed the same sides and hairline; their places while
+    read on the same block;
+  - while a write of «Каса» is on its way, its rows that take no tap
+    meanwhile (all but «Закриття», which stays open, as before) no longer
+    fade to 45 %: their titles in pencil, as a list's row that takes no tap
+    everywhere (4.5:1 and more on the card, both themes); a day's operation
+    that may not be changed as before;
+  - a «Каса» row's chevron the set's `sale-open`, in pencil 16, as before to
+    the eye;
+  - unchanged: the thread «Видано й внесено після закриття» and the ink tag
+    «Закрити касу» stay on the paper; sums, order and who sees what.
+  - Decided here: a person with none of «Каса»'s tasks sees no empty white
+    block where its rows would lie (an empty list's block is not drawn,
+    anywhere).
+  - Noted: the no-fade rule reaches every row whose title is «Каса»'s
+    class — suppliers' rows and «Сьогодні»'s search rows while held keep
+    their titles in pencil and no longer fade; the frame's P2-4 asks the
+    same of any row.

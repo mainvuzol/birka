@@ -216,7 +216,12 @@ export function History({
       />
       <section className="cash-history">
         {closes.isPending ? (
-          <Placeholder said="Завантажуємо закриття…" rows={4} day={false} />
+          <Placeholder
+            said="Завантажуємо закриття…"
+            rows={4}
+            day={false}
+            block
+          />
         ) : closes.data === undefined ? (
           <Unread
             error={closes.error}
@@ -241,7 +246,10 @@ export function History({
                 }}
               />
             )}
-            <ul className="history close-list" aria-label="Закриття каси">
+            <ul
+              className="history close-list list-block"
+              aria-label="Закриття каси"
+            >
               {items.map((close) => (
                 <HistoryRow
                   key={close.id}

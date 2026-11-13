@@ -92,12 +92,15 @@ export function Sheet({
       if (node?.isConnected) return;
       // Scrolled to: a cell tapped as the tray came is under it now, and the
       // page's scroll padding keeps it clear. A way pressed waits while its
-      // answer is sent, and takes no cursor: `fallback` then.
+      // answer is sent, and takes no cursor: `fallback` then. A button on
+      // what sticks — the tray, a dock — is where it stood: focused in place,
+      // never scrolled to where it would stand unstuck, which moved the page
+      // under a long list (audit 2026-11-13, sale P1-3).
       const back =
         before?.isConnected && !before.matches(":disabled")
           ? before
           : fallback?.current;
-      if (back?.isConnected) back.focus();
+      if (back?.isConnected) back.focus({ preventScroll: stuck(back) });
     };
   }, [before, fallback]);
   // The second tap of the one that opened it lands on what rose under the
@@ -183,4 +186,13 @@ export function Sheet({
     </div>,
     document.body,
   );
+}
+
+/** On something that sticks or is fixed: in view wherever the page is. */
+function stuck(node: Element): boolean {
+  for (let at: Element | null = node; at; at = at.parentElement) {
+    const { position } = getComputedStyle(at);
+    if (position === "sticky" || position === "fixed") return true;
+  }
+  return false;
 }

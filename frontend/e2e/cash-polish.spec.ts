@@ -187,7 +187,10 @@ test("the seller's operations, one of them, and the closes read keep their place
     .getByRole("button", { name: "Змінити спосіб оплати", exact: true })
     .click();
   await expect(said(page)).toHaveText("Завантажуємо…");
-  await expect(page.locator(".placeholder .sale-row")).toHaveCount(3);
+  // On the rows' white block (audit 2026-11-13, orders-cash P1-2).
+  await expect(page.locator(".placeholder .list-block .sale-row")).toHaveCount(
+    3,
+  );
   await expect(page.locator(".placeholder .skeleton-day")).toHaveCount(0);
   mine.release();
   const rows = page.getByRole("list", { name: "Ваші операції" });
@@ -237,7 +240,9 @@ test("«Закриття» read keeps four rows' places, and says «Завант
   const closes = await hold(page, "**/api/v1/cash/closes?**");
   await page.getByRole("button", { name: "Закриття", exact: true }).click();
   await expect(said(page)).toHaveText("Завантажуємо закриття…");
-  await expect(page.locator(".placeholder .sale-row")).toHaveCount(4);
+  await expect(page.locator(".placeholder .list-block .sale-row")).toHaveCount(
+    4,
+  );
   closes.release();
   // The blank tag (orders and «Каса» task list after stage 2, P2-3).
   await expectEmpty(
@@ -508,13 +513,73 @@ test("whoever may not close never sees the card's place while «Каса» is re
   await open(page);
   await section(page, "Каса");
   await expect(said(page)).toHaveText("Завантажуємо касу…");
-  await expect(page.locator(".placeholder .cash-row")).toHaveCount(2);
+  await expect(page.locator(".placeholder .list-block .cash-row")).toHaveCount(
+    2,
+  );
   await expect(page.locator(".cash-card-skeleton")).toHaveCount(0);
   read.release();
   await expect(
     page.getByRole("button", { name: "Видати з каси", exact: true }),
   ).toBeVisible();
   await expect(page.locator(".cash-card")).toHaveCount(0);
+});
+
+test("a day's operations read keep three rows' places on the rows' white block (audit 2026-11-13, orders-cash P1-2)", async ({
+  page,
+}) => {
+  await stub(page, drawer({ may_correct: true }));
+  // Nothing that day: what is checked is the places while it is read.
+  await page.route("**/api/v1/cash/events?**", async (route) => {
+    await route.fulfill({ json: { items: [] } });
+  });
+  await open(page, owner);
+  await section(page, "Каса");
+  const day = await hold(page, "**/api/v1/cash/events?**");
+  await page
+    .getByRole("button", { name: "Змінити спосіб оплати", exact: true })
+    .click();
+  await expect(said(page)).toHaveText("Завантажуємо операції…");
+  await expect(page.locator(".placeholder .list-block .sale-row")).toHaveCount(
+    3,
+  );
+  day.release();
+  await expect(
+    page.getByText("Цього дня грошових операцій не було."),
+  ).toBeVisible();
+  await expect(page.locator(".placeholder")).toHaveCount(0);
+});
+
+test("whoever has none of «Каса»'s tasks sees no white block where its rows would lie (audit 2026-11-13, orders-cash P1-2)", async ({
+  page,
+}) => {
+  // Оля here neither closes, nor moves cash, nor changes a way.
+  await stub(page, drawer({ may_close: false, movement_kinds: [] }));
+  await page.route("**/api/v1/me", async (route) => {
+    const response = await route.fetch();
+    const me = (await response.json()) as {
+      stores: { permissions: string[] }[];
+    };
+    await route.fulfill({
+      response,
+      json: {
+        ...me,
+        stores: me.stores.map((each) => ({
+          ...each,
+          permissions: each.permissions.filter(
+            (permission) =>
+              !["cash:close", "sale:create", "report:view_financial"].includes(
+                permission,
+              ),
+          ),
+        })),
+      },
+    });
+  });
+  await open(page);
+  await section(page, "Каса");
+  await expect(page.locator(".cash-context")).toBeVisible();
+  await expect(page.locator(".cash-rows .cash-row")).toHaveCount(0);
+  await expect(page.locator(".cash-rows")).toBeHidden();
 });
 
 /** The WCAG contrast of an element's text against what it is drawn on. */

@@ -1,4 +1,11 @@
-import { test, expect, openStore, section, expectOneSticker } from "./fixtures";
+import {
+  test,
+  expect,
+  openStore,
+  section,
+  expectListBlock,
+  expectOneSticker,
+} from "./fixtures";
 import { icons } from "../src/shared/icons";
 import type { Locator, Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
@@ -594,6 +601,22 @@ async function contrast(element: Locator): Promise<number> {
   });
 }
 
+test("a list of closes that ends on a day nobody closed draws no hairline under that day, as under any list's last row (audit 2026-11-13, orders-cash P1-2)", async ({
+  page,
+}) => {
+  await stub(page);
+  // One close, the two days nobody closed before it under it.
+  await page.route("**/api/v1/cash/closes?**", async (route) => {
+    await route.fulfill({ json: { items: [shortage], has_more: false } });
+  });
+  const list = await history(page);
+  await expect(list.locator(".close-unclosed")).toHaveCount(2);
+  await expect(list.getByRole("listitem").last()).toHaveClass(
+    /\bclose-unclosed\b/,
+  );
+  await expectListBlock(list, list.locator(".close-row, .close-unclosed"));
+});
+
 for (const [name, theme] of [
   ["light", { bg_color: "#ffffff", text_color: "#000000" }],
   ["dark", { bg_color: "#17212b", text_color: "#f5f5f5" }],
@@ -614,6 +637,9 @@ for (const [name, theme] of [
       list.locator(".close-unclosed .cash-row-title").first(),
     ])
       expect(await contrast(part)).toBeGreaterThanOrEqual(4.5);
+    // The closes and the days nobody closed on a list's white block (audit
+    // 2026-11-13, orders-cash P1-2).
+    await expectListBlock(list, list.locator(".close-row, .close-unclosed"));
     await page.screenshot({ path: `test-results/cash-history-${name}.png` });
     await row(list, "20.10").getByRole("button").click();
     await page.screenshot({

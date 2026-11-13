@@ -647,7 +647,7 @@ test("a price of nothing is said, never refused: a gift is allowed", async ({
   expect(sent[0]?.lines[0]?.unit_price).toBe("0.00");
 });
 
-test("the till's ticks are rows of 44 px, and paying in parts puts the cursor in the name", async ({
+test("the till's switches are rows of 44 px — «Оплата частинами» one, as the paper's, its words its target — and paying in parts puts the cursor in the name", async ({
   page,
 }) => {
   await stubList(page);
@@ -659,11 +659,21 @@ test("the till's ticks are rows of 44 px, and paying in parts puts the cursor in
   });
   expect((await paper.boundingBox())?.height).toBeGreaterThanOrEqual(44);
   // Paying in parts is in the basket's sheet («Усе на бірці» task list,
-  // P0-5).
+  // P0-5), a switch row as the paper's (spec S10 п. 7; audit 2026-11-13,
+  // sale P2-6).
   const sheet = await basketSheet(page);
-  const parts = sheet.locator("label.check", { hasText: "Оплата частинами" });
-  expect((await parts.boundingBox())?.height).toBeGreaterThanOrEqual(44);
-  await parts.click();
+  const parts = sheet.locator("label.switch-row", {
+    hasText: "Оплата частинами",
+  });
+  const turned = sheet.getByRole("switch", { name: "Оплата частинами" });
+  await expect(turned).not.toBeChecked();
+  const row = await parts.boundingBox();
+  expect(row?.height).toBeGreaterThanOrEqual(44);
+  // The whole row is the switch's target: its words pressed turn it on.
+  const target = await turned.boundingBox();
+  expect([target?.width, target?.height]).toEqual([row?.width, row?.height]);
+  await parts.click({ position: { x: 12, y: (row?.height ?? 44) / 2 } });
+  await expect(turned).toBeChecked();
   await expect(page.getByLabel("Ім’я покупця")).toBeFocused();
   await expect(page.getByLabel("Ім’я покупця")).toHaveAttribute(
     "enterkeyhint",

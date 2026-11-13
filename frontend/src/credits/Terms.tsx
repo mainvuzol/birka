@@ -5,6 +5,7 @@ import { decimal, kopecks, money } from "@/orders/types";
 import { useSettled } from "@/sales/StockSearch";
 import type { CreditTerms } from "@/sales/types";
 import { api } from "@/shared/api";
+import { SwitchRow } from "@/shared/SwitchRow";
 import { hideKeyboard } from "@/shared/telegram";
 import { visible } from "@/shared/visible";
 import { phoneDigits, wholePhone } from "./types";
@@ -231,8 +232,8 @@ export function TermsFields({
 }): JSX.Element {
   const paid = kopecks(value.paid);
   const numberDebt = useId();
-  // Ticked, the cursor goes to the customer's name: one tap fewer with the
-  // customer waiting (redesign P1-9).
+  // Turned on, the cursor goes to the customer's name: one tap fewer with
+  // the customer waiting (redesign P1-9).
   const nameRef = useRef<HTMLInputElement>(null);
   const phoneRef = useRef<HTMLInputElement>(null);
   const paidRef = useRef<HTMLInputElement>(null);
@@ -258,16 +259,15 @@ export function TermsFields({
   }, [value.inParts]);
   return (
     <>
-      <label className="check">
-        <input
-          type="checkbox"
-          checked={value.inParts}
-          onChange={(event) => {
-            change({ ...value, inParts: event.target.checked });
-          }}
-        />
-        Оплата частинами
-      </label>
+      {/* A switch row, as the paper's on the same till (spec S10 п. 7,
+          §6.15; audit 2026-11-13, sale P2-6). */}
+      <SwitchRow
+        label="Оплата частинами"
+        on={value.inParts}
+        turn={(on) => {
+          change({ ...value, inParts: on });
+        }}
+      />
       {value.inParts && (
         <div className="section-block">
           <p className="hint">{hint}</p>

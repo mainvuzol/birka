@@ -43,7 +43,8 @@ export function DrawerPlaceholder({ card }: { card: boolean }): JSX.Element {
             </span>
           </div>
         )}
-        <div className="cash-rows">
+        {/* On the rows' white block (audit 2026-11-13, orders-cash P1-2). */}
+        <div className="cash-rows list-block">
           {[0, 1].map((n) => (
             <div className="sale-row cash-row" key={n}>
               <span className="sale-main">

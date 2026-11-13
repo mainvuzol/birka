@@ -3,6 +3,7 @@ import {
   expect,
   expectEmpty,
   expectGlyphBeside,
+  expectListBlock,
   openStore,
   section,
 } from "./fixtures";
@@ -609,6 +610,8 @@ for (const [name, theme] of [
       first.locator(".way-pill"),
     ])
       expect(await contrast(part)).toBeGreaterThanOrEqual(4.5);
+    // On a list's white block (audit 2026-11-13, orders-cash P1-2).
+    await expectListBlock(rows(page), rows(page).getByRole("button"));
     // Nothing wider than the phone.
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth),
