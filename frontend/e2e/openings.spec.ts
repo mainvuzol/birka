@@ -786,6 +786,86 @@ test("lines answered where they wait: the line answered leaves its filter and th
   );
 });
 
+test("a list's next page of lines refused: the fifty read stand, one «Спробувати ще раз» at their foot and no «Показати ще»; it reads that page alone; the lines read again and refused, the plate over them (audit 2026-11-13, goods P1-1)", async ({
+  page,
+}) => {
+  const coat = await model(page);
+  await noListWaits(page, fixture.opening_location_id);
+  await openings(page);
+  const source = `Зошит сторінок ${word()}`;
+  await typeList(
+    page,
+    fixture.opening_location_id,
+    source,
+    Array.from({ length: 52 }, (_, i) => `${coat} сірий ${String(i + 1)} шт`),
+  );
+  await page.getByRole("button", { name: "Зберегти список" }).click();
+  await expect(page.getByRole("heading", { name: source })).toBeVisible();
+  const rows = page.getByRole("article", { name: /^Рядок \d+$/ });
+  await expect(rows).toHaveCount(50);
+  let refuse: "next" | "all" | null = "next";
+  const asked: string[] = [];
+  await page.route("**/api/v1/snapshots/*/lines?**", async (route) => {
+    const offset =
+      new URL(route.request().url()).searchParams.get("offset") ?? "0";
+    asked.push(`offset=${offset}`);
+    if (
+      (refuse === "next" && offset === "50") ||
+      (refuse === "all" && offset === "0")
+    ) {
+      await route.fulfill({
+        status: 500,
+        json: { code: "INTERNAL", message: "boom" },
+      });
+      return;
+    }
+    await route.fallback();
+  });
+  const more = page.getByRole("button", { name: "Показати ще" });
+  const plate = page.locator(".read-failure");
+  // Read again whole and refused before a next page: the plate over the
+  // fifty, «Показати ще» held under it — a next page read past lines that
+  // moved would skip one.
+  refuse = "all";
+  await page.evaluate(() => {
+    window.dispatchEvent(new Event("visibilitychange"));
+  });
+  await expect(plate).toBeVisible();
+  await expect(rows).toHaveCount(50);
+  await expect(more).toBeDisabled();
+  refuse = "next";
+  await plate.getByRole("button", { name: "Спробувати ще раз" }).click();
+  await expect(plate).toHaveCount(0);
+  await expect(more).toBeEnabled();
+  await more.click();
+  await expect(plate).toBeVisible();
+  await expect(rows).toHaveCount(50);
+  await expect(more).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Спробувати ще раз" }),
+  ).toHaveCount(1);
+  // At the foot, under the lines read.
+  const last = await rows.last().boundingBox();
+  const foot = await plate.boundingBox();
+  expect(last && foot && foot.y > last.y).toBe(true);
+  refuse = null;
+  asked.length = 0;
+  await plate.getByRole("button", { name: "Спробувати ще раз" }).click();
+  await expect(rows).toHaveCount(52);
+  await expect(plate).toHaveCount(0);
+  expect(asked).toEqual(["offset=50"]);
+  // Read again whole and refused: over the lines, which stand.
+  refuse = "all";
+  await page.evaluate(() => {
+    window.dispatchEvent(new Event("visibilitychange"));
+  });
+  await expect(plate).toBeVisible();
+  await expect(rows).toHaveCount(52);
+  const first = await rows.first().boundingBox();
+  const over = await plate.boundingBox();
+  expect(first && over && over.y < first.y).toBe(true);
+});
+
 test("at 360 px, light and dark, the lists, a list's big tag and a line's screen fit; every kind of line is reached — three on the switch, a tap each, «Не товар» and «Усі» behind ⋯ (stage 2, goods task list, P0-5, P0-6)", async ({
   page,
 }) => {

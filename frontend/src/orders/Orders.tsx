@@ -21,7 +21,15 @@ import { Toast } from "@/shared/Toast";
 import { KnotFilter, StatusSticker, placeWords } from "./Knots";
 import type { Place } from "./Knots";
 import { placesKey, shippingText } from "./types";
-import type { Location, Order, OrderItem, Status, Store } from "./types";
+import type {
+  Location,
+  Order,
+  OrderItem,
+  Status,
+  StepRefusal,
+  Store,
+} from "./types";
+import { StepRefused } from "./StepRefused";
 import { Unread } from "@/shared/Unread";
 import { Empty } from "@/shared/Empty";
 
@@ -138,10 +146,14 @@ function OrderTag({
   sticker,
   open,
   verb,
+  refused,
 }: {
   order: Order;
   sticker: boolean;
   open: () => void;
+  /** Its «Прибув на пошту» refused: why, under its tag (audit 2026-11-13,
+   * orders P1-1). */
+  refused?: StepRefusal | null | undefined;
   verb?:
     | {
         words: string;
@@ -194,6 +206,7 @@ function OrderTag({
           )}
         </div>
       </article>
+      {refused && <StepRefused refusal={refused} />}
     </li>
   );
 }
@@ -287,6 +300,7 @@ export function Orders({
   open,
   create,
   arrive,
+  refusal,
 }: {
   store: Store;
   token: string;
@@ -301,6 +315,9 @@ export function Orders({
   /** «Прибув на пошту» from its row: recorded as from its card, and
    * whether it was. */
   arrive: (order: Order) => Promise<boolean>;
+  /** A row's «Прибув на пошту» refused: said under its tag, or where its
+   * tag stood once the order moved on (audit 2026-11-13, orders P1-1). */
+  refusal?: StepRefusal | null | undefined;
 }): JSX.Element {
   const mayCreate = store.permissions.includes("sale:create");
   const mayRead = store.permissions.includes("sale:view");
@@ -426,7 +443,50 @@ export function Orders({
     wasGone.current = gone;
   }, [gone]);
 
-  function verbOf(order: Order) {
+  // Where the row whose «Прибув на пошту» was pressed stood: its refusal is
+  // said under its tag until the next step, another place or search; its
+  // order moved on meanwhile, where its tag stood, until the next tap (audit
+  // 2026-11-13, orders P1-1) — let go once that tap is delivered, so nothing
+  // moves under it first (review, 2026-11-13).
+  const pressedAt = useRef<{
+    orderId: string;
+    label: string;
+    at: number;
+  } | null>(null);
+  const [heard, setHeard] = useState(0);
+  const [tapped, setTapped] = useState(0);
+  const said = refusal && refusal.times > heard ? refusal : null;
+  const stoodSaid = said && said.times > tapped ? said : null;
+  const stoodTimes = stoodSaid?.times ?? null;
+  useEffect(() => {
+    if (stoodTimes === null) return;
+    const hear = (): void => {
+      setTapped(stoodTimes);
+    };
+    document.addEventListener("click", hear, { capture: true });
+    return () => {
+      document.removeEventListener("click", hear, { capture: true });
+    };
+  }, [stoodTimes]);
+  useEffect(() => {
+    if (refusal) setHeard(refusal.times);
+    // Another place or search: what was refused is not said there; the
+    // refusal itself is not why this runs.
+  }, [place, search]);
+  /** The refusal of a row no longer shown, where its tag stood. */
+  function stood(label: string, orders: readonly Order[]): number | null {
+    const was = pressedAt.current;
+    if (
+      !stoodSaid ||
+      was?.orderId !== stoodSaid.orderId ||
+      was.label !== label ||
+      orders.some((order) => order.id === stoodSaid.orderId)
+    )
+      return null;
+    return Math.min(was.at, orders.length);
+  }
+
+  function verbOf(order: Order, label: string, at: number) {
     const next = nextOf[order.status];
     if (!mayCreate || next === undefined) return undefined;
     return {
@@ -442,6 +502,7 @@ export function Orders({
           return;
         }
         setArriving(order.id);
+        pressedAt.current = { orderId: order.id, label, at };
         void arrive(order)
           .then((recorded) => {
             if (recorded)
@@ -462,19 +523,32 @@ export function Orders({
     label: string,
     sticker: boolean,
   ): JSX.Element {
+    const standsAt = stood(label, orders);
+    const tagsOf = orders.map((order, at) => (
+      <OrderTag
+        key={order.id}
+        order={order}
+        sticker={sticker}
+        open={() => {
+          open(order);
+        }}
+        verb={verbOf(order, label, at)}
+        refused={said?.orderId === order.id ? said : null}
+      />
+    ));
+    // Its own keyed place: the rows read again move it, never draw it anew
+    // (review, 2026-11-13).
+    if (stoodSaid && standsAt !== null)
+      tagsOf.splice(
+        standsAt,
+        0,
+        <li key="refused" className="order-refused">
+          <StepRefused refusal={stoodSaid} />
+        </li>,
+      );
     return (
       <ul className="order-rows order-tags" aria-label={label}>
-        {orders.map((order) => (
-          <OrderTag
-            key={order.id}
-            order={order}
-            sticker={sticker}
-            open={() => {
-              open(order);
-            }}
-            verb={verbOf(order)}
-          />
-        ))}
+        {tagsOf}
       </ul>
     );
   }
@@ -587,6 +661,9 @@ export function Orders({
     const under = place === "send" ? groups : null;
     return (
       <>
+        {orders.length === 0 && stood(placeWords[place], orders) !== null
+          ? rows(orders, placeWords[place], false)
+          : null}
         {orders.length === 0 ? (
           // Nothing here yet of what is read: the rest may hold some.
           opened.pages.hasNextPage ? null : place === "send" ? (

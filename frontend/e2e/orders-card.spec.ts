@@ -2654,7 +2654,7 @@ async function readyToTake(page: Page): Promise<void> {
     .check();
 }
 
-test("a return refused as changed keeps its screen, the reason and the tick; one another phone already took back shows the card as it is now (review, 2026-10-25)", async ({
+test("a return refused as changed keeps its screen, the reason and the tick, why under the tick and the title where it was; one another phone already took back shows the card as it is now, why at its foot (review, 2026-10-25; audit 2026-11-13, orders P1-1)", async ({
   page,
 }) => {
   const server: Server = { order: cameBack(), sent: [] };
@@ -2675,17 +2675,44 @@ test("a return refused as changed keeps its screen, the reason and the tick; one
   await expect(take).toHaveClass("main-mimic");
   expect((await take.boundingBox())?.height).toBe(50);
   await expect(take).toHaveCSS("border-top-left-radius", "10px");
+  const heading = page.getByRole("heading", {
+    name: "Товар повернувся на склад",
+  });
+  // Where it stands on the page, wherever the cursor scrolls it.
+  const onPage = (): Promise<number> =>
+    heading.evaluate(
+      (node) => node.getBoundingClientRect().top + window.scrollY,
+    );
+  const headingBefore = await onPage();
   await take.click();
   await expect(page.getByRole("alert")).toBeVisible();
-  await expect(
-    page.getByRole("heading", { name: "Товар повернувся на склад" }),
-  ).toBeVisible();
+  await expect(heading).toBeVisible();
+  // Under the tick, in the return's own section, the cursor on it; its
+  // title where it stood.
+  const why = page.locator("section.order-returned > fieldset + [role=alert]");
+  await expect(why).toBeVisible();
+  await expect(why).toBeFocused();
+  await expect(page.getByRole("alert")).toHaveCount(1);
+  expect(await onPage()).toBe(headingBefore);
   await expect(page.getByLabel("Причина повернення")).toHaveValue(
     "Не забрали з пошти",
   );
   await expect(
     page.getByLabel("Усі товари фізично отримані на складах відправлення"),
   ).toBeChecked();
+  // Back to the card: why was the return's, never carried onto the card,
+  // nor back on the return opened again (review, 2026-11-13).
+  await page
+    .locator(".screen-header")
+    .getByRole("button", { name: "Замовлення", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Товар повернувся на склад" }),
+  ).toBeVisible();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await readyToTake(page);
+  await expect(heading).toBeVisible();
+  await expect(page.getByRole("alert")).toHaveCount(0);
   // Pressed again, it was taken back meanwhile by another phone: the card
   // as it is now, nothing more to take back.
   server.answer = {
@@ -2702,6 +2729,8 @@ test("a return refused as changed keeps its screen, the reason and the tick; one
   await expect(
     page.getByRole("heading", { name: "Товар повернувся на склад" }),
   ).toHaveCount(0);
+  // Its screen gone with the card as it is now: why at the card's foot.
+  await expect(page.locator("section.order > [role=alert]")).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Товар повернувся на склад" }),
   ).toHaveCount(0);

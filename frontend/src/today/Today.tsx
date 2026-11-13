@@ -19,7 +19,16 @@ import { Toast } from "@/shared/Toast";
 import { buzz } from "@/shared/telegram";
 import { visible } from "@/shared/visible";
 import { Empty } from "@/shared/Empty";
-import { Stamp, Waiting, dayLine, staleOf, useNow } from "./age";
+import {
+  Stamp,
+  UNREAD,
+  Unreads,
+  Waiting,
+  dayLine,
+  failedOf,
+  staleOf,
+  useNow,
+} from "./age";
 import {
   ageOf,
   dayStores,
@@ -452,21 +461,23 @@ function WaitingTags({
                 />
               </li>
             ))}
-            {work.unread && (
-              // Grey and unread aloud until its read fails.
-              <li
-                className="today-tag-wait"
-                aria-hidden={!work.unreadAge.failed}
-              >
+            {work.unreadPending && (
+              // Grey while it is read.
+              <li className="today-tag-wait" aria-hidden="true">
                 <div className="tag-row tag-outline">
                   <div className="today-tag-body">
                     <Waiting width="70%" />
                     <Waiting width="45%" />
-                    {work.unreadAge.failed && (
-                      <Stamp age={work.unreadAge} now={now} />
-                    )}
                   </div>
                 </div>
+              </li>
+            )}
+            {work.unreadFailed.length > 0 && (
+              // Failed before it ever answered: the plate in its place,
+              // its «Спробувати ще раз» asking only those again (audit
+              // 2026-11-13, frame P1-1).
+              <li className="today-tag-failed">
+                <Unreads reads={work.unreadFailed} />
               </li>
             )}
           </ul>
@@ -538,7 +549,8 @@ function WaitingTags({
 }
 
 /** A store's drawer and debts, each by its own read: a line in its place
- * until it comes. */
+ * until it comes, «не вдалося прочитати» there if it failed before it ever
+ * answered (audit 2026-11-13, frame P1-1). */
 function StoreLines({
   drawer,
   debts,
@@ -550,7 +562,13 @@ function StoreLines({
     <>
       {drawer && (
         <p className="t-meta day-drawer">
-          {drawer.data ? drawerText(drawer.data) : <Waiting width="8em" />}
+          {drawer.data ? (
+            drawerText(drawer.data)
+          ) : drawer.isError ? (
+            UNREAD
+          ) : (
+            <Waiting width="8em" />
+          )}
         </p>
       )}
       {debts && (
@@ -568,6 +586,8 @@ function StoreLines({
                 <Parts parts={owedParts(debts.data)} />
               </span>
             </>
+          ) : debts.isError ? (
+            UNREAD
           ) : (
             <Waiting width="10em" />
           )}
@@ -582,6 +602,7 @@ function StoreColumn({
   store,
   figures,
   read,
+  failed,
   drawer,
   debts,
 }: {
@@ -591,6 +612,8 @@ function StoreColumn({
   figures: StoreFigures | undefined;
   /** Whether the report has been read: its place held in grey before. */
   read: boolean;
+  /** The report failed before it ever answered: said in the sum's place. */
+  failed: boolean;
   drawer: UseQueryResult<Drawer> | undefined;
   debts: UseQueryResult<StoreDebts> | undefined;
 }): JSX.Element {
@@ -618,11 +641,14 @@ function StoreColumn({
           </span>
         </p>
       ) : (
-        !read && (
+        !read &&
+        (failed ? (
+          <p className="t-meta day-unread">{UNREAD}</p>
+        ) : (
           <p className="day-store-sold">
             <Waiting width="7em" />
           </p>
-        )
+        ))
       )}
       <StoreLines drawer={drawer} debts={debts} />
     </div>
@@ -675,12 +701,14 @@ export function Today({
   const orders = [...useOpenOrders(token, scopeKey, shown).values()];
   // What waits, read as the tab's badge reads it.
   const work = useWaiting({ token, scopeKey, stores, open, readsBackups });
-  const age = ageOf([
-    report,
-    ...drawers.values(),
-    ...debts.values(),
-    ...orders,
-  ]);
+  const reads = [report, ...drawers.values(), ...debts.values(), ...orders];
+  const age = ageOf(reads);
+  // Failed before it ever answered: said in each figure's place, one plate
+  // for the tag (audit 2026-11-13, frame P1-1).
+  const reportFailed = report.data === undefined && report.isError;
+  // Nothing read yet and a read failed: the plate says why, no stamp over
+  // it, as «Гроші»'s places (audit 2026-11-13, frame P1-1).
+  const stamped = age.at !== undefined || failedOf(reads).length === 0;
   const now = useNow();
   // What is typed stays here, so a key redraws «Сьогодні» alone; the app
   // keeps it as a row opens (review, 2026-11-04).
@@ -744,33 +772,39 @@ export function Today({
       {searched && <Found found={found} query={query} />}
       <section className="today" aria-label="Сьогодні" hidden={searched}>
         {folded ? (
-          <button
-            type="button"
-            className="tag-hero tag-outline day-folded"
-            aria-expanded="false"
-            onClick={() => {
-              setOpened(true);
-            }}
-          >
-            <span className="day-folded-inner">
-              <span className="day-folded-line">
-                {/* Too long for 360 px: it wraps between its two parts
+          <>
+            <button
+              type="button"
+              className="tag-hero tag-outline day-folded"
+              aria-expanded="false"
+              onClick={() => {
+                setOpened(true);
+              }}
+            >
+              <span className="day-folded-inner">
+                <span className="day-folded-line">
+                  {/* Too long for 360 px: it wraps between its two parts
                     only, as the money's line does. */}
-                <span className="day-folded-text">
-                  <span className="t-label day-part">Сьогодні досі</span>
-                  {" · "}
-                  {day ? (
-                    <Parts parts={foldedParts(day, pair)} />
-                  ) : (
-                    <Waiting width="9em" />
-                  )}
+                  <span className="day-folded-text">
+                    <span className="t-label day-part">Сьогодні досі</span>
+                    {" · "}
+                    {day ? (
+                      <Parts parts={foldedParts(day, pair)} />
+                    ) : reportFailed ? (
+                      UNREAD
+                    ) : (
+                      <Waiting width="9em" />
+                    )}
+                  </span>
+                  <Icon name="chevron-down" size={16} />
                 </span>
-                <Icon name="chevron-down" size={16} />
+                {/* Old, or not read: said here too. */}
+                {stamped && staleOf(age, now) && <Stamp age={age} now={now} />}
               </span>
-              {/* Old, or not read: said here too. */}
-              {staleOf(age, now) && <Stamp age={age} now={now} />}
-            </span>
-          </button>
+            </button>
+            {/* Folded, its plate under its line: no plate in a button. */}
+            <Unreads reads={reads} />
+          </>
         ) : (
           <div className="day-hang">
             <div className="tag-hero tag-outline">
@@ -785,7 +819,7 @@ export function Today({
                   >
                     Сьогодні досі
                   </h2>
-                  <Stamp age={age} now={now} />
+                  {stamped && <Stamp age={age} now={now} />}
                 </div>
                 {day ? (
                   <>
@@ -803,6 +837,8 @@ export function Today({
                       <Parts parts={moneyParts(day)} />
                     </p>
                   </>
+                ) : reportFailed ? (
+                  <p className="t-meta day-unread day-total-unread">{UNREAD}</p>
                 ) : (
                   <div className="day-total-wait" aria-hidden="true">
                     <span className="skeleton day-total-skeleton" />
@@ -829,6 +865,7 @@ export function Today({
                             store={store}
                             figures={figuresOf(store)}
                             read={data !== undefined}
+                            failed={reportFailed}
                             drawer={drawers.get(store.id)}
                             debts={debts.get(store.id)}
                           />
@@ -838,10 +875,14 @@ export function Today({
                   )
                 )}
                 {orders.length > 0 &&
-                  (orders.some((read) => read.data === undefined) ? (
+                  (orders.some(
+                    (read) => read.data === undefined && !read.isError,
+                  ) ? (
                     <p className="t-meta day-online">
                       <Waiting width="14em" />
                     </p>
+                  ) : orders.some((read) => read.data === undefined) ? (
+                    <p className="t-meta day-online day-unread">{UNREAD}</p>
                   ) : (
                     online.length > 0 &&
                     (toOrders ? (
@@ -864,6 +905,7 @@ export function Today({
                       </p>
                     ))
                   ))}
+                <Unreads reads={reads} />
               </div>
             </div>
           </div>

@@ -1461,12 +1461,50 @@ test("a long count inside Telegram: «Показати ще» waits while the li
   // Goods arrive meanwhile for a position before them all: the next page
   // read from its place begins with «Модель 25»'s S again — shown once.
   server.arrive("Модель 0", "M", 1);
+  // That page fails once (audit 2026-11-13, goods P1-1): the fifty read
+  // stand, one «Спробувати ще раз» at the foot where «Показати ще» stood.
+  let failNext = true;
+  await page.route(
+    "**/api/v1/stocktakes/*/positions?**offset=50**",
+    async (route) => {
+      if (failNext) {
+        failNext = false;
+        await route.fulfill({
+          status: 500,
+          json: { code: "INTERNAL", message: "boom" },
+        });
+        return;
+      }
+      await route.fallback();
+    },
+  );
+  const shownBefore = await tags.count();
   await more.click();
+  const foot = counting(page).locator(".read-failure");
+  await expect(foot).toBeVisible();
+  await expect(tags).toHaveCount(shownBefore);
+  await expect(split.locator(".count-cell")).toHaveText(["Sв обліку 2"]);
+  await expect(more).toHaveCount(0);
+  await expect(
+    counting(page).getByRole("button", { name: "Спробувати ще раз" }),
+  ).toHaveCount(1);
+  // Its retry reads that page alone.
+  const asked: string[] = [];
+  page.on("request", (request) => {
+    if (request.url().includes("/positions?")) asked.push(request.url());
+  });
+  await foot.getByRole("button", { name: "Спробувати ще раз" }).click();
   await expect(split).toHaveCount(1);
   await expect(split.locator(".count-cell")).toHaveText([
     "Sв обліку 2",
     "Mв обліку 2",
   ]);
+  await expect(foot).toHaveCount(0);
+  expect(asked).toHaveLength(1);
+  expect(asked[0]).toContain("state=uncounted");
+  expect(asked[0]).toContain("offset=50");
+  // The cursor on the first position it brought.
+  await expect(split.locator(".count-cell").nth(1)).toBeFocused();
   await expect(more).toHaveCount(0);
   await expect(tags).toHaveCount(26);
 
@@ -1588,6 +1626,193 @@ test("a long count inside Telegram: «Показати ще» waits while the li
   await expect
     .poll(main)
     .toMatchObject({ is_visible: true, text: "Почати інвентаризацію" });
+});
+
+test("«Пораховані»'s next page refused: the fifty read stand, one «Спробувати ще раз» at their foot and no «Показати ще»; it reads that page alone, the cursor on the first row it brings; the list read again and refused, the plate over the rows, «Показати ще» waiting under them (audit 2026-11-13, goods P1-1)", async ({
+  page,
+}) => {
+  await stubbed(page, many());
+  // A hundred and three counted, served here: nothing is counted on the
+  // stub.
+  const rows = Array.from({ length: 103 }, (_, at) => ({
+    product_variant_id: randomUUID(),
+    size_id: randomUUID(),
+    display_name: `Пораховано ${String(at + 1).padStart(3, "0")}`,
+    size_label: "M",
+    size_is_unknown: false,
+    quantity: 1,
+    reserved_quantity: 0,
+    count: {
+      counted_quantity: 1,
+      net_delta: 0,
+      counted_by: "Оля",
+      counted_at: new Date().toISOString(),
+    },
+  }));
+  let refuse: "next" | "all" | null = "next";
+  const asked: string[] = [];
+  await page.route(
+    "**/api/v1/stocktakes/*/positions?**state=counted**",
+    async (route) => {
+      const url = new URL(route.request().url());
+      const offset = Number(url.searchParams.get("offset") ?? "0");
+      asked.push(`offset=${String(offset)}`);
+      if (
+        (refuse === "next" && offset === 50) ||
+        (refuse === "all" && offset === 0)
+      ) {
+        await route.fulfill({
+          status: 500,
+          json: { code: "INTERNAL", message: "boom" },
+        });
+        return;
+      }
+      await route.fulfill({
+        json: {
+          items: rows.slice(offset, offset + 50),
+          has_more: offset + 50 < rows.length,
+        },
+      });
+    },
+  );
+  await enter(page, "Склад інвентаризації");
+  await begin(page);
+  await modes(page)
+    .getByRole("button", { name: /^Пораховані/ })
+    .click();
+  const list = counting(page).getByRole("list", {
+    name: "Пораховані позиції",
+  });
+  await expect(list.getByRole("listitem")).toHaveCount(50);
+  const more = counting(page).getByRole("button", { name: "Показати ще" });
+  await more.click();
+  const foot = counting(page).locator(".read-failure");
+  await expect(foot).toBeVisible();
+  // The rows read stand, and the plate is after them.
+  await expect(list.getByRole("listitem")).toHaveCount(50);
+  await expect(more).toHaveCount(0);
+  const last = await list.getByRole("listitem").last().boundingBox();
+  const plate = await foot.boundingBox();
+  expect(last && plate && plate.y > last.y).toBe(true);
+  refuse = null;
+  asked.length = 0;
+  await foot.getByRole("button", { name: "Спробувати ще раз" }).click();
+  await expect(list.getByRole("listitem")).toHaveCount(100);
+  await expect(foot).toHaveCount(0);
+  expect(asked).toEqual(["offset=50"]);
+  await expect(
+    counting(page).getByRole("button", {
+      name: "Перерахувати: Пораховано 051 · M",
+    }),
+  ).toBeFocused();
+  await expect(more).toBeEnabled();
+  // Read again whole and refused: the plate over the rows, which stand.
+  refuse = "all";
+  await page.evaluate(() => {
+    window.dispatchEvent(new Event("visibilitychange"));
+  });
+  const over = counting(page).locator(".read-failure");
+  await expect(over).toBeVisible();
+  await expect(list.getByRole("listitem")).toHaveCount(100);
+  const first = await list.getByRole("listitem").first().boundingBox();
+  const overBox = await over.boundingBox();
+  expect(first && overBox && overBox.y < first.y).toBe(true);
+  await expect(more).toBeDisabled();
+});
+
+test("a finished stocktake's «Розбіжності», a next page refused: those read stand, one «Спробувати ще раз» at their foot and no «Показати ще»; it reads that page alone (audit 2026-11-13, goods P1-1)", async ({
+  page,
+}) => {
+  const day = new Date(Date.now() - 86_400_000);
+  const finished = {
+    id: randomUUID(),
+    location_id: fixture.stocktake_location_id,
+    location_name: "Склад інвентаризації",
+    store_id: fixture.store_id,
+    started_by: "Тетяна",
+    started_at: day.toISOString(),
+    finished_by: "Тетяна",
+    finished_at: day.toISOString(),
+    sums: {
+      counted_positions: 55,
+      unchecked_positions: 0,
+      shortage_units: 55,
+      shortage_positions: 55,
+      surplus_units: 0,
+      surplus_positions: 0,
+    },
+  };
+  const differences = Array.from({ length: 55 }, (_, at) => ({
+    product_variant_id: randomUUID(),
+    size_id: randomUUID(),
+    display_name: `Модель ${String(at + 1)}`,
+    size_label: "M",
+    size_is_unknown: false,
+    quantity: 1,
+    reserved_quantity: 0,
+    count: {
+      counted_quantity: 0,
+      net_delta: -1,
+      counted_by: "Оля",
+      counted_at: new Date().toISOString(),
+    },
+  }));
+  let failing = true;
+  const asked: string[] = [];
+  await page.route("**/api/v1/stocktakes**", async (route) => {
+    const url = new URL(route.request().url());
+    const path = url.pathname;
+    if (path.endsWith("/stocktakes"))
+      await route.fulfill({
+        json: {
+          items:
+            url.searchParams.get("location_id") ===
+            fixture.stocktake_location_id
+              ? [finished]
+              : [],
+        },
+      });
+    else if (path.endsWith("/positions")) {
+      const offset = Number(url.searchParams.get("offset") ?? "0");
+      asked.push(`offset=${String(offset)}`);
+      if (failing && offset === 50) {
+        await route.fulfill({
+          status: 500,
+          json: { code: "INTERNAL", message: "boom" },
+        });
+        return;
+      }
+      await route.fulfill({
+        json: {
+          items: differences.slice(offset, offset + 50),
+          has_more: offset + 50 < differences.length,
+        },
+      });
+    } else await route.fallback();
+  });
+  await enter(page, "Склад інвентаризації");
+  const history = page.getByRole("list", { name: "Попередні інвентаризації" });
+  await history
+    .locator(":scope > li")
+    .first()
+    .getByRole("button", { name: "Показати розбіжності" })
+    .click();
+  const shown = history.getByRole("list", { name: "Розбіжності" });
+  await page.getByRole("button", { name: "Ще 50", exact: true }).click();
+  await expect(shown.getByRole("listitem")).toHaveCount(50);
+  await page.getByRole("button", { name: "Показати ще" }).click();
+  const foot = history.locator(".read-failure");
+  await expect(foot).toBeVisible();
+  await expect(shown.getByRole("listitem")).toHaveCount(50);
+  await expect(page.getByRole("button", { name: "Показати ще" })).toHaveCount(
+    0,
+  );
+  failing = false;
+  asked.length = 0;
+  await foot.getByRole("button", { name: "Спробувати ще раз" }).click();
+  await expect(shown.getByRole("listitem")).toHaveCount(55);
+  await expect(foot).toHaveCount(0);
+  expect(asked).toEqual(["offset=50"]);
 });
 
 test("«Попередні»: the last three and «Ще N»; a finished one's differences five and «Ще N», each in the words of before (stage 2, goods task list, P0-2)", async ({

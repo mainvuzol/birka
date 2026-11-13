@@ -23,6 +23,7 @@ import {
 } from "./Knots";
 import { sinceDay, tagOf, titleOf } from "./Orders";
 import { Returned, byPlace } from "./Returned";
+import { StepRefused } from "./StepRefused";
 import {
   carrierLabels,
   decimal,
@@ -38,6 +39,7 @@ import type {
   OrderItem,
   SameWaybill,
   ShippingChange,
+  StepRefusal,
   Store,
 } from "./types";
 
@@ -142,6 +144,11 @@ interface CardProps {
   sheet: boolean;
   /** A step is being asked: «Прибув на пошту» turns. */
   waiting: boolean;
+  /** A step refused on it, or on its return's screen: said at its foot,
+   * or under the return's tick (audit 2026-11-13, orders P1-1). */
+  refusal?: StepRefusal | null | undefined;
+  /** What was refused there forgotten: the return's left for the card. */
+  forget?: (() => void) | undefined;
 }
 /**
  * An order's place while it is read (orders task list, P2-2): its string of
@@ -237,6 +244,9 @@ export function OrderDetail({
   const [returning, setReturning] = useState(false);
   const back = (): void => {
     setReturning(false);
+    // Its refusal was the return's: never carried onto the card (review,
+    // 2026-11-13).
+    if (props.refusal?.place === "return") props.forget?.();
   };
   useEffect(() => {
     task?.(returning);
@@ -247,11 +257,16 @@ export function OrderDetail({
     },
     [task],
   );
+  // A return refused: under its tick while its screen is open; the screen
+  // gone with the card mounted afresh, at the card's foot.
+  const refusal = props.refusal ?? null;
+  const onReturn = refusal?.place === "return" && returning;
   // The card first: its panel's room let go before the step's is kept.
   return (
     <>
       <Card
         {...props}
+        refusal={onReturn ? null : refusal}
         away={returning}
         takeBack={() => {
           setReturning(true);
@@ -265,6 +280,7 @@ export function OrderDetail({
           title={titleOf(props.order)}
           blocked={props.blocked}
           waiting={props.waiting}
+          refusal={onReturn ? refusal : null}
           back={back}
           take={(body) => {
             props.action("return", body);
@@ -303,6 +319,7 @@ function Card({
   sheet,
   away,
   takeBack,
+  refusal,
 }: CardProps & {
   /** The goods coming back are taken over it: hidden, its panel with it. */
   away: boolean;
@@ -692,6 +709,10 @@ function Card({
             }}
           />
         )}
+        {/* A step refused on it: at its foot, over the dock, by the thumb —
+            its title and string where they were (audit 2026-11-13, orders
+            P1-1). */}
+        {refusal && <StepRefused refusal={refusal} />}
         {panelStep !== null && !main && (
           // Outside Telegram, its MainButton as the dock's one button.
           <div className="pay-panel order-panel order-dock" ref={panel}>

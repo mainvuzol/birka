@@ -10,10 +10,12 @@ import {
   ApiError,
   SlowAnswer,
   api,
+  denied,
   errorText,
   unreachable,
 } from "@/shared/api";
 import { Unread } from "@/shared/Unread";
+import { useNextPageFailed } from "@/shared/nextPage";
 import type { Location, Store } from "@/orders/types";
 import type { SizeOption } from "@/inventory/receiptTypes";
 import { visible } from "@/shared/visible";
@@ -1252,6 +1254,15 @@ function ListView({
       last.has_more ? lastParam + last.items.length : undefined,
     retry: false,
   });
+  // Never read: the plate in the lines' place; read again and refused,
+  // over the lines read; a next page, where «Показати ще» stood (audit
+  // 2026-11-13, goods P1-1).
+  const linesNextFailed = useNextPageFailed(lines);
+  // Its right gone, nothing read before stays in sight.
+  const linesUnshown =
+    lines.error !== null && (lines.data === undefined || denied(lines.error));
+  const linesReadAgainFailed =
+    lines.error !== null && !linesUnshown && !linesNextFailed;
   const parts = useQuery({
     queryKey: ["stock-list-parts", scopeKey, list.snapshot_id],
     queryFn: () =>
@@ -1694,19 +1705,23 @@ function ListView({
             )}
           </button>
         </nav>
-        {/* A read that failed is said over the lines read before, as the
-            next page's failing is (review, 2026-11-08). */}
-        {!lines.isPending && lines.error && (
-          <Unread
-            error={lines.error}
-            retry={() => {
-              void lines.refetch();
-            }}
-          />
-        )}
+        {/* Read again and refused, said over the lines read before; never
+            read, in their place (review, 2026-11-08; audit 2026-11-13,
+            goods P1-1). */}
+        {!lines.isPending &&
+          lines.error &&
+          (linesUnshown || !linesNextFailed) && (
+            <Unread
+              error={lines.error}
+              held={lines.isFetching}
+              retry={() => {
+                void lines.refetch();
+              }}
+            />
+          )}
         {lines.isPending ? (
           <OpeningPlaceholder said="Завантажуємо рядки…" shape="lines" />
-        ) : lines.error && items.length === 0 ? null : items.length === 0 ? (
+        ) : linesUnshown ? null : items.length === 0 ? (
           <p>Тут рядків немає.</p>
         ) : (
           <>
@@ -1727,17 +1742,29 @@ function ListView({
                 />
               ))}
             </div>
-            {lines.hasNextPage && (
-              <button
-                type="button"
-                className="quiet today-more"
-                disabled={lines.isFetching}
-                onClick={() => {
+            {linesNextFailed ? (
+              // Its page alone asked again, never «Показати ще» beside it
+              // reading the same page.
+              <Unread
+                error={lines.error}
+                held={lines.isFetching}
+                retry={() => {
                   void lines.fetchNextPage();
                 }}
-              >
-                Показати ще
-              </button>
+              />
+            ) : (
+              lines.hasNextPage && (
+                <button
+                  type="button"
+                  className="quiet today-more"
+                  disabled={lines.isFetching || linesReadAgainFailed}
+                  onClick={() => {
+                    void lines.fetchNextPage();
+                  }}
+                >
+                  Показати ще
+                </button>
+              )
             )}
           </>
         )}

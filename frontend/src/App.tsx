@@ -57,8 +57,8 @@ import { Unread } from "@/shared/Unread";
 import { ModeSwitch } from "@/shared/ModeSwitch";
 import { BlankTag } from "@/shared/BlankTag";
 import type { OrdersView } from "@/orders/Orders";
-import { asShown, money, stateText } from "@/orders/types";
-import type { Me, Store, Order } from "@/orders/types";
+import { asShown, money, nextRefusal, stateText } from "@/orders/types";
+import type { Me, Store, Order, StepAt, StepRefusal } from "@/orders/types";
 import { Stock } from "@/inventory/Stock";
 import { Model } from "@/inventory/Model";
 import type { Opened } from "@/inventory/Model";
@@ -1368,9 +1368,15 @@ function Workspace({
   const [orderEpoch, setOrderEpoch] = useState(0);
   // An order's step refused: why, at the screen's top, brought to the
   // finger from where it was pressed (review, 2026-10-23; orders task
-  // list, P0-2).
+  // list, P0-2) — only a kept step's now: a step pressed on its row, its
+  // card or «Товар повернувся на склад» is said where it was pressed,
+  // nothing above it moving (audit 2026-11-13, orders P1-1).
   const orderAlert = useRef<HTMLParagraphElement>(null);
   const [stepRefused, setStepRefused] = useState(0);
+  const [stepAt, setStepAt] = useState<StepAt | null>(null);
+  // What it said: forgotten with its screen, unless something else has been
+  // said since (review, 2026-11-13).
+  const stepError = useRef<unknown>(null);
   // A new order's refusal belongs to its screen: a shortfall said on its
   // line, and forgotten with the screen, never said again over the list or
   // the next new order (orders task list, P0-5; review, 2026-10-24).
@@ -1398,6 +1404,7 @@ function Workspace({
     // its sheet and what was said kept (review, 2026-11-01).
     if (useCommand.getState().busy) return null;
     setOrderResent(resent ? command.label : null);
+    setStepAt(null);
     setOrderDone(null);
     setCollected(null);
     setNewRefused(null);
@@ -1440,6 +1447,23 @@ function Workspace({
       // its line marked on its screen (P0-5).
       buzz("error");
       setStepRefused((count) => count + 1);
+      // Pressed on its row, its card or the return's screen, and not kept:
+      // said there (audit 2026-11-13, orders P1-1). From its sheet, there —
+      // unless the order moved on meanwhile, which its card says.
+      const orderId = command.orderId;
+      if (
+        orderId &&
+        !resent &&
+        step !== "reserve" &&
+        (!fromSheet || movedOn(settled.error))
+      ) {
+        stepError.current = settled.error;
+        setStepAt({
+          orderId,
+          place: stay ? "row" : step === "return" ? "return" : "card",
+          times: nextRefusal(),
+        });
+      }
       // From its sheet: kept, why over what was typed — unless the order
       // moved on meanwhile, which its card says.
       if (fromSheet) {
@@ -1762,6 +1786,51 @@ function Workspace({
   function checkOrder(): void {
     if (pending) void run(pending, true);
   }
+  // A step refused where it was pressed: its words for that place (audit
+  // 2026-11-13, orders P1-1).
+  const stepRefusal: StepRefusal | null =
+    stepAt !== null && error !== null
+      ? {
+          ...stepAt,
+          text: orderErrorText(
+            error,
+            orderResent,
+            pending !== null && !pending.acknowledged,
+            orderMisses,
+            pending?.label ?? null,
+            pending?.acknowledged === true,
+          ),
+        }
+      : null;
+  // Its place on the screen: the list for a row's; its card, or its
+  // return's screen, for the card's. Away from it, the banner says it, as
+  // before (review, 2026-11-13).
+  const stepInSight =
+    stepAt !== null &&
+    tab === "list" &&
+    (stepAt.place === "row"
+      ? selectedId === null
+      : selectedId === stepAt.orderId);
+  /** A step refused where it was pressed is forgotten with its screen, as
+   * a new order's is: never said again over another, nor brought back to
+   * the finger when its card is opened later (review, 2026-11-13). */
+  function forgetStep(): void {
+    setStepAt(null);
+    const now = useCommand.getState();
+    if (
+      now.pending === null &&
+      now.error !== null &&
+      now.error === stepError.current
+    )
+      useCommand.setState({ error: null });
+    stepError.current = null;
+  }
+  const stepWasShown = useRef(false);
+  useEffect(() => {
+    if (stepWasShown.current && !stepInSight && stepAt !== null) forgetStep();
+    stepWasShown.current = stepInSight;
+    // Its screen left: why it runs.
+  }, [stepInSight]);
   // A sheet left over a card that is gone: closed with it.
   useEffect(() => {
     if (tab !== "list") setOrderSheet(null);
@@ -3330,7 +3399,10 @@ function Workspace({
         // line (stage 2, orders task list, P0-5); a step refused in its
         // sheet, there.
         error !== newRefused &&
-        !(sheetRefused && orderSheet !== null) && (
+        !(sheetRefused && orderSheet !== null) &&
+        // Pressed on its row, card or return: said there while it is on
+        // the screen (audit 2026-11-13, orders P1-1).
+        !stepInSight && (
           <p role="alert" ref={orderAlert} tabIndex={-1}>
             {orderErrorText(
               error,
@@ -4097,6 +4169,13 @@ function Workspace({
               }
               store={store}
               token={token}
+              refusal={
+                stepRefusal?.orderId === detail.data.id &&
+                stepRefusal.place !== "row"
+                  ? stepRefusal
+                  : null
+              }
+              forget={forgetStep}
               blocked={blocked}
               waiting={busy}
               sheet={orderSheet?.id === detail.data.id}
@@ -4170,6 +4249,7 @@ function Workspace({
             setOrderDone(null);
             setCollected(null);
           }}
+          refusal={stepRefusal?.place === "row" ? stepRefusal : null}
           arrive={(order) =>
             run(
               {

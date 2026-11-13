@@ -13,7 +13,8 @@ import { ScreenHeader } from "@/shared/ScreenHeader";
 import { useMainButton } from "@/shared/telegram";
 import { tagOf } from "./Orders";
 import { placesKey } from "./types";
-import type { Location, Order, OrderItem, Store } from "./types";
+import { StepRefused } from "./StepRefused";
+import type { Location, Order, OrderItem, StepRefusal, Store } from "./types";
 
 /** The warehouses as last read, only while that read stood: one read again
  * and refused — the right to see them gone — names none (review,
@@ -59,6 +60,7 @@ export function Returned({
   title,
   blocked,
   waiting,
+  refusal,
   back,
   take,
 }: {
@@ -70,6 +72,9 @@ export function Returned({
   blocked: boolean;
   /** The return asked and not answered yet. */
   waiting: boolean;
+  /** The return refused: under the tick, over the dock — the reason and
+   * the tick as they were (audit 2026-11-13, orders P1-1). */
+  refusal?: StepRefusal | null | undefined;
   /** «← Замовлення». */
   back: () => void;
   take: (body: Record<string, unknown>) => void;
@@ -176,6 +181,7 @@ export function Returned({
             Усі товари фізично отримані на складах відправлення
           </label>
         </fieldset>
+        {refusal && <StepRefused refusal={refusal} />}
         {!main && (
           // Outside Telegram, its MainButton as the dock's one button.
           <div className="pay-panel order-panel order-dock" ref={panel}>
