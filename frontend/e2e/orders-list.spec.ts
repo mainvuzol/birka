@@ -134,8 +134,9 @@ interface Server {
   gate?: Promise<void>;
   /** The cancel's answer, once `gate` opens: refused, or recorded. */
   cancelRefused?: boolean;
-  /** The next «Прибув на пошту»'s answer: refused, or lost on the way. */
-  arriveAnswer?: "refused" | "lost";
+  /** The next «Прибув на пошту»'s answer: refused, lost on the way, or
+   * refused as another phone recorded it first — the order arrived. */
+  arriveAnswer?: "refused" | "lost" | "moved";
   /** The next «Прибув на пошту» answered only once this opens. */
   arriveHeld?: Promise<void>;
   /** The open orders answered only once this opens. */
@@ -243,7 +244,12 @@ async function stub(page: Page, server: Server): Promise<void> {
         await route.abort("failed");
         return;
       }
-      if (answer === "refused") {
+      if (answer === "refused" || answer === "moved") {
+        if (answer === "moved") {
+          const id = new URL(request.url()).pathname.split("/").at(-2);
+          const found = server.open.find((each) => each.id === id);
+          if (found) found.status = becomes;
+        }
         await route.fulfill({
           status: 409,
           json: { code: "CONFLICT", message: "Conflict", details: {} },
@@ -957,7 +963,7 @@ test("«Прибув на пошту» on its way: the ring on the pressed verb 
   ).toEqual(["success"]);
 });
 
-test("«Прибув на пошту» on its row refused says why with a buzz, the row kept; one whose answer never came is the card's kept step, checked and recorded once («Усе на бірці» sections task list, P0-1)", async ({
+test("«Прибув на пошту» on its row refused says why with a buzz under its tag, nothing above it moved, the row kept; one whose answer never came is the card's kept step, checked and recorded once («Усе на бірці» sections task list, P0-1; audit 2026-11-13, orders P1-1)", async ({
   page,
 }) => {
   await hear(page);
@@ -971,12 +977,30 @@ test("«Прибув на пошту» on its row refused says why with a buzz, 
   const verb = page
     .getByRole("list", { name: "Відправлено" })
     .getByRole("button", { name: "Прибув на пошту" });
+  // What stands above the row: the title, the waybill's field, the knots.
+  const above = [
+    page.getByRole("heading", { level: 1, name: "Замовлення", exact: true }),
+    page.getByRole("searchbox", { name: "Номер ТТН" }),
+    knots(page),
+  ];
+  const before = await Promise.all(above.map((one) => one.boundingBox()));
   await verb.click();
-  await expect(page.getByRole("alert")).toBeVisible();
+  // Said under its tag, in the order's own row, the cursor on it.
+  const why = page
+    .getByRole("list", { name: "Відправлено" })
+    .getByRole("listitem")
+    .locator(":scope > article + [role=alert]");
+  await expect(why).toBeVisible();
+  await expect(why).toBeFocused();
+  await expect(page.getByRole("alert")).toHaveCount(1);
   expect(
     (await buzzes(page)).filter((buzz) => buzz !== "selection_change"),
   ).toEqual(["error"]);
   await expect(rows(page, "Відправлено")).toHaveCount(1);
+  // Nothing above it moved.
+  expect(await Promise.all(above.map((one) => one.boundingBox()))).toEqual(
+    before,
+  );
 
   // Lost on its way: kept, named, and nothing more pressed meanwhile.
   orders.arriveAnswer = "lost";
@@ -1001,6 +1025,60 @@ test("«Прибув на пошту» on its row refused says why with a buzz, 
   ).toBeVisible();
   expect(orders.arrives).toHaveLength(3);
   expect(orders.arrives[2]).toEqual(orders.arrives[1]);
+});
+
+test("a row's «Прибув на пошту» refused as another phone moved its order on: why where its tag stood, the cursor on it, until the next tap; refused so again, said again; a card opened forgets it, nothing on the card or back on the list (audit 2026-11-13, orders P1-1)", async ({
+  page,
+}) => {
+  // Enough to scroll: the plate in sight scrolls nothing.
+  const parcels = Array.from({ length: 8 }, () => ({
+    ...sent,
+    id: randomUUID(),
+  }));
+  const orders = server({ open: parcels, arriveAnswer: "moved" });
+  await stub(page, orders);
+  await enter(page, { version: "7.0" });
+  await drawn(page);
+  await knot(page, "Відправлено 8").click();
+  await settle(page);
+  const list = page.getByRole("list", { name: "Відправлено" });
+  const verbs = list.getByRole("button", { name: "Прибув на пошту" });
+  await verbs.first().click();
+  // Its order gone from here: why where its tag stood, the first place.
+  const stood = list.locator(":scope > li.order-refused > [role=alert]");
+  await expect(rows(page, "Відправлено")).toHaveCount(7);
+  await expect(stood).toBeVisible();
+  await expect(stood).toBeFocused();
+  await expect(page.getByRole("alert")).toHaveCount(1);
+  // In sight: the screen not scrolled to it.
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
+  expect(
+    await list
+      .locator(":scope > li")
+      .first()
+      .evaluate((node) => node.classList.contains("order-refused")),
+  ).toBe(true);
+  // The next tap lets it go.
+  await settle(page);
+  await page
+    .getByRole("heading", { level: 1, name: "Замовлення", exact: true })
+    .click();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  // Refused so again: said again, the cursor on it.
+  orders.arriveAnswer = "moved";
+  await verbs.first().click();
+  await expect(rows(page, "Відправлено")).toHaveCount(6);
+  await expect(stood).toBeVisible();
+  await expect(stood).toBeFocused();
+  await expect(page.getByRole("alert")).toHaveCount(1);
+  // A card opened forgets it: nothing on the card, nothing back here.
+  await settle(page);
+  await rows(page, "Відправлено").first().click();
+  await expect(page.locator(".order-number")).toBeVisible();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await page.getByRole("button", { name: "До замовлень", exact: true }).click();
+  await expect(rows(page, "Відправлено")).toHaveCount(6);
+  await expect(page.getByRole("alert")).toHaveCount(0);
 });
 
 test("«Відправити» on its row opens the card with its sheet, the cursor in the waybill's field: sent with it by the MainButton, three taps from the menu («Усе на бірці» sections task list, P0-1, P0-3)", async ({
@@ -1746,7 +1824,7 @@ test("inside a Telegram that has its own popup, «Скасувати замов�
   expect(orders.cancels).toEqual([{ command_id: expect.any(String) }]);
 });
 
-test("a cancel on its way holds «Ні, залишити» too; refused, it buzzes and brings why to the finger, the order kept (orders task list, P0-4)", async ({
+test("a cancel on its way holds «Ні, залишити» too; refused, it buzzes and brings why to the finger at the card's foot, its title where it was, the order kept (orders task list, P0-4; audit 2026-11-13, orders P1-1)", async ({
   page,
 }) => {
   await page.addInitScript(() => {
@@ -1786,10 +1864,26 @@ test("a cancel on its way holds «Ні, залишити» too; refused, it buzz
   await expect(
     page.getByRole("button", { name: "Так, скасувати" }),
   ).toBeDisabled();
+  const title = page.getByRole("heading", { level: 1 });
+  // Where it stands on the page, wherever the cursor scrolls it.
+  const onPage = (): Promise<number> =>
+    title.evaluate((node) => node.getBoundingClientRect().top + window.scrollY);
+  const titleBefore = await onPage();
   open();
   const why = page.getByRole("alert");
   await expect(why).toBeVisible();
   await expect(why).toBeFocused();
+  // At the card's foot, after its body — over the dock, where there is
+  // one — the card's title where it stood.
+  await expect(page.locator("section.order > [role=alert]")).toHaveCount(1);
+  expect(
+    await why.evaluate(
+      (node) =>
+        node.nextElementSibling === null ||
+        node.nextElementSibling.classList.contains("order-dock"),
+    ),
+  ).toBe(true);
+  expect(await onPage()).toBe(titleBefore);
   const buzzes = await page.evaluate(
     () => (window as unknown as { buzzes: string[] }).buzzes,
   );
@@ -1807,6 +1901,16 @@ test("a cancel on its way holds «Ні, залишити» too; refused, it buzz
   await expect(
     page.getByRole("button", { name: "Ні, залишити" }),
   ).toBeEnabled();
+  // Left, why is forgotten with its card: nothing over the list, and the
+  // card opened again says nothing, its title at the top (review,
+  // 2026-11-13).
+  await page.getByRole("button", { name: "До замовлень", exact: true }).click();
+  await expect(page.locator(".order-row").first()).toBeVisible();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await page.locator(".order-row").first().click();
+  await expect(title).toBeVisible();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
 });
 
 test("a store that does not trade lists its orders with no «+» and no verb (orders task list, P0-1)", async ({

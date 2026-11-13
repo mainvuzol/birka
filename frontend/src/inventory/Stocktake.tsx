@@ -12,6 +12,7 @@ import type {
 import {
   api,
   ApiError,
+  denied,
   errorText,
   inOwnWords,
   isConflict,
@@ -38,6 +39,7 @@ import {
 } from "@/shared/telegram";
 import { Toast } from "@/shared/Toast";
 import { Unread } from "@/shared/Unread";
+import { useNextPageFailed } from "@/shared/nextPage";
 import { visible } from "@/shared/visible";
 import { keptUnconfirmed, twiceOf } from "@/cash/errors";
 import { shortDay, shortTime } from "@/credits/format";
@@ -729,6 +731,9 @@ function Differences({
     stocktakeId,
     "differences",
   );
+  // A next page that failed: its retry where «Показати ще» stood, the
+  // differences read in sight (audit 2026-11-13, goods P1-1).
+  const nextFailed = useNextPageFailed(pages);
   if (pages.isPending)
     // Its lines of differences in grey, as many as will be shown — five at
     // most, folded — in their own lines' height (goods task list after
@@ -752,7 +757,8 @@ function Differences({
         </ul>
       </>
     );
-  if (pages.isError)
+  // Never read, or its right gone: nothing read before stays in sight.
+  if (pages.data === undefined || denied(pages.error))
     return (
       <Unread
         error={pages.error}
@@ -761,10 +767,20 @@ function Differences({
         }}
       />
     );
+  const readAgainFailed = pages.error !== null && !nextFailed;
   const items = itemsOf(pages.data);
   const shown = folded ? items.slice(0, FOLDED) : items;
   return (
     <>
+      {readAgainFailed && (
+        <Unread
+          error={pages.error}
+          held={pages.isFetching}
+          retry={() => {
+            void pages.refetch();
+          }}
+        />
+      )}
       <ul className="stocktake-differences" aria-label="Розбіжності">
         {shown.map((item) => (
           <li key={keyOf(item)}>
@@ -786,12 +802,21 @@ function Differences({
         >
           Ще {total - FOLDED}
         </button>
+      ) : nextFailed ? (
+        // Its page alone asked again, never «Показати ще» beside it.
+        <Unread
+          error={pages.error}
+          held={pages.isFetching}
+          retry={() => {
+            void pages.fetchNextPage();
+          }}
+        />
       ) : (
         pages.hasNextPage && (
           <button
             type="button"
             className="quiet"
-            disabled={pages.isFetching}
+            disabled={pages.isFetching || readAgainFailed}
             onClick={() => {
               void pages.fetchNextPage();
             }}
@@ -885,6 +910,36 @@ export function Stocktake({
     "counted",
     mode === "counted" && done === null,
   );
+  // A next page that failed: each list's own, its retry at the foot where
+  // «Показати ще» stood, the positions read in sight (audit 2026-11-13,
+  // goods P1-1).
+  const uncountedNext = useNextPageFailed(uncounted);
+  const countedNext = useNextPageFailed(counted);
+  // «Показати ще» or a page's retry pressed: the cursor goes to the first
+  // position it brings, its cell or its «Перерахувати».
+  const [focusFrom, setFocusFrom] = useState<number | null>(null);
+  const shelf = useRef<HTMLDivElement>(null);
+  // Asked in the other list, or its page refused: forgotten, so no later
+  // read moves the cursor (review, 2026-11-13).
+  useEffect(() => {
+    setFocusFrom(null);
+  }, [mode]);
+  useEffect(() => {
+    if (uncounted.error !== null || counted.error !== null) setFocusFrom(null);
+  }, [uncounted.error, counted.error]);
+  useEffect(() => {
+    if (focusFrom === null) return;
+    const read = itemsOf((mode === "uncounted" ? uncounted : counted).data);
+    const first = read[focusFrom];
+    if (!first) return;
+    const to = shelf.current?.querySelector<HTMLElement>(
+      `[data-position="${CSS.escape(keyOf(first))}"]`,
+    );
+    if (to) {
+      to.focus();
+      setFocusFrom(null);
+    }
+  });
   // The organization's order of sizes is receiving's to read; without it,
   // as the server gave them (P0-3).
   const sizes = useQuery({
@@ -1101,6 +1156,13 @@ export function Stocktake({
 
   const list = mode === "uncounted" ? uncounted : counted;
   const items = itemsOf(list.data);
+  const nextFailed = mode === "uncounted" ? uncountedNext : countedNext;
+  // Never read: the plate in the positions' place; read again and refused,
+  // over those read; a next page, where «Показати ще» stood.
+  // Its right gone, nothing read before stays in sight.
+  const neverRead =
+    list.error !== null && (list.data === undefined || denied(list.error));
+  const readAgainFailed = list.error !== null && !neverRead && !nextFailed;
   // A position the sheet counts, as read now: a balance read again is the
   // one counted against (review, 2026-10-10).
   const known = new Map(items.map((item) => [keyOf(item), item]));
@@ -1207,9 +1269,9 @@ export function Stocktake({
                   ? { tags: 2 }
                   : { rows: 3, day: false })}
               />
-            ) : list.isError ? (
+            ) : neverRead ? (
               <Unread error={list.error} retry={reread} />
-            ) : items.length === 0 ? (
+            ) : items.length === 0 && !readAgainFailed ? (
               // Nothing: the blank tag and its one line (goods task list after
               // stage 2, P2-2).
               <Empty
@@ -1220,51 +1282,79 @@ export function Stocktake({
                     : "Ще нічого не пораховано."
                 }
               />
-            ) : mode === "uncounted" ? (
-              <div className="tags">
-                {cards.map((card) => (
-                  <CountCard
-                    key={card.variantId}
-                    card={card}
-                    disabled={blocked}
-                    pick={(at) => {
-                      count(card.cells, at);
-                    }}
-                  />
-                ))}
-              </div>
             ) : (
-              <ul className="counted-rows" aria-label="Пораховані позиції">
-                {items.map(
-                  (item) =>
-                    item.count && (
-                      <CountedRow
-                        key={keyOf(item)}
-                        position={item}
-                        count={item.count}
+              <div ref={shelf}>
+                {readAgainFailed && (
+                  <Unread
+                    error={list.error}
+                    held={list.isFetching}
+                    retry={reread}
+                  />
+                )}
+                {mode === "uncounted" ? (
+                  <div className="tags">
+                    {cards.map((card) => (
+                      <CountCard
+                        key={card.variantId}
+                        card={card}
                         disabled={blocked}
-                        recount={() => {
-                          count([targetOf(item)], 0);
+                        pick={(at) => {
+                          count(card.cells, at);
                         }}
                       />
-                    ),
+                    ))}
+                  </div>
+                ) : (
+                  <ul className="counted-rows" aria-label="Пораховані позиції">
+                    {items.map(
+                      (item) =>
+                        item.count && (
+                          <CountedRow
+                            key={keyOf(item)}
+                            position={item}
+                            count={item.count}
+                            disabled={blocked}
+                            recount={() => {
+                              count([targetOf(item)], 0);
+                            }}
+                          />
+                        ),
+                    )}
+                  </ul>
                 )}
-              </ul>
+              </div>
             )}
-            {list.hasNextPage && !waiting && !list.isError && (
-              // A next page asked while the list is read again from its top
-              // would cancel that read and be read from where the old pages
-              // ended, past a position that moved up (review, 2026-11-07).
-              <button
-                type="button"
-                className="quiet stocktake-more"
-                disabled={list.isFetching}
-                onClick={() => {
+            {nextFailed && !waiting && !neverRead ? (
+              // Its page alone asked again, never «Показати ще» beside it
+              // reading the same page.
+              <Unread
+                error={list.error}
+                held={list.isFetching}
+                retry={() => {
+                  setFocusFrom(items.length);
                   void list.fetchNextPage();
                 }}
-              >
-                Показати ще
-              </button>
+              />
+            ) : (
+              list.hasNextPage &&
+              !waiting &&
+              !neverRead && (
+                // A next page asked while the list is read again from its
+                // top would cancel that read and be read from where the old
+                // pages ended, past a position that moved up (review,
+                // 2026-11-07); refused, it waits under the plate.
+                <button
+                  type="button"
+                  className="quiet stocktake-more"
+                  disabled={list.isFetching || readAgainFailed}
+                  onClick={() => {
+                    setFocusFrom(items.length);
+                    void list.fetchNextPage();
+                  }}
+                >
+                  Показати ще
+                </button>
+              )
             )}
             <button
               ref={finder}
@@ -1479,6 +1569,7 @@ function CountedRow({
       <button
         type="button"
         className="tag-verb"
+        data-position={keyOf(position)}
         aria-label={`Перерахувати: ${what}`}
         aria-haspopup="dialog"
         disabled={disabled}

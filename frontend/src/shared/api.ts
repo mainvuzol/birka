@@ -350,6 +350,13 @@ export function readText(
   return unreachable(error) ? SILENT : said(error);
 }
 
+/** A read refused because this person may no longer read it: what it read
+ * before is not shown («stock access denial hides stale balances»), whatever
+ * page it was (audit 2026-11-13, goods P1-1). */
+export function denied(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 403;
+}
+
 export function errorText(error: unknown): string {
   // The server was not reached: the shop sells on paper (ADR-0013 §3).
   if (unreachable(error)) return UNREACHABLE;

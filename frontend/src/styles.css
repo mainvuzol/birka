@@ -4081,6 +4081,16 @@ span.cash-difference > .difference-sign {
   display: block;
   margin-top: 16px;
 }
+/* A step refused where it was pressed: under its tag, at the card's foot,
+   under the return's tick — nothing above it moves (audit 2026-11-13,
+   orders P1-1). */
+.order-tags .step-refused {
+  margin: 8px 0 0;
+}
+.order .step-refused,
+.order-returned .step-refused {
+  margin: 16px 0 0;
+}
 /* What is said under a field or a step, 14 px on every screen of
    «Замовлення» (orders task list, P2-3), as «Каса»'s. */
 .orders .hint,
@@ -5673,6 +5683,22 @@ button.day-online {
   display: grid;
   gap: 8px;
   margin-top: 6px;
+}
+/* A figure whose read failed before it ever answered says so in its place,
+   in pencil, and one plate under the tag asks again (audit 2026-11-13,
+   frame P1-1). */
+.day-unread {
+  margin: 0;
+  color: var(--pencil);
+}
+.day-total-unread {
+  margin-top: 6px;
+}
+.day-tag > .read-failure {
+  margin: 12px 0 0;
+}
+.today > .read-failure {
+  margin: 8px 0 0;
 }
 .day-total-skeleton {
   width: 60%;

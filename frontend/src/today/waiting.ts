@@ -72,8 +72,12 @@ export interface Waiting {
   tags: Tag[];
   /** Some read has not answered yet: its place is held. */
   unread: boolean;
-  /** The unread reads' last asking: whether it failed. */
-  unreadAge: Age;
+  /** The reads that never answered and whose last asking failed: asked
+   * again, and only they, by the plate in their place (audit 2026-11-13,
+   * frame P1-1). */
+  unreadFailed: UseQueryResult[];
+  /** Some read has not answered yet and has not failed: its grey place. */
+  unreadPending: boolean;
   /** Whether anything is read at all: this person holds a right to one. */
   asked: boolean;
   /** How old it all is: the oldest of its reads. */
@@ -540,7 +544,8 @@ export function useWaiting({
       })
       .sort((a, b) => b.at - a.at),
     unread: unread.length > 0,
-    unreadAge: ageOf(unread),
+    unreadFailed: unread.filter((read) => read.isError),
+    unreadPending: unread.some((read) => !read.isError),
     asked: reads.length > 0,
     age: ageOf(reads),
     backupsOk:

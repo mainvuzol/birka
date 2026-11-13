@@ -3,8 +3,9 @@ import type { JSX } from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { BackToMore } from "@/shared/More";
 import type { MoreBack } from "@/shared/More";
-import { api } from "@/shared/api";
+import { api, denied } from "@/shared/api";
 import { Unread } from "@/shared/Unread";
+import { useNextPageFailed } from "@/shared/nextPage";
 import { Icon } from "@/shared/Icon";
 import { Placeholder } from "@/shared/Placeholder";
 import { Empty } from "@/shared/Empty";
@@ -124,6 +125,14 @@ export function Stock({
     enabled: allowed && !!selected && !locations.isError,
     retry: false,
   });
+  // Never read: the plate in the tags' place; read again and refused, over
+  // the tags read; a next page, where «Показати ще» stood (audit 2026-11-13,
+  // goods P1-1).
+  const nextFailed = useNextPageFailed(stock);
+  // Its right gone: nothing read before stays in sight.
+  const unshown =
+    stock.error !== null && (stock.data === undefined || denied(stock.error));
+  const readAgainFailed = stock.error !== null && !unshown && !nextFailed;
 
   useEffect(() => {
     // Revocation clears the selection; later access never restores it implicitly.
@@ -254,9 +263,7 @@ export function Stock({
                 )}
                 {refreshing || stock.isPending ? (
                   <Placeholder said="Завантажуємо залишки…" />
-                ) : stock.error && !stock.isFetchNextPageError ? (
-                  // Read again and refused: nothing of what was read before
-                  // stays in sight.
+                ) : unshown ? (
                   <Unread
                     error={stock.error}
                     retry={() => {
@@ -265,11 +272,14 @@ export function Stock({
                   />
                 ) : (
                   <>
-                    {stock.isFetchNextPageError && (
+                    {readAgainFailed && (
+                      // Read again and refused: the tags read stand under
+                      // it, as every list's (audit 2026-11-13, goods P1-1).
                       <Unread
                         error={stock.error}
+                        held={stock.isFetching}
                         retry={() => {
-                          void stock.fetchNextPage();
+                          void stock.refetch();
                         }}
                       />
                     )}
@@ -295,18 +305,31 @@ export function Stock({
                         />
                       ))}
                     </div>
-                    {stock.hasNextPage && (
-                      <button
-                        type="button"
-                        className="quiet"
-                        disabled={stock.isFetchingNextPage}
-                        onClick={() => {
+                    {nextFailed ? (
+                      // Its page alone asked again, never «Показати ще»
+                      // beside it reading the same page.
+                      <Unread
+                        error={stock.error}
+                        held={stock.isFetching}
+                        retry={() => {
                           setFocusAt(tags.length);
                           void stock.fetchNextPage();
                         }}
-                      >
-                        Показати ще
-                      </button>
+                      />
+                    ) : (
+                      stock.hasNextPage && (
+                        <button
+                          type="button"
+                          className="quiet"
+                          disabled={stock.isFetchingNextPage || readAgainFailed}
+                          onClick={() => {
+                            setFocusAt(tags.length);
+                            void stock.fetchNextPage();
+                          }}
+                        >
+                          Показати ще
+                        </button>
+                      )
                     )}
                   </>
                 )}

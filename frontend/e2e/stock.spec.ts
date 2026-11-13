@@ -352,6 +352,38 @@ test("stock access denial hides stale balances and offers retry", async ({
   await expect(page.locator(".stock-tag")).toHaveCount(0);
 });
 
+test("read again and refused for anything but the right: the tags read stand under the plate, its «Спробувати ще раз» reads them again (audit 2026-11-13, goods P1-1)", async ({
+  page,
+}) => {
+  await enter(page);
+  await chip(page, "Основний склад").click();
+  const loran = page.getByText(/Лоран шоколад 70(?:\.0)? см/);
+  await expect(loran).toBeVisible();
+  let failing = true;
+  await page.route("**/api/v1/catalog/stock-options?**", async (route) => {
+    if (failing) {
+      await route.fulfill({
+        status: 500,
+        json: { code: "INTERNAL", message: "boom" },
+      });
+      return;
+    }
+    await route.fallback();
+  });
+  await page.getByRole("button", { name: "Оновити", exact: true }).click();
+  const plate = page.locator(".read-failure");
+  await expect(plate).toBeVisible();
+  await expect(loran).toBeVisible();
+  // Over the tags read, not under them.
+  const tag = await page.locator(".stock-tag").first().boundingBox();
+  const over = await plate.boundingBox();
+  expect(tag && over && over.y < tag.y).toBe(true);
+  failing = false;
+  await plate.getByRole("button", { name: "Спробувати ще раз" }).click();
+  await expect(plate).toHaveCount(0);
+  await expect(loran).toBeVisible();
+});
+
 test("a paused warehouse, a size all held and one of unknown size stay readable, the tags glued across a page's edge — the last model shown once whole, a row read twice counted once; nothing to sell where the store does not sell from it (stage 2, goods task list, P2-5)", async ({
   page,
 }) => {
@@ -377,9 +409,21 @@ test("a paused warehouse, a size all held and one of unknown size stay readable,
     available_quantity: 0,
     ...over,
   });
+  // The next page refused once (audit 2026-11-13, goods P1-1).
+  let refused = false;
+  const asked: string[] = [];
   await page.route("**/api/v1/catalog/stock-options?**", async (route) => {
     const next =
       new URL(route.request().url()).searchParams.get("offset") === "50";
+    asked.push(next ? "offset=50" : "offset=0");
+    if (next && !refused) {
+      refused = true;
+      await route.fulfill({
+        status: 500,
+        json: { code: "INTERNAL", message: "boom" },
+      });
+      return;
+    }
     await route.fulfill({
       json: next
         ? {
@@ -437,6 +481,22 @@ test("a paused warehouse, a size all held and one of unknown size stay readable,
   await expect(held).toHaveCount(0);
   const showMore = page.getByRole("button", { name: "Показати ще" });
   await showMore.click();
+  // Refused: the tags read stand, one «Спробувати ще раз» at their foot
+  // where «Показати ще» stood (audit 2026-11-13, goods P1-1).
+  const foot = page.locator(".read-failure");
+  await expect(foot).toBeVisible();
+  await expect(tagOf(page, first)).toBeVisible();
+  await expect(showMore).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Спробувати ще раз" }),
+  ).toHaveCount(1);
+  const tag = await tagOf(page, first).boundingBox();
+  const plate = await foot.boundingBox();
+  expect(tag && plate && plate.y > tag.y).toBe(true);
+  asked.length = 0;
+  await foot.getByRole("button", { name: "Спробувати ще раз" }).click();
+  await expect(foot).toHaveCount(0);
+  expect(asked).toEqual(["offset=50"]);
   // The cursor on the first tag the page brought.
   await expect(
     held.getByRole("button", { name: "Повністю зарезервований" }),

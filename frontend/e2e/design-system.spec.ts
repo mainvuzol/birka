@@ -743,8 +743,9 @@ async function mainsShown(page: Page): Promise<number> {
 }
 
 /** The screens that say what could not be read when every list fails;
- * «Сьогодні» and «Ще» draw no plate. */
-const PLATES = ["Продаж", "Замовлення", "Гроші", "Каса", "Покупці"];
+ * «Ще» draws no plate — «Сьогодні» does, its places never read (audit
+ * 2026-11-13, frame P1-1). */
+const PLATES = ["Сьогодні", "Продаж", "Замовлення", "Гроші", "Каса", "Покупці"];
 
 for (const failing of [false, true])
   test(`one main a screen at most — its own or Telegram's — on «Сьогодні», «Ще», «Продаж», «Замовлення», «Покупці», «Каса» and «Гроші»${failing ? ", with what could not be read said on it, its «Спробувати ще раз» the secondary button" : ""} (spec S04, S07, S08, S16, S19, S25, S29; audit after stage 2, frame P1-1${failing ? ", P1-2" : ""})`, async ({

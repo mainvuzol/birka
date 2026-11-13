@@ -1010,6 +1010,103 @@ test("under 700 px an old day says so in its one line", async ({ page }) => {
   await expect(line).toContainText(said);
 });
 
+test("under 700 px nothing of the day read: its one line says «не вдалося прочитати», no stamp over it, one plate under it; «Спробувати ще раз» asks the day's reads again, and the line fills (audit 2026-11-13, frame P1-1)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  await twoStores(page);
+  let failing = true;
+  const fail = async (route: Route): Promise<void> => {
+    const url = new URL(route.request().url());
+    // The day-tag's own reads alone: «Чекає на вас» reads orders too.
+    if (
+      !failing ||
+      (url.pathname === "/api/v1/orders" &&
+        url.searchParams.get("status") !== "open")
+    ) {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({ status: 503, json: { code: "UNAVAILABLE" } });
+  };
+  await page.route("**/api/v1/reports/sales", fail);
+  for (const store of [centre, market]) {
+    await page.route(`**/api/v1/cash/drawer?store_id=${store}`, fail);
+    await page.route(`**/api/v1/credits/summary?store_id=${store}`, fail);
+    await page.route(`**/api/v1/orders?store_id=${store}&**`, fail);
+  }
+  await onToday(page);
+  const line = page.getByRole("button", { name: /^Сьогодні досі/ });
+  await expect(line).toHaveText("Сьогодні досі · не вдалося прочитати");
+  // Nothing read at all: the plate says why, no stamp says it again.
+  await expect(line.locator(".day-stamp")).toHaveCount(0);
+  const plate = page.locator(".today > .read-failure");
+  await expect(plate).toHaveText(/^Сервер не відповідає\.Спробувати ще раз$/);
+  // One for the day; «Чекає на вас» reads the parcels by the same orders,
+  // and its own place says so with its own plate.
+  await expect(
+    page.locator(".today").getByRole("button", { name: "Спробувати ще раз" }),
+  ).toHaveCount(1);
+  failing = false;
+  await plate.getByRole("button", { name: "Спробувати ще раз" }).click();
+  await expect(line).toHaveText(
+    "Сьогодні досі · 12 050,00 грн · «Центр» 6 950,00 грн · «Ринок» 5 100,00 грн",
+  );
+  await expect(plate).toHaveCount(0);
+});
+
+test("the tag unfolded and nothing of the day read: «не вдалося прочитати» in every place — the total, each store's sum, drawer and debts, the orders' line —, no stamp over it, one plate; «Спробувати ще раз» asks them again, and they fill (audit 2026-11-13, frame P1-1)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 741 });
+  await twoStores(page);
+  let failing = true;
+  const fail = async (route: Route): Promise<void> => {
+    const url = new URL(route.request().url());
+    // The day-tag's own reads alone: «Чекає на вас» reads orders too.
+    if (
+      !failing ||
+      (url.pathname === "/api/v1/orders" &&
+        url.searchParams.get("status") !== "open")
+    ) {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({ status: 503, json: { code: "UNAVAILABLE" } });
+  };
+  await page.route("**/api/v1/reports/sales", fail);
+  for (const store of [centre, market]) {
+    await page.route(`**/api/v1/cash/drawer?store_id=${store}`, fail);
+    await page.route(`**/api/v1/credits/summary?store_id=${store}`, fail);
+    await page.route(`**/api/v1/orders?store_id=${store}&**`, fail);
+  }
+  await onToday(page);
+  const tag = dayTag(page);
+  await expect(tag.locator(".day-total-unread")).toHaveText(
+    "не вдалося прочитати",
+  );
+  for (const store of ["Центр", "Ринок"]) {
+    const one = column(page, store);
+    await expect(one.locator(".day-unread")).toHaveText("не вдалося прочитати");
+    await expect(one.locator(".day-drawer")).toHaveText("не вдалося прочитати");
+    await expect(one.locator(".day-owed")).toHaveText("не вдалося прочитати");
+  }
+  await expect(tag.locator(".day-online")).toHaveText("не вдалося прочитати");
+  // Nothing grey left breathing, and nothing read: no stamp over the plate.
+  await expect(tag.locator(".skeleton-line, .skeleton")).toHaveCount(0);
+  await expect(tag.locator(".day-stamp")).toHaveCount(0);
+  const plate = tag.getByRole("alert");
+  await expect(plate).toHaveCount(1);
+  await expect(plate.locator("p")).toHaveText("Сервер не відповідає.");
+  failing = false;
+  await plate.getByRole("button", { name: "Спробувати ще раз" }).click();
+  await expect(tag.locator(".day-total")).toContainText("12 050,00 грн");
+  await expect(tag.locator(".day-unread")).toHaveCount(0);
+  await expect(tag.locator(".day-online")).toContainText("Онлайн:");
+  await expect(tag.getByRole("alert")).toHaveCount(0);
+  await expect(tag.locator(".day-stamp")).toHaveText(/^наживо · \d\d:\d\d$/);
+});
+
 test("a million in a store's day stays in its column, and the day's in the tag, whatever face draws them", async ({
   page,
 }) => {
@@ -1747,22 +1844,30 @@ test("nothing waiting: «Вас нічого не чекає.», no count, and t
   ).not.toHaveAttribute("data-badge");
 });
 
-test("a read that fails holds its tag's place and says so: nothing is said to be done, and the rest stands", async ({
+test("a read that fails holds its tag's place with the plate: nothing is said to be done, and the rest stands; «Спробувати ще раз» asks it alone again (audit 2026-11-13, frame P1-1)", async ({
   page,
 }) => {
   await twoStores(page);
   await orders(page, centre, [0, 1, 0]);
   await orders(page, market, [0, 0, 0]);
+  let failing = true;
   await page.route(
     `**/api/v1/damaged-units?store_id=${market}`,
     async (route) => {
-      await route.fulfill({ status: 500, json: { code: "INTERNAL" } });
+      if (failing) {
+        await route.fulfill({ status: 500, json: { code: "INTERNAL" } });
+        return;
+      }
+      await route.fulfill({ json: { units: [] } });
     },
   );
+  const urls = asked(page);
   await onToday(page);
-  const place = waiting(page).locator(".today-tag-wait");
-  await expect(place).toBeVisible();
-  await expect(place).toContainText("не вдалося прочитати");
+  // The plate in the grey tag's place, the grey gone.
+  const place = waiting(page).locator(".today-tag-failed");
+  await expect(place.getByRole("alert")).toBeVisible();
+  await expect(waiting(page).locator(".today-tag-wait")).toHaveCount(0);
+  await expect(waiting(page).locator(".skeleton-line")).toHaveCount(0);
   await expect(tags(page)).toHaveCount(0);
   await expect(
     page.getByRole("heading", { name: "Вас нічого не чекає.", exact: true }),
@@ -1772,6 +1877,17 @@ test("a read that fails holds its tag's place and says so: nothing is said to be
     "12 050,00 грн",
   );
   await expect(page.locator(".today-backups")).toBeVisible();
+  await expect(dayTag(page).getByRole("alert")).toHaveCount(0);
+  const before = urls.length;
+  failing = false;
+  await place.getByRole("button", { name: "Спробувати ще раз" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Вас нічого не чекає.", exact: true }),
+  ).toBeVisible();
+  await expect(place).toHaveCount(0);
+  expect(urls.slice(before)).toEqual([
+    `/api/v1/damaged-units?store_id=${market}`,
+  ]);
 });
 
 test("a read that fails again: what waits says how old it is by its heading, its tags as they were", async ({
@@ -2630,27 +2746,70 @@ test("what was seen is kept on this phone a week, by its id alone, under the org
 
 // --- its age, its failures, its reads ---------------------------------------
 
-test("the report unread: each store's drawer and debts stand, its figures wait", async ({
+test("the report unread: «не вдалося прочитати» in the total's place and each store's sum's, never a grey line; one plate in the tag, whose «Спробувати ще раз» asks the report alone again; each store's drawer and debts stand (audit 2026-11-13, frame P1-1)", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 741 });
   await twoStores(page);
-  await page.unroute("**/api/v1/reports/sales");
+  let failing = true;
   await page.route("**/api/v1/reports/sales", async (route: Route) => {
-    await route.fulfill({ status: 503, json: { code: "UNAVAILABLE" } });
+    if (failing) {
+      await route.fulfill({ status: 503, json: { code: "UNAVAILABLE" } });
+      return;
+    }
+    await route.fallback();
   });
+  const urls = asked(page);
   await onToday(page);
+  const tag = dayTag(page);
   await expect(column(page, "Центр")).toContainText(
     "Каса відкритаВинні 8 400,00 грн",
   );
   await expect(column(page, "Ринок")).toContainText("Касу закрито о");
-  await expect(
-    column(page, "Ринок").locator(".day-store-sold .day-wait"),
-  ).toBeVisible();
-  await expect(dayTag(page).locator(".day-online")).toContainText("Онлайн:");
-  await expect(dayTag(page).locator(".day-stamp")).toHaveText(
+  // Said in each figure's place: the total's, each store's sum's.
+  await expect(tag.locator(".day-total-unread")).toHaveText(
+    "не вдалося прочитати",
+  );
+  for (const store of ["Центр", "Ринок"])
+    await expect(column(page, store).locator(".day-unread")).toHaveText(
+      "не вдалося прочитати",
+    );
+  // Nothing grey is left breathing once it failed.
+  await expect(tag.locator(".skeleton-line, .skeleton")).toHaveCount(0);
+  await expect(tag.locator(".day-online")).toContainText("Онлайн:");
+  await expect(tag.locator(".day-stamp")).toHaveText(
     /^дані на \d\d:\d\d — сервер не відповідає$/,
   );
+  // One plate for the tag: the server silent, its own words alone.
+  const plate = tag.getByRole("alert");
+  await expect(plate).toHaveCount(1);
+  await expect(plate.locator("p")).toHaveText("Сервер не відповідає.");
+  const retry = plate.getByRole("button", {
+    name: "Спробувати ще раз",
+    exact: true,
+  });
+  await expect(
+    page.getByRole("button", { name: "Спробувати ще раз" }),
+  ).toHaveCount(1);
+  const before = urls.length;
+  failing = false;
+  await retry.click();
+  await expect(tag.locator(".day-total")).toContainText("12 050,00 грн");
+  await expect(column(page, "Ринок").locator(".day-store-sold")).toContainText(
+    "5 100,00 грн",
+  );
+  await expect(tag.getByRole("alert")).toHaveCount(0);
+  await expect(tag.locator(".day-unread")).toHaveCount(0);
+  // Only what failed was asked again: the report, once.
+  const again = urls.slice(before);
+  expect(
+    again.filter((url) => url.startsWith("/api/v1/reports/sales")),
+  ).toHaveLength(1);
+  expect(
+    again.filter((url) =>
+      /^\/api\/v1\/(cash\/drawer|credits\/summary|orders)\?/.test(url),
+    ),
+  ).toEqual([]);
 });
 
 test("the stamp says how old the figures are, and when the server is silent", async ({
@@ -2679,9 +2838,12 @@ test("the stamp says how old the figures are, and when the server is silent", as
   await expect(dayTag(page).locator(".day-total")).toContainText(
     "12 050,00 грн",
   );
+  // Read before, it failed since: its figures and the stamp, never the
+  // plate of what was never read (audit 2026-11-13, frame P1-1).
+  await expect(dayTag(page).getByRole("alert")).toHaveCount(0);
 });
 
-test("a read that fails hides nothing else: its line holds its place", async ({
+test("a read that fails hides nothing else: its line says so in its place, one plate in the tag (audit 2026-11-13, frame P1-1)", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 741 });
@@ -2696,15 +2858,82 @@ test("a read that fails hides nothing else: its line holds its place", async ({
   await onToday(page);
   await expect(column(page, "Центр")).toContainText("Винні 8 400,00 грн");
   await expect(column(page, "Ринок")).toContainText("Касу закрито о");
-  await expect(
-    column(page, "Ринок").locator(".day-owed .day-wait"),
-  ).toBeVisible();
+  await expect(column(page, "Ринок").locator(".day-owed")).toHaveText(
+    "не вдалося прочитати",
+  );
+  await expect(column(page, "Ринок").locator(".day-owed")).not.toHaveClass(
+    /owes/,
+  );
+  await expect(dayTag(page).getByRole("alert")).toHaveCount(1);
   await expect(dayTag(page).locator(".day-total")).toContainText(
     "12 050,00 грн",
   );
   await expect(dayTag(page).locator(".day-stamp")).toHaveText(
     /^дані на \d\d:\d\d — сервер не відповідає$/,
   );
+});
+
+test("at 360 px, light and dark, a store's drawer unread: «не вдалося прочитати» in its column, two lines at most as its debts' line, the other column as it was, one plate in the tag; read again, its line comes (audit 2026-11-13, frame P1-1)", async ({
+  page,
+}) => {
+  // Tall enough for the tag unfolded: its columns ≈ 158 px each.
+  await page.setViewportSize({ width: 360, height: 800 });
+  const closedAt = await twoStores(page);
+  let failing = true;
+  await page.route(
+    `**/api/v1/cash/drawer?store_id=${market}`,
+    async (route: Route) => {
+      if (failing) {
+        await route.fulfill({
+          status: 500,
+          json: { code: "INTERNAL", message: "boom" },
+        });
+        return;
+      }
+      await route.fallback();
+    },
+  );
+  const urls = asked(page);
+  await onToday(page);
+  const tag = dayTag(page);
+  const unread = column(page, "Ринок").locator(".day-drawer");
+  await expect(unread).toHaveText("не вдалося прочитати");
+  // «Ринок»'s debts and sum, and «Центр» whole, as they were.
+  await expect(column(page, "Ринок")).toContainText("5 100,00 грн");
+  await expect(column(page, "Ринок")).toContainText("Винні 2 600,00 грн");
+  await expect(column(page, "Центр")).toContainText(
+    "Каса відкритаВинні 8 400,00 грн",
+  );
+  await expect(tag.getByRole("alert")).toHaveCount(1);
+  await expect(
+    tag.getByRole("alert").getByRole("button", { name: "Спробувати ще раз" }),
+  ).toBeVisible();
+  for (const scheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    await page.screenshot({
+      path: `test-results/today-drawer-unread-360-${scheme}.png`,
+    });
+    // In its column, as its debts' line: two lines at most at 360 (19
+    // each), never wider than the column, nothing past the screen's width.
+    const box = await unread.boundingBox();
+    expect(box && box.height < 45).toBe(true);
+    expect(
+      await unread.evaluate((node) => node.scrollWidth <= node.clientWidth),
+    ).toBe(true);
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+    ).toBe(true);
+  }
+  const before = urls.length;
+  failing = false;
+  await tag.getByRole("button", { name: "Спробувати ще раз" }).click();
+  await expect(unread).toHaveText(`Касу закрито о ${closedAt}`);
+  await expect(tag.getByRole("alert")).toHaveCount(0);
+  expect(urls.slice(before)).toEqual([
+    `/api/v1/cash/drawer?store_id=${market}`,
+  ]);
 });
 
 /** Every read from now on, by the path and query it asked. */

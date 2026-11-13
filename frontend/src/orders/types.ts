@@ -227,3 +227,25 @@ export function money(value: string): string {
   const [whole = "0", fraction = "00"] = decimal(parsed).split(".");
   return `${whole.replace(/\B(?=(\d{3})+$)/g, "\u00a0")},${fraction}\u00a0грн`;
 }
+
+/** An order's step refused where it was pressed, not in its sheet nor kept
+ * (audit 2026-11-13, orders P1-1): under its tag, at its card's foot, or
+ * under the return's tick. `times`: each refusal its own, for the cursor. */
+export interface StepAt {
+  orderId: string;
+  place: "row" | "card" | "return";
+  times: number;
+}
+
+/** A step's refusal as its screen says it: where, and why. */
+export interface StepRefusal extends StepAt {
+  text: string;
+}
+
+let stepsRefused = 0;
+/** A step refused anew: its own count, never one before it, whatever was
+ * drawn anew between them (review, 2026-11-13). */
+export function nextRefusal(): number {
+  stepsRefused += 1;
+  return stepsRefused;
+}

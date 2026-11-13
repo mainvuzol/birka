@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import type { JSX } from "react";
+import type { UseQueryResult } from "@tanstack/react-query";
 import { timeOf } from "@/cash/errors";
 import { Icon } from "@/shared/Icon";
+import { Unread } from "@/shared/Unread";
 import { STALE_AFTER } from "./reads";
 import type { Age } from "./reads";
 
@@ -59,6 +61,38 @@ export function useNow(): number {
   return now;
 }
 
+/** Said in a figure's place where its read failed before it ever answered,
+ * as «Гроші» says it (audit 2026-11-13, frame P1-1). */
+export const UNREAD = "не вдалося прочитати";
+
+/** The reads of a tag that never answered and whose last asking failed. */
+export function failedOf(reads: readonly UseQueryResult[]): UseQueryResult[] {
+  return reads.filter((read) => read.isError && read.data === undefined);
+}
+
+/** One plate for a tag, however many of its reads failed before they ever
+ * answered: its «Спробувати ще раз» asks only those again, as «Гроші»'s
+ * places do (audit 2026-11-13, frame P1-1). What was read and failed later
+ * keeps its figures and its stamp, and gives none. */
+export function Unreads({
+  reads,
+}: {
+  reads: readonly UseQueryResult[];
+}): JSX.Element | null {
+  const failed = failedOf(reads);
+  const first = failed[0];
+  if (!first) return null;
+  return (
+    <Unread
+      error={first.error}
+      held={failed.some((read) => read.isFetching)}
+      retry={() => {
+        for (const read of failed) void read.refetch();
+      }}
+    />
+  );
+}
+
 /** A line still read, in its place. */
 export function Waiting({ width }: { width: string }): JSX.Element {
   return (
@@ -85,7 +119,7 @@ export function Stamp({ age, now }: { age: Age; now: number }): JSX.Element {
     return age.failed ? (
       <span className="day-stamp stale">
         <Icon name="warning" size={16} />
-        {age.silent ? "сервер не відповідає" : "не вдалося прочитати"}
+        {age.silent ? "сервер не відповідає" : UNREAD}
       </span>
     ) : (
       <Waiting width="7em" />

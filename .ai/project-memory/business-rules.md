@@ -9274,3 +9274,90 @@ sent is as before.
   changes nothing (before, a broken file between them kept the first's name
   over the next one's). A file that fills nothing keeps the earlier one's,
   as before — now seen, «Ще про список» opened over it.
+
+## Chosen in chat — 2026-11-13 (audit 2026-11-13, batch 1: «Сьогодні»'s places never read say «не вдалося прочитати», one «Спробувати ще раз» a tag; a failed next page in four «Товар» lists keeps the rows, one plate at the foot; an order step's refusal said where it was pressed; frame P1-1, goods P1-1, orders-cash P1-1)
+
+Chosen here on 2026-11-13, after the new audit of the whole app
+(`.ai/project-memory/redesign/2026-11-13-redesign-tz-audit-*.md`), by the
+user's pick «Unread and refusals»: the first P1 of three of its task lists.
+No right, no server rule, no read, no write changes; what was never read
+says so, and what was refused is said where it was pressed.
+- **«Сьогодні»** (frame P1-1):
+  - a figure whose read failed before it ever answered says «не вдалося
+    прочитати» in its place, never a grey line: the day's total, each
+    store's sum, its drawer's and debts' lines, the online orders' line,
+    the folded line;
+  - one plate (`Unread`) at the day-tag's foot, however many of its reads
+    failed; its «Спробувати ще раз» asks only those again; the server
+    silent, «Сервер не відповідає.»;
+  - «Чекає на вас»: its reads failed before they answered — the plate in
+    the grey tag's place, never «Вас нічого не чекає.»; its retry asks only
+    those;
+  - what was read and failed later keeps its figures and its stamp, and
+    gives no plate (the rule «a read that fails keeps what it showed»,
+    unchanged).
+- **Decided here** (each a reading for the owner):
+  - nothing read at all and a read failed: no stamp on the day-tag, folded
+    or not — the plate says why, as «Гроші»'s places;
+  - folded (under 700 px), the plate under the folded line, outside its
+    button;
+  - «Чекає на вас» keeps its own plate: it reads the parcels by the same
+    orders' read as the day's online line, so one failed orders' read is
+    said in both tags, each retry asking it;
+  - at 360 px the column's «не вдалося прочитати» takes two lines — the
+    task list asked one —, as the debts' line does in the same ≈ 158 px
+    column; nothing passes the column (a deviation, shown to the owner by
+    the journey's screenshots).
+- **Four «Товар» lists** (goods P1-1): «Інвентаризація»'s «Не пораховані»
+  and «Пораховані», a finished stocktake's «Розбіжності», «Залишки», a
+  list's lines in «Початкові залишки» — the shared form of batch 14
+  (`useNextPageFailed`):
+  - a next page refused: the rows read stand; one plate at the foot in
+    «Показати ще»'s place, its «Спробувати ще раз» reading that page alone;
+    «Показати ще» back once it is read;
+  - the whole list read again and refused: the plate over the rows, which
+    stand, «Показати ще» held under it;
+  - the stocktake read again from its top after one's own count, as
+    before.
+- **Decided here:**
+  - a read refused because the right is gone (403): nothing read before
+    stays in sight, in all four lists — the rule «stock access denial hides
+    stale balances» kept and made every list's; any other refusal keeps the
+    rows;
+  - so «Залишки» read again and refused for anything but the right keeps
+    its tags under the plate (before: hidden, the plate alone), as the task
+    list's «строки стоят» asks;
+  - after «Показати ще» or its page's retry, the cursor goes to the first
+    position it brought: «Не пораховані» its first cell, «Пораховані» its
+    «Перерахувати», «Залишки» as before; a list's lines and «Розбіжності»
+    keep it where it was, as their «Показати ще» did; the stocktake forgets
+    where the cursor was to go when the other list is chosen or the page is
+    refused (review).
+- **An order's step refused** (orders-cash P1-1), said where it was pressed,
+  nothing above it moving:
+  - «Прибув на пошту» on its row: under its tag, inside its row; its order
+    moved on meanwhile (another phone), where its tag stood;
+  - the card's steps (its MainButton's, «Скасувати замовлення»), and a
+    sheet's step whose order moved on: at the card's foot, over the dock;
+  - «Прийняти повернення»: under the tick, over the dock; the order taken
+    back meanwhile, at the card's foot;
+  - the cursor on it, the screen scrolled to it only when it is out of
+    sight;
+  - unchanged: the words (`orderErrorText`), one `error` buzz, the row and
+    card read again; a kept step's refusal and «… ще не підтверджено» at the
+    app's top, as every kept operation's; a new order's on its screen; a
+    sheet's in its sheet.
+- **Decided here:**
+  - under its tag until the next step, another place or another search;
+    where its tag stood, until the next tap — let go once that tap is
+    delivered, so nothing moves under the finger first (review);
+  - forgotten with its screen — the list left for a card, the card left,
+    the return's screen left by «←» — as a new order's refusal is: never
+    said over another screen, nor brought back when the card is opened
+    again (review); pressed and left before the answer came, it is said by
+    the app's banner, as before;
+  - drawn again (its row moved on, its card read anew), the cursor is not
+    brought again and nothing scrolls — unless the cursor was lost with its
+    old place: then back on it, still without a scroll (review);
+  - each refusal its own: a second is said and brought to the cursor as
+    the first was (review: it was silent).
