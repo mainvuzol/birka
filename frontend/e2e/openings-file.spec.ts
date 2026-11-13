@@ -271,11 +271,26 @@ async function refuseOnce(
   });
 }
 
+/**
+ * «Ще про список» open, «Звідки список» and «Коли перелічено» under it
+ * (goods task list after stage 2, P2-4): pressed unless it stands open — a
+ * draft or a file that filled them opens it by itself.
+ */
+async function aboutList(scope: Page | Locator): Promise<void> {
+  const about = scope.getByRole("button", { name: "Ще про список" });
+  if ((await about.getAttribute("aria-expanded")) !== "true")
+    await about.click();
+  await expect(about).toHaveAttribute("aria-expanded", "true");
+}
+
 async function newFromFile(page: Page, location: string): Promise<Locator> {
   await page.getByRole("button", { name: "Новий список" }).click();
   const form = page.getByRole("form", { name: "Новий список" });
   await warehouse(page, location);
-  await form.getByLabel("Завантажити файл").check();
+  await form
+    .getByRole("group", { name: "Як внести список" })
+    .getByRole("button", { name: "Завантажити файл" })
+    .click();
   return form;
 }
 
@@ -393,66 +408,116 @@ test("a file fills a new list: lines show their photo and reading, a split the l
   await noListWaits(page, fixture.file_location_id);
   await openings(page);
   const form = await newFromFile(page, fixture.file_location_id);
-  await choose(
-    form,
-    "зошит-1.json",
-    stockFile(
-      [
-        {
-          text: `${coat} сірий M-1 L-2`,
-          photo: "IMG_0001.jpg",
-          photo_line: 1,
-          model: coat,
-          colours: ["сірий"],
-          size_counts: [
-            { size: "M", count: 1 },
-            { size: "L", count: 2 },
-          ],
-        },
-        {
-          text: `${coat} сірий M 3 1200`,
-          photo: "IMG_0001.jpg",
-          photo_line: 2,
-          model: coat,
-          colours: ["сірий"],
-          sizes: ["M"],
-          count: 3,
-          price: "1200",
-        },
-        {
-          text: "Залишки на перше жовтня",
-          photo: "IMG_0001.jpg",
-          photo_line: 3,
-          note: "заголовок",
-        },
-        {
-          text: `Куртка ${RLO}абв${SHY} 1 шт`,
-          photo: "IMG_0001.jpg",
-          photo_line: 4,
-        },
-        {
-          text: `${coat} сірий M-1 4XL-2`,
-          photo: "IMG_0001.jpg",
-          photo_line: 5,
-          model: coat,
-          size_counts: [
-            { size: "M", count: 1 },
-            { size: "4XL", count: 2 },
-          ],
-        },
-      ],
-      { source: "Зошит 1", price_kind: "purchase", counted_on: "жовтень" },
-    ),
+  const about = form.getByRole("button", { name: "Ще про список" });
+  await expect(about).toHaveAttribute("aria-expanded", "false");
+  const first = stockFile(
+    [
+      {
+        text: `${coat} сірий M-1 L-2`,
+        photo: "IMG_0001.jpg",
+        photo_line: 1,
+        model: coat,
+        colours: ["сірий"],
+        size_counts: [
+          { size: "M", count: 1 },
+          { size: "L", count: 2 },
+        ],
+      },
+      {
+        text: `${coat} сірий M 3 1200`,
+        photo: "IMG_0001.jpg",
+        photo_line: 2,
+        model: coat,
+        colours: ["сірий"],
+        sizes: ["M"],
+        count: 3,
+        price: "1200",
+      },
+      {
+        text: "Залишки на перше жовтня",
+        photo: "IMG_0001.jpg",
+        photo_line: 3,
+        note: "заголовок",
+      },
+      {
+        text: `Куртка ${RLO}абв${SHY} 1 шт`,
+        photo: "IMG_0001.jpg",
+        photo_line: 4,
+      },
+      {
+        text: `${coat} сірий M-1 4XL-2`,
+        photo: "IMG_0001.jpg",
+        photo_line: 5,
+        model: coat,
+        size_counts: [
+          { size: "M", count: 1 },
+          { size: "4XL", count: 2 },
+        ],
+      },
+    ],
+    { source: "Зошит 1", price_kind: "purchase", counted_on: "жовтень" },
   );
+  await choose(form, "зошит-1.json", first);
   // What is in it, and where it goes, before anything is sent.
   await expect(form.getByLabel("Що у файлі")).toHaveText(
     "Файл «зошит-1.json»: рядків 5, фото 1, ціни закупівельні. Піде до списку складу «Склад для файлу».",
   );
+  // What the file filled is seen before it is saved: «Ще про список»
+  // opened by itself (P2-4).
+  await expect(about).toHaveAttribute("aria-expanded", "true");
   await expect(form.getByLabel("Звідки список (необов’язково)")).toHaveValue(
     "Зошит 1",
   );
   await expect(form.getByLabel("Коли перелічено (необов’язково)")).toHaveValue(
     "жовтень",
+  );
+  // Closed, then a broken file, then one that fills nothing: «Ще про
+  // список» opens by itself over what goes with it, the first's name and
+  // date kept, as before. Then one with a name of its own: it replaces the
+  // first's — the two between them change nothing; the first again, its
+  // own (review).
+  await about.click();
+  await expect(about).toHaveAttribute("aria-expanded", "false");
+  await choose(form, "зламаний.json", Buffer.from("{"));
+  await expect(form.getByLabel("Що у файлі")).toHaveCount(0);
+  await expect(about).toHaveAttribute("aria-expanded", "false");
+  await choose(
+    form,
+    "без-назви.json",
+    stockFile([
+      { text: `${coat} сірий 2 шт`, photo: "IMG_0003.jpg", photo_line: 1 },
+    ]),
+  );
+  await expect(about).toHaveAttribute("aria-expanded", "true");
+  await expect(form.getByLabel("Звідки список (необов’язково)")).toHaveValue(
+    "Зошит 1",
+  );
+  await about.click();
+  await choose(
+    form,
+    "зошит-2.json",
+    stockFile(
+      [{ text: `${coat} сірий 1 шт`, photo: "IMG_0002.jpg", photo_line: 1 }],
+      {
+        source: "Зошит 2",
+      },
+    ),
+  );
+  await expect(about).toHaveAttribute("aria-expanded", "true");
+  await expect(form.getByLabel("Звідки список (необов’язково)")).toHaveValue(
+    "Зошит 2",
+  );
+  await expect(form.getByLabel("Коли перелічено (необов’язково)")).toHaveValue(
+    "жовтень",
+  );
+  await about.click();
+  await choose(form, "зошит-1.json", first);
+  await expect(about).toHaveAttribute("aria-expanded", "true");
+  await expect(form.getByLabel("Звідки список (необов’язково)")).toHaveValue(
+    "Зошит 1",
+  );
+  await expect(form.getByLabel("Що у файлі")).toHaveText(
+    "Файл «зошит-1.json»: рядків 5, фото 1, ціни закупівельні. Піде до списку складу «Склад для файлу».",
   );
   // The draft kept on the phone holds the file's name, nothing of its
   // content: the name and date it filled in come back with the file.
@@ -1102,6 +1167,7 @@ test("a file not in Birka's format is refused before it is sent, and the same fi
   await expect(form.getByLabel("Що у файлі")).toContainText(
     "Файл «перевірка.json»: рядків 2, фото 1.",
   );
+  await aboutList(form);
   await form.getByLabel("Звідки список (необов’язково)").fill("Перевірка");
   await form.getByRole("button", { name: "Зберегти список" }).click();
   await expect(page.getByRole("heading", { name: "Перевірка" })).toBeVisible();
@@ -1635,13 +1701,17 @@ test("a shared list whose own store stopped trading is only rejected, from the o
     await page.getByRole("button", { name: "Новий список" }).click();
     const fresh = page.getByRole("form", { name: "Новий список" });
     await chip(page, "Склад півночі й півдня");
-    await fresh.getByLabel("Завантажити файл").check();
+    await fresh
+      .getByRole("group", { name: "Як внести список" })
+      .getByRole("button", { name: "Завантажити файл" })
+      .click();
     await choose(
       fresh,
       "заново.json",
       stockFile([{ text: "Пальто сіре 2 шт", photo: "N1.jpg", photo_line: 1 }]),
     );
     await expect(fresh.getByLabel("Що у файлі")).toBeVisible();
+    await aboutList(fresh);
     await fresh
       .getByLabel("Звідки список (необов’язково)")
       .fill(`${name}, заново`);

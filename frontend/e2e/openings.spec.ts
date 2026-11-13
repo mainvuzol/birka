@@ -159,6 +159,18 @@ async function warehouse(page: Page, location: string): Promise<void> {
   await chip(page, await placeName(page, location));
 }
 
+/**
+ * «Ще про список» open, «Звідки список» and «Коли перелічено» under it
+ * (goods task list after stage 2, P2-4): pressed unless it stands open — a
+ * draft or a file that filled them opens it by itself.
+ */
+async function aboutList(scope: Page | Locator): Promise<void> {
+  const about = scope.getByRole("button", { name: "Ще про список" });
+  if ((await about.getAttribute("aria-expanded")) !== "true")
+    await about.click();
+  await expect(about).toHaveAttribute("aria-expanded", "true");
+}
+
 async function typeList(
   page: Page,
   location: string,
@@ -167,6 +179,7 @@ async function typeList(
 ): Promise<void> {
   await page.getByRole("button", { name: "Новий список" }).click();
   await warehouse(page, location);
+  await aboutList(page);
   await page.getByLabel("Звідки список (необов’язково)").fill(source);
   await page
     .getByLabel("Рядки списку — кожен товар з нового рядка, як написано")
@@ -495,6 +508,7 @@ test("inside Telegram a line's answer is its MainButton, naming what is recorded
   await expect(page.locator(".main-mimic")).toHaveCount(0);
   await pressMain();
   await warehouse(page, fixture.opening_location_id);
+  await aboutList(page);
   await page
     .getByLabel("Звідки список (необов’язково)")
     .fill("Зошит у Телеграмі");
@@ -806,6 +820,7 @@ test("at 360 px, light and dark, the lists, a list's big tag and a line's screen
   const form = page.getByRole("form", { name: "Новий список" });
   await expect(form.locator(".opening-place")).toHaveText(`Склад «${place}»`);
   await expect(form.getByRole("group", { name: "Склад" })).toHaveCount(0);
+  await aboutList(form);
   await form.getByLabel("Звідки список (необов’язково)").fill(name);
   await form
     .getByLabel("Рядки списку — кожен товар з нового рядка, як написано")
@@ -1411,6 +1426,170 @@ test("the check that no list waits at the warehouse, failed, is the warning's pl
   await expect(plate).toHaveCount(0);
 });
 
+test("«Новий список»: the way in a switch, the list its one field; «Звідки список» and «Коли перелічено» under the quiet «Ще про список», opened by a tap and by a refusal of them, the words kept; at 360, light and dark (audit after stage 2, goods P2-4)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  // No list waits there as this journey reads it, whatever another left.
+  await page.route("**/api/v1/snapshots?*status=IN_REVIEW*", (route) =>
+    route.fulfill({ json: { items: [] } }),
+  );
+  // The server's own 422 (FastAPI's shape, `detail` alone): first for
+  // «Коли перелічено»; then no answer, late; then, unsure, for the lines
+  // and «Коли перелічено» at once.
+  const issue = (loc: (string | number)[]) => ({
+    loc,
+    type: "value_error",
+    msg: "Value error, Text may not contain a NUL character",
+    ctx: {},
+  });
+  const sent: Record<string, unknown>[] = [];
+  await page.route("**/api/v1/snapshots", async (route) => {
+    if (route.request().method() !== "POST") return route.fallback();
+    sent.push(route.request().postDataJSON() as Record<string, unknown>);
+    if (sent.length === 2) {
+      await new Promise((resolve) => setTimeout(resolve, 800));
+      await route.abort("failed");
+      return;
+    }
+    await route.fulfill({
+      status: 422,
+      json: {
+        detail:
+          sent.length === 1
+            ? [issue(["body", "captured_at"])]
+            : [issue(["body", "lines", 0]), issue(["body", "captured_at"])],
+      },
+    });
+  });
+  await openings(page);
+  await page.getByRole("button", { name: "Новий список" }).click();
+  const form = page.getByRole("form", { name: "Новий список" });
+  await warehouse(page, fixture.opening_location_id);
+
+  // The way in: a switch, its name for a reader alone — no radio, no
+  // legend.
+  const way = form.getByRole("group", { name: "Як внести список" });
+  await expect(way.getByRole("button")).toHaveText([
+    "Вставити текст",
+    "Завантажити файл",
+  ]);
+  await expect(
+    way.getByRole("button", { name: "Вставити текст" }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect(form.getByRole("radio")).toHaveCount(0);
+  await expect(form.locator("fieldset, legend")).toHaveCount(0);
+
+  // One field on the screen: the list's lines. The other two under the
+  // quiet «Ще про список», closed.
+  const lines = form.getByLabel(
+    "Рядки списку — кожен товар з нового рядка, як написано",
+  );
+  await expect(lines).toBeVisible();
+  await expect(form.locator("input, textarea")).toHaveCount(1);
+  const about = form.getByRole("button", { name: "Ще про список" });
+  await expect(about).toHaveAttribute("aria-expanded", "false");
+  await expect(about).toHaveClass(/\bquiet\b/);
+  const source = form.getByLabel("Звідки список (необов’язково)");
+  const captured = form.getByLabel("Коли перелічено (необов’язково)");
+  await expect(source).toHaveCount(0);
+  await expect(captured).toHaveCount(0);
+  const typed = `Пальто ${word()} сірий 1 шт`;
+  await lines.fill(typed);
+
+  // At 360, light and dark: the switch, the field and «Ще про список» in
+  // the width; at the form's end «Ще про список» stands clear of the
+  // dock's «Зберегти список».
+  const fits = (): Promise<boolean> =>
+    page.evaluate(() => document.documentElement.scrollWidth <= innerWidth);
+  await lines.blur();
+  await page.evaluate(() => {
+    scrollTo(0, document.documentElement.scrollHeight);
+  });
+  const aboutBox = await about.boundingBox();
+  const dockBox = await page.locator(".order-dock").boundingBox();
+  expect(aboutBox && dockBox).toBeTruthy();
+  if (aboutBox && dockBox)
+    expect(aboutBox.y + aboutBox.height).toBeLessThanOrEqual(dockBox.y);
+  for (const scheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    expect(await fits()).toBe(true);
+    await page.screenshot({
+      path: `test-results/openings-new-list-360-${scheme}.png`,
+    });
+  }
+  await page.emulateMedia({ colorScheme: "light" });
+
+  // The file's way: its chooser alone; the lines typed kept for the way
+  // back.
+  await way.getByRole("button", { name: "Завантажити файл" }).click();
+  await expect(
+    way.getByRole("button", { name: "Завантажити файл" }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect(lines).toHaveCount(0);
+  await expect(form.getByLabel("Файл від парсера (.json)")).toBeVisible();
+  await expect(form.locator("input, textarea")).toHaveCount(1);
+  await way.getByRole("button", { name: "Вставити текст" }).click();
+  await expect(lines).toHaveValue(typed);
+
+  // A tap opens the two; another closes them, their words kept.
+  await about.click();
+  await expect(about).toHaveAttribute("aria-expanded", "true");
+  await expect(source).toBeVisible();
+  await captured.fill("вересень");
+  await about.click();
+  await expect(about).toHaveAttribute("aria-expanded", "false");
+  await expect(captured).toHaveCount(0);
+  // The way switched while they hold words: open by itself, what goes with
+  // the list seen (review).
+  await way.getByRole("button", { name: "Завантажити файл" }).click();
+  await expect(about).toHaveAttribute("aria-expanded", "true");
+  await way.getByRole("button", { name: "Вставити текст" }).click();
+  await about.click();
+  await expect(about).toHaveAttribute("aria-expanded", "false");
+
+  // Refused for «Коли перелічено»: «Ще про список» opens by itself, the
+  // field named — never «Перевірте рядки».
+  await form.getByRole("button", { name: "Зберегти список" }).click();
+  await expect(form.getByRole("alert")).toHaveText(
+    "Список не збережено. Перевірте «Коли перелічено».",
+  );
+  await expect(about).toHaveAttribute("aria-expanded", "true");
+  await expect(captured).toHaveValue("вересень");
+  expect(sent).toHaveLength(1);
+  expect(sent[0]).toMatchObject({ captured_at: "вересень", lines: [typed] });
+
+  // While the list is sent the switch is held, as the file's chooser is;
+  // no answer leaves it unsure.
+  await form.getByRole("button", { name: "Зберегти список" }).click();
+  for (const button of await way.getByRole("button").all())
+    await expect(button).toBeDisabled();
+  await expect(form.getByRole("alert")).toHaveText(
+    /^Невідомо, чи збережено список\./,
+  );
+  await expect(
+    way.getByRole("button", { name: "Вставити текст" }),
+  ).toBeEnabled();
+  // Unsure, refused for the lines and «Коли перелічено» at once: both
+  // named, then the step.
+  await form.getByRole("button", { name: "Зберегти список" }).click();
+  await expect(form.getByRole("alert")).toHaveText(
+    "Сервер не прийняв цей запит, а чи збережено список попередньою спробою — ще невідомо. Перевірте рядки та «Коли перелічено», потім натисніть ще раз — двічі список не збережеться.",
+  );
+  expect(sent).toHaveLength(3);
+
+  // The draft keeps both: «Новий список» again, «Ще про список» open by
+  // itself over the words it holds.
+  await page
+    .getByRole("button", { name: "Назад до «Початкові залишки»" })
+    .click();
+  await page.getByRole("button", { name: "Новий список" }).click();
+  await expect(about).toHaveAttribute("aria-expanded", "true");
+  await expect(captured).toHaveValue("вересень");
+  await expect(source).toHaveValue("");
+  await expect(lines).toHaveValue(typed);
+});
+
 test("a list typed is kept on the phone, and saved once when its answer is lost", async ({
   page,
 }) => {
@@ -1438,6 +1617,14 @@ test("a list typed is kept on the phone, and saved once when its answer is lost"
   await expect(
     page.getByLabel("Рядки списку — кожен товар з нового рядка, як написано"),
   ).toHaveValue(`${coat} сірий 1 шт`);
+  // Where it is from, kept too, and «Ще про список» open by itself over it:
+  // what will be saved is never hidden (P2-4).
+  await expect(
+    page.getByRole("button", { name: "Ще про список" }),
+  ).toHaveAttribute("aria-expanded", "true");
+  await expect(page.getByLabel("Звідки список (необов’язково)")).toHaveValue(
+    source,
+  );
 
   await page.getByRole("button", { name: "Зберегти список" }).click();
   await expect(page.getByText(/Невідомо, чи збережено список/)).toBeVisible();
