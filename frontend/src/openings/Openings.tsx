@@ -541,13 +541,23 @@ function newListRefusal(
   error: unknown,
   mode: "text" | "file",
   unsure: boolean,
+  extra: Refused = { fields: [], others: false },
 ): string {
   const what = mode === "file" ? "файл" : "рядки";
+  // A refusal of «Ще про список» names its fields, and the lines too when
+  // they are refused with them (goods task list after stage 2, P2-4;
+  // review).
+  const fields =
+    extra.fields.length > 0
+      ? [...(extra.others ? [what] : []), named(extra.fields)].join(" та ")
+      : null;
   return unsure
     ? listRefusal(
         error,
         "Сервер не прийняв цей запит, а чи збережено список попередньою спробою — ще невідомо.",
-        `Перевірте ${what}${mode === "file" ? " і" : " й"} натисніть ще раз — двічі список не збережеться.`,
+        fields
+          ? `Перевірте ${fields}, потім натисніть ще раз — двічі список не збережеться.`
+          : `Перевірте ${what}${mode === "file" ? " і" : " й"} натисніть ще раз — двічі список не збережеться.`,
         "Дані змінилися — натисніть ще раз: двічі список не збережеться.",
       )
     : // What happened, then the step — never «спробуйте ще раз» on a write
@@ -555,9 +565,40 @@ function newListRefusal(
       listRefusal(
         error,
         "Список не збережено.",
-        `Перевірте ${what}.`,
+        `Перевірте ${fields ?? what}.`,
         "Поки ви працювали, дані змінилися: перевірте склад і натисніть «Зберегти список» ще раз.",
       );
+}
+
+/** «Ще про список»'s fields as the server names them. */
+const extraFields: [string, string][] = [
+  ["source_document_ref", "Звідки список"],
+  ["captured_at", "Коли перелічено"],
+];
+
+/** What a refusal names: «Ще про список»'s fields, in the form's order,
+ * and whether it names anything else of the request too. */
+interface Refused {
+  fields: string[];
+  others: boolean;
+}
+
+function refusedExtra(error: unknown): Refused {
+  if (!(error instanceof ApiError)) return { fields: [], others: false };
+  const body = error.validation.filter((issue) => issue.loc[0] === "body");
+  return {
+    fields: extraFields
+      .filter(([field]) => body.some((issue) => issue.loc[1] === field))
+      .map(([, name]) => name),
+    others: body.some(
+      (issue) => !extraFields.some(([field]) => issue.loc[1] === field),
+    ),
+  };
+}
+
+/** «Звідки список» та «Коли перелічено». */
+function named(fields: string[]): string {
+  return fields.map((field) => `«${field}»`).join(" та ");
 }
 
 /** A file's own name for itself, taken as the list's if it fits. */
@@ -589,6 +630,17 @@ function NewList({
   const [read, setRead] = useState<StockFileRead | null>(null);
   const [busy, setBusy] = useState(false);
   const [problems, setProblems] = useState<string[]>([]);
+  // What files filled, field by field, while nobody typed over it: the next
+  // file replaces it, whatever was picked between them (review).
+  const filledFrom = useRef<{ source: string | null; captured: string | null }>(
+    { source: null, captured: null },
+  );
+  // «Звідки список» and «Коли перелічено» under the quiet «Ще про список»
+  // (goods task list after stage 2, P2-4): open from the start when the
+  // draft brought back holds their words, never hiding what will be saved.
+  const [more, setMore] = useState(
+    () => draft.source.trim() !== "" || draft.captured.trim() !== "",
+  );
   const lines = listLines(draft.text);
   const tooLong = lines.find((line) => line.length > 500);
   const tooMuch =
@@ -662,26 +714,42 @@ function NewList({
         next.sha256 === draft.file_sha256 &&
         next.name === draft.file_name);
     // The file's own name and date fill the list's, unless the person typed
-    // their own; a file picked instead of another replaces what it filled.
-    const filled = read?.ok ? read.summary : null;
+    // their own; a file picked instead of another replaces what a file
+    // filled — a broken one, or one that fills nothing, between them changes
+    // nothing (review).
+    const filled = filledFrom.current;
     const { source, counted_on } = next.summary;
+    const fills = {
+      ...((draft.source.trim() === "" || draft.source === filled.source) &&
+      fits(source, 300)
+        ? { source }
+        : {}),
+      ...((draft.captured.trim() === "" ||
+        draft.captured === filled.captured) &&
+      fits(counted_on, 40)
+        ? { captured: counted_on }
+        : {}),
+    };
+    filledFrom.current = {
+      source: fills.source ?? filled.source,
+      captured: fills.captured ?? filled.captured,
+    };
     setDraft(
       {
         command_id: same ? draft.command_id : crypto.randomUUID(),
         file_name: next.name,
         file_sha256: next.sha256,
-        ...((draft.source.trim() === "" || draft.source === filled?.source) &&
-        fits(source, 300)
-          ? { source }
-          : {}),
-        ...((draft.captured.trim() === "" ||
-          draft.captured === filled?.counted_on) &&
-        fits(counted_on, 40)
-          ? { captured: counted_on }
-          : {}),
+        ...fills,
       },
       next,
     );
+    // What goes with the file is seen before it is saved: what it filled,
+    // or what an earlier one did (review).
+    if (
+      (fills.source ?? draft.source).trim() !== "" ||
+      (fills.captured ?? draft.captured).trim() !== ""
+    )
+      setMore(true);
     // Whether the unsettled send made a list here, read again.
     if (draft.unsettled && draft.location_id !== "") void waiting.refetch();
   }
@@ -739,6 +807,9 @@ function NewList({
         error instanceof ApiError
           ? fileProblemTexts(error.validation, error.validationMore)
           : [];
+      // A refusal of «Ще про список»'s fields opens it (P2-4).
+      const extra = refusedExtra(error);
+      if (extra.fields.length > 0) setMore(true);
       setProblems(
         error instanceof SlowAnswer
           ? [errorText(error)]
@@ -751,8 +822,11 @@ function NewList({
                   "Цей список уже збережено, але в іншому вигляді. Знайдіть його в переліку, або почніть новий.",
                 ]
               : refused.length > 0
-                ? refused
-                : [newListRefusal(error, draft.mode, unsure)],
+                ? // A file's problems, and the field refused with them.
+                  extra.fields.length > 0
+                  ? [...refused, `Перевірте ${named(extra.fields)}.`]
+                  : refused
+                : [newListRefusal(error, draft.mode, unsure, extra)],
       );
     } finally {
       setBusy(false);
@@ -877,33 +951,27 @@ function NewList({
               </div>
             )
           ))}
-        <fieldset>
-          <legend>Як внести список</legend>
-          <label className="check">
-            <input
-              type="radio"
-              name="stock-list-mode"
-              checked={draft.mode === "text"}
-              onChange={() => {
-                setDraft({ mode: "text" });
-                setProblems([]);
-              }}
-            />
-            Вставити текст
-          </label>
-          <label className="check">
-            <input
-              type="radio"
-              name="stock-list-mode"
-              checked={draft.mode === "file"}
-              onChange={() => {
-                setDraft({ mode: "file" });
-                setProblems([]);
-              }}
-            />
-            Завантажити файл
-          </label>
-        </fieldset>
+        {/* The way in as a switch, its name for a reader alone (goods task
+            list after stage 2, P2-4; spec §5 «Переключатель режима»). */}
+        <ModeSwitch<Draft["mode"]>
+          label="Як внести список"
+          filters
+          modes={[
+            { mode: "text", label: "Вставити текст" },
+            { mode: "file", label: "Завантажити файл" },
+          ]}
+          current={draft.mode}
+          choose={(mode) => {
+            setDraft({ mode });
+            setProblems([]);
+            // What goes with the other way is seen before it is saved
+            // (review).
+            if (draft.source.trim() !== "" || draft.captured.trim() !== "")
+              setMore(true);
+          }}
+          disabled={busy}
+          className="opening-way"
+        />
         {draft.mode === "file" && (
           <>
             <FileChooser
@@ -919,28 +987,6 @@ function NewList({
             )}
           </>
         )}
-        <label>
-          Звідки список (необов’язково)
-          <input
-            value={draft.source}
-            maxLength={300}
-            placeholder="Наприклад, «Зошит 2, сторінки 1–4»"
-            onChange={(event) => {
-              setDraft({ source: event.target.value });
-            }}
-          />
-        </label>
-        <label>
-          Коли перелічено (необов’язково)
-          <input
-            value={draft.captured}
-            maxLength={40}
-            placeholder="Наприклад, 30.09.2026"
-            onChange={(event) => {
-              setDraft({ captured: event.target.value });
-            }}
-          />
-        </label>
         {draft.mode === "text" && (
           <>
             <label>
@@ -961,6 +1007,44 @@ function NewList({
             )}
             {tooMuch && <p role="alert">{tooMuch}</p>}
           </>
+        )}
+        {/* What the list is and when it was counted: optional, under one
+            quiet button — the screen's one field is the list (P2-4). */}
+        <button
+          type="button"
+          className="quiet opening-more"
+          aria-expanded={more}
+          onClick={() => {
+            setMore(!more);
+          }}
+        >
+          Ще про список
+        </button>
+        {more && (
+          <div className="opening-extra">
+            <label>
+              Звідки список (необов’язково)
+              <input
+                value={draft.source}
+                maxLength={300}
+                placeholder="Наприклад, «Зошит 2, сторінки 1–4»"
+                onChange={(event) => {
+                  setDraft({ source: event.target.value });
+                }}
+              />
+            </label>
+            <label>
+              Коли перелічено (необов’язково)
+              <input
+                value={draft.captured}
+                maxLength={40}
+                placeholder="Наприклад, 30.09.2026"
+                onChange={(event) => {
+                  setDraft({ captured: event.target.value });
+                }}
+              />
+            </label>
+          </div>
         )}
         {problems.length === 1 ? (
           <p role="alert">{visible(problems[0] ?? "")}</p>

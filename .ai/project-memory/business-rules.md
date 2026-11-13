@@ -9233,3 +9233,44 @@ server rule, no field, no count changes; what is recorded is as before.
   - the model chosen shown as receiving shows it, the search gone with it;
   - the correction's stub over «Знайшли товар…» on the entry, where its line
     stood, the cursor on «Знайшли товар…».
+
+
+## Chosen in chat — 2026-11-13 (audit after stage 2, batch 18: «Новий список» — the way in a switch, the list its one field, «Звідки список» and «Коли перелічено» under the quiet «Ще про список»; goods P2-4)
+
+Chosen here on 2026-11-13, after batch 17 (#200) was merged («merged, go
+next»): P2-4 is the last point of the goods task list after stage 2, marked
+«нужно утверждение» as P1-2..P1-5 were; built as the task list gives it,
+and what it did not give is a reading for the owner. No right, no server
+rule, no field, no limit changes; the draft keeps what it kept, and what is
+sent is as before.
+- **«Новий список»** (P2-4; spec §5 «Переключатель режима»):
+  - the radios «Як внести список: Вставити текст / Завантажити файл» → the
+    switch «Вставити текст · Завантажити файл»; «Як внести список» is its
+    name for a reader alone, no legend on the screen;
+  - the screen's one field: the list's lines, or the file's chooser;
+  - «Звідки список (необов’язково)» and «Коли перелічено (необов’язково)»
+    → under the quiet «Ще про список», closed; a tap opens them, another
+    closes them, their words kept and sent as before;
+  - a refusal of them opens «Ще про список» by itself.
+- **Decided here** (each a reading for the owner):
+  - the switch's ways marked as pressed, as the form's other switches
+    («Яку ціну змінюємо», «Що зробити»), never as a page;
+  - «Ще про список» at the form's end, under the list's field and its
+    hint;
+  - it opens by itself also when what it holds would be saved unseen: a
+    draft brought back with their words; a file read whole while they hold
+    words — what it filled, or an earlier one did; the way switched while
+    they hold words (the review's);
+  - a refusal of them names them: «Список не збережено. Перевірте «Коли
+    перелічено».» (before: «… Перевірте рядки.»); the lines too when they
+    are refused with them, «Перевірте рядки та «Коли перелічено».»; unsure
+    of the send before it, «Перевірте «…», потім натисніть ще раз — двічі
+    список не збережеться.»; a file's problems refused with them, the
+    file's problems, then «Перевірте «…».»;
+  - the switch held while the list is sent, as the file's chooser is.
+- **In passing** (the review's): a file picked instead of another replaces
+  the name and date a file filled, field by field, as long as nobody typed
+  over them — a broken file, or one that fills nothing, picked between them
+  changes nothing (before, a broken file between them kept the first's name
+  over the next one's). A file that fills nothing keeps the earlier one's,
+  as before — now seen, «Ще про список» opened over it.

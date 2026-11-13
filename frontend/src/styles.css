@@ -7398,6 +7398,15 @@ label.way-option {
 .opening-new .opening-places {
   margin: 12px 0 0;
 }
+/* «Новий список» (goods task list after stage 2, P2-4): the way in as a
+   switch over the list's one field; «Звідки список» and «Коли перелічено»
+   under the quiet «Ще про список». */
+.opening-new .opening-way {
+  margin: 16px 0 0;
+}
+.opening-new .opening-extra label:first-child {
+  margin-top: 4px;
+}
 .openings .opening-place {
   margin: 12px 0 0;
 }
