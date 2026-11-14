@@ -1,6 +1,7 @@
 import {
   test,
   expect,
+  expectEmpty,
   expectPlate,
   listRow,
   openStore,
@@ -271,14 +272,16 @@ test("the search runs as it is typed, from two letters; Enter at once; one lette
   await page.clock.resume();
   await expect(page.getByRole("article")).toContainText("Альпака сіра · M");
 
-  // Nothing found: said, and cleared in one tap, the cursor back.
+  // Nothing found: said, and cleared in one tap, the cursor back. The fact
+  // its line, what to do its meta, as the till's (audit 2026-11-13, sale
+  // P2-2).
   await field.fill("немає такого");
   await field.press("Enter");
-  await expect(
-    page.getByText(
-      "За «немає такого» продажів не знайдено. Перевірте назву або очистіть пошук.",
-    ),
-  ).toBeVisible();
+  const empty = page.locator(".returns-empty");
+  await expectEmpty(empty, "За «немає такого» продажів не знайдено.");
+  await expect(empty.locator(":scope > .t-meta")).toHaveText(
+    "Перевірте назву або очистіть пошук.",
+  );
   await page.getByRole("button", { name: "Очистити", exact: true }).click();
   await expect(field).toHaveValue("");
   await expect(field).toBeFocused();
@@ -560,7 +563,10 @@ test("the other stores are offered from two letters under this store's results, 
   await expect(offer).toHaveCount(0);
   await field.fill("лор");
   await expect(page.getByRole("article")).toHaveCount(1);
-  // Under this store's results.
+  // Under this store's results, where it stood: never in a blank tag
+  // (В3 (а); audit 2026-11-13, sale P2-2).
+  await expect(page.locator(".returns > .elsewhere-offer")).toHaveCount(1);
+  await expect(page.locator(".returns-empty")).toHaveCount(0);
   const row = await page.getByRole("article").boundingBox();
   const under = await offer.boundingBox();
   if (!row || !under) throw new Error("not laid out");
@@ -658,26 +664,72 @@ test("nothing found here says to call the manager for goods sold before Бірк
   );
   await page.getByLabel("Що повертають?").fill("немає");
   await page.getByLabel("Що повертають?").press("Enter");
-  await expect(
-    page.getByText(
-      "За «немає» продажів не знайдено. Перевірте назву або очистіть пошук.",
-    ),
-  ).toBeVisible();
-  // В5 (а): the manager decides (returns task list, P1-6).
+  const empty = page.locator(".returns-empty");
+  await expectEmpty(empty, "За «немає» продажів не знайдено.");
+  await expect(empty.locator(":scope > .t-meta")).toHaveText(
+    "Перевірте назву або очистіть пошук.",
+  );
+  // В5 (а): the manager decides (returns task list, P1-6). The blank tag's
+  // children, as the till's way on: «Очистити», the other stores, then the
+  // manager (audit 2026-11-13, sale P2-2).
   await expect(before).toBeVisible();
-  await expect(page.locator(".returns-empty .orders-empty-mark")).toBeVisible();
+  await expect(empty.locator(":scope > *")).toHaveText([
+    "",
+    "За «немає» продажів не знайдено.",
+    "Перевірте назву або очистіть пошук.",
+    "Очистити",
+    "Купили в іншому магазині мережі? Шукати там",
+    "Продали ще до Бірки? Покличте менеджера — таке повернення вирішує він.",
+  ]);
+  // Centred with the tag: the buttons' boxes, and each line of the words
+  // (review: a paragraph's own box is centred in the tag whatever its
+  // text does).
+  const centre = async (part: Locator): Promise<number> => {
+    const box = await part.boundingBox();
+    if (!box) throw new Error("not laid out");
+    return Math.round(box.x + box.width / 2);
+  };
+  const lineCentres = (part: Locator): Promise<number[]> =>
+    part.evaluate((node) => {
+      const range = document.createRange();
+      range.selectNodeContents(node);
+      const lines = new Map<number, { left: number; right: number }>();
+      for (const rect of range.getClientRects()) {
+        if (rect.width === 0) continue;
+        const top = Math.round(rect.top);
+        const line = lines.get(top);
+        lines.set(top, {
+          left: Math.min(line?.left ?? rect.left, rect.left),
+          right: Math.max(line?.right ?? rect.right, rect.right),
+        });
+      }
+      return [...lines.values()].map(({ left, right }) => (left + right) / 2);
+    });
+  const middle = await centre(empty.locator(":scope > .orders-empty-mark"));
+  for (const part of [
+    page.getByRole("button", { name: "Очистити", exact: true }),
+    page.getByRole("button", { name: "Шукати там" }),
+  ])
+    expect(Math.abs((await centre(part)) - middle)).toBeLessThanOrEqual(1);
+  for (const part of [
+    empty.getByText("Купили в іншому магазині мережі?", { exact: true }),
+    before,
+  ]) {
+    const centres = await lineCentres(part);
+    expect(centres.length).toBeGreaterThan(0);
+    for (const each of centres)
+      expect(Math.abs(each - middle)).toBeLessThanOrEqual(2);
+  }
   await page.getByRole("button", { name: "Шукати там" }).click();
-  await expect(
-    page.getByText(
-      "В інших магазинах мережі за «немає» продажів не знайдено.",
-      {
-        exact: true,
-      },
-    ),
-  ).toBeVisible();
-  // Nowhere left to look: the manager decides here too (В-ЗП7 (а)), under
-  // the blank tag and its «Очистити».
-  await expect(page.locator(".returns-empty .orders-empty-mark")).toBeVisible();
+  await expectEmpty(
+    empty,
+    "В інших магазинах мережі за «немає» продажів не знайдено.",
+  );
+  // One sentence: no meta; nowhere left to look, the manager decides here
+  // too (В-ЗП7 (а)), inside the blank tag, under its «Очистити».
+  await expect(empty.locator(":scope > .t-meta")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Шукати там" })).toHaveCount(0);
+  await expect(empty.locator(":scope > .returns-manager")).toBeVisible();
   await expect(before).toBeVisible();
   const clear = await page
     .getByRole("button", { name: "Очистити", exact: true })
@@ -782,11 +834,20 @@ for (const [name, theme, scheme] of [
         },
       }),
       sale("Альпака сіра", ago(0, 1), { refunded: 1 }),
+      sale("Лагуна персик", ago(0, 2), {
+        store_id: randomUUID(),
+        store_name: "Другий",
+      }),
     ]);
     await returns(page, theme);
     expect(
       await page.evaluate(() => document.documentElement.dataset.theme),
     ).toBe(scheme);
+    // Another store's name `neutral`, as on a debt's row (audit 2026-11-13,
+    // sale P2-5).
+    const store = page.getByText("Магазин «Другий»", { exact: true });
+    await expect(store).toHaveClass("sticker tone-neutral");
+    expect(await contrast(store)).toBeGreaterThanOrEqual(4.5);
     const pills = {
       debt: page.getByText("Оплата частинами", { exact: true }),
       warn: page.getByText("Продано з паперу", { exact: true }),
@@ -836,9 +897,24 @@ for (const [name, theme, scheme] of [
     );
     // A list's row by §6.8, a day's rows on a white block 8 under its
     // heading (audit after stage 2, frame P2-2).
-    await expect(page.locator(".sale-day").first()).toHaveCSS(
-      "margin-bottom",
-      "8px",
+    const day = page.locator(".sale-day").first();
+    await expect(day).toHaveCSS("margin-bottom", "8px");
+    // The day's heading the section's caption, 13/700 in capitals in
+    // pencil, as «В інших магазинах мережі» (audit 2026-11-13, sale P2-2).
+    await expect(day).toHaveCSS("font-size", "13px");
+    await expect(day).toHaveCSS("font-weight", "700");
+    await expect(day).toHaveCSS("text-transform", "uppercase");
+    await expect(day).toHaveCSS("letter-spacing", "0.78px");
+    await expect(day).toHaveCSS(
+      "color",
+      await day.evaluate((node) => {
+        const probe = document.createElement("i");
+        probe.style.color = "var(--pencil)";
+        node.append(probe);
+        const colour = getComputedStyle(probe).color;
+        probe.remove();
+        return colour;
+      }),
     );
     await listRow(
       page,
@@ -846,4 +922,20 @@ for (const [name, theme, scheme] of [
       ".sale-goods",
     );
     await page.screenshot({ path: `test-results/returns-list-${name}.png` });
+    // Nothing found at 360 in the theme: the blank tag's line, its meta and
+    // what to do next inside it, each read at 4.5:1 (audit 2026-11-13, sale
+    // P2-2).
+    await page.getByLabel("Що повертають?").fill("немає");
+    await page.getByLabel("Що повертають?").press("Enter");
+    const empty = page.locator(".returns-empty");
+    await expectEmpty(empty, "За «немає» продажів не знайдено.");
+    for (const part of [
+      empty.locator(":scope > .t-meta"),
+      empty.getByText("Купили в іншому магазині мережі?", { exact: true }),
+      empty.getByRole("button", { name: "Шукати там" }),
+      empty.getByRole("button", { name: "Очистити", exact: true }),
+      empty.locator(".returns-manager"),
+    ])
+      expect(await contrast(part)).toBeGreaterThanOrEqual(4.5);
+    await page.screenshot({ path: `test-results/returns-empty-${name}.png` });
   });

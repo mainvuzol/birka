@@ -1392,7 +1392,7 @@ test("«Сплачені» and «Списані» each ask their own status, eac
     page
       .getByRole("button", { name: /^Відкрити борг: Петро/ })
       .getByText("Списано", { exact: true }),
-  ).toHaveClass(/\btone-neutral\b/);
+  ).toHaveClass(/\btone-offline\b/);
   await expectOneSticker(rows(page));
   await statusWay(page, "Винні зараз").click();
   await expect(rows(page)).toHaveCount(1);
@@ -1825,6 +1825,11 @@ for (const [name, theme, scheme] of [
       name: "Магазину «Основний» винні",
     });
     await expect(block.locator(".owed-sum")).toHaveText("4 000,00 грн");
+    // What is owed in money-xl, as on S21 (audit 2026-11-13, sale P2-4).
+    await expect(block.locator(".customer-owed .sum")).toHaveCSS(
+      "font-size",
+      "56px",
+    );
     // Their phone, to call, in the theme's accent, never the browser's blue.
     const phone = page.locator("a[href^='tel:']");
     await expect(phone).toHaveCSS("color", await token(page, "--accent-text"));
@@ -1969,8 +1974,10 @@ for (const [name, theme, scheme] of [
     await expect(page.getByText("Нічого не винні")).toHaveCount(0);
     await page.screenshot({ path: `test-results/credits-pills-${name}.png` });
     await statusWay(page, "Списані").click();
+    // Written off, closed for good: `offline`'s grey (spec §6.18; audit
+    // 2026-11-13, sale P2-5).
     const written = page.getByText("Списано", { exact: true });
-    await expect(written).toHaveClass("sticker tone-neutral");
+    await expect(written).toHaveClass("sticker tone-offline");
     expect(await contrast(written)).toBeGreaterThanOrEqual(4.5);
     await statusWay(page, "Винні зараз").click();
 

@@ -222,6 +222,11 @@ test("goods bought at another store come back here, and this store hands the mon
   const card = page.getByRole("article");
   await expect(card).toHaveCount(1);
   await expect(card).toContainText("Магазин «Другий»");
+  // The store's name `neutral`, as on a debt's row (audit 2026-11-13, sale
+  // P2-5).
+  await expect(card.getByText("Магазин «Другий»", { exact: true })).toHaveClass(
+    "sticker tone-neutral",
+  );
 
   await card.getByRole("button", { name: "Оформити повернення" }).click();
   // The sale's store in the header's one line (audit after stage 2, sale

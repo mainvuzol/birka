@@ -642,6 +642,31 @@ test("before a tap: nine things to see, nothing to type and nothing to press; a 
       exact: true,
     }),
   ).toBeVisible();
+  // At the till's scale (audit 2026-11-13, sale P2-1): what comes back in
+  // money-l, as the tray's «Разом»; the button that hands it back 56, its
+  // name two lines at most at 360, the longest way chosen.
+  const large = panel.locator(".pay-total .sum");
+  await expect(large).toHaveCSS("font-size", "32px");
+  await expect(large).toHaveCSS("line-height", "34px");
+  await expect(large).toHaveCSS("font-weight", "800");
+  await panel.getByRole("radio", { name: "На картку" }).check();
+  const card = panel.getByRole("button", {
+    name: "Повернути покупцю 6 000,00 грн на картку",
+    exact: true,
+  });
+  await expect(card).toHaveCSS("min-height", "56px");
+  expect((await card.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(56);
+  const lines = await card.evaluate((node) => {
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    return new Set(
+      [...range.getClientRects()].map((rect) => Math.round(rect.top)),
+    ).size;
+  });
+  expect(lines).toBeLessThanOrEqual(2);
+  await expect(card).toBeInViewport({ ratio: 1 });
+  await noSideScroll(page);
+  await page.screenshot({ path: "test-results/return-dock-360.png" });
 });
 
 test("the way not read says so, the seller's own goes, and the result's sum is the server's", async ({

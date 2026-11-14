@@ -176,6 +176,38 @@ export function Returns({
         .map((sale) => [sale.id, sale]),
     ).values(),
   ];
+  // A search read and nothing in it: its blank tag says so, what to do
+  // next inside it.
+  const nothingFound =
+    search !== "" &&
+    !!sales.data &&
+    !sales.isPlaceholderData &&
+    listed.length === 0;
+  const offer = (
+    <p className="hint elsewhere-offer">
+      <span id={offerId}>Купили в іншому магазині мережі?</span>{" "}
+      <button
+        type="button"
+        className="quiet"
+        aria-describedby={offerId}
+        onClick={() => {
+          setElsewhere(true);
+        }}
+      >
+        Шукати там
+      </button>
+    </p>
+  );
+  // Found in neither store, a coat sold from the notebook, before Бірка:
+  // the manager decides (owner decision, 2026-10-17, В5 (а); returns task
+  // list, P1-6). Said after the other stores' offer, which comes first, and
+  // under the other stores' empty search too, where nothing is left to look
+  // in (stage 2, orders task list, P0-6, В-ЗП7 (а)).
+  const manager = (
+    <p className="hint returns-manager">
+      Продали ще до Бірки? Покличте менеджера — таке повернення вирішує він.
+    </p>
+  );
 
   useEffect(() => {
     if (open === null) return;
@@ -320,14 +352,18 @@ export function Returns({
         ) : listed.length === 0 ? (
           // Nothing found (spec §6.28): a blank tag drawn, the words under
           // it (stage 2, orders task list, P0-6).
+          // The fact its line, what to do its meta; «Очистити», the other
+          // stores and the manager its children, as the till's (audit
+          // 2026-11-13, sale P2-2).
           search ? (
             <Empty
               className="returns-empty"
               title={
                 away
                   ? `В інших магазинах мережі за «${visible(search)}» продажів не знайдено.`
-                  : `За «${visible(search)}» продажів не знайдено. Перевірте назву або очистіть пошук.`
+                  : `За «${visible(search)}» продажів не знайдено.`
               }
+              meta={away ? undefined : "Перевірте назву або очистіть пошук."}
             >
               <button
                 type="button"
@@ -340,6 +376,8 @@ export function Returns({
               >
                 Очистити
               </button>
+              {offerElsewhere && offer}
+              {manager}
             </Empty>
           ) : (
             <Empty
@@ -365,7 +403,11 @@ export function Returns({
                 rows anew, nor takes the focus from one (review). */}
             {byDay(listed).map((day) => (
               <div key={dayOf(day[0]?.sold_at ?? "")}>
-                <h3 className="sale-day">{dayTitle(day[0]?.sold_at ?? "")}</h3>
+                {/* The section's caption, as «В інших магазинах мережі»
+                    over it (spec §4; audit 2026-11-13, sale P2-2). */}
+                <h3 className="t-label sale-day">
+                  {dayTitle(day[0]?.sold_at ?? "")}
+                </h3>
                 {/* A day's rows on a list's white block (spec §6.8; audit
                     after stage 2, frame P2-2). */}
                 <div className="list-block">
@@ -412,38 +454,9 @@ export function Returns({
             )}
           </>
         )}
-        {offerElsewhere && (
-          // Under the results, what was typed kept (owner decision,
-          // 2026-10-17, В3 (а)).
-          <p className="hint elsewhere-offer">
-            <span id={offerId}>Купили в іншому магазині мережі?</span>{" "}
-            <button
-              type="button"
-              className="quiet"
-              aria-describedby={offerId}
-              onClick={() => {
-                setElsewhere(true);
-              }}
-            >
-              Шукати там
-            </button>
-          </p>
-        )}
-        {search !== "" &&
-          !!sales.data &&
-          !sales.isPlaceholderData &&
-          listed.length === 0 && (
-            // Found in neither store, a coat sold from the notebook, before
-            // Бірка: the manager decides (owner decision, 2026-10-17, В5 (а);
-            // returns task list, P1-6). Said after the other stores' offer,
-            // which comes first, and under the other stores' empty search
-            // too, where nothing is left to look in (stage 2, orders task
-            // list, P0-6, В-ЗП7 (а)).
-            <p className="hint returns-manager">
-              Продали ще до Бірки? Покличте менеджера — таке повернення вирішує
-              він.
-            </p>
-          )}
+        {/* Under the results, what was typed kept (owner decision,
+            2026-10-17, В3 (а)); nothing found, inside the blank tag. */}
+        {offerElsewhere && !nothingFound && offer}
       </section>
     </>
   );

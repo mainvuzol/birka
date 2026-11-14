@@ -103,7 +103,18 @@ export function CustomerRow({
           {money(customer.owed)}
         </span>
       ) : (
-        <Sticker tone={alike?.status === "SETTLED" ? "paid" : "neutral"}>
+        // Written off, closed for good: `offline`'s grey, apart from
+        // «Сплачено» and a store's name; nothing owed stays `neutral` (spec
+        // §6.18; audit 2026-11-13, sale P2-5).
+        <Sticker
+          tone={
+            alike?.status === "SETTLED"
+              ? "paid"
+              : alike?.status === "WRITTEN_OFF"
+                ? "offline"
+                : "neutral"
+          }
+        >
           {closed}
         </Sticker>
       )}

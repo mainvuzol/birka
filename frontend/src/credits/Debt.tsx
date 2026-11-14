@@ -624,7 +624,7 @@ export function Debt({
             <div className="debt-closed">
               <p>
                 <Sticker
-                  tone={credit.status === "WRITTEN_OFF" ? "neutral" : "paid"}
+                  tone={credit.status === "WRITTEN_OFF" ? "offline" : "paid"}
                 >
                   {statusLabels[credit.status]}
                 </Sticker>
@@ -831,7 +831,12 @@ export function Debt({
         {credit.status === "OPEN" ? (
           // What they owe, first and large (P0-3): «скільки я ще винна?».
           <div className="owed-card" role="group" aria-label="Скільки винні">
-            <p className="owed-what">Винні</p>
+            {/* As S21's: the debt's glyph and word (audit 2026-11-13, sale
+                P2-4). */}
+            <p className="owed-what">
+              <Icon name="owed" size={20} />
+              Винні
+            </p>
             <p className="owed-sum">
               <Sum value={money(credit.owed)} />
             </p>
@@ -844,7 +849,7 @@ export function Debt({
           <div className="debt-closed">
             <p>
               <Sticker
-                tone={credit.status === "WRITTEN_OFF" ? "neutral" : "paid"}
+                tone={credit.status === "WRITTEN_OFF" ? "offline" : "paid"}
               >
                 {statusLabels[credit.status]}
               </Sticker>
@@ -867,7 +872,8 @@ export function Debt({
             {problem}
           </p>
         )}
-        <h3>Історія</h3>
+        {/* The section's caption, as on S20 (audit 2026-11-13, sale P2-4). */}
+        <h3 className="t-label customer-history-title">Історія</h3>
         <History credit={credit} />
         {takes && deposit && !main && (
           // Outside Telegram, its MainButton as the dock's one button.

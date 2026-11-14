@@ -464,9 +464,10 @@ function StoreBlock({
             }}
           />
         ) : (
-          // Its place while it is read, in its own lines' heights.
+          // Its place while it is read, in its own lines' heights: what is
+          // owed its money-xl line (audit 2026-11-13, sale P2-4; review).
           <div className="owed-lines" aria-hidden="true">
-            <p className="owed-sum">
+            <p className="owed-sum customer-owed">
               <strong className="sum skeleton-line">
                 <span>00 000</span>
               </strong>
@@ -543,7 +544,7 @@ function OneDebt({ credit }: { credit: Credit }): JSX.Element {
   ) : (
     <div className="customer-debt">
       <p>
-        <Sticker tone={credit.status === "WRITTEN_OFF" ? "neutral" : "paid"}>
+        <Sticker tone={credit.status === "WRITTEN_OFF" ? "offline" : "paid"}>
           {statusLabels[credit.status]}
         </Sticker>
         {credit.closed_at && ` Закрито ${shortDay(credit.closed_at)}`}
@@ -606,7 +607,7 @@ function DebtRows({
                 </span>
               ) : (
                 <Sticker
-                  tone={credit.status === "WRITTEN_OFF" ? "neutral" : "paid"}
+                  tone={credit.status === "WRITTEN_OFF" ? "offline" : "paid"}
                 >
                   {statusLabels[credit.status]}
                 </Sticker>
