@@ -48,6 +48,7 @@ import { ScreenHeader } from "@/shared/ScreenHeader";
 import { SearchField } from "@/shared/SearchField";
 import { Sheet } from "@/shared/Sheet";
 import { Stub } from "@/shared/Stub";
+import { Placeholder } from "@/shared/Placeholder";
 import { usePanelRoom } from "@/shared/panel";
 import { askPopup, buzz, popupHere, useMainButton } from "@/shared/telegram";
 import { Sticker } from "@/shared/Sticker";
@@ -226,11 +227,29 @@ function ModelSearch({
         />
       )}
       {asked !== null &&
+        !found.isError &&
+        (found.isPending ||
+          (found.isPlaceholderData && items.length === 0)) && (
+          // Nothing found before, the words not read yet: three rows in
+          // grey, one line each, as the catalogue's search; a screen reader
+          // hears it is searched (audit 2026-11-13, goods P2-1).
+          <Placeholder
+            said="Шукаємо моделі…"
+            rows={3}
+            day={false}
+            rowShape={{
+              list: "catalog-rows",
+              row: "catalog-proposal",
+              meta: false,
+            }}
+          />
+        )}
+      {asked !== null &&
         found.data &&
         !found.isPlaceholderData &&
         items.length === 0 && (
           <p className="t-meta" role="status">
-            Нічого не знайшли за «{visible(asked)}».
+            Нічого не знайшли за «{visible(asked)}»
           </p>
         )}
       {items.length > 0 && (
@@ -505,6 +524,7 @@ function RenameSheet({
           <label>
             {wordLabels.concept}
             <input
+              enterKeyHint="done"
               required
               maxLength={200}
               value={fields.concept}
@@ -516,6 +536,7 @@ function RenameSheet({
           <label>
             {wordLabels.color}
             <input
+              enterKeyHint="done"
               maxLength={120}
               value={fields.color}
               onChange={(e) => {
@@ -539,6 +560,7 @@ function RenameSheet({
                 <label key={name}>
                   {wordLabels[name]}
                   <input
+                    enterKeyHint="done"
                     maxLength={name === "source" ? 200 : 120}
                     value={fields[name]}
                     onChange={(e) => {
@@ -550,6 +572,7 @@ function RenameSheet({
               <label>
                 Довжина, см
                 <input
+                  enterKeyHint="done"
                   inputMode="decimal"
                   value={fields.length_cm}
                   onChange={(e) => {
@@ -560,6 +583,7 @@ function RenameSheet({
               <label>
                 Категорія
                 <input
+                  enterKeyHint="done"
                   maxLength={120}
                   value={fields.business_category}
                   onChange={(e) => {
@@ -570,6 +594,7 @@ function RenameSheet({
               <label>
                 Тип виробу
                 <input
+                  enterKeyHint="done"
                   maxLength={120}
                   value={fields.garment_type}
                   onChange={(e) => {
@@ -679,6 +704,7 @@ function RenameSheet({
                 <label>
                   Чим відрізняється модель
                   <textarea
+                    enterKeyHint="enter"
                     required
                     maxLength={1000}
                     value={note}

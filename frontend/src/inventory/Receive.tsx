@@ -6,12 +6,14 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, errorText, refusedWrite } from "@/shared/api";
 import { Unread } from "@/shared/Unread";
 import { Placeholder } from "@/shared/Placeholder";
+import { Empty } from "@/shared/Empty";
 import { Eyelet, RecordedMark } from "@/shared/Eyelet";
 import { Icon } from "@/shared/Icon";
 import { usePanelRoom } from "@/shared/panel";
 import { Sheet } from "@/shared/Sheet";
 import { Stub } from "@/shared/Stub";
 import { visible } from "@/shared/visible";
+import { enterGoes } from "@/shared/enter";
 import { ScreenHeader } from "@/shared/ScreenHeader";
 import { ResultScreen } from "@/shared/ResultScreen";
 import { buzz, useAskBeforeClosing, useMainButton } from "@/shared/telegram";
@@ -371,6 +373,9 @@ export function Receive({
     .filter((line) => line.unit_cost !== null);
   const warehouse = receivable.find((location) => location.id === locationId);
   const words = `Записати прихід · ${String(units)} шт.`;
+  // No warehouse takes a delivery: nothing to count into (audit 2026-11-13,
+  // goods P2-1; review).
+  const nowhere = locations.data !== undefined && receivable.length === 0;
   const ready = units > 0 && warehouse !== undefined && !blocked && !working;
   const press = (): void => {
     if (ready) void send();
@@ -378,12 +383,12 @@ export function Receive({
   // The screen's one action, Telegram's: put away under the sheet and once
   // the delivery is recorded.
   const main = useMainButton(words, press, {
-    shown: !received && !details && !pricing,
+    shown: !received && !details && !pricing && !nowhere,
     progress: busy,
     active: ready,
   });
   const dock = useRef<HTMLDivElement>(null);
-  usePanelRoom(dock, !received && !main);
+  usePanelRoom(dock, !received && !main && !nowhere);
   // Anything counted and not yet recorded: Telegram asks before Бірка
   // closes (spec §4.4).
   useAskBeforeClosing(!received && units > 0);
@@ -491,6 +496,22 @@ export function Receive({
     .filter((part) => part !== null)
     .join(" · ");
 
+  // Nothing said of the rule (stage 2, goods task list, P1-5): the blank tag
+  // alone — no search, no count, no dock under it (audit 2026-11-13, goods
+  // P2-1; review).
+  if (nowhere)
+    return (
+      <>
+        <ScreenHeader
+          title="Прийшов товар"
+          back={back && <BackToMore back={back} />}
+        />
+        <section className="goods-part receive">
+          <Empty title="Тут немає складу для приймання." />
+        </section>
+      </>
+    );
+
   return (
     <>
       <ScreenHeader
@@ -513,9 +534,6 @@ export function Receive({
                 void locations.refetch();
               }}
             />
-          ) : receivable.length === 0 ? (
-            // Nothing said of the rule (stage 2, goods task list, P1-5).
-            <p>Тут немає складу для приймання.</p>
           ) : onlyWarehouse ? (
             <p className="t-row receive-place">
               Склад «{visible(onlyWarehouse.name)}»
@@ -601,8 +619,9 @@ export function Receive({
                 />
               ) : (
                 <div className="receive-sizes">
-                  {sizes.data.map((size) => {
+                  {sizes.data.map((size, at) => {
                     const got = counts[size.size_id] ?? 0;
+                    const last = at === sizes.data.length - 1;
                     const code = visible(size.code);
                     return (
                       <div
@@ -628,6 +647,8 @@ export function Receive({
                           −
                         </button>
                         <input
+                          enterKeyHint={last ? "done" : "next"}
+                          onKeyDown={enterGoes}
                           // Typed as well: thirty of a size are not thirty
                           // taps.
                           inputMode="numeric"
@@ -810,6 +831,8 @@ export function Receive({
                 ? "Домовлена ціна за шт., грн"
                 : "Закупівельна ціна за шт., грн (необов’язково)"}
               <input
+                enterKeyHint="next"
+                onKeyDown={enterGoes}
                 inputMode="decimal"
                 placeholder={paidWhenSold(acquisition) ? "обов’язково" : "0,00"}
                 value={cost}
@@ -855,6 +878,8 @@ export function Receive({
             <label>
               Примітка (накладна, постачальник)
               <input
+                enterKeyHint="done"
+                onKeyDown={enterGoes}
                 value={notes}
                 maxLength={1000}
                 onChange={(event) => {

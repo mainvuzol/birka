@@ -12,6 +12,7 @@ import {
   rowNamed,
   section,
   sections,
+  supplierList,
   holdReads,
   under14,
 } from "./fixtures";
@@ -403,7 +404,29 @@ test("goods go back to a supplier from a warehouse, and come back when it is can
   await size.getByRole("button", { name: "Менше" }).click();
   await size.getByRole("button", { name: "Менше" }).click();
   await expect(size.getByRole("textbox", { name: "M, шт." })).toHaveValue("2");
-  await page.getByLabel("Примітка (необов’язково)").fill("не продалось");
+  // The one size the last: «done», as the note; Enter puts the keyboard
+  // away, nothing sent (audit 2026-11-13, frame P2-5 p. 1).
+  let returns = 0;
+  const returning = (request: Request): void => {
+    if (
+      request.method() === "POST" &&
+      request.url().endsWith("/api/v1/supplier-returns")
+    )
+      returns += 1;
+  };
+  page.on("request", returning);
+  const typed = size.getByRole("textbox", { name: "M, шт." });
+  await expect(typed).toHaveAttribute("enterkeyhint", "done");
+  await typed.press("Enter");
+  await expect(typed).not.toBeFocused();
+  await expect(typed).toHaveValue("2");
+  const note = page.getByLabel("Примітка (необов’язково)");
+  await expect(note).toHaveAttribute("enterkeyhint", "done");
+  await note.fill("не продалось");
+  await note.press("Enter");
+  await expect(note).not.toBeFocused();
+  expect(returns).toBe(0);
+  page.off("request", returning);
   // Refused once for a reason the screen does not name: its own words,
   // never an order's (owner decision, 2026-10-25); what was counted stays,
   // and the warehouse is read again.
@@ -538,6 +561,30 @@ test("goods go back to a supplier from a warehouse, and come back when it is can
   const edit = page.getByRole("dialog", { name: "Змінити постачальника" });
   await expect(edit).toHaveAttribute("data-ready", "");
   await expect(edit.getByLabel("Назва")).toHaveValue(supplier);
+  // Enter goes as its key says, nothing sent (audit 2026-11-13, frame P2-5
+  // p. 1): «Назва» «next» to «Телефон», whose «done» puts the keyboard
+  // away, the sheet open — «Зберегти» alone saves.
+  let saves = 0;
+  const saving = (request: Request): void => {
+    if (
+      request.method() !== "GET" &&
+      /\/api\/v1\/suppliers(\/|$)/.test(new URL(request.url()).pathname)
+    )
+      saves += 1;
+  };
+  page.on("request", saving);
+  const named = edit.getByLabel("Назва");
+  const phone = edit.getByLabel("Телефон");
+  await expect(named).toHaveAttribute("enterkeyhint", "next");
+  await expect(phone).toHaveAttribute("enterkeyhint", "done");
+  await named.press("Enter");
+  await expect(phone).toBeFocused();
+  await phone.press("Enter");
+  await expect(phone).not.toBeFocused();
+  // The cursor left on the sheet, where Escape still closes it (review).
+  await expect(edit).toBeFocused();
+  expect(saves).toBe(0);
+  page.off("request", saving);
   await refuseOnce(page, "**/api/v1/suppliers/*", 422);
   await edit.getByRole("button", { name: "Зберегти" }).click();
   await expect(
@@ -984,7 +1031,35 @@ test("a supplier is never written twice: the one on the list is picked", async (
 }) => {
   const supplier = `Арно ${randomUUID().slice(0, 6)}`;
   await newReturn(page);
-  await addOne(page, supplier, returnForm(page));
+  // A new supplier's own fields go as their keys say, nothing sent, the
+  // cursor left on the sheet (audit 2026-11-13, frame P2-5 p. 1; review).
+  const list = await supplierList(page, { of: returnForm(page) });
+  await list
+    .getByRole("button", { name: "Новий постачальник", exact: true })
+    .click();
+  const named = list.getByLabel("Назва постачальника");
+  const phone = list.getByLabel("Телефон (необов’язково)");
+  let added = 0;
+  const adding = (request: Request): void => {
+    if (
+      request.method() === "POST" &&
+      new URL(request.url()).pathname === "/api/v1/suppliers"
+    )
+      added += 1;
+  };
+  page.on("request", adding);
+  await expect(named).toHaveAttribute("enterkeyhint", "next");
+  await expect(phone).toHaveAttribute("enterkeyhint", "done");
+  await named.fill(supplier);
+  await named.press("Enter");
+  await expect(phone).toBeFocused();
+  await phone.fill("067 123 45 67");
+  await phone.press("Enter");
+  await expect(list).toBeFocused();
+  expect(added).toBe(0);
+  page.off("request", adding);
+  await list.getByRole("button", { name: "Додати постачальника" }).click();
+  await expect(list).toHaveCount(0);
   await addOne(page, `  ${supplier.toUpperCase()} `, returnForm(page));
   await expect(
     page.getByText(`«${supplier}» уже є у списку — обрано його.`),

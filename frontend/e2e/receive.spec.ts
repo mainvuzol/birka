@@ -142,6 +142,20 @@ test("a delivery of a known model is received into an explicitly chosen warehous
   await expect(m).toHaveValue("4");
   await plus(page, "M", 1);
   await expect(m).toHaveValue("5");
+  // A size's count goes on to the next by Enter, the last's «done» puts the
+  // keyboard away; nothing changes, nothing is sent (audit 2026-11-13,
+  // goods P2-3).
+  const counts = page.locator(".receive-sizes input");
+  const many = await counts.count();
+  expect(many).toBeGreaterThan(1);
+  for (let at = 0; at < many - 1; at += 1)
+    await expect(counts.nth(at)).toHaveAttribute("enterkeyhint", "next");
+  await expect(counts.nth(many - 1)).toHaveAttribute("enterkeyhint", "done");
+  await counts.nth(0).press("Enter");
+  await expect(counts.nth(1)).toBeFocused();
+  await counts.nth(many - 1).press("Enter");
+  await expect(counts.nth(many - 1)).not.toBeFocused();
+  await expect(m).toHaveValue("5");
   // Stepped back to 0, «−» is held and keeps the cursor.
   await plus(page, "L", 1);
   const fewer = receiveSize(page, "L").getByRole("button", { name: "Менше" });
@@ -158,9 +172,21 @@ test("a delivery of a known model is received into an explicitly chosen warehous
     "5 шт. · склад «Каса-склад»",
   );
   const sheet = await receiveWay(page);
-  await sheet
-    .getByLabel("Примітка (накладна, постачальник)")
-    .fill("Накладна 17");
+  // The price's «next» takes the cursor to the note, whose «done» puts the
+  // keyboard away: the sheet stays, nothing is sent (audit 2026-11-13,
+  // goods P2-3).
+  const price = sheet.getByLabel(/^Закупівельна ціна за шт\./);
+  const note = sheet.getByLabel("Примітка (накладна, постачальник)");
+  await expect(price).toHaveAttribute("enterkeyhint", "next");
+  await expect(note).toHaveAttribute("enterkeyhint", "done");
+  await price.press("Enter");
+  await expect(note).toBeFocused();
+  await note.fill("Накладна 17");
+  await note.press("Enter");
+  await expect(note).not.toBeFocused();
+  // The cursor left on the sheet, where Escape still closes it (review).
+  await expect(sheet).toBeFocused();
+  expect(sent).toHaveLength(0);
   await receiveWayDone(sheet);
   await expect(
     page.getByRole("button", {
@@ -619,9 +645,21 @@ test("a store with no warehouse to receive into says so, never who may (stage 2,
     });
   });
   await enter(page);
+  // The blank tag, the same words (audit 2026-11-13, goods P2-1).
+  const none = page.locator(".orders-empty", {
+    hasText: "Тут немає складу для приймання.",
+  });
+  await expect(none).toBeVisible();
+  await expect(none.locator(".orders-empty-mark")).toBeVisible();
+  // The blank tag alone: nothing to count into, no search, no dock
+  // (review).
+  await expect(page.getByLabel("Пошук у каталозі")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^Як надійшов/ })).toHaveCount(
+    0,
+  );
   await expect(
-    page.getByText("Тут немає складу для приймання.", { exact: true }),
-  ).toBeVisible();
+    page.getByRole("button", { name: /^Записати прихід/ }),
+  ).toHaveCount(0);
   await expect(page.getByText(/Зверніться|може приймати/)).toHaveCount(0);
   await expect(page.getByRole("group", { name: "Склад" })).toHaveCount(0);
 });

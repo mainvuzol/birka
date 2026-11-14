@@ -200,11 +200,45 @@ test("a store with no warehouse to count says so, never who may (stage 2, goods 
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
   await section(page, "Інвентаризація");
-  await expect(
-    page.getByText("Тут немає складу для інвентаризації.", { exact: true }),
-  ).toBeVisible();
+  // The blank tag, the same words (audit 2026-11-13, goods P2-1).
+  const none = page.locator(".orders-empty", {
+    hasText: "Тут немає складу для інвентаризації.",
+  });
+  await expect(none).toBeVisible();
+  await expect(none.locator(".orders-empty-mark")).toBeVisible();
   await expect(page.getByText(/Зверніться|може виправляти/)).toHaveCount(0);
   await expect(page.getByRole("group", { name: "Склад" })).toHaveCount(0);
+});
+
+test("a warehouse chosen for a stocktake and taken away is said in «Залишки»' words: «Оберіть інший склад.», no list named (audit 2026-11-13, goods P2-1)", async ({
+  page,
+}) => {
+  await enter(page, "Основний склад");
+  await expect(
+    page
+      .getByRole("group", { name: "Склад" })
+      .getByRole("button", { name: "Основний склад", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await page.route("**/api/v1/stock-locations?*", async (route) => {
+    const response = await route.fetch();
+    const places = (await response.json()) as { name: string }[];
+    await route.fulfill({
+      response,
+      json: places.filter((place) => place.name !== "Основний склад"),
+    });
+  });
+  await page.evaluate(() => {
+    window.dispatchEvent(new Event("visibilitychange"));
+  });
+  await expect(
+    page.getByText("Обраний склад більше не доступний. Оберіть інший склад.", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(page.getByText(/зі списку/)).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Основний склад", exact: true }),
+  ).toHaveCount(0);
 });
 
 test("«Інвентаризація»'s warehouses not read are the warning's plate with «Спробувати ще раз», which reads them again (audit after stage 2, goods P1-1)", async ({

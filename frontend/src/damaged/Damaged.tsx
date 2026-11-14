@@ -912,6 +912,7 @@ function UnitSheet({
                 ? "Чому списуємо (необов’язково)"
                 : "Примітка для постачальника (необов’язково)"}
             <textarea
+              enterKeyHint="enter"
               value={note}
               maxLength={1000}
               aria-describedby={hint}

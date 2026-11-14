@@ -13,6 +13,7 @@ import type { JSX, ReactNode } from "react";
  * a field 52 under its label; a row of size cells 60; a row of choices;
  * rows in their own list's shape, where a row is not a list's 64;
  * a size's steps 44 high; a history's thread under its label;
+ * one grey line where a short answer comes;
  * and the model tags with their cells, as before.
  */
 export function Placeholder({
@@ -33,6 +34,7 @@ export function Placeholder({
   rowShape,
   steps = 0,
   thread,
+  line = false,
 }: {
   said: string;
   /** The search field's place, above the tags. */
@@ -83,12 +85,24 @@ export function Placeholder({
   /** A history's thread under its label (spec §6.21): its days, its round
    * eyelets, a line and its meta each — «Інвентаризація»'s «Попередні». */
   thread?: { label: string; rows: number };
+  /** One grey line where a short answer comes, or nothing does: whether a
+   * warehouse has a list waiting (audit 2026-11-13, goods P2-1). */
+  line?: boolean;
 }): JSX.Element {
   const status = (
     <p role="status" className="visually-hidden">
       {said}
     </p>
   );
+  if (line)
+    return (
+      <>
+        {status}
+        <div className="placeholder placeholder-line" aria-hidden="true">
+          <span className="skeleton skeleton-name" />
+        </div>
+      </>
+    );
   if (stores > 0)
     return (
       <>

@@ -595,10 +595,13 @@ test("revoked warehouse clears its visible stock and selection", async ({
     await route.fulfill({ json: [] });
   });
   await page.getByRole("button", { name: "Оновити", exact: true }).click();
-  // Nothing said of the rule (stage 2, goods task list, P1-5).
-  await expect(
-    page.getByText("Тут немає складів.", { exact: true }),
-  ).toBeVisible();
+  // Nothing said of the rule (stage 2, goods task list, P1-5); the blank
+  // tag, the same words (audit 2026-11-13, goods P2-1).
+  const none = page.locator(".orders-empty", {
+    hasText: "Тут немає складів.",
+  });
+  await expect(none).toBeVisible();
+  await expect(none.locator(".orders-empty-mark")).toBeVisible();
   await expect(page.getByText(/Зверніться/)).toHaveCount(0);
   await expect(page.getByText(/Лоран шоколад 70(?:\.0)? см/)).toHaveCount(0);
   await expect(page.getByRole("group", { name: "Склад" })).toHaveCount(0);

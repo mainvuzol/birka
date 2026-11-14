@@ -17,6 +17,7 @@ import { Icon } from "@/shared/Icon";
 import { SearchField } from "@/shared/SearchField";
 import { Sheet } from "@/shared/Sheet";
 import { buzz } from "@/shared/telegram";
+import { enterGoes } from "@/shared/enter";
 import type { Supplier } from "./types";
 
 /** The network's suppliers, as whoever returns goods in this store sees them. */
@@ -410,6 +411,9 @@ export function SupplierPicker({
           value={name}
           maxLength={200}
           enterKeyHint="next"
+          // No form sends it: Enter as its key says (audit 2026-11-13,
+          // frame P2-5 p. 1; review).
+          onKeyDown={enterGoes}
           onChange={(event) => {
             const text = event.target.value;
             setDraft((now) => ({ ...now, name: text }));
@@ -423,6 +427,7 @@ export function SupplierPicker({
           maxLength={40}
           inputMode="tel"
           enterKeyHint="done"
+          onKeyDown={enterGoes}
           onChange={(event) => {
             const text = event.target.value;
             setDraft((now) => ({ ...now, phone: text }));

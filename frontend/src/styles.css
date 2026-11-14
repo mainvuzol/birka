@@ -2789,6 +2789,12 @@ section.credits.customer-card {
 .placeholder :is(.set-off-return, .catalog-proposal) .sale-main {
   align-self: stretch;
 }
+/* One grey line where a short answer comes (audit 2026-11-13, goods
+   P2-1): whether a warehouse has a list waiting, in a row's line. */
+.placeholder-line {
+  margin: 12px 0;
+  font-size: 16px;
+}
 /* «Товар»'s places while read (goods task list after stage 2, P2-2): a
    found model's row one line, 44, as the radio it holds the place of. */
 .placeholder .catalog-row {
@@ -5139,6 +5145,14 @@ span.cash-difference > .difference-sign {
    of the eyelet, as a stub's head is (review, 2026-11-06). */
 .stub > .eyelet + .elsewhere-line {
   margin-right: 32px;
+}
+/* A stub that begins with its line keeps it clear of the eyelet too, and of
+   a knot's loop, 16 further in (audit 2026-11-13, goods P2-4; review). */
+.stub > .eyelet + .stub-line {
+  margin-right: 32px;
+}
+.stub > .eyelet-knot + .stub-line {
+  margin-right: 52px;
 }
 .stub-kept {
   background-image: radial-gradient(

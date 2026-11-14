@@ -739,6 +739,85 @@ test("ambiguous named model retains explicit form then allows a distinct model",
   ).toBeVisible();
 });
 
+test("in Telegram «Ще ознаки» go by Enter as their keys say: each «next» takes the cursor on, «Довжина, см»'s «done» lets the keyboard go, nothing sent; a size cell tapped lets it go too (audit 2026-11-13, goods P2-3)", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const host = window as unknown as {
+      TelegramWebviewProxy: { postEvent: (event: string) => void };
+      told: string[];
+    };
+    host.told = [];
+    host.TelegramWebviewProxy = {
+      postEvent: (event) => {
+        host.told.push(event);
+      },
+    };
+  });
+  const hidden = (): Promise<number> =>
+    page.evaluate(
+      () =>
+        (window as unknown as { told: string[] }).told.filter(
+          (event) => event === "web_app_hide_keyboard",
+        ).length,
+    );
+  await page.goto(launch("9.1"));
+  await openStore(page, "Основний MAIN");
+  await section(page, "Перевірка каталогу");
+  // «Далі» is Telegram's MainButton here.
+  const sheet = await draft(page, `Клавіші ${randomUUID().slice(0, 8)}`);
+  // Several lines: Enter a new line (review).
+  await expect(sheet.getByLabel("Як записано")).toHaveAttribute(
+    "enterkeyhint",
+    "enter",
+  );
+  await pressMain(page);
+  await expect(sheet.getByText("Може, це модель, що вже є?")).toBeVisible();
+  await sheet.getByRole("button", { name: "Ні, це нова модель" }).click();
+  // The name's «next» goes to the colour (review).
+  await sheet.getByLabel("Назва моделі", { exact: true }).press("Enter");
+  await expect(sheet.getByLabel("Колір", { exact: true })).toBeFocused();
+  await sheet.getByRole("button", { name: "Ще ознаки" }).click();
+  const sent: string[] = [];
+  page.on("request", (request) => {
+    if (request.method() !== "GET" && request.url().includes("/api/v1/"))
+      sent.push(request.url());
+  });
+  const fields = [
+    "Джерело",
+    "Категорія",
+    "Тип виробу",
+    "Матеріал",
+    "Фактура",
+    "Хутро",
+    "Комір",
+    "Довжина, см",
+  ];
+  for (const [at, label] of fields.slice(0, -1).entries()) {
+    const field = sheet.getByLabel(label, { exact: true });
+    await expect(field).toHaveAttribute("enterkeyhint", "next");
+    await field.fill("так");
+    await field.press("Enter");
+    await expect(
+      sheet.getByLabel(fields[at + 1] ?? "", { exact: true }),
+    ).toBeFocused();
+  }
+  const length = sheet.getByLabel("Довжина, см", { exact: true });
+  await expect(length).toHaveAttribute("enterkeyhint", "done");
+  const before = await hidden();
+  await length.press("Enter");
+  await expect(length).not.toBeFocused();
+  expect(await hidden()).toBe(before + 1);
+  // The cursor left on the sheet, where Escape still closes it (review).
+  await expect(sheet).toBeFocused();
+  // The cursor in the name, a cell tapped: a choice, not typing.
+  await sheet.getByLabel("Назва моделі", { exact: true }).focus();
+  await sizeCell(sheet, "L").click();
+  await expect(sizeCell(sheet, "L")).toHaveAttribute("aria-pressed", "true");
+  expect(await hidden()).toBe(before + 2);
+  expect(sent).toEqual([]);
+});
+
 test("review-only users cannot open product creation", async ({ page }) => {
   await page.route("**/api/v1/me", async (route) => {
     const response = await route.fetch();

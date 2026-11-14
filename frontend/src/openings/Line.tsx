@@ -9,7 +9,8 @@ import { Back } from "@/shared/Back";
 import { Eyelet } from "@/shared/Eyelet";
 import { usePanelRoom } from "@/shared/panel";
 import { ScreenHeader } from "@/shared/ScreenHeader";
-import { buzz, useMainButton } from "@/shared/telegram";
+import { buzz, hideKeyboard, useMainButton } from "@/shared/telegram";
+import { enterGoes } from "@/shared/enter";
 import { Unread } from "@/shared/Unread";
 import { Placeholder } from "@/shared/Placeholder";
 import { visible } from "@/shared/visible";
@@ -242,8 +243,10 @@ function SizeCells({
             key={option.size_id}
             className={look(size === option.size_id, code.length > 3)}
             onClick={() => {
-              // A choice, felt (spec §4.4).
+              // A choice, felt (spec §4.4); not typing, so the keyboard
+              // goes away (spec §6.3; audit 2026-11-13, goods P2-3).
               buzz("selection");
+              hideKeyboard();
               choose(option.size_id);
             }}
           >
@@ -259,6 +262,7 @@ function SizeCells({
         className={look(size === "UNKNOWN", false)}
         onClick={() => {
           buzz("selection");
+          hideKeyboard();
           choose("UNKNOWN");
         }}
       >
@@ -659,6 +663,8 @@ export function LineTask({
     <label className="opening-count">
       Кількість
       <input
+        enterKeyHint="next"
+        onKeyDown={enterGoes}
         inputMode="numeric"
         value={fixed === null ? part.quantity : String(fixed)}
         disabled={fixed !== null}
@@ -712,6 +718,8 @@ export function LineTask({
           <label className="opening-skip">
             Чому це не товар
             <input
+              enterKeyHint="done"
+              onKeyDown={enterGoes}
               value={reason}
               maxLength={1000}
               placeholder="Наприклад, підсумок сторінки"
@@ -916,6 +924,8 @@ export function LineTask({
                   : "Звідки це відомо"
                 : "Примітка (необов’язково)"}
               <input
+                enterKeyHint="done"
+                onKeyDown={enterGoes}
                 value={note}
                 maxLength={1000}
                 onChange={(event) => {

@@ -48,6 +48,17 @@ export default tseslint.config(
           message:
             "A status is the shared Sticker, its glyph brought by its tone (frame P1-5).",
         },
+        {
+          // A field's Enter key says what it does (spec §6.3; audit
+          // 2026-11-13, frame P2-5 p. 1): «next», «done», «search» on one
+          // line, «enter» on several. Choices, a date, a file, a hidden
+          // value and the app's own keypad (inputMode none) bring no
+          // keyboard of their own.
+          selector:
+            'JSXOpeningElement[name.name=/^(input|textarea)$/]:not(:has(JSXAttribute[name.name="enterKeyHint"])):not(:has(JSXAttribute[name.name="type"][value.value=/^(radio|checkbox|date|file|hidden)$/])):not(:has(JSXAttribute[name.name="inputMode"][value.value="none"]))',
+          message:
+            "A field says what its Enter does: enterKeyHint «next», «done», «search», or «enter» for several lines (frame P2-5).",
+        },
       ],
     },
   },
