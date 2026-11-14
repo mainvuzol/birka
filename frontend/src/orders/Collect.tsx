@@ -171,7 +171,10 @@ export function Collect({
             role="group"
             aria-labelledby={`${hint}-ways-${String(index)}`}
           >
-            <p className="pay-caption" id={`${hint}-ways-${String(index)}`}>
+            <p
+              className="t-label pay-caption"
+              id={`${hint}-ways-${String(index)}`}
+            >
               {caption}
             </p>
             <div className={`pay-ways${ways.length === 2 ? " two" : ""}`}>

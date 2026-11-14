@@ -117,7 +117,8 @@ export function Count({
             onClick={takeOut}
           >
             <Icon name="info" size={16} />
-            Спершу запишіть видане з каси<span aria-hidden="true"> ›</span>
+            Спершу запишіть видане з каси
+            <Icon name="chevron-right" size={16} className="link-chevron" />
           </button>
         )}
         <p className="hint">Поки рахуєте, не продавайте.</p>
@@ -233,6 +234,9 @@ function Confirm({
       close={() => {
         if (!sending) cancel();
       }}
+      // «Так, закрити» on its way: Telegram's «Назад» hidden, not shown
+      // and dead (audit 2026-11-13, orders-cash P2-3).
+      held={sending}
       fallback={fallback}
       foot={
         <div className="count-foot">

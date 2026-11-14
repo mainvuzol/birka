@@ -42,7 +42,9 @@ export function parcelLine(
  * server's to find, said once it is recorded (owner decision, 2026-10-01) —
  * the sheet stays with the warning, the order sent, and «Готово» closes it.
  * Refused, why over the field, what was typed kept. Telegram asks before
- * closing while the field holds anything; its «Назад» closes the sheet.
+ * closing while the field holds anything; its «Назад» closes the sheet —
+ * hidden, and nothing closes it, while «Відправлено» is on its way (audit
+ * 2026-11-13, orders-cash P2-3).
  */
 export function Send({
   order,
@@ -118,7 +120,12 @@ export function Send({
   return (
     <Sheet
       title="Відправити"
-      close={close}
+      // «Відправлено» on its way: no way out until it is answered, as
+      // «Клієнт забрав» holds (audit 2026-11-13, orders-cash P2-3).
+      close={() => {
+        if (!(waiting && !sent)) close();
+      }}
+      held={waiting && !sent}
       said={meta}
       foot={
         main ? undefined : (

@@ -3506,11 +3506,11 @@ section.cash {
 .cash-closed .history-meta {
   font-size: 14px;
 }
+/* The section's caption, as the card's «У посилці» (audit 2026-11-13,
+   orders-cash P2-2). */
 .cash-subhead {
-  margin: 20px 0 2px;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--text-2);
+  margin: 20px 0 4px;
+  color: var(--pencil);
 }
 /* A quiet line, not a button: cash out first, so the field, the reminders
    and the panel stand together on a small screen. */
@@ -3811,6 +3811,14 @@ span.cash-difference > .difference-sign {
   padding: 0;
   list-style: none;
 }
+/* The list's caption over its rows, the screen's one context line the
+   store's (audit 2026-11-13, orders-cash P2-2): a heading of its screen,
+   in the text face as every caption — never the titles' display face. */
+.fix-caption {
+  margin: 0 0 8px;
+  font-family: var(--font-text);
+  color: var(--pencil);
+}
 .fix-time {
   flex: 0 0 auto;
   min-width: 48px;
@@ -3856,9 +3864,11 @@ span.cash-difference > .difference-sign {
 .fix-ways-rows {
   grid-template-columns: minmax(0, 1fr);
 }
+/* At the reading floor, 14, its line 14: the way still 54 (audit
+   2026-11-13, orders-cash P2-2). */
 .fix-now {
   display: block;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 500;
   line-height: 14px;
 }
@@ -4120,6 +4130,14 @@ span.cash-difference > .difference-sign {
 .order-rare {
   display: block;
   margin-top: 16px;
+}
+/* A link's way on, the set's chevron 16 in pencil after its words, as
+   «Зроблено сьогодні · N» and a debt's «Історія · N» — never a typed «›»
+   (audit 2026-11-13, orders-cash P2-1). */
+.link-chevron {
+  flex: none;
+  vertical-align: -3px;
+  color: var(--pencil);
 }
 /* A step refused where it was pressed: under its tag, at the card's foot,
    under the return's tick — nothing above it moves (audit 2026-11-13,
@@ -4548,11 +4566,12 @@ span.cash-difference > .difference-sign {
   width: var(--icon-s);
   height: var(--icon-s);
 }
-.shipping-changes-title[aria-expanded] span {
-  display: inline-block;
+/* Turned while the history is open, as a debt's «Історія · N» (audit
+   2026-11-13, orders-cash P2-1). */
+.shipping-changes-title[aria-expanded] .icon {
   transition: transform var(--dur-base) var(--ease-standard);
 }
-.shipping-changes-title[aria-expanded="true"] span {
+.shipping-changes-title[aria-expanded="true"] .icon {
   transform: rotate(90deg);
 }
 /* The MainButton's place outside Telegram (spec §6.4): 50 high, radius
@@ -4632,11 +4651,12 @@ span.cash-difference > .difference-sign {
 /* «Клієнт забрав» (orders task list, P0-3): its ways in two rows under
    their captions — the money given now, three; ahead or to the carrier,
    two. */
+/* The section's caption (audit 2026-11-13, orders-cash P2-2); a group's
+   inside the sheet, 8 above, not «У посилці»'s 20: the five ways stay in
+   reach at 360 × 640. */
 .pay-caption {
   margin: 8px 0 4px;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--text-2);
+  color: var(--pencil);
 }
 .pay-ways.two {
   grid-template-columns: repeat(2, minmax(0, 1fr));

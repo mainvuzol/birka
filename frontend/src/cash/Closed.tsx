@@ -8,7 +8,7 @@ import { usePanelRoom } from "@/shared/panel";
 import { methodLabels } from "@/shared/payment";
 import { Perforation, Stub } from "@/shared/Stub";
 import { Sum } from "@/shared/Sum";
-import { useMainButton } from "@/shared/telegram";
+import { buzz, useMainButton } from "@/shared/telegram";
 import { visible } from "@/shared/visible";
 import { Back } from "@/shared/Back";
 import { ScreenHeader } from "@/shared/ScreenHeader";
@@ -406,6 +406,7 @@ function ReasonForm({
               className="chip"
               aria-pressed={reason === text}
               onClick={() => {
+                if (reason !== text) buzz("selection");
                 setReason(text);
               }}
             >
@@ -417,6 +418,7 @@ function ReasonForm({
           id={field}
           value={reason}
           maxLength={1000}
+          enterKeyHint="enter"
           aria-describedby={hint}
           onChange={(event) => {
             setReason(event.target.value);

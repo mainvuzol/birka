@@ -9643,3 +9643,72 @@ every sum is the one the server answered.
   винні» stays `neutral`, «Сплачено» `paid`; a return row's «Магазин «…»»
   `neutral`, as a debt row's. `offline` reads at 4.5:1 on its ground in
   both themes.
+
+## Chosen in chat — 2026-11-14 (audit 2026-11-13, batch 6: the set's chevron for the last typed «›»; captions in the section's caption style, Fix's one context line, «зараз» at 14; Telegram's rules in «Каса» and the orders' sheets; «Продаж записано» the result's heading; orders-cash P2-1, P2-2, P2-3, P2-8)
+
+Chosen here on 2026-11-14, after batch 5 (#206) was merged («merged, go
+next»): the orders-cash list's quick wins (its §8) — P2-1, P2-2, P2-3 and
+P2-8, look and Telegram's rules only. Built as the task list gives them;
+what it did not give is decided here or a reading for the owner. No right,
+no server rule, no word and no name a reader hears changes; nothing sent
+changes.
+- **A link's way on** (orders-cash P2-1; direction §4, spec §5 «Строка
+  списку»): «Скасовані й повернені на склад», «Історія доставки», «Змінити
+  доставку» / «ТТН ще немає — вписати», «Товар повернувся на склад» and
+  «Спершу запишіть видане з каси» say it by the set's chevron 16 in pencil
+  after their words and on their line (`.link-chevron`), hidden from a
+  reader — never a typed «›»; their places, sizes (44) and order as
+  before. «Історія доставки» turns its chevron 90° while open, as a
+  debt's «Історія · N»; its turn eased as before, still where motion is
+  reduced. The count's reminder keeps its info glyph before the words.
+- **Captions** (orders-cash P2-2; direction §4 «підпис розділу»):
+  «Видано й внесено після закриття» on «Каса» and the ways' «Зараз, у
+  магазині» / «Наперед чи перевізнику» in «Клієнт забрав» are the
+  section's caption, `t-label` 13/700 in capitals by the style, in pencil,
+  as the card's «У посилці». «Каса»'s keeps 20 above and now 4 under, as
+  «У посилці»; the sheet's keep 8 above and 4 under (decided here: a
+  group's caption inside the sheet, and the five ways stay in reach at
+  360 × 640 as before).
+- **«Змінити спосіб оплати» (the seller's)** (orders-cash P2-2; direction
+  §2 P2): one context line under the title, the store's; «Ваші операції
+  після останнього закриття» is the list's caption over its rows — a
+  heading of the screen (level 2), in the text face (decided here: the
+  `h2` rule's display face is the titles'; the direction keeps it for
+  titles, money from 28 and sizes) — over the rows, over their places
+  while read and over a refused read; never over the blank tag, whose
+  «Після останнього закриття ви ще нічого не провели.» says it (decided
+  here). The list's name for a reader stays «Ваші операції». At 360 the
+  caption is two lines.
+- **«зараз» under the way an operation has** (orders-cash P2-2): 14/500,
+  the reading floor, on a line of 14 — the way still the ways' 54 (18 +
+  14 + its padding and border), its place while read the same.
+- **A choice felt** (orders-cash P2-3; spec §4.4, §6 p. 9): a chip of
+  «Кому чи на що», a reason's chip of «Чому не збігається?» and a new way
+  of «Новий спосіб оплати» buzz `selection` once as the choice changes,
+  never on the one already chosen — as the goods' and the orders' chips.
+- **The keyboard's key** (orders-cash P2-3; spec §6 p. 3): «На що» /
+  «Примітка» of «Видати з каси» / «Внести в касу» and «Пояснення» of a way
+  changed say «done»; pressed, the keyboard goes and what was typed stays
+  — nothing is sent (decided here: as the sum's field over them; the
+  sheet's or the dock's button sends). The close's reason, the waybill
+  sheet's «Куди і як відправили» and a return's «Причина повернення» say
+  «enter»: a new line, as the returns' and the debts' texts.
+- **«Назад» while a write is on its way** (orders-cash P2-3; spec §6
+  p. 8): «Так, закрити», «Відправлено» and «Зберегти доставку» hold their
+  sheets while asked — Telegram's «Назад» hidden, and Escape, the scrim
+  and the handle close nothing, as «Клієнт забрав» and «Видати з каси»
+  hold. Answered, refused or lost, as before: the close's refusal over the
+  count's dock with «Назад» the count's; «Відправлено» and «Зберегти
+  доставку» answered, the card under «Назад» again. A waybill another
+  order has: the sheet stays with its warning, never held, «Готово»
+  closes it.
+- **«Продаж записано» after «Клієнт забрав»** (orders-cash P2-8; spec
+  §6.30): the result's heading in the display face 24/800 (`t-sheet`), as
+  the till's; «Продаж записано один раз» the same; its eyelet, level,
+  cursor and scroll as before. At 360 one line.
+- **A reading for later** (found here, not built): nine other `h2`
+  captions with `t-label` («Сьогодні»'s sections and search groups,
+  «Гроші»'s two, «У поставці», «У поверненні», «Історія змін»,
+  «Попередні», an opening's «Модель») take the display face from the `h2`
+  rule, while every `h3` and `p` caption is in the text face. Left as
+  they are in this batch.

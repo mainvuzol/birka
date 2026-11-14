@@ -201,7 +201,15 @@ export function FixStep({
       />
       <section className="cash-fix">
         {kept}
-        <p className="cash-context">Ваші операції після останнього закриття</p>
+        {/* The list's caption over its rows, the store's line the one
+            context line (audit 2026-11-13, orders-cash P2-2): over their
+            places while they are read and over a refused read, as what it
+            names; never over the blank tag, which says its words. */}
+        {mine.data?.items.length !== 0 && (
+          <h2 className="t-label fix-caption">
+            Ваші операції після останнього закриття
+          </h2>
+        )}
         {mine.isPending ? (
           <Placeholder said="Завантажуємо…" rows={3} day={false} block />
         ) : mine.error ? (
@@ -325,6 +333,7 @@ export function WayCard({
             aria-pressed={to === way}
             disabled={disabled || way === current}
             onClick={() => {
+              if (to !== way) buzz("selection");
               setTo(way);
               setProblem(null);
             }}
@@ -341,9 +350,16 @@ export function WayCard({
           value={note}
           maxLength={200}
           disabled={disabled}
+          enterKeyHint="done"
           aria-describedby={hint}
           onChange={(event) => {
             setNote(event.target.value);
+          }}
+          onKeyDown={(event) => {
+            // The keyboard put away, «Змінити на «…»» in view.
+            if (event.key !== "Enter") return;
+            event.preventDefault();
+            event.currentTarget.blur();
           }}
         />
         <NoCustomerData id={hint} />

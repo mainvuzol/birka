@@ -166,6 +166,7 @@ export function Move({
                 aria-pressed={kind === each}
                 disabled={disabled}
                 onClick={() => {
+                  if (kind !== each) buzz("selection");
                   setKind(each);
                   setProblem(null);
                   // Chosen: the sum next, the keyboard already up.
@@ -226,9 +227,16 @@ export function Move({
             value={note}
             maxLength={200}
             disabled={disabled}
+            enterKeyHint="done"
             aria-describedby={hint}
             onChange={(event) => {
               setNote(event.target.value);
+            }}
+            onKeyDown={(event) => {
+              // As the sum's: the keyboard put away, the dock in view.
+              if (event.key !== "Enter") return;
+              event.preventDefault();
+              event.currentTarget.blur();
             }}
           />
           <NoCustomerData id={hint} />

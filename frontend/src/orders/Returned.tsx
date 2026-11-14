@@ -162,6 +162,7 @@ export function Returned({
             <textarea
               maxLength={1000}
               value={reason}
+              enterKeyHint="enter"
               aria-describedby={hint}
               onChange={(event) => {
                 setReason(event.target.value);

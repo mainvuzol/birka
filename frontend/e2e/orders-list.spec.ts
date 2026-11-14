@@ -1,6 +1,7 @@
 import {
   test,
   expect,
+  expectLinkChevron,
   expectPlate,
   openStore,
   section,
@@ -620,6 +621,9 @@ test("the string of places is the filter: «До відправлення 3 · �
   const link = page.getByRole("button", {
     name: "Скасовані й повернені на склад",
   });
+  // Its way on the set's chevron, never a typed «›» (audit 2026-11-13,
+  // orders-cash P2-1).
+  await expectLinkChevron(link, "Скасовані й повернені на склад");
   await link.click();
   const heading = page.getByRole("heading", {
     name: "Скасовані й повернені на склад",

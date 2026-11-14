@@ -1,8 +1,11 @@
 import {
   test,
   expect,
+  chevronTurn,
   dockOnMenu,
+  expectCaption,
   expectGlyphBeside,
+  expectLinkChevron,
   expectStub,
   openStore,
   section,
@@ -338,6 +341,17 @@ async function pressAsShown(page: Page, text: string): Promise<void> {
   await page.evaluate((wanted) => {
     (window as unknown as { pressWhen: string }).pressWhen = wanted;
   }, text);
+}
+
+/** What Telegram's «Назад» was last told: nothing, before it was. */
+async function back(page: Page): Promise<unknown> {
+  return page.evaluate(
+    () =>
+      (window as unknown as { told: [string, unknown][] }).told
+        .filter(([event]) => event === "web_app_setup_back_button")
+        .map(([, data]) => data)
+        .at(-1) ?? null,
+  );
 }
 
 /** Its MainButton put away, or never shown. */
@@ -747,6 +761,9 @@ test("sent without a waybill says it may come later; refused, a buzz of its own 
     { type: "notification", notification_type: "error" },
   ]);
   await expect(standing(page)).toHaveText("До відправлення");
+  // Answered: the sheet no longer held — Telegram's «Назад» shown again
+  // (audit 2026-11-13, orders-cash P2-3).
+  await expect.poll(() => back(page)).toEqual({ is_visible: true });
   server.refuse = false;
   await pressMain(page, "Відправлено");
   await expect(sending).toHaveCount(0);
@@ -1002,6 +1019,9 @@ test("a waybill another order has: recorded with a warning's buzz, the sheet kep
     sending.getByLabel("Номер ТТН (можна дописати пізніше)"),
   ).toHaveJSProperty("readOnly", true);
   await expect(standing(page)).toHaveText("Відправлено");
+  // Sent: never held over its warning — Telegram's «Назад» shown (audit
+  // 2026-11-13, orders-cash P2-3).
+  await expect.poll(() => back(page)).toEqual({ is_visible: true });
   // «Готово» pressed a while later, and again the moment the card's
   // «Прибув на пошту» stands in its place: let go (review, 2026-11-01).
   await wait(page, 800);
@@ -1325,6 +1345,10 @@ test("«Клієнт забрав»: its sheet of five ways in two rows, each th
   ]);
   // Nothing chosen for the seller.
   await expect(taking.locator("[aria-pressed='true']")).toHaveCount(0);
+  // Their captions the section's, as the card's «У посилці» (audit
+  // 2026-11-13, orders-cash P2-2).
+  for (const group of [now, ahead])
+    await expectCaption(group.locator(".pay-caption"));
   // Two rows, each under the thumb's size, all on the screen — «Оплата
   // частинами» under them, the fifth way still in sight.
   const rows = [
@@ -1567,6 +1591,11 @@ test("a card's «Клієнт забрав» whose answer never came, confirmed 
   await expect(
     page.getByRole("heading", { name: "Продаж записано один раз" }),
   ).toBeVisible();
+  // The result's heading as the till's (audit 2026-11-13, orders-cash
+  // P2-8).
+  await expect(
+    page.getByRole("heading", { name: "Продаж записано один раз" }),
+  ).toHaveCSS("font-size", "24px");
   await expect(
     page.getByText("Операцію «Клієнт забрав» записано один раз"),
   ).toHaveCount(0);
@@ -2110,6 +2139,9 @@ test("a save refused for its waybill keeps where it goes and what was typed; the
   // closed (stage 2, orders task list, P1-1).
   await expect(writing).toBeVisible();
   await expect(field).toHaveValue("НП");
+  // Answered: the sheet no longer held — Telegram's «Назад» shown, Escape
+  // closes it (audit 2026-11-13, orders-cash P2-3).
+  await expect.poll(() => back(page)).toEqual({ is_visible: true });
   await page.keyboard.press("Escape");
   await expect(writing).toHaveCount(0);
   const again = page.getByRole("button", { name: "Спробувати ще раз" });
@@ -2374,6 +2406,11 @@ test("goods come back as their own step: each warehouse they go back to named, s
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth),
   ).toBeLessThanOrEqual(360);
+  // A text's key makes a new line (audit 2026-11-13, orders-cash P2-3).
+  await expect(page.getByLabel("Причина повернення")).toHaveAttribute(
+    "enterkeyhint",
+    "enter",
+  );
   await page.getByLabel("Причина повернення").click();
   await page.keyboard.type("Не забрали з пошти");
   await readTheAnswer(page);
@@ -3153,7 +3190,149 @@ for (const [name, theme] of [
       await page.evaluate(() => document.documentElement.scrollWidth),
     ).toBeLessThanOrEqual(360);
     await page.screenshot({ path: `test-results/order-collect-${name}.png` });
+    // Recorded: «Продаж записано» the result's heading as the till's — the
+    // display face 24/800 on one line at 360 (audit 2026-11-13,
+    // orders-cash P2-8).
+    await taking.getByRole("button", { name: "Готівка", exact: true }).click();
+    const title = page
+      .locator(".order-collected")
+      .getByRole("heading", { name: "Продаж записано" });
+    await expect(title).toBeFocused();
+    const look = await title.evaluate((node) => {
+      const style = getComputedStyle(node);
+      const probe = document.createElement("span");
+      probe.style.fontFamily = "var(--font-display)";
+      document.body.append(probe);
+      const display = getComputedStyle(probe).fontFamily;
+      probe.remove();
+      const words = [...node.childNodes].find(
+        (child) =>
+          child.nodeType === Node.TEXT_NODE && child.textContent?.trim(),
+      );
+      if (words === undefined) throw new Error("no words");
+      const range = document.createRange();
+      range.selectNodeContents(words);
+      return {
+        size: style.fontSize,
+        weight: style.fontWeight,
+        line: style.lineHeight,
+        display: style.fontFamily === display,
+        lines: range.getClientRects().length,
+      };
+    });
+    expect(look).toEqual({
+      size: "24px",
+      weight: "800",
+      line: "26px",
+      display: true,
+      lines: 1,
+    });
+    expect(await contrast(title)).toBeGreaterThanOrEqual(4.5);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(360);
+    await page.screenshot({
+      path: `test-results/order-collected-title-${name}.png`,
+    });
   });
+
+test("the card's links say their way on by the set's chevron, never a typed «›»; «Історія доставки» turns it while open (audit 2026-11-13, orders-cash P2-1)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  await open(page, { order: order(), sent: [] });
+  const history = page.getByRole("button", { name: "Історія доставки" });
+  await expectLinkChevron(history, "Історія доставки");
+  await expectLinkChevron(
+    page.getByRole("button", { name: "Змінити доставку", exact: true }),
+    "Змінити доставку",
+  );
+  // The thumb's 44 as before.
+  expect((await history.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+  expect(await chevronTurn(history)).toBe(0);
+  await history.click();
+  await expect(history).toHaveAttribute("aria-expanded", "true");
+  await expect.poll(() => chevronTurn(history)).toBe(90);
+  await history.click();
+  await expect(history).toHaveAttribute("aria-expanded", "false");
+  await expect.poll(() => chevronTurn(history)).toBe(0);
+  // Sent with no waybill: the waybill to write, and the goods come back.
+  await open(page, { order: order({ status: "DISPATCHED" }), sent: [] });
+  await expectLinkChevron(
+    page.getByRole("button", { name: "ТТН ще немає — вписати", exact: true }),
+    "ТТН ще немає — вписати",
+  );
+  await expectLinkChevron(
+    page.getByRole("button", { name: "Товар повернувся на склад" }),
+    "Товар повернувся на склад",
+  );
+  await expect(page.locator("#root")).not.toContainText("›");
+  await page.screenshot({ path: "test-results/order-links.png" });
+});
+
+test("«Відправлено» and «Зберегти доставку» on their way hide Telegram's «Назад», and neither it, Escape nor the scrim closes the sheet; answered, «Назад» is the card's again (audit 2026-11-13, orders-cash P2-3)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  let answer = (): void => undefined;
+  const server: Server = {
+    order: order(),
+    sent: [],
+    hold: new Promise<void>((done) => {
+      answer = done;
+    }),
+  };
+  await open(page, server);
+  const backs = (): Promise<unknown> => back(page);
+  const backPressed = (): Promise<void> =>
+    page.evaluate(() => {
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          data: JSON.stringify({ eventType: "back_button_pressed" }),
+          source: window.parent,
+        }),
+      );
+    });
+  await pressMain(page, "Відправити");
+  const sending = await sheet(page, "Відправити");
+  await expect.poll(backs).toEqual({ is_visible: true });
+  await pressMain(page, "Відправлено");
+  await expect.poll(() => server.sent.length).toBe(1);
+  await expect.poll(backs).toEqual({ is_visible: false });
+  await backPressed();
+  await sending.focus();
+  await page.keyboard.press("Escape");
+  await page.mouse.click(180, 20);
+  await wait(page, 300);
+  await expect(sending).toBeVisible();
+  expect(server.sent).toHaveLength(1);
+  answer();
+  await expect(sending).toHaveCount(0);
+  await expect(standing(page)).toHaveText("Відправлено");
+  await expect.poll(backs).toEqual({ is_visible: true });
+  // «Доставка», its waybill written later: the same.
+  await readTheAnswer(page);
+  server.hold = new Promise<void>((done) => {
+    answer = done;
+  });
+  await shipping(page, "ТТН ще немає — вписати");
+  const editing = await sheet(page, "Доставка");
+  await editing.getByLabel("Номер ТТН", { exact: true }).fill("20450012345678");
+  await expect.poll(backs).toEqual({ is_visible: true });
+  await pressMain(page, "Зберегти доставку");
+  await expect.poll(() => server.sent.length).toBe(2);
+  await expect.poll(backs).toEqual({ is_visible: false });
+  await backPressed();
+  await editing.focus();
+  await page.keyboard.press("Escape");
+  await page.mouse.click(180, 20);
+  await wait(page, 300);
+  await expect(editing).toBeVisible();
+  expect(server.sent).toHaveLength(2);
+  answer();
+  await expect(editing).toHaveCount(0);
+  await expect.poll(backs).toEqual({ is_visible: true });
+});
 
 test("«Клієнт забрав» by each of its five ways is a sale's stub torn off, as the till's: the way's sticker — its glyph where the till has one — what to do under it, the server's sum (stage 2, orders task list, P1-2)", async ({
   page,

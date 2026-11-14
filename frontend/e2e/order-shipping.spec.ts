@@ -384,6 +384,13 @@ test("where an order goes is corrected while it is open, as its own step, and ev
       exact: true,
     }),
   ).toHaveAccessibleDescription("Без імен і телефонів покупців.");
+  // A text's key makes a new line (audit 2026-11-13, orders-cash P2-3).
+  await expect(
+    shipping.getByRole("textbox", {
+      name: "Куди і як відправили: місто, країна, спосіб",
+      exact: true,
+    }),
+  ).toHaveAttribute("enterkeyhint", "enter");
   // A carrier's chip: within Ukraine again, by it.
   await where(page, { carrier: "Міст", waybill: MEEST });
   await saveShipping(page);
