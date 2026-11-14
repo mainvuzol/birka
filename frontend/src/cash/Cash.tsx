@@ -1095,7 +1095,7 @@ function CorrectStep({
                 setProblem(null);
               }}
               disabled={false}
-              filters
+              kind="pressed"
               className="correct-days"
             />
             {which === "other" && (

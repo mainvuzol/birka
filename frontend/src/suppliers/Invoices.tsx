@@ -584,7 +584,7 @@ function InvoiceList({
             setOwedOnly(mode === "open");
           }}
           disabled={false}
-          filters
+          kind="pressed"
         />
         <SupplierFilter
           store={store}
@@ -729,16 +729,20 @@ function InvoiceList({
           </>
         )}
         {makes && (
-          <button
-            type="button"
-            className="sale-row invoice-elsewhere"
-            onClick={toElsewhere}
-          >
-            <span className="sale-main t-row">
-              Накладні магазинів, що не працюють
-            </span>
-            <Icon name="chevron-right" size={20} />
-          </button>
+          // A row in a block of its own, the set's chevron 16 (audit
+          // 2026-11-13, money P2-4).
+          <div className="list-block invoice-elsewhere-block">
+            <button
+              type="button"
+              className="sale-row invoice-elsewhere"
+              onClick={toElsewhere}
+            >
+              <span className="sale-main t-row">
+                Накладні магазинів, що не працюють
+              </span>
+              <Icon name="chevron-right" size={16} />
+            </button>
+          </div>
         )}
       </section>
     </>

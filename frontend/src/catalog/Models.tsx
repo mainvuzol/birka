@@ -14,6 +14,7 @@ import {
   isConflict,
   refusedWrite,
 } from "@/shared/api";
+import { Fold } from "@/shared/Fold";
 import { Unread } from "@/shared/Unread";
 import { visible } from "@/shared/visible";
 import { money } from "@/orders/types";
@@ -402,6 +403,7 @@ function RenameSheet({
     garment_type: card.garment_type ?? "",
   });
   const [more, setMore] = useState(false);
+  const extra = useId();
   const [refusal, setRefusal] = useState<ApiError | null>(null);
   const [family, setFamily] = useState<string | null>(null);
   const [separate, setSeparate] = useState(false);
@@ -544,18 +546,18 @@ function RenameSheet({
               }}
             />
           </label>
-          <button
-            type="button"
-            className="quiet new-model-more"
-            aria-expanded={more}
-            onClick={() => {
+          <Fold
+            open={more}
+            toggle={() => {
               setMore(!more);
             }}
+            controls={extra}
+            className="new-model-more"
           >
             Ще ознаки
-          </button>
+          </Fold>
           {more && (
-            <div className="new-model-extra">
+            <div id={extra} className="new-model-extra">
               {moreWords.map((name) => (
                 <label key={name}>
                   {wordLabels[name]}

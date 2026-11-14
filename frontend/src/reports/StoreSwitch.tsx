@@ -35,7 +35,7 @@ export function StoreSwitch({
         current={current}
         choose={choose}
         disabled={false}
-        filters
+        kind="pressed"
         className="report-stores"
       />
     );

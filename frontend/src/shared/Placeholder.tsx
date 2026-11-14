@@ -83,8 +83,10 @@ export function Placeholder({
    * after stage 2, P2-2). */
   steps?: number;
   /** A history's thread under its label (spec §6.21): its days, its round
-   * eyelets, a line and its meta each — «Інвентаризація»'s «Попередні». */
-  thread?: { label: string; rows: number };
+   * eyelets, a line and its meta each — «Інвентаризація»'s «Попередні».
+   * A thread with no label of its own, none: the report's «Продажі й
+   * повернення» (audit 2026-11-13, money P2-1). */
+  thread?: { label?: string; rows: number };
   /** One grey line where a short answer comes, or nothing does: whether a
    * warehouse has a list waiting (audit 2026-11-13, goods P2-1). */
   line?: boolean;
@@ -142,11 +144,13 @@ export function Placeholder({
       <>
         {status}
         <div className="placeholder" aria-hidden="true">
-          <p className="t-label customer-history-title">
-            <span className="skeleton-line">
-              <span>{thread.label}</span>
-            </span>
-          </p>
+          {thread.label !== undefined && (
+            <p className="t-label customer-history-title">
+              <span className="skeleton-line">
+                <span>{thread.label}</span>
+              </span>
+            </p>
+          )}
           <div className="timeline">
             {Array.from({ length: thread.rows }, (_, n) => (
               <div className="timeline-row" key={n}>

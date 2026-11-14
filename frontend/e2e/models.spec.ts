@@ -2,6 +2,7 @@ import {
   test,
   expect,
   addModel,
+  expectFold,
   FAILED_REQUEST_ID,
   fillLine,
   leaveNewModel,
@@ -636,6 +637,9 @@ test("a rename warns of a similar word, and taking the word in use saves it", as
     ),
   ).toBeVisible();
   const more = sheet.getByRole("button", { name: "Ще ознаки" });
+  // A fold's one look, opened and shut (audit 2026-11-13, frame P2-3).
+  await expectFold(more, "Ще ознаки", sheet.locator(".new-model-extra"));
+  await more.click();
   await expect(more).toHaveAttribute("aria-expanded", "false");
   await expect(sheet.getByLabel("Джерело", { exact: true })).toHaveCount(0);
   await sheet.getByLabel("Колір", { exact: true }).fill(colour.typo);

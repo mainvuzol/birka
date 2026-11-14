@@ -2,6 +2,7 @@ import { useId, useLayoutEffect, useRef } from "react";
 import type { JSX, MutableRefObject, ReactNode } from "react";
 import { StoreName } from "@/money/Money";
 import { methodLabels } from "@/shared/payment";
+import { TableWait } from "@/shared/TableWait";
 import { visible } from "@/shared/visible";
 import {
   bare,
@@ -29,6 +30,62 @@ interface Line {
   value: (figures: Figures) => string;
   meta?: (figures: Figures) => string;
   strong?: boolean;
+}
+
+/** The sections and rows every report has, whatever its stores: the
+ * table's, and its place's while it is read. */
+const titles = {
+  sales: "Продажі",
+  money: "Гроші",
+  ways: "За способом оплати",
+} as const;
+const labels = {
+  sold: "Продажі",
+  returned: "Повернення",
+  net: "З урахуванням повернень",
+  paidInFull: "Оплачено одразу повністю",
+  debtPayments: "Внески за борг",
+  paidBack: "Віддано при поверненнях",
+  money: "Разом",
+} as const;
+
+/** The table's place while it is read (audit 2026-11-13, money P2-1): the
+ * rows every report has, in their own heights — the ways' block under it
+ * never moves when the figures come. */
+export function ReportTableWait(): JSX.Element {
+  return (
+    <TableWait
+      said="Рахуємо…"
+      className="report-table"
+      sections={[
+        {
+          title: titles.sales,
+          rows: [
+            { label: labels.sold, meta: "0 · 0 шт." },
+            { label: labels.returned, meta: "0 · 0 шт." },
+            { label: labels.net, total: true },
+          ],
+        },
+        {
+          title: titles.money,
+          rows: [
+            { label: labels.paidInFull },
+            { label: labels.debtPayments },
+            { label: labels.paidBack },
+            { label: labels.money, total: true },
+          ],
+        },
+        {
+          title: titles.ways,
+          rows: [
+            { label: wayLabels.CASH },
+            { label: wayLabels.CARD },
+            { label: wayLabels.TRANSFER },
+          ],
+        },
+      ]}
+    />
+  );
 }
 
 /** A way's figures in a column; none, nothing. */
@@ -109,25 +166,25 @@ export function ReportTable({
     }));
   const sections: { title: string; lines: Line[] }[] = [
     {
-      title: "Продажі",
+      title: titles.sales,
       lines: [
         {
           key: "sold",
-          label: "Продажі",
+          label: labels.sold,
           value: (figures) => bare(signed(figures.sold)),
           meta: (figures) =>
             `${String(figures.sales)} · ${String(figures.units)} шт.`,
         },
         {
           key: "returned",
-          label: "Повернення",
+          label: labels.returned,
           value: (figures) => bare(minus(figures.returned)),
           meta: (figures) =>
             `${String(figures.returns)} · ${String(figures.returned_units)} шт.`,
         },
         {
           key: "net",
-          label: "З урахуванням повернень",
+          label: labels.net,
           value: (figures) => bare(signed(figures.net)),
           strong: true,
         },
@@ -136,21 +193,21 @@ export function ReportTable({
     {
       // «Гроші», not «Гроші в касі»: card and transfer are in it too, and
       // «Каса» is the cash drawer (ADR-0012 §B11, §G24).
-      title: "Гроші",
+      title: titles.money,
       lines: [
         {
           key: "paid_in_full",
-          label: "Оплачено одразу повністю",
+          label: labels.paidInFull,
           value: (figures) => bare(signed(figures.paid_in_full)),
         },
         {
           key: "debt_payments",
-          label: "Внески за борг",
+          label: labels.debtPayments,
           value: (figures) => bare(signed(figures.debt_payments)),
         },
         {
           key: "paid_back",
-          label: "Віддано при поверненнях",
+          label: labels.paidBack,
           value: (figures) => bare(minus(figures.paid_back)),
         },
         ...(any((figures) => !nothing(figures.corrected_into_till))
@@ -167,14 +224,14 @@ export function ReportTable({
           : []),
         {
           key: "money",
-          label: "Разом",
+          label: labels.money,
           value: (figures) => bare(signed(figures.money)),
           strong: true,
         },
       ],
     },
     // The till's ways add up to «Разом».
-    { title: "За способом оплати", lines: ways },
+    { title: titles.ways, lines: ways },
     // Orders paid off the till stand outside «Разом» (G24).
     { title: "Окремо від «Разом» — замовлення", lines: orders },
   ];

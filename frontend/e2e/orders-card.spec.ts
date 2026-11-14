@@ -4,6 +4,7 @@ import {
   chevronTurn,
   dockOnMenu,
   expectCaption,
+  expectFold,
   expectGlyphBeside,
   expectLinkChevron,
   expectStub,
@@ -3311,17 +3312,17 @@ test("the card's links say their way on by the set's chevron, never a typed «�
   await page.setViewportSize({ width: 360, height: 640 });
   await open(page, { order: order(), sent: [] });
   const history = page.getByRole("button", { name: "Історія доставки" });
-  await expectLinkChevron(history, "Історія доставки");
   await expectLinkChevron(
     page.getByRole("button", { name: "Змінити доставку", exact: true }),
     "Змінити доставку",
   );
-  // The thumb's 44 as before.
-  expect((await history.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
-  expect(await chevronTurn(history)).toBe(0);
-  await history.click();
-  await expect(history).toHaveAttribute("aria-expanded", "true");
-  await expect.poll(() => chevronTurn(history)).toBe(90);
+  // The thumb's 44 as before; a fold's one look, what it opens named
+  // (audit 2026-11-13, frame P2-3).
+  await expectFold(
+    history,
+    "Історія доставки",
+    page.getByRole("list", { name: "Історія доставки" }),
+  );
   await history.click();
   await expect(history).toHaveAttribute("aria-expanded", "false");
   await expect.poll(() => chevronTurn(history)).toBe(0);

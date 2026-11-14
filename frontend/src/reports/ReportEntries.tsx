@@ -145,7 +145,9 @@ export function ReportEntries({
     retry: false,
   });
   if (entries.isPending)
-    return <Placeholder said="Завантажуємо продажі…" rows={4} day={false} />;
+    // The thread it comes as, four eyelets, no label (audit 2026-11-13,
+    // money P2-1).
+    return <Placeholder said="Завантажуємо продажі…" thread={{ rows: 4 }} />;
   if (entries.data === undefined)
     return (
       <Unread

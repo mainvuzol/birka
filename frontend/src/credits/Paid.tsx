@@ -255,7 +255,6 @@ function PaidScreen({
                     <button
                       type="button"
                       className="more-goods"
-                      aria-expanded={false}
                       onClick={() => {
                         setAllGoods(true);
                       }}

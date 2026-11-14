@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type { JSX, RefObject } from "react";
 import {
   useInfiniteQuery,
@@ -14,6 +14,7 @@ import {
   errorText,
   unreachable,
 } from "@/shared/api";
+import { Fold } from "@/shared/Fold";
 import { Unread } from "@/shared/Unread";
 import { useNextPageFailed } from "@/shared/nextPage";
 import type { Location, Store } from "@/orders/types";
@@ -642,6 +643,7 @@ function NewList({
   // «Звідки список» and «Коли перелічено» under the quiet «Ще про список»
   // (goods task list after stage 2, P2-4): open from the start when the
   // draft brought back holds their words, never hiding what will be saved.
+  const moreFields = useId();
   const [more, setMore] = useState(
     () => draft.source.trim() !== "" || draft.captured.trim() !== "",
   );
@@ -964,7 +966,7 @@ function NewList({
             list after stage 2, P2-4; spec §5 «Переключатель режима»). */}
         <ModeSwitch<Draft["mode"]>
           label="Як внести список"
-          filters
+          kind="pressed"
           modes={[
             { mode: "text", label: "Вставити текст" },
             { mode: "file", label: "Завантажити файл" },
@@ -1020,18 +1022,18 @@ function NewList({
         )}
         {/* What the list is and when it was counted: optional, under one
             quiet button — the screen's one field is the list (P2-4). */}
-        <button
-          type="button"
-          className="quiet opening-more"
-          aria-expanded={more}
-          onClick={() => {
+        <Fold
+          open={more}
+          toggle={() => {
             setMore(!more);
           }}
+          controls={moreFields}
+          className="opening-more"
         >
           Ще про список
-        </button>
+        </Fold>
         {more && (
-          <div className="opening-extra">
+          <div id={moreFields} className="opening-extra">
             <label>
               Звідки список (необов’язково)
               <input
@@ -1678,7 +1680,7 @@ function ListView({
         <nav className="opening-modes" aria-label="Рядки списку">
           <ModeSwitch<LineMode>
             label="Які рядки"
-            filters
+            kind="pressed"
             modes={[
               {
                 mode: "NEEDS_REVIEW",

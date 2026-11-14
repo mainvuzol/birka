@@ -400,7 +400,9 @@ test("«Постачальникам» read slowly: three rows in grey where the
   const answer = await slowly(page, "supplier-returns", "Постачальникам");
   await heldThenShown(
     page,
-    page.locator(".supplier-returns .placeholder .sale-row"),
+    // On the list's white block, as the rows they hold the place of (audit
+    // 2026-11-13, money P2-4).
+    page.locator(".supplier-returns .placeholder .list-block > .sale-row"),
     3,
     "Завантажуємо повернення…",
     page

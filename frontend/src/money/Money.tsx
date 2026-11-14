@@ -17,6 +17,7 @@ import type { MoreRow } from "@/shared/More";
 import { ModeSwitch } from "@/shared/ModeSwitch";
 import { methodLabels, notStated } from "@/shared/payment";
 import { ScreenHeader } from "@/shared/ScreenHeader";
+import { TableWait } from "@/shared/TableWait";
 import { visible } from "@/shared/visible";
 import { Sticker } from "@/shared/Sticker";
 import { Sum } from "@/shared/Sum";
@@ -739,7 +740,7 @@ export function Money({
           // which day today is.
           disabled={today === undefined}
           choose={choose}
-          filters
+          kind="pressed"
         />
         {cameData === undefined ? (
           cameIn.isError ? (
@@ -750,11 +751,21 @@ export function Money({
               }}
             />
           ) : (
-            <div className="money-table-wait" aria-hidden="true">
-              {[0, 1, 2, 3].map((row) => (
-                <Waiting key={row} width="100%" />
-              ))}
-            </div>
+            // The rows it comes with but «Не вказано» — the corner, three
+            // ways, «Разом» — in their own heights (audit 2026-11-13, money
+            // P2-1).
+            <TableWait
+              sections={[
+                {
+                  rows: [
+                    ...wayRows
+                      .filter((way) => way.method !== "NOT_STATED")
+                      .map((way) => ({ label: way.label })),
+                    { label: "Разом", total: true },
+                  ],
+                },
+              ]}
+            />
           )
         ) : (
           <>

@@ -412,7 +412,7 @@ export function Damaged({
                 setProblem(null);
               }}
               disabled={false}
-              filters
+              kind="pressed"
             />
             {/* A read that failed keeps the units already read. */}
             {units.error && (

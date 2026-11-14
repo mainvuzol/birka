@@ -43,7 +43,7 @@ export function ReportModels({
     retry: false,
   });
   if (models.isPending)
-    return <Placeholder said="Рахуємо моделі…" rows={4} day={false} />;
+    return <Placeholder said="Рахуємо моделі…" rows={4} day={false} block />;
   if (models.data === undefined)
     return (
       <Unread
@@ -60,7 +60,9 @@ export function ReportModels({
     return <Empty title="Нічого не продано." />;
   return (
     <>
-      <ul className="report-rows" aria-label="Моделі">
+      {/* On a white block, the sum `money-m` at the right (audit
+          2026-11-13, money P2-4). */}
+      <ul className="report-rows list-block" aria-label="Моделі">
         {models.data.models.map((model) => (
           <li key={model.product_variant_id} className="sale-row report-row">
             <span className="sale-main">

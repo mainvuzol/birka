@@ -9,8 +9,10 @@ import { buzz } from "./telegram";
  * button, the way open marked for a reader as the page. A way
  * chosen opens another screen: its switch takes the focus on the way now
  * open, never lost to the page (review, 2026-10-26). A switch that only
- * filters what the screen shows marks its way as pressed: «Винні зараз ·
- * Сплачені · Списані» («Усе на бірці» sections task list, P0-4).
+ * filters what the screen shows, or changes a form in the same place, marks
+ * its way as pressed: «Винні зараз · Сплачені · Списані» («Усе на бірці»
+ * sections task list, P0-4), «Яка модель». Which, every switch says: no
+ * default to forget (audit 2026-11-13, frame P2-2).
  */
 export function ModeSwitch<Mode extends string>({
   label,
@@ -20,7 +22,7 @@ export function ModeSwitch<Mode extends string>({
   disabled,
   focus = false,
   focused,
-  filters = false,
+  kind,
   className,
 }: {
   /** What the group is called for a reader: «Продаж або повернення». */
@@ -34,8 +36,9 @@ export function ModeSwitch<Mode extends string>({
   focus?: boolean;
   /** The focus taken. */
   focused?: () => void;
-  /** Its ways filter this screen, never open another. */
-  filters?: boolean;
+  /** «page»: a way opens another screen (the till's only); «pressed»: its
+   * ways filter this screen or change its form, never open another. */
+  kind: "page" | "pressed";
   className?: string;
 }): JSX.Element {
   const open = useRef<HTMLButtonElement>(null);
@@ -55,7 +58,7 @@ export function ModeSwitch<Mode extends string>({
           type="button"
           key={mode}
           ref={mode === current ? open : undefined}
-          {...(filters
+          {...(kind === "pressed"
             ? { "aria-pressed": mode === current }
             : { "aria-current": mode === current ? "page" : undefined })}
           disabled={typeof disabled === "function" ? disabled(mode) : disabled}

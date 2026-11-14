@@ -358,7 +358,7 @@ export function Borrowed({
             setOnHandOnly(mode === "on");
           }}
           disabled={false}
-          filters
+          kind="pressed"
         />
         {lots.isPending ? (
           // Three tags' places, where the first one comes (money task list

@@ -716,7 +716,11 @@ test("«Внесок» on a debt opens S21 on it: the sum keyed in, a way, the r
   // the menu's top, nothing to scroll; «Відкрити борг» quiet under the stub.
   await dockOnMenu(page);
   // «+ ще 1»: every good, where the line was; the result longer than the
-  // screen now, its dock sticking on the menu.
+  // screen now, its dock sticking on the menu. Gone once pressed, never a
+  // fold (audit 2026-11-13, frame P2-3).
+  await expect(
+    paid.getByRole("button", { name: "+ ще 1" }),
+  ).not.toHaveAttribute("aria-expanded");
   await paid.getByRole("button", { name: "+ ще 1" }).click();
   await expect(
     paid.getByRole("list", { name: "Товари боргу" }).getByRole("listitem"),
@@ -876,7 +880,9 @@ test("a debt of more goods than one names the first, and all of them on a tap", 
   await opened(page);
   await expect(page.getByRole("list", { name: "Товари боргу" })).toHaveCount(0);
   const more = page.getByRole("button", { name: "+ ще 1" });
-  await expect(more).toHaveAttribute("aria-expanded", "false");
+  // Gone once pressed, never a fold: nothing to say open or shut (audit
+  // 2026-11-13, frame P2-3).
+  await expect(more).not.toHaveAttribute("aria-expanded");
   await more.click();
   await expect(
     page.getByRole("list", { name: "Товари боргу" }).getByRole("listitem"),

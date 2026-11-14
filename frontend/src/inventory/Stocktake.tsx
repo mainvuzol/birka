@@ -73,11 +73,11 @@ import type { ReceivableVariant, SizeOption } from "./receiptTypes";
 
 const pageSize = 50;
 
-/** The entry's history: the last three, and «Ще N» for the rest (spec
+/** The entry's history: the last three, and «+ ще N» for the rest (spec
  * §6.21; goods task list, P0-2). */
 const HISTORY = 3;
 
-/** A result's differences: five, and «Ще N» for the rest (P0-2). */
+/** A result's differences: five, and «+ ще N» for the rest (P0-2). */
 const FOLDED = 5;
 
 type Page = { items: StocktakePosition[]; has_more: boolean };
@@ -629,7 +629,7 @@ function StartSheet({
 }
 
 /** «Попередні» (spec §6.21): the day on the left, a knot each, what it
- * found and who finished it; the last three, and «Ще N». */
+ * found and who finished it; the last three, and «+ ще N». */
 function History({
   store,
   token,
@@ -643,6 +643,12 @@ function History({
 }): JSX.Element | null {
   const [all, setAll] = useState(false);
   const [shown, setShown] = useState<string | null>(null);
+  // Unfolded: the cursor on the first that was folded — the tapped «+ ще
+  // N» is gone (audit 2026-11-13, frame P2-3).
+  const unfolded = useRef<HTMLLIElement>(null);
+  useEffect(() => {
+    if (all) unfolded.current?.focus();
+  }, [all]);
   if (finished.length === 0) return null;
   const rows = all ? finished : finished.slice(0, HISTORY);
   return (
@@ -652,10 +658,15 @@ function History({
         className="timeline stocktake-history"
         aria-label="Попередні інвентаризації"
       >
-        {rows.map((record) => {
+        {rows.map((record, row) => {
           const at = record.finished_at ?? record.started_at;
           return (
-            <li className="timeline-row" key={record.id}>
+            <li
+              className="timeline-row"
+              key={record.id}
+              ref={row === HISTORY ? unfolded : undefined}
+              tabIndex={row === HISTORY ? -1 : undefined}
+            >
               <span className="timeline-day">{shortDay(at)}</span>
               <span className="timeline-node knot" aria-hidden="true" />
               <div className="timeline-main">
@@ -701,7 +712,7 @@ function History({
             setAll(true);
           }}
         >
-          Ще {finished.length - HISTORY}
+          + ще {finished.length - HISTORY}
         </button>
       )}
     </>
@@ -709,7 +720,7 @@ function History({
 }
 
 /** Where a finished stocktake found the shelf and the balance apart: five,
- * and «Ще N» for the rest of `total`. */
+ * and «+ ще N» for the rest of `total`. */
 function Differences({
   store,
   token,
@@ -724,6 +735,11 @@ function Differences({
   total: number;
 }): JSX.Element {
   const [folded, setFolded] = useState(true);
+  // Unfolded: the cursor on the first difference that was folded.
+  const unfolded = useRef<HTMLLIElement>(null);
+  useEffect(() => {
+    if (!folded) unfolded.current?.focus();
+  }, [folded]);
   const pages = usePositions(
     store,
     token,
@@ -782,8 +798,12 @@ function Differences({
         />
       )}
       <ul className="stocktake-differences" aria-label="Розбіжності">
-        {shown.map((item) => (
-          <li key={keyOf(item)}>
+        {shown.map((item, row) => (
+          <li
+            key={keyOf(item)}
+            ref={row === FOLDED ? unfolded : undefined}
+            tabIndex={row === FOLDED ? -1 : undefined}
+          >
             {visible(item.display_name)} · {sizeWord(targetOf(item))} —{" "}
             {item.count ? signed(item.count.net_delta) : ""} шт.
             {item.count
@@ -800,7 +820,7 @@ function Differences({
             setFolded(false);
           }}
         >
-          Ще {total - FOLDED}
+          + ще {total - FOLDED}
         </button>
       ) : nextFailed ? (
         // Its page alone asked again, never «Показати ще» beside it.
@@ -1246,7 +1266,7 @@ export function Stocktake({
           <section className="stocktake" aria-label="Інвентаризація">
             <ModeSwitch
               label="Які позиції"
-              filters
+              kind="pressed"
               className="stocktake-modes"
               modes={[
                 {

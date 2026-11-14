@@ -2,7 +2,9 @@ import {
   test,
   expect,
   countTaps,
+  expectListBlock,
   grn,
+  holdReads,
   menu,
   more,
   openStore,
@@ -709,6 +711,21 @@ function figures(sold: string, money: string): Figures {
 
 /** The report of today, `serverToday`, as the stores given; their sums
  * the server's own, «Усі разом» a sum no phone would make. */
+/** A read held until the journey says, with or without a query: today's
+ * report and one store's «Моделі» are read with none, so a glob's `?` never
+ * holds them (review; CI). */
+async function holdRead(page: Page, path: RegExp): Promise<() => void> {
+  let answer = (): void => undefined;
+  const held = new Promise<void>((resolve) => {
+    answer = resolve;
+  });
+  await page.route(path, async (route: Route) => {
+    await held;
+    await route.fallback();
+  });
+  return answer;
+}
+
 async function stubReport(
   page: Page,
   names: string[],
@@ -1282,6 +1299,137 @@ test("«Продажі й повернення»: a thread by day, the newest fi
     page.getByRole("list", { name: "Моделі" }).getByRole("listitem"),
   ).toHaveCount(1);
 });
+
+for (const scheme of ["light", "dark"] as const)
+  test(`in the ${scheme} theme at 360 px, read slowly: the table waits as the rows every report has, in their own heights, the ways' block under it never moving, «Як рахуємо» alone in it meanwhile; then «Моделі», «Продажі й повернення» and «Як рахуємо» one white block; «Моделі» grey rows on their block, then the models on it, the sums \`money-m\`; «Продажі й повернення» waits as its thread, no label (audit 2026-11-13, money P2-1, P2-4)`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ colorScheme: scheme });
+    await page.setViewportSize({ width: 360, height: 740 });
+    await stubReport(page, ["Центр"]);
+    await page.route(
+      /\/api\/v1\/reports\/sales\/models(\?.*)?$/,
+      async (route: Route) => {
+        await route.fulfill({
+          json: {
+            date_from: "2026-11-05",
+            date_to: "2026-11-05",
+            today: "2026-11-05",
+            models: Array.from({ length: 3 }, (_, at) => ({
+              product_variant_id: `00000000-0000-4000-8000-${String(
+                300 + at,
+              ).padStart(12, "0")}`,
+              display_name: `Модель ${String(at + 1)}`,
+              units: 3 - at,
+              sold: `${String((3 - at) * 1000)}.00`,
+              returned_units: 0,
+              returned: "0.00",
+            })),
+          },
+        });
+      },
+    );
+    await page.route(
+      "**/api/v1/reports/sales/entries?**",
+      async (route: Route) => {
+        await route.fulfill({
+          json: {
+            date_from: "2026-11-05",
+            date_to: "2026-11-05",
+            today: "2026-11-05",
+            entries: [],
+            has_more: false,
+          },
+        });
+      },
+    );
+    // «Сьогодні» reads today's report first, under the report's own key:
+    // held from the start, the report finds it unread.
+    const report = await holdRead(page, /\/api\/v1\/reports\/sales(\?.*)?$/);
+    await page.goto("about:blank");
+    await page.goto(
+      `/#${new URLSearchParams({ tgWebAppData: initData(owner, "Тест") }).toString()}`,
+    );
+    await openStore(page, "Центр CENTRE");
+    await section(page, "Звіт про продажі");
+    // The table's place: its corner, three sections and their rows, in grey;
+    // «Рахуємо…» to a reader alone.
+    const wait = page.locator(".table-wait");
+    await expect(wait.locator("tr")).toHaveCount(14);
+    await expect(wait.locator(".skeleton-line").first()).toBeVisible();
+    await expect(
+      page.getByRole("status").filter({ hasText: "Рахуємо…" }),
+    ).toHaveClass(/\bvisually-hidden\b/);
+    const ways = page.locator(".report-ways-block");
+    await expect(ways.getByRole("button")).toHaveText(["Як рахуємо"]);
+    await expectListBlock(ways, ways.locator(".sale-row"));
+    const before = (await ways.boundingBox())?.y ?? Number.NaN;
+    report();
+    await expect(table(page)).toBeVisible();
+    await expect(wait).toHaveCount(0);
+    // Nothing under the table moved when its figures came.
+    expect(
+      Math.abs(((await ways.boundingBox())?.y ?? Number.NaN) - before),
+    ).toBeLessThanOrEqual(1);
+    await expect(ways.getByRole("button")).toHaveText([
+      "Моделі",
+      "Продажі й повернення",
+      "Як рахуємо",
+    ]);
+    await expectListBlock(ways, ways.locator(".sale-row"));
+    await expect(page.locator("html")).toHaveJSProperty("scrollWidth", 360);
+    await page.screenshot({
+      path: `test-results/report-ways-${scheme}.png`,
+      fullPage: true,
+    });
+
+    // «Моделі»: grey rows on the block while read, then the models on it.
+    const models = await holdRead(
+      page,
+      /\/api\/v1\/reports\/sales\/models(\?.*)?$/,
+    );
+    await toScreen(page, "Моделі");
+    await expect(
+      page.locator(".placeholder .list-block > .sale-row"),
+    ).toHaveCount(4);
+    models();
+    const list = page.getByRole("list", { name: "Моделі" });
+    await expect(list.getByRole("listitem")).toHaveCount(3);
+    await expectListBlock(list, list.locator(".sale-row"));
+    const sum = list.locator(".report-sum").first();
+    await expect(sum).toHaveText(grn("3000.00"));
+    await expect(sum).toHaveCSS("font-size", "20px");
+    await expect(sum).toHaveCSS("font-weight", "600");
+    expect(
+      await sum.evaluate((node) => {
+        const probe = document.createElement("span");
+        probe.style.color = "var(--ink)";
+        probe.style.fontFamily = "var(--font-text)";
+        document.body.append(probe);
+        const want = getComputedStyle(probe);
+        const same = [want.color, want.fontFamily];
+        probe.remove();
+        const own = getComputedStyle(node);
+        return [own.color, own.fontFamily].every((one, at) => one === same[at]);
+      }),
+    ).toBe(true);
+    await page.screenshot({ path: `test-results/report-models-${scheme}.png` });
+    await backToReport(page);
+
+    // «Продажі й повернення»: its thread's eyelets in grey, no label.
+    const entries = await holdReads(page, "reports/sales/entries");
+    await toScreen(page, "Продажі й повернення");
+    const thread = page.locator(".placeholder .timeline > .timeline-row");
+    await expect(thread).toHaveCount(4);
+    await expect(
+      page.locator(".placeholder .customer-history-title"),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole("status").filter({ hasText: "Завантажуємо продажі…" }),
+    ).toHaveClass(/\bvisually-hidden\b/);
+    entries();
+    await expect(thread).toHaveCount(0);
+  });
 
 test("at 360 × 400, the report scrolled to its foot, «Моделі» read before opens again at its top, the heading whole in view — the same header, its title another; back, the report where it was left (audit after stage 2, frame P1-3)", async ({
   page,

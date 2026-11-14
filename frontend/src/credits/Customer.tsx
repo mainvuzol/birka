@@ -39,7 +39,7 @@ import type {
   CustomerPage,
 } from "./types";
 
-/** How many lines of the history show before «Ще N» (spec §6.21). */
+/** How many lines of the history show before «+ ще N» (spec §6.21). */
 const HISTORY_SHOWN = 7;
 
 /** «Сплачено 1 000,00 грн з 3 000,00 грн»: a debt row's line. */
@@ -664,7 +664,7 @@ interface Line {
  * «ІСТОРІЯ» (spec §6.21): every debt read and each of its entries, the
  * newest first, a thread of eyelets — a knot where a debt closed — each
  * with its day, store, what it was, who, and its sum, in the debt's own
- * words; seven, then «Ще N» opens the rest in place.
+ * words; seven, then «+ ще N» opens the rest in place.
  */
 function History({ credits }: { credits: readonly Credit[] }): JSX.Element {
   const [all, setAll] = useState(false);
@@ -758,12 +758,11 @@ function History({ credits }: { credits: readonly Credit[] }): JSX.Element {
         <button
           type="button"
           className="quiet history-more"
-          aria-expanded={false}
           onClick={() => {
             setAll(true);
           }}
         >
-          Ще {number(rest)}
+          + ще {number(rest)}
         </button>
       )}
     </>

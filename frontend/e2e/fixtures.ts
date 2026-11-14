@@ -1185,6 +1185,27 @@ export async function expectPlate(
 }
 
 /**
+ * A row taking no tap (audit 2026-11-13, frame P2-4): nothing faded over
+ * it, its title in pencil — whatever the title's class.
+ */
+export async function expectHeldRow(
+  row: Locator,
+  title: Locator,
+): Promise<void> {
+  await expect(row).toBeDisabled();
+  await expect(row).toHaveCSS("opacity", "1");
+  const pencil = await title.evaluate((node) => {
+    const probe = document.createElement("span");
+    probe.style.color = "var(--pencil)";
+    document.body.append(probe);
+    const want = getComputedStyle(probe).color;
+    probe.remove();
+    return getComputedStyle(node).color === want;
+  });
+  expect(pencil).toBe(true);
+}
+
+/**
  * A list's row by spec §6.8 (audit after stage 2, frame P2-2): 64 high at
  * least, on its list's white block with sides of 16; its title 17/600 in
  * ink; its chevron the set's 16 in pencil, never a «›»; pressed, the fold
@@ -1262,19 +1283,32 @@ export async function listRow(
 
 /**
  * A list on its white block (spec §6.8; audit after stage 2, frame P0-1;
- * audit 2026-11-13, orders-cash P1-2): the card's white, 4 round; its rows'
- * sides 16, a hairline under each from 16, none under the last. `rows`, top
- * to bottom, are every row of the block — whatever their kind.
+ * audit 2026-11-13, orders-cash P1-2, frame P2-4, money P2-4): the card's
+ * white, 4 round, a hairline round it in the light theme and none in the
+ * dark; nothing wider than the screen; its rows 64 high at least, sides
+ * 16, a hairline under each from 16, none under the last; a row's chevron
+ * the set's 16 in pencil. `rows`, top to bottom, are every row of the
+ * block — whatever their kind.
  */
 export async function expectListBlock(
   block: Locator,
   rows: Locator,
+  /** A row that is a button carries the set's one chevron (review) — but
+   * where a screen's rows were drawn without one. */
+  chevron = true,
 ): Promise<void> {
-  const card = await block.evaluate(() => {
+  const tokens = await block.evaluate(() => {
     const probe = document.createElement("span");
-    probe.style.color = "var(--card)";
     document.body.append(probe);
-    const said = getComputedStyle(probe).color;
+    const read = (name: string): string => {
+      probe.style.color = `var(${name})`;
+      return getComputedStyle(probe).color;
+    };
+    const said = {
+      card: read("--card"),
+      outline: read("--block-outline"),
+      pencil: read("--pencil"),
+    };
     probe.remove();
     return said;
   });
@@ -1282,27 +1316,49 @@ export async function expectListBlock(
     await block.evaluate((node) => [
       getComputedStyle(node).backgroundColor,
       getComputedStyle(node).borderTopLeftRadius,
+      getComputedStyle(node).borderTopColor,
+      node.getBoundingClientRect().right <= innerWidth,
     ]),
-  ).toEqual([card, "4px"]);
+  ).toEqual([tokens.card, "4px", tokens.outline, true]);
   const all = await rows.all();
   expect(all.length).toBeGreaterThan(0);
-  for (const [n, row] of all.entries())
-    expect(
-      await row.evaluate((node) => {
-        const style = getComputedStyle(node);
-        return [
-          style.paddingLeft,
-          style.paddingRight,
+  for (const [n, row] of all.entries()) {
+    const look = await row.evaluate((node, want) => {
+      const style = getComputedStyle(node);
+      // The set's chevron as the browser writes it (review).
+      const probe = document.createElementNS(
+        "http://www.w3.org/2000/svg",
+        "svg",
+      );
+      probe.innerHTML = want;
+      return {
+        button: node.tagName === "BUTTON",
+        tall: node.getBoundingClientRect().height >= 64,
+        sides: [style.paddingLeft, style.paddingRight],
+        line:
           style.backgroundImage === "none"
             ? "none"
             : `${style.backgroundPositionX} ${style.backgroundSize}`,
-        ];
-      }),
-    ).toEqual([
-      "16px",
-      "16px",
-      n === all.length - 1 ? "none" : "16px calc(100% - 16px) 1px",
-    ]);
+        chevrons: [...node.querySelectorAll("svg")]
+          .filter((svg) => svg.innerHTML === probe.innerHTML)
+          .map(
+            (svg) =>
+              `${String(svg.getBoundingClientRect().width)} ${getComputedStyle(svg).color}`,
+          ),
+      };
+    }, icons["chevron-right"]);
+    // A row that opens says so by the set's one chevron (review).
+    expect(look).toEqual({
+      button: look.button,
+      tall: true,
+      sides: ["16px", "16px"],
+      line: n === all.length - 1 ? "none" : "16px calc(100% - 16px) 1px",
+      chevrons:
+        look.button && chevron
+          ? [`16 ${tokens.pencil}`]
+          : look.chevrons.map(() => `16 ${tokens.pencil}`),
+    });
+  }
 }
 
 /** A sum's face, size and weight as drawn: `money-m` — 20/24 in the text
@@ -1460,47 +1516,53 @@ export async function expectOwed(scope: Locator, sum: string): Promise<void> {
 /**
  * A link's way on (audit 2026-11-13, orders-cash P2-1): never a typed «›»,
  * the set's chevron 16 in pencil after its words and on their line, hidden
- * from a reader — the link's name its words alone, as before.
+ * from a reader — the link's name its words alone, as before. A fold's
+ * chevron the same (frame P2-3).
  */
 export async function expectLinkChevron(
   link: Locator,
-  name: string,
+  name: string | RegExp,
 ): Promise<void> {
   await expect(link).toBeVisible();
   await expect(link).not.toContainText("›");
   await expect(link).toHaveAccessibleName(name);
-  await expect(link.locator("svg.link-chevron")).toHaveCount(1);
-  const look = await link.evaluate((button, want) => {
-    const chevron = button.querySelector("svg.link-chevron");
-    if (chevron === null) throw new Error("no chevron");
-    const probe = document.createElementNS(chevron.namespaceURI, "svg");
-    probe.innerHTML = want;
-    const pencil = document.createElement("span");
-    pencil.style.color = "var(--pencil)";
-    document.body.append(pencil);
-    const colour = getComputedStyle(pencil).color;
-    pencil.remove();
-    const texts = [...button.childNodes].filter(
-      (child) => child.nodeType === Node.TEXT_NODE && child.textContent?.trim(),
-    );
-    const first = texts[0];
-    const last = texts.at(-1);
-    if (first === undefined || last === undefined) throw new Error("no words");
-    const range = document.createRange();
-    range.setStartBefore(first);
-    range.setEndAfter(last);
-    const words = range.getBoundingClientRect();
-    const box = chevron.getBoundingClientRect();
-    const middle = box.top + box.height / 2;
-    return {
-      set: chevron.innerHTML === probe.innerHTML,
-      size: [box.width, box.height],
-      pencil: getComputedStyle(chevron).color === colour,
-      after: box.left >= words.right,
-      line: middle >= words.top && middle <= words.bottom,
-      hidden: chevron.getAttribute("aria-hidden"),
-    };
-  }, icons["chevron-right"]);
+  await expect(link.locator(CHEVRON)).toHaveCount(1);
+  const look = await link.evaluate(
+    (button, [want, chevronOf]) => {
+      const chevron = button.querySelector(chevronOf);
+      if (chevron === null) throw new Error("no chevron");
+      const probe = document.createElementNS(chevron.namespaceURI, "svg");
+      probe.innerHTML = want;
+      const pencil = document.createElement("span");
+      pencil.style.color = "var(--pencil)";
+      document.body.append(pencil);
+      const colour = getComputedStyle(pencil).color;
+      pencil.remove();
+      const texts = [...button.childNodes].filter(
+        (child) =>
+          child.nodeType === Node.TEXT_NODE && child.textContent?.trim(),
+      );
+      const first = texts[0];
+      const last = texts.at(-1);
+      if (first === undefined || last === undefined)
+        throw new Error("no words");
+      const range = document.createRange();
+      range.setStartBefore(first);
+      range.setEndAfter(last);
+      const words = range.getBoundingClientRect();
+      const box = chevron.getBoundingClientRect();
+      const middle = box.top + box.height / 2;
+      return {
+        set: chevron.innerHTML === probe.innerHTML,
+        size: [box.width, box.height],
+        pencil: getComputedStyle(chevron).color === colour,
+        after: box.left >= words.right,
+        line: middle >= words.top && middle <= words.bottom,
+        hidden: chevron.getAttribute("aria-hidden"),
+      };
+    },
+    [icons["chevron-right"], CHEVRON] as const,
+  );
   expect(look).toEqual({
     set: true,
     size: [16, 16],
@@ -1511,14 +1573,43 @@ export async function expectLinkChevron(
   });
 }
 
+/** A link's chevron, or a fold's. */
+const CHEVRON = "svg:is(.link-chevron, .fold-chevron)";
+
 /** How far a link's chevron is turned, in degrees: 0 unturned. */
 export async function chevronTurn(link: Locator): Promise<number> {
-  return link.locator("svg.link-chevron").evaluate((node) => {
+  return link.locator(CHEVRON).evaluate((node) => {
     const { transform } = getComputedStyle(node);
     if (transform === "none") return 0;
     const matrix = new DOMMatrix(transform);
     return Math.round((Math.atan2(matrix.b, matrix.a) * 180) / Math.PI);
   });
+}
+
+/**
+ * What opens in place (audit 2026-11-13, frame P2-3): one look and one say
+ * — a quiet button of a finger's height, its words, the set's chevron 16
+ * in pencil after them, unturned while shut and pointing at nothing; open,
+ * turned a quarter and pointing at what stands under it. Left open.
+ */
+export async function expectFold(
+  fold: Locator,
+  name: string | RegExp,
+  opened: Locator,
+): Promise<void> {
+  await expectLinkChevron(fold, name);
+  expect((await fold.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+  await expect(fold).toHaveAttribute("aria-expanded", "false");
+  await expect(fold).not.toHaveAttribute("aria-controls");
+  expect(await chevronTurn(fold)).toBe(0);
+  await expect(opened).toHaveCount(0);
+  await fold.click();
+  await expect(fold).toHaveAttribute("aria-expanded", "true");
+  await expect(opened).toBeVisible();
+  const id = (await opened.getAttribute("id")) ?? "";
+  expect(id).not.toBe("");
+  await expect(fold).toHaveAttribute("aria-controls", id);
+  await expect.poll(() => chevronTurn(fold)).toBe(90);
 }
 
 /**

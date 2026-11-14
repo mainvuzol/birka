@@ -9932,3 +9932,91 @@ recorded changes.
     with its line keeps it clear of the eyelet, as a stub's head is — and
     of a knot's loop, further in. «Затверджено…», a stocktake's result and
     «Продано»'s stub had their first line under the eyelet too.
+
+## Chosen in chat — 2026-11-14 (audit 2026-11-13, batch 10: a switch says which it is, a supplier chosen a radio; one fold, one «+ ще N»; the search on a white block, a row taking no tap unfaded; the suppliers', the report's and the invoices' lists on blocks; waits shaped as what comes; frame P2-2, P2-3, P2-4, money P2-4, P2-1)
+
+The audit's next batch in its own order, «merged, go next» after #210:
+the frame's shared components (its §8 batch 2) with the money list's
+package 2 that stands on them. No request body, right or rule of what is
+recorded changes; one line's words change («Ще N» → «+ ще N»).
+
+- **A switch says which it is** (frame P2-2; spec §6.7): every switch
+  names its kind, none by default — «page» where a way opens another
+  screen, the till's «Продати · Повернути · Внесок» alone; «pressed»
+  where its ways filter the screen or change its form in the same place,
+  «Яка модель» of «Нова модель» now among them. A screen reader hears the
+  till's way as the page open, every other as pressed.
+- **A supplier chosen is a radio** (frame P2-2): the supplier's sheet and
+  its list in place are a group of radios named «Постачальник», the one
+  chosen checked — as the catalogue's found goods; the look as before,
+  the tick and the row.
+- **One fold** (frame P2-3; spec S21): what opens in place — «Ще ознаки»
+  of «Нова модель» and of a model's rename, «Ще про список», a debt's
+  «Історія · N», an order's «Історія доставки» — is one component: its
+  words, the set's chevron 16 in pencil after them, turned a quarter
+  while open, a finger's height; a reader hears it open or shut and what
+  it opened.
+  - Decided here: each keeps the look it had — the debt's history and the
+    order's without an edge, «Ще ознаки» and «Ще про список» the quiet
+    button they were (screens «needs approval»: only the chevron is new,
+    as the task list says).
+  - Decided here: it names what it opens only while that stands under it
+    — shut, there is nothing to point at.
+  - Decided here (review): «Цей опис — назва товару?» of «Перевірка
+    каталогу» opens in place too, so it is the same fold — its words, the
+    chevron after them; what it opens stands as it stood.
+  - Not touched: «Сьогодні досі», the day tag folded whole (§6.10).
+- **One «+ ще N»** (frame P2-3; К14): the rest known beforehand is «+ ще
+  N» everywhere, gone once pressed — no «expanded» to say — the cursor on
+  the first row it brought. «Ще 4» of a customer's history → «+ ще 4»:
+  «Ще» is a tab's name.
+  - Decided here: the rule's «everywhere» takes in the places the audit
+    did not list — a stocktake's «Попередні» and a finished one's
+    differences («Ще N» → «+ ще N», the cursor on the first that was
+    folded), and S22's goods, which still said «expanded: no»; and (review)
+    «Додати примітку» of a correction, gone once pressed, which said
+    «expanded: no» as well.
+  - Not touched: «Показати ще», the server's next page.
+- **The search on a white block** (frame P2-4; spec §6.8): «Сьогодні»'s
+  groups lie on a list's white block, their caption over it; its grey
+  rows while read on it too.
+- **A row taking no tap** (frame P2-4; spec §6.8): one rule for every
+  list's row, whatever its title's class — held while a kept operation
+  holds the screen, or not this person's: nothing faded over it, its
+  words in pencil; what says itself in its own colour keeps it (a meta, a
+  sticker, a debt's sum). «Каса»'s row of an operation not to change keeps
+  its own grey.
+  - Decided here: the rule colours the row's words, not a named title —
+    a sum with no colour of its own (a history's) is pencil too while the
+    row is held.
+  - The report's ways take no hold: nothing holds them, so the rule has
+    nothing to show there. «Ще»'s rows show it — «Постачальникам» held
+    while an invoice's payment is kept.
+- **The section's lists on white blocks** (money P2-4; spec §6.8):
+  «Постачальникам»'s returns one block, its two ways a second, as «Гроші»'s
+  rows; «Список постачальників» rows 64 on a block, the chevron 16 in
+  pencil; the supplier's sheet
+  rows 64 with no block (the sheet is white already); «Звіт про
+  продажі»'s «Моделі», «Продажі й повернення» and «Як рахуємо» one block
+  under the table — the table unread, «Як рахуємо» alone in it; «Моделі»'s
+  rows a block, each sum `money-m` 20/600 in ink; «Накладні магазинів, що
+  не працюють» a row in a block of its own, the set's chevron 16. Their
+  grey places lie on a block too.
+- **Waits shaped as what comes** (money P2-1; spec §5, §6.27):
+  - «Продажі й повернення» waits as its thread — four grey eyelets, no
+    label (the placeholder's thread label is now optional);
+  - «Повернути постачальнику»'s models wait as three rows 64, no day;
+  - one warehouse's line «Склад «…»» holds the chips' row, 52, its words in
+    the middle: the fields under it never move as the warehouses come.
+    Decided here: «Прийшов товар»'s same line too — one rule;
+  - «Тут немає складу, з якого повертають.» is the blank tag, the same
+    words; «За «…» на складі «…» вільного товару немає.» is a meta line a
+    reader hears, the same words;
+  - «Надійшло» and the report's table wait as their own tables: the rows
+    every answer has — the corner, «Надійшло»'s three ways and «Разом»;
+    the report's three sections, their rows, «Продажі» and «Повернення»
+    with the line under their figure — each a grey line of its own words
+    in the table's own rows, so nothing under it moves when the figures
+    come. Decided here: the wait draws one store's column — how many
+    stores, only the answer says; a store's name over two lines may still
+    add its second line.

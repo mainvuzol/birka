@@ -521,7 +521,7 @@ export function Credits({
             current={status}
             choose={setStatus}
             disabled={false}
-            filters
+            kind="pressed"
           />
         )}
         {!single ? (

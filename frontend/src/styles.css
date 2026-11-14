@@ -989,6 +989,15 @@ nav:not(.tab-bar, .more-list) {
   align-items: flex-start;
   gap: 8px;
 }
+/* What «Цей опис — назва товару?» opens, a column as it stood (audit
+   2026-11-13, frame P2-3; review). */
+.catalog-name-fold {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+}
 .catalog-name-row {
   display: flex;
   flex-wrap: wrap;
@@ -1911,20 +1920,18 @@ html {
 button.sale-row:not(:disabled):active {
   background-color: var(--fold);
 }
-button.sale-row:disabled
-  :is(.sale-goods, .debt-name, .more-label, .cash-row-title) {
+/* A row taking no tap — held while an operation is on its way, or not
+   this person's — nothing faded over it: what it is still reads (review).
+   Its words in pencil, whatever its title's class; what says itself in its
+   own colour — a meta, a sticker, a debt's sum — keeps it. Every list's
+   row, «Каса»'s, the search's, the report's and the suppliers' ways
+   included (audit 2026-11-13, frame P2-4; orders-cash P1-2). */
+button.sale-row:disabled {
+  opacity: 1;
   color: var(--pencil);
 }
-/* …and nothing faded over it: what it is still reads (review) — «Каса»'s
-   rows too while its write is on its way (audit 2026-11-13, orders-cash
-   P1-2). */
-button.sale-row:disabled:has(
-    .sale-goods,
-    .debt-name,
-    .more-label,
-    .cash-row-title
-  ) {
-  opacity: 1;
+button.sale-row:disabled .sale-goods {
+  color: inherit;
 }
 .sale-main {
   display: flex;
@@ -2208,13 +2215,6 @@ button.sale-row:disabled:has(
   padding: 0 4px;
   border: 0;
   font-weight: 600;
-}
-.history-toggle .icon {
-  vertical-align: -3px;
-  color: var(--pencil);
-}
-.history-toggle[aria-expanded="true"] .icon {
-  transform: rotate(90deg);
 }
 .till-dock {
   margin-top: 12px;
@@ -4155,6 +4155,28 @@ span.cash-difference > .difference-sign {
   vertical-align: -3px;
   color: var(--pencil);
 }
+/* What opens in place (audit 2026-11-13, frame P2-3; spec S21): a quiet
+   button of a finger's height, its words, the set's chevron 16 in pencil
+   after them, turned a quarter while open. Each place keeps its own look —
+   a debt's «Історія · N» without an edge, «Ще ознаки» and «Ще про список»
+   the quiet button they were. */
+.fold {
+  min-height: var(--touch);
+}
+.fold-chevron {
+  flex: none;
+  vertical-align: -3px;
+  color: var(--pencil);
+  transition: transform var(--dur-base) var(--ease-standard);
+}
+.fold[aria-expanded="true"] .fold-chevron {
+  transform: rotate(90deg);
+}
+@media (prefers-reduced-motion: reduce) {
+  .fold-chevron {
+    transition: none;
+  }
+}
 /* A step refused where it was pressed: under its tag, at the card's foot,
    under the return's tick — nothing above it moves (audit 2026-11-13,
    orders P1-1). */
@@ -4582,14 +4604,6 @@ span.cash-difference > .difference-sign {
   width: var(--icon-s);
   height: var(--icon-s);
 }
-/* Turned while the history is open, as a debt's «Історія · N» (audit
-   2026-11-13, orders-cash P2-1). */
-.shipping-changes-title[aria-expanded] .icon {
-  transition: transform var(--dur-base) var(--ease-standard);
-}
-.shipping-changes-title[aria-expanded="true"] .icon {
-  transform: rotate(90deg);
-}
 /* The MainButton's place outside Telegram (spec §6.4): 50 high, radius
    10, the primary; turning while the server is asked. */
 .order-dock .main-mimic,
@@ -4854,7 +4868,7 @@ span.cash-difference > .difference-sign {
 }
 /* Its rows' sides 16, a hairline under each from its text's edge, none
    under the last (spec §6.8; frame P2-2). */
-.list-block .sale-row {
+.list-block :is(.sale-row, .supplier-row) {
   padding: 12px 16px;
   border-bottom: 0;
   background: linear-gradient(var(--hairline), var(--hairline)) left 16px
@@ -4865,8 +4879,8 @@ span.cash-difference > .difference-sign {
   background-position: left 68px bottom;
   background-size: calc(100% - 68px) 1px;
 }
-.list-block > .sale-row:last-child,
-.list-block > :last-child > .sale-row {
+.list-block > :is(.sale-row, .supplier-row):last-child,
+.list-block > :last-child > :is(.sale-row, .supplier-row) {
   background-image: none;
 }
 /* No rows, no block. */
@@ -6118,7 +6132,9 @@ button.day-folded {
 /* «Сьогодні»'s search (spec S04 #3, §6.6; frame task list, P2-2): the
    field under the title's line, 52 high; once searched, the groups in the
    day's place, each headed as «Чекає на вас» is, its rows 64 with a
-   chevron of 16 in pencil. The day, kept as it was, is unseen meanwhile. */
+   chevron of 16 in pencil, on a list's white block under the heading
+   (audit 2026-11-13, frame P2-4). The day, kept as it was, is unseen
+   meanwhile. */
 .today-find {
   margin: 12px 0 0;
 }
@@ -6132,7 +6148,7 @@ button.day-folded {
   margin-top: 20px;
 }
 .found-group h2 {
-  margin: 0 0 4px;
+  margin: 0 0 8px;
   color: var(--pencil);
 }
 .found-row > .icon {
@@ -6480,11 +6496,6 @@ button.money-line-open:disabled {
   font-weight: 700;
   color: var(--ink);
 }
-.money-table-wait {
-  display: grid;
-  gap: 12px;
-  padding: 6px 0;
-}
 .money-rows {
   margin-top: 8px;
 }
@@ -6691,6 +6702,15 @@ section.receive-list {
 .receive-place {
   margin: 4px 0 12px;
 }
+/* One warehouse, its line the chips' row's 52, its words in the middle:
+   nothing under it moves as the warehouses come, one or two (audit
+   2026-11-13, money P2-1) — «Повернути постачальнику»'s and «Прийшов
+   товар»'s alike. */
+p.receive-place {
+  display: flex;
+  align-items: center;
+  min-height: 52px;
+}
 .receive-model {
   display: flex;
   align-items: center;
@@ -6867,12 +6887,15 @@ section.receive-list {
   padding: 0;
   list-style: none;
 }
+/* A supplier's row, 64 as every list's (audit 2026-11-13, money P2-4): in
+   the sheet, which is white already, with no block; on «Список
+   постачальників», on one. */
 .supplier-row {
   display: flex;
   align-items: center;
   gap: 12px;
   width: 100%;
-  min-height: 56px;
+  min-height: var(--h-row);
   padding: 10px 4px;
   border: 0;
   border-bottom: 1px solid var(--line);
@@ -6956,9 +6979,11 @@ section.receive-list {
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
-.invoice-elsewhere {
+/* A row in a block of its own (audit 2026-11-13, money P2-4). */
+.invoice-elsewhere-block {
   margin-top: 16px;
-  border-top: 1px solid var(--line);
+}
+.invoice-elsewhere {
   color: var(--ink);
 }
 .invoice-elsewhere .icon {
@@ -7935,7 +7960,12 @@ label.way-option {
 }
 nav.report-ways {
   display: block;
-  margin-top: 8px;
+  margin-top: 0;
+}
+/* The report's ways, one white block under the table (audit 2026-11-13,
+   money P2-4). */
+.report-ways-block {
+  margin-top: 16px;
 }
 .report-screen > .mode-switch,
 .report-screen > .chips {
@@ -7958,9 +7988,15 @@ nav.report-ways {
 .report-row .t-row {
   overflow-wrap: anywhere;
 }
+/* `money-m`, 20/600 in the text face, its figures even (audit 2026-11-13,
+   money P2-4). */
 .report-sum {
   flex-shrink: 0;
+  font-family: var(--font-text);
+  font-size: 20px;
   font-weight: 600;
+  line-height: 24px;
+  color: var(--ink);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }

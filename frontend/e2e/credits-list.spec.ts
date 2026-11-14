@@ -1637,7 +1637,7 @@ test("a whole number the closed stores owe nothing either: the blank tag, its li
   await expect(none.getByRole("button")).toHaveCount(0);
 });
 
-test("the card's history: every debt's lines, the newest first, a debt opened «Частинами», a knot where one closed; seven, then «Ще N» opens the rest at the eighth", async ({
+test("the card's history: every debt's lines, the newest first, a debt opened «Частинами», a knot where one closed; seven, then «+ ще N» opens the rest at the eighth", async ({
   page,
 }) => {
   await summary(page);
@@ -1710,12 +1710,15 @@ test("the card's history: every debt's lines, the newest first, a debt opened «
   // The payment that paid it off, a knot.
   await expect(lines.nth(5).locator(".timeline-node")).toHaveClass(/\bknot\b/);
   await expect(page.locator(".timeline-node.knot")).toHaveCount(1);
-  const more = page.getByRole("button", { name: "Ще 1" });
+  // «+ ще N», as everywhere — «Ще» is a tab's name — gone once pressed,
+  // no fold's «expanded» (audit 2026-11-13, frame P2-3).
+  const more = page.getByRole("button", { name: "+ ще 1", exact: true });
+  await expect(more).not.toHaveAttribute("aria-expanded");
   await more.click();
   await expect(lines).toHaveCount(8);
   await expect(lines.nth(7)).toBeFocused();
   await expect(lines.nth(7).locator(".timeline-what")).toHaveText("Частинами");
-  await expect(page.getByRole("button", { name: /^Ще \d/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^\+ ще \d/ })).toHaveCount(0);
   await expect(page.locator(".customer-kept")).toHaveText(
     "Ім’я й телефон зберігаємо, поки є борг, і ще рік після того, як його закрито (3 роки — після списання).",
   );

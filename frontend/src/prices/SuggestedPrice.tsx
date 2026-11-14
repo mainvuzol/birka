@@ -397,7 +397,7 @@ function Form({
             setProblem("");
           }}
           disabled={held}
-          filters
+          kind="pressed"
           className="price-scope"
         />
       ) : (
