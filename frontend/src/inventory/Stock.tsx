@@ -217,8 +217,9 @@ export function Stock({
             }}
           />
         ) : locations.data.length === 0 ? (
-          // Nothing said of the rule (stage 2, goods task list, P1-5).
-          <p>Тут немає складів.</p>
+          // Nothing said of the rule (stage 2, goods task list, P1-5); the
+          // blank tag (audit 2026-11-13, goods P2-1).
+          <Empty title="Тут немає складів." />
         ) : (
           <>
             {only && !selectionLost ? (

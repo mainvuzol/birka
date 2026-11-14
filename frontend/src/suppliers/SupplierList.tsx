@@ -10,6 +10,7 @@ import { Sheet } from "@/shared/Sheet";
 import { Unread } from "@/shared/Unread";
 import { Placeholder } from "@/shared/Placeholder";
 import { buzz } from "@/shared/telegram";
+import { enterGoes } from "@/shared/enter";
 import { visible } from "@/shared/visible";
 import { Empty } from "@/shared/Empty";
 import type { Store } from "@/orders/types";
@@ -215,6 +216,8 @@ function SupplierEdit({
       <label>
         Назва
         <input
+          enterKeyHint="next"
+          onKeyDown={enterGoes}
           value={name}
           maxLength={200}
           disabled={busy}
@@ -227,6 +230,8 @@ function SupplierEdit({
       <label>
         Телефон
         <input
+          enterKeyHint="done"
+          onKeyDown={enterGoes}
           value={phone}
           maxLength={40}
           inputMode="tel"

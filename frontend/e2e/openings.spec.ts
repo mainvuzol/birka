@@ -940,7 +940,11 @@ test("at 360 px, light and dark, the lists, a list's big tag and a line's screen
     );
     await expect(others).toHaveAttribute("aria-pressed", "false");
   }
-  await expect(page.getByText("Тут рядків немає.")).toBeVisible();
+  // Under the switch, as the section's other filters empty: the blank tag,
+  // the same words (audit 2026-11-13, goods P2-1).
+  const none = page.locator(".orders-empty", { hasText: "Тут рядків немає." });
+  await expect(none).toBeVisible();
+  await expect(none.locator(".orders-empty-mark")).toBeVisible();
   // Two behind ⋯, said on it once chosen.
   await showLines(page, "Не товар");
   await expect(
@@ -1425,6 +1429,30 @@ test("a split the list does not state asks who counted, and a warehouse with his
       "Відхилено: склад уже працює. Залишків цей список не змінив.",
     ),
   ).toBeVisible();
+  // Rejected, as final as approved: the settled stub, its eyelet knotted,
+  // the same words — in both themes (audit 2026-11-13, goods P2-4).
+  const rejected = page.locator(".stub", {
+    hasText: "Відхилено: склад уже працює.",
+  });
+  await expect(rejected).toHaveClass(/\bstub-settled\b/);
+  await expect(rejected.locator(".eyelet")).toHaveClass(/\beyelet-knot\b/);
+  await expect(rejected.getByRole("status")).toHaveText(
+    "Відхилено: склад уже працює. Залишків цей список не змінив.",
+  );
+  // Its line clear of the eyelet and the knot's loop (review).
+  const line = await rejected.locator(".stub-line").boundingBox();
+  const eyelet = await rejected.locator(".eyelet").boundingBox();
+  expect((line?.x ?? 0) + (line?.width ?? 0)).toBeLessThan(
+    (eyelet?.x ?? 0) - 4,
+  );
+  for (const scheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    await expect(rejected).toBeVisible();
+    await rejected.screenshot({
+      path: `test-results/openings-rejected-${scheme}.png`,
+    });
+  }
+  await page.emulateMedia({ colorScheme: "light" });
 });
 
 test("a line's model the catalogue has not is added from its empty search, in the sheet «Нова модель» over the list: the line keeps what it was answered, its model chosen and said (stage 2, goods task list, P0-1)", async ({
@@ -1504,6 +1532,128 @@ test("the check that no list waits at the warehouse, failed, is the warning's pl
   refused = false;
   await plate.getByRole("button", { name: "Спробувати ще раз" }).click();
   await expect(plate).toHaveCount(0);
+});
+
+test("the check that no list waits at the warehouse, while it is read, is a grey line where its answer comes, «Перевіряємо…» said to a reader alone (audit 2026-11-13, goods P2-1)", async ({
+  page,
+}) => {
+  let hold = false;
+  let free = (): void => undefined;
+  const freed = new Promise<void>((resolve) => {
+    free = resolve;
+  });
+  await page.route("**/api/v1/snapshots?*status=IN_REVIEW*", async (route) => {
+    if (hold) await freed;
+    await route.fallback();
+  });
+  await openings(page);
+  await page.getByRole("button", { name: "Новий список" }).click();
+  hold = true;
+  await warehouse(page, fixture.opening_location_id);
+  const form = page.getByRole("form", { name: "Новий список" });
+  const grey = form.locator(".placeholder-line > .skeleton");
+  await expect(grey).toBeVisible();
+  await expect(
+    form
+      .getByRole("status")
+      .filter({ hasText: "Перевіряємо, чи на складі не чекає список…" }),
+  ).toHaveClass(/visually-hidden/);
+  free();
+  await expect(grey).toHaveCount(0);
+  await expect(form.getByText(/^Перевіряємо/)).toHaveCount(0);
+});
+
+test("a line's keys do as they say inside Telegram: «Кількість» «next» takes the cursor to the note, the note's «done» and a size cell tapped let the keyboard go, «Чому це не товар» «done»; nothing sent; «Ще про список»'s fields «done» (audit 2026-11-13, goods P2-3)", async ({
+  page,
+}) => {
+  const { main, pressMain } = await telegram(page);
+  const hidden = (): Promise<number> =>
+    page.evaluate(
+      () =>
+        (window as unknown as { told: [string, unknown][] }).told.filter(
+          ([name]) => name === "web_app_hide_keyboard",
+        ).length,
+    );
+  const coat = await model(page);
+  await noListWaits(page, fixture.opening_location_id);
+  await openings(page, "9.1");
+  await expect.poll(main).toMatchObject({
+    is_visible: true,
+    is_active: true,
+    text: "Новий список",
+  });
+  await pressMain();
+  await warehouse(page, fixture.opening_location_id);
+  await aboutList(page);
+  for (const label of [
+    "Звідки список (необов’язково)",
+    "Коли перелічено (необов’язково)",
+  ])
+    await expect(page.getByLabel(label)).toHaveAttribute(
+      "enterkeyhint",
+      "done",
+    );
+  const title = `Клавіші ${coat}`;
+  // In Telegram no button submits the form: «done» puts the keyboard away,
+  // nothing saved (review).
+  let lists = 0;
+  page.on("request", (request) => {
+    if (
+      request.method() === "POST" &&
+      new URL(request.url()).pathname === "/api/v1/snapshots"
+    )
+      lists += 1;
+  });
+  const from = page.getByLabel("Звідки список (необов’язково)");
+  await from.fill(title);
+  const typed = await hidden();
+  await from.press("Enter");
+  await expect(from).not.toBeFocused();
+  expect(await hidden()).toBe(typed + 1);
+  expect(lists).toBe(0);
+  await page
+    .getByLabel("Рядки списку — кожен товар з нового рядка, як написано")
+    .fill([`${coat} сірий 2 шт`, "Разом"].join("\n"));
+  await expect.poll(main).toMatchObject({
+    is_visible: true,
+    is_active: true,
+    text: "Зберегти список",
+  });
+  await pressMain();
+  await expect(page.getByRole("heading", { name: title })).toBeVisible();
+  await showLines(page, "Усі");
+  const sent: string[] = [];
+  page.on("request", (request) => {
+    if (request.method() !== "GET" && request.url().includes("/api/v1/"))
+      sent.push(request.url());
+  });
+  const editor = await answer(page, 1);
+  await pick(page, "Розбір рядка 1", coat);
+  await editor.getByLabel("Відомо інакше").check();
+  const count = editor.getByLabel("Кількість");
+  await expect(count).toHaveAttribute("enterkeyhint", "next");
+  await count.fill("2");
+  // A cell tapped with the cursor in «Кількість»: a choice, not typing.
+  const before = await hidden();
+  await size(editor, "M");
+  expect(await hidden()).toBe(before + 1);
+  await count.press("Enter");
+  const note = editor.getByLabel("Звідки це відомо");
+  await expect(note).toBeFocused();
+  await expect(note).toHaveAttribute("enterkeyhint", "done");
+  await note.fill("бачили на полиці");
+  await note.press("Enter");
+  await expect(note).not.toBeFocused();
+  expect(await hidden()).toBe(before + 2);
+  // «Не товар»: its reason «done», Enter puts the keyboard away only.
+  await editor.getByRole("button", { name: "Не товар" }).click();
+  const why = editor.getByLabel("Чому це не товар");
+  await expect(why).toHaveAttribute("enterkeyhint", "done");
+  await why.fill("підсумок");
+  await why.press("Enter");
+  await expect(why).not.toBeFocused();
+  expect(await hidden()).toBe(before + 3);
+  expect(sent).toEqual([]);
 });
 
 test("«Новий список»: the way in a switch, the list its one field; «Звідки список» and «Коли перелічено» under the quiet «Ще про список», opened by a tap and by a refusal of them, the words kept; at 360, light and dark (audit after stage 2, goods P2-4)", async ({

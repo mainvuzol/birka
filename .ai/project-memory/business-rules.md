@@ -9860,3 +9860,75 @@ right or rule of what is recorded changes.
     basket, a card that fits the screen — would have the toast lifted
     onto it. Where the dock stands higher, the toast keeps its place over
     the menu, under the dock.
+
+## Chosen in chat — 2026-11-14 (audit 2026-11-13, batch 9: every field's Enter as its key says, a size cell lets the keyboard go, the guard; «Товар»'s last plain empties and reads; a rejected list's stub; goods P2-3, P2-1 without its two new lines, P2-4, frame P2-5 p. 1)
+
+The audit's next batch in its own order, «merged, go next» after #209:
+the goods list's quick wins that wait on no one (its §8) and the frame's
+guard that waited on them. No request body, right or rule of what is
+recorded changes.
+
+- **Enter as its key says** (goods P2-3; frame P2-5 p. 1; spec §6.3):
+  every one-line field names its Enter — «next» where a field follows,
+  «done» on the last, «search» on a search (as before); a field of
+  several lines «enter», a new line. On a field no form sends (a
+  delivery, a supplier return, a supplier's sheet, a correction's note,
+  «Ще ознаки», an opening list's line) Enter does what it says: «next»
+  takes the cursor to the next field of its sheet or screen, «done» — or
+  no field after it — puts the keyboard away. Nothing is sent: a record
+  is the MainButton's or the dock's, as «Нове замовлення».
+  - Decided here: «the next field» is the next one shown that the phone's
+    keyboard types into, in the page's order, within the sheet it stands
+    in — buttons, choices, a size's cells, a date, a read-only field and
+    the app's own keypad are passed over. In a sheet, «done» leaves the
+    cursor on the sheet, where Escape still closes it, as a rejection's
+    reason does (batch 10 after stage 2; review).
+  - Decided here: the size counts of «Прийшов товар» and «Повернути
+    постачальнику» are «next» to the last size, which is «done» — the
+    price and the note stand in another sheet or under other controls.
+    «Як надійшов»: the price «next», the note «done». A supplier's sheet:
+    «Назва» «next», «Телефон» «done». «Ще ознаки»: the source, the
+    category, the garment's type and the four marks «next», «Довжина, см»
+    «done». A list's line: «Кількість» «next», the note and «Чому це не
+    товар» «done».
+  - Where Enter saves by earlier decisions — «Перейменувати модель»
+    (2026-11-08), «Додати рядки вручну» and «Новий список» outside
+    Telegram (batch 10 after stage 2) — it still does; their fields say
+    «done».
+  - Decided here (review): inside Telegram «Додати рядки вручну» and
+    «Новий список» draw no button that submits — the MainButton saves —
+    so their «done» puts the keyboard away there, nothing saved.
+  - Decided here (review): «Як записано», a field of several lines,
+    says «enter», not «next».
+- **A size cell lets the keyboard go** (goods P2-3; spec §6.3): «Нова
+  модель»'s cells and a list's line's, «Розмір невідомий» too, as «Знайшли
+  товар…» and the catalogue's picker.
+- **The guard** (frame P2-5 p. 1): ESLint refuses an `<input>` or a
+  `<textarea>` without `enterKeyHint` in every screen of the app, except
+  a choice (`radio`, `checkbox`), a date, a file, a hidden value and the
+  app's own keypad (`inputMode="none"`). Its block lets off the shared
+  `Unread` and `Sticker`, which hold no field.
+- **«Товар»'s last plain empties and reads** (goods P2-1; spec §5):
+  «Тут рядків немає.» under a list's switch and the three «no warehouse»
+  lines («Тут немає складу для приймання.», «… для інвентаризації.»,
+  «Тут немає складів.») are the blank tag, the same words. Whether a list
+  waits at the warehouse, while it is checked, is a grey line where its
+  answer comes, «Перевіряємо…» said to a screen reader alone. The models'
+  search, read with nothing found before, is three rows in grey, one line
+  each, as the catalogue's search, «Шукаємо моделі…» to a reader alone.
+  «Нічого не знайшли за «…»» with no full stop, as everywhere; a
+  stocktake's warehouse lost says «Оберіть інший склад.», as «Залишки».
+  - Decided here (review): «Прийшов товар» with no warehouse to receive
+    into is the blank tag alone — no search, no count, no dock under it,
+    as «Залишки» and «Інвентаризація» are.
+  - Not built here: the first stocktake's blank tag («Інвентаризацій на
+    цьому складі ще не було.») and an empty answer of sizes («У каталозі
+    ще немає розмірів.») — two new lines that wait on the owner's
+    reading, as the task list says.
+- **A rejected list's stub** (goods P2-4; P3): «Відхилено: {причина}.
+  Залишків цей список не змінив.» in the same settled stub, its eyelet
+  knotted, as «Затверджено…»; the words as before.
+  - Decided here (review, seen on the screenshot): a stub that begins
+    with its line keeps it clear of the eyelet, as a stub's head is — and
+    of a knot's loop, further in. «Затверджено…», a stocktake's result and
+    «Продано»'s stub had their first line under the eyelet too.

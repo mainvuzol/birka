@@ -12,6 +12,7 @@ import { Stub } from "@/shared/Stub";
 import { usePanelRoom } from "@/shared/panel";
 import { buzz, useAskBeforeClosing, useMainButton } from "@/shared/telegram";
 import { visible } from "@/shared/visible";
+import { enterGoes } from "@/shared/enter";
 import { sizeLabel } from "@/returns/types";
 import type { StockOption, Store } from "@/orders/types";
 import { useBackOnSale } from "@/returns/places";
@@ -451,8 +452,9 @@ export function NewReturn({
                   </button>
                 </div>
                 <div className="receive-sizes">
-                  {model.sizes.map((size) => {
+                  {model.sizes.map((size, at) => {
                     const got = counts[size.size_id] ?? 0;
+                    const last = at === model.sizes.length - 1;
                     const code = codeOf(size);
                     const free = size.available_quantity;
                     return (
@@ -487,6 +489,8 @@ export function NewReturn({
                           −
                         </button>
                         <input
+                          enterKeyHint={last ? "done" : "next"}
+                          onKeyDown={enterGoes}
                           inputMode="numeric"
                           aria-label={`${code}, шт.`}
                           value={String(got)}
@@ -630,6 +634,8 @@ export function NewReturn({
           <label>
             Примітка (необов’язково)
             <input
+              enterKeyHint="done"
+              onKeyDown={enterGoes}
               value={note}
               maxLength={1000}
               onChange={(event) => {

@@ -6,7 +6,8 @@ import { ApiError, api } from "@/shared/api";
 import { Eyelet } from "@/shared/Eyelet";
 import { ModeSwitch } from "@/shared/ModeSwitch";
 import { Sheet } from "@/shared/Sheet";
-import { buzz, useMainButton } from "@/shared/telegram";
+import { buzz, hideKeyboard, useMainButton } from "@/shared/telegram";
+import { enterGoes } from "@/shared/enter";
 import { visible } from "@/shared/visible";
 import { Placeholder } from "@/shared/Placeholder";
 import { Unread } from "@/shared/Unread";
@@ -423,7 +424,9 @@ export function NewModel({
               maxLength={2000}
               value={text}
               disabled={blocked}
-              enterKeyHint="next"
+              // Several lines: Enter a new line (audit 2026-11-13, goods
+              // P2-3; review).
+              enterKeyHint="enter"
               onChange={(event) => {
                 setText(event.target.value);
               }}
@@ -510,6 +513,7 @@ export function NewModel({
                   value={concept}
                   disabled={blocked}
                   enterKeyHint="next"
+                  onKeyDown={enterGoes}
                   onChange={(event) => {
                     setConcept(event.target.value);
                   }}
@@ -574,6 +578,7 @@ export function NewModel({
                 value={colour}
                 disabled={blocked}
                 enterKeyHint="next"
+                onKeyDown={enterGoes}
                 onChange={(event) => {
                   setColour(event.target.value);
                 }}
@@ -607,6 +612,10 @@ export function NewModel({
                         aria-pressed={on}
                         disabled={blocked}
                         onClick={() => {
+                          // A cell is a choice, not typing: the keyboard
+                          // goes away (spec §6.3; audit 2026-11-13, goods
+                          // P2-3).
+                          hideKeyboard();
                           toggle({ system: size.system, code: size.code });
                         }}
                       >
@@ -631,6 +640,7 @@ export function NewModel({
                     value={typedSize}
                     disabled={blocked}
                     enterKeyHint="done"
+                    onKeyDown={enterGoes}
                     onChange={(event) => {
                       setTypedSize(event.target.value);
                       // Other letters, their system asked again.
@@ -706,6 +716,8 @@ export function NewModel({
                     <label>
                       Джерело
                       <input
+                        enterKeyHint="next"
+                        onKeyDown={enterGoes}
                         maxLength={200}
                         value={source}
                         disabled={blocked}
@@ -717,6 +729,8 @@ export function NewModel({
                     <label>
                       Категорія
                       <input
+                        enterKeyHint="next"
+                        onKeyDown={enterGoes}
                         maxLength={120}
                         value={category}
                         disabled={blocked}
@@ -728,6 +742,8 @@ export function NewModel({
                     <label>
                       Тип виробу
                       <input
+                        enterKeyHint="next"
+                        onKeyDown={enterGoes}
                         maxLength={120}
                         value={garment}
                         disabled={blocked}
@@ -742,6 +758,8 @@ export function NewModel({
                   <label key={key}>
                     {label}
                     <input
+                      enterKeyHint="next"
+                      onKeyDown={enterGoes}
                       maxLength={120}
                       value={extra[key] ?? ""}
                       disabled={blocked}
@@ -754,6 +772,8 @@ export function NewModel({
                 <label>
                   Довжина, см
                   <input
+                    enterKeyHint="done"
+                    onKeyDown={enterGoes}
                     inputMode="decimal"
                     value={length}
                     disabled={blocked}
@@ -786,6 +806,7 @@ export function NewModel({
                       <label>
                         Чим відрізняється модель
                         <textarea
+                          enterKeyHint="enter"
                           maxLength={1000}
                           value={note}
                           disabled={blocked}

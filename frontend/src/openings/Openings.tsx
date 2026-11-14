@@ -48,6 +48,8 @@ import { BackToMore } from "@/shared/More";
 import type { MoreBack } from "@/shared/More";
 import { Back } from "@/shared/Back";
 import { Empty } from "@/shared/Empty";
+import { Placeholder } from "@/shared/Placeholder";
+import { enterGoes } from "@/shared/enter";
 import { Eyelet } from "@/shared/Eyelet";
 import { Icon } from "@/shared/Icon";
 import { ModeSwitch } from "@/shared/ModeSwitch";
@@ -908,7 +910,12 @@ function NewList({
         )}
         {draft.location_id !== "" &&
           (waiting.isPending ? (
-            <p role="status">Перевіряємо, чи на складі не чекає список…</p>
+            // A grey line where its answer comes, its words for a screen
+            // reader alone (audit 2026-11-13, goods P2-1).
+            <Placeholder
+              said="Перевіряємо, чи на складі не чекає список…"
+              line
+            />
           ) : waiting.error ? (
             // The warning's plate, «Спробувати ще раз» (stage 2's audit,
             // goods P1-1).
@@ -994,6 +1001,7 @@ function NewList({
             <label>
               Рядки списку — кожен товар з нового рядка, як написано
               <textarea
+                enterKeyHint="enter"
                 value={draft.text}
                 rows={10}
                 onChange={(event) => {
@@ -1027,6 +1035,10 @@ function NewList({
             <label>
               Звідки список (необов’язково)
               <input
+                enterKeyHint="done"
+                // Outside Telegram Enter saves, as before; in it no
+                // button submits: «done» puts the keyboard away (review).
+                onKeyDown={main ? enterGoes : undefined}
                 value={draft.source}
                 maxLength={300}
                 placeholder="Наприклад, «Зошит 2, сторінки 1–4»"
@@ -1038,6 +1050,8 @@ function NewList({
             <label>
               Коли перелічено (необов’язково)
               <input
+                enterKeyHint="done"
+                onKeyDown={main ? enterGoes : undefined}
                 value={draft.captured}
                 maxLength={40}
                 placeholder="Наприклад, 30.09.2026"
@@ -1606,14 +1620,18 @@ function ListView({
                 </p>
               </Stub>
             )}
+            {/* Rejected, as final as approved: the same settled stub,
+                the same words (audit 2026-11-13, goods P2-4). */}
             {list.status === "REJECTED" && (
-              <p role="status">
-                Відхилено
-                {list.rejection_reason
-                  ? `: ${visible(list.rejection_reason)}`
-                  : ""}
-                . Залишків цей список не змінив.
-              </p>
+              <Stub state="settled">
+                <p className="stub-line" role="status">
+                  Відхилено
+                  {list.rejection_reason
+                    ? `: ${visible(list.rejection_reason)}`
+                    : ""}
+                  . Залишків цей список не змінив.
+                </p>
+              </Stub>
             )}
           </div>
         </div>
@@ -1722,7 +1740,9 @@ function ListView({
         {lines.isPending ? (
           <OpeningPlaceholder said="Завантажуємо рядки…" shape="lines" />
         ) : linesUnshown ? null : items.length === 0 ? (
-          <p>Тут рядків немає.</p>
+          // Under the switch as the section's other filters empty: the blank
+          // tag, the same words (audit 2026-11-13, goods P2-1).
+          <Empty title="Тут рядків немає." />
         ) : (
           <>
             <div className="tags opening-lines">

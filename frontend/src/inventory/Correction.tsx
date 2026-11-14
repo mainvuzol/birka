@@ -8,6 +8,7 @@ import { Eyelet } from "@/shared/Eyelet";
 import { Keypad } from "@/shared/Keypad";
 import { ModeSwitch } from "@/shared/ModeSwitch";
 import { buzz, useMainButton } from "@/shared/telegram";
+import { enterGoes } from "@/shared/enter";
 import type { Store } from "@/orders/types";
 import { submitAdjustment, useAdjustmentCommand } from "./adjustmentCommands";
 import { reasonLabels } from "./adjustmentTypes";
@@ -307,6 +308,8 @@ export function Correction({
         <label>
           Примітка
           <input
+            enterKeyHint="done"
+            onKeyDown={enterGoes}
             ref={noteField}
             value={note}
             maxLength={500}

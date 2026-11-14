@@ -1022,7 +1022,12 @@ test("a rename keeps a similar word once the person says it is another", async (
   await open(page, name, /графіт/);
   const sheet = await renameSheet(page);
   await sheet.getByLabel("Колір", { exact: true }).fill(colour.typo);
-  // Enter in a field saves, as the button does.
+  // Enter in a field saves, as the button does — its key says «done»
+  // (audit 2026-11-13, goods P2-3).
+  await expect(sheet.getByLabel("Колір", { exact: true })).toHaveAttribute(
+    "enterkeyhint",
+    "done",
+  );
   await sheet.getByLabel("Колір", { exact: true }).press("Enter");
   await expect(sheet.getByText("Схожа назва вже є")).toBeVisible();
   await sheet
@@ -1814,6 +1819,49 @@ test("a kept creation refused stays across tabs, answered on its own proposal al
   expect(attempts).toBe(2);
 });
 
+test("the models' search read slowly: three rows in grey, one line each, where the rows come, «Шукаємо моделі…» said to a reader alone; answered, the rows where the grey stood (audit 2026-11-13, goods P2-1)", async ({
+  page,
+}) => {
+  const bearer = await token(page);
+  const name = `Повільна ${randomUUID().slice(0, 8)}`;
+  await model(page, bearer, { concept: name, variant: { color: "графіт" } }, 0);
+  let hold = false;
+  let free = (): void => undefined;
+  const freed = new Promise<void>((resolve) => {
+    free = resolve;
+  });
+  await page.route("**/api/v1/catalog/models?*", async (route) => {
+    if (hold) await freed;
+    await route.fallback();
+  });
+  await enter(page, "Моделі");
+  hold = true;
+  await page.getByLabel("Знайти модель").fill(name);
+  const search = page.locator(".models-search");
+  const grey = search.locator(".placeholder .catalog-proposal");
+  await expect(grey).toHaveCount(3);
+  await expect(grey.locator(".skeleton-name")).toHaveCount(3);
+  await expect(grey.locator(".skeleton-meta")).toHaveCount(0);
+  await expect(
+    search.getByRole("status").filter({ hasText: "Шукаємо моделі…" }),
+  ).toHaveClass(/visually-hidden/);
+  await expect(search.getByText(/^Нічого не знайшли/)).toHaveCount(0);
+  const greyRow = await grey.first().boundingBox();
+  free();
+  const found = search
+    .getByRole("list", { name: "Знайдені моделі" })
+    .getByRole("button")
+    .first();
+  await expect(found).toBeVisible();
+  await expect(grey).toHaveCount(0);
+  await expect(search.getByRole("status")).toHaveCount(0);
+  const row = await found.boundingBox();
+  expect(Math.abs((row?.y ?? 0) - (greyRow?.y ?? 0))).toBeLessThanOrEqual(2);
+  expect(
+    Math.abs((row?.height ?? 0) - (greyRow?.height ?? 0)),
+  ).toBeLessThanOrEqual(4);
+});
+
 test("a retirement an opening list stops says so", async ({ page }) => {
   const bearer = await token(page);
   const name = `Список ${randomUUID().slice(0, 8)}`;
@@ -1838,7 +1886,7 @@ test("a retirement an opening list stops says so", async ({ page }) => {
   // Words no model has: said so.
   await page.getByLabel("Знайти модель").fill(`${name} немає`);
   await expect(
-    page.getByText(`Нічого не знайшли за «${name} немає».`, { exact: true }),
+    page.getByText(`Нічого не знайшли за «${name} немає»`, { exact: true }),
   ).toBeVisible();
   await open(page, name, /графіт/);
   await way(page, "Прибрати модель");

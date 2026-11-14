@@ -11,6 +11,7 @@ import { Placeholder } from "@/shared/Placeholder";
 import { ScreenHeader } from "@/shared/ScreenHeader";
 import { Sheet } from "@/shared/Sheet";
 import { buzz, useMainButton } from "@/shared/telegram";
+import { enterGoes } from "@/shared/enter";
 import { Unread } from "@/shared/Unread";
 import { visible } from "@/shared/visible";
 import { FileChooser } from "./FileChooser";
@@ -861,6 +862,10 @@ export function AddLines({
         <label>
           Звідки ці рядки (необов’язково)
           <input
+            enterKeyHint="done"
+            // Outside Telegram Enter saves, as before; in it no
+            // button submits: «done» puts the keyboard away (review).
+            onKeyDown={main ? enterGoes : undefined}
             value={draft.source}
             maxLength={300}
             placeholder="Наприклад, «Зошит 2, сторінка 5»"
@@ -872,6 +877,8 @@ export function AddLines({
         <label>
           Коли перелічено (необов’язково)
           <input
+            enterKeyHint="done"
+            onKeyDown={main ? enterGoes : undefined}
             value={draft.counted}
             maxLength={40}
             onChange={(event) => {
@@ -882,6 +889,7 @@ export function AddLines({
         <label>
           Рядки — кожен товар з нового рядка, як написано
           <textarea
+            enterKeyHint="enter"
             value={draft.text}
             rows={6}
             onChange={(event) => {

@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/shared/api";
 import { Unread } from "@/shared/Unread";
 import { Placeholder } from "@/shared/Placeholder";
+import { Empty } from "@/shared/Empty";
 import { BackToMore } from "@/shared/More";
 import type { MoreBack } from "@/shared/More";
 import { ScreenHeader } from "@/shared/ScreenHeader";
@@ -261,7 +262,7 @@ export function Stocktaking({
       <section className="stocktaking">
         {lost && (
           <p role="status">
-            Обраний склад більше не доступний. Оберіть інший склад зі списку.
+            Обраний склад більше не доступний. Оберіть інший склад.
           </p>
         )}
         {locations.isPending ? (
@@ -276,8 +277,9 @@ export function Stocktaking({
             }}
           />
         ) : fixable.length === 0 ? (
-          // Nothing said of the rule (stage 2, goods task list, P1-5).
-          <p>Тут немає складу для інвентаризації.</p>
+          // Nothing said of the rule (stage 2, goods task list, P1-5); the
+          // blank tag (audit 2026-11-13, goods P2-1).
+          <Empty title="Тут немає складу для інвентаризації." />
         ) : (
           <>
             {only ? (

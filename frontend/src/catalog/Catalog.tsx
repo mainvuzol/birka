@@ -743,6 +743,7 @@ function Detail({
               <label>
                 Причина відхилення
                 <textarea
+                  enterKeyHint="enter"
                   maxLength={1000}
                   value={reason}
                   disabled={blocked}

@@ -367,6 +367,18 @@ test("damaged goods are written off by how many, whatever the balance", async ({
   // Unfolded, the cursor in it.
   await expect(page.getByLabel("Примітка")).toBeFocused();
   await page.getByLabel("Примітка").fill("Пляма на рукаві");
+  // «done»: Enter puts the keyboard away and records nothing — only the
+  // button does (audit 2026-11-13, goods P2-3).
+  await expect(page.getByLabel("Примітка")).toHaveAttribute(
+    "enterkeyhint",
+    "done",
+  );
+  await page.getByLabel("Примітка").press("Enter");
+  await expect(page.getByLabel("Примітка")).not.toBeFocused();
+  // The cursor left on the sheet, where Escape still closes it (review).
+  await expect(page.getByRole("dialog")).toBeFocused();
+  await expect(page.getByLabel("Примітка")).toHaveValue("Пляма на рукаві");
+  expect(sent).toHaveLength(0);
   await record(page, "−1").click();
   await expect(page.getByRole("status")).toContainText(
     `Пошкоджено, облік ${String(system)} → ${String(system - 1)}.`,
