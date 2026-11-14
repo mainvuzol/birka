@@ -407,6 +407,15 @@ function SetOff({
     (item) => item.cancelled === null,
   );
   const cents = kopecks(amount);
+  // More than is owed is said as it is typed, and the button holds, as the
+  // payment's (audit 2026-11-13, money P2-5 (а)); the server checks it as
+  // before. «4500,» is a sum still being typed: said on as 4500 (review). A
+  // refusal of the sum pressed says it all: the line waits until the sum is
+  // changed, which clears the refusal.
+  const typing = kopecks(amount.replace(/[.,]$/, ""));
+  const over = typing !== null && typing > (kopecks(invoice.owed) ?? 0n);
+  const overSaid = over && problem === null;
+  const overLine = useId();
 
   function submit(): void {
     setProblem(null);
@@ -419,12 +428,8 @@ function SetOff({
       setProblem("Вкажіть суму заліку з точністю до копійок.");
       return;
     }
-    if (cents > (kopecks(invoice.owed) ?? 0n)) {
-      setProblem(
-        `Це більше, ніж винні: залишок ${money(invoice.owed)}. Решту зарахуйте на іншу накладну.`,
-      );
-      return;
-    }
+    // Held by the button already; a second check, as the payment's.
+    if (over) return;
     void send(chosen, cents).then((refusal) => {
       if (refusal === null) return;
       setProblem(refusal);
@@ -448,7 +453,7 @@ function SetOff({
               className={
                 pressing ? "sheet-done primary pressed" : "sheet-done primary"
               }
-              disabled={held}
+              disabled={held || over}
               onClick={submit}
             >
               {pressing && <Eyelet state="spin" size={20} />}
@@ -531,12 +536,20 @@ function SetOff({
               placeholder="0,00"
               value={amount}
               disabled={pressing}
+              aria-invalid={over || undefined}
+              aria-describedby={overSaid ? overLine : undefined}
               onChange={(event) => {
                 setAmount(event.target.value);
                 setProblem(null);
               }}
             />
           </label>
+          {overSaid && (
+            <p id={overLine} className="pay-over" role="alert">
+              Це більше, ніж винні: залишок {money(invoice.owed)}. Решту
+              зарахуйте на іншу накладну.
+            </p>
+          )}
           {problem && <p role="alert">{problem}</p>}
         </>
       )}

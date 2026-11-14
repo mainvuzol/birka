@@ -5,6 +5,7 @@ import {
   dockOnMenu,
   expectEmpty,
   expectGlyphBeside,
+  expectResultHeading,
   expectSumRole,
   grn,
   menu,
@@ -478,6 +479,15 @@ test("an invoice is recorded on its own screen and paid in parts until it is set
   await expect(
     result(page).getByRole("heading", { name: "Накладну записано" }),
   ).toBeVisible();
+  // The result's heading as «Продано 1 шт.»'s: 24/26, 800, the display
+  // face, its check 28, one line at 360 (audit 2026-11-13, money P2-2 (а);
+  // review).
+  const phone = page.viewportSize();
+  await page.setViewportSize({ width: 360, height: phone?.height ?? 640 });
+  await expectResultHeading(
+    result(page).getByRole("heading", { name: "Накладну записано" }),
+  );
+  if (phone) await page.setViewportSize(phone);
   await expect(result(page).locator(".stub")).toHaveClass(/\bstub-recorded\b/);
   await expect(result(page).locator(".stub-sum")).toHaveText("5 000,00 грн");
   await expect(result(page).locator(".stub-say")).toHaveText(
@@ -547,6 +557,9 @@ test("an invoice is recorded on its own screen and paid in parts until it is set
   await expect(
     result(page).getByRole("heading", { name: "Оплату записано" }),
   ).toBeVisible();
+  await expectResultHeading(
+    result(page).getByRole("heading", { name: "Оплату записано" }),
+  );
   await expect(result(page).locator(".stub")).toHaveClass(/\bstub-recorded\b/);
   await expect(result(page).locator(".stub-sum")).toHaveText("999,50 грн");
   await expect(result(page).locator(".stub-say")).toHaveText(
@@ -727,7 +740,50 @@ test("goods returned are set off against an invoice, and their return waits for 
   await expect(returns).toHaveAttribute("aria-pressed", "false");
   await returns.click();
   await expect(returns).toHaveAttribute("aria-pressed", "true");
-  await setOff.getByLabel("Скільки зарахував постачальник, грн").fill("1200");
+  // More than is owed: said as it is typed, under the field, and the button
+  // holds — nothing sent — as the payment's (audit 2026-11-13, money P2-5
+  // (а)).
+  const field = setOff.getByLabel("Скільки зарахував постачальник, грн");
+  const over = setOff.locator(".pay-over");
+  await field.fill("4000,01");
+  await expect(over).toHaveText(
+    "Це більше, ніж винні: залишок 4 000,00 грн. Решту зарахуйте на іншу накладну.",
+  );
+  await expect(over).toHaveAttribute("role", "alert");
+  await expect(field).toHaveAttribute("aria-invalid", "true");
+  await expect(field).toHaveAccessibleDescription(
+    "Це більше, ніж винні: залишок 4 000,00 грн. Решту зарахуйте на іншу накладну.",
+  );
+  const held = setOff.getByRole("button", {
+    name: "Зарахувати 4 000,01 грн",
+    exact: true,
+  });
+  await expect(held).toBeDisabled();
+  await held.click({ force: true });
+  // The whole debt is not more: no line, the button free.
+  await field.fill("4000");
+  await expect(over).toHaveCount(0);
+  await expect(field).not.toHaveAttribute("aria-invalid", "true");
+  await expect(
+    setOff.getByRole("button", {
+      name: "Зарахувати 4 000,00 грн",
+      exact: true,
+    }),
+  ).toBeEnabled();
+  await field.fill("4000,01");
+  await expect(over).toBeVisible();
+  // A sum still being typed, its comma last, is said on as it stands
+  // (review).
+  await field.fill("4001,");
+  await expect(over).toBeVisible();
+  await expect(
+    setOff.getByRole("button", { name: "Зарахувати", exact: true }),
+  ).toBeDisabled();
+  // The sum changed: the line gone.
+  await field.fill("1200");
+  await expect(over).toHaveCount(0);
+  await expect(field).not.toHaveAttribute("aria-describedby", /.+/);
+  expect(counted.bodies).toHaveLength(0);
   // Refused: said in its sheet, the return chosen and the sum kept, as a
   // refused payment keeps its sum.
   await refuseOnce(page, "**/api/v1/supplier-invoices/*/set-offs", 409);
@@ -1801,6 +1857,18 @@ for (const [name, theme] of [
     ])
       expect(await contrast(part)).toBeGreaterThanOrEqual(4.5);
     await page.screenshot({ path: `test-results/invoice-pay-${name}.png` });
+    // Paid: «Оплату записано» the result's heading at 360, at 4.5:1 (audit
+    // 2026-11-13, money P2-2 (а)).
+    await payButton(page).click();
+    const paid = result(page).getByRole("heading", {
+      name: "Оплату записано",
+    });
+    await expectResultHeading(paid);
+    expect(await contrast(paid)).toBeGreaterThanOrEqual(4.5);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(360);
+    await page.screenshot({ path: `test-results/invoice-paid-${name}.png` });
   });
 
 test("at 390 × 844 the total and three tags show at once, at 360 × 640 the total and one; a forty-letter name wraps, its sum whole; its age said once five minutes old", async ({

@@ -20,7 +20,7 @@ import { Back } from "@/shared/Back";
 import { ScreenHeader } from "@/shared/ScreenHeader";
 import { Closed, CloseSummary } from "./Closed";
 import { Count } from "./Count";
-import { FixStep, WayCard } from "./Fix";
+import { FixStep, useTaskWhile, WayCard } from "./Fix";
 import { History } from "./History";
 import { Kept } from "./Kept";
 import { Move } from "./Move";
@@ -150,7 +150,8 @@ export function Cash({
   /** «← Ще» over the heading, for whoever reads the report: «Ще» › «Гроші»
    * › «Каса» until «Гроші» (S29; «Усе на бірці» task list, P0-4). */
   back?: MoreBack | undefined;
-  /** The menu steps aside while the count stands (spec S26). */
+  /** The menu steps aside while the count stands (spec S26), and while one
+   * operation's card does (audit 2026-11-13, orders-cash P2-4). */
   task: (shown: boolean) => void;
 }): JSX.Element {
   const cache = useQueryClient();
@@ -454,6 +455,7 @@ export function Cash({
           setStep({ name: "main" });
           setDone(text);
         }}
+        task={task}
       />
     );
   if (step.name === "correct")
@@ -468,6 +470,7 @@ export function Cash({
           setStep({ name: "main" });
           setDone(text);
         }}
+        task={task}
       />
     );
   if (step.name === "history")
@@ -971,6 +974,7 @@ function CorrectStep({
   disabled,
   send,
   back,
+  task,
 }: {
   store: Store;
   token: string;
@@ -979,6 +983,8 @@ function CorrectStep({
   disabled: boolean;
   send: (body: CashBody) => Promise<JournalOutcome<CashAnswer>>;
   back: (done: string | null) => void;
+  /** The menu steps aside while one operation's card stands. */
+  task: (shown: boolean) => void;
 }): JSX.Element {
   const [which, setWhich] = useState<keyof typeof dayChoices>("today");
   // Another day: none until one is chosen.
@@ -986,6 +992,7 @@ function CorrectStep({
   const day =
     which === "today" ? cashDay(0) : which === "yesterday" ? cashDay(1) : other;
   const [chosen, setChosen] = useState<DayEvent | null>(null);
+  useTaskWhile(chosen !== null, task);
   // A change on its way: no way out, nor to another operation, until it is
   // answered (review, 2026-11-09).
   const [sending, setSending] = useState(false);

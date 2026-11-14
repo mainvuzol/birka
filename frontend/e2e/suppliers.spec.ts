@@ -3,6 +3,7 @@ import {
   expect,
   addSupplier,
   countTaps,
+  expectResultHeading,
   more,
   openStore,
   pickSupplier,
@@ -65,16 +66,18 @@ function initData(telegramUserId: string): string {
   return fields.toString();
 }
 
-/** Бірка as this person; in `theme`'s colours. */
+/** Бірка as this person; in `theme`'s colours; in Telegram `version`. */
 async function openAs(
   page: Page,
   telegramUserId: string,
   theme?: Record<string, string>,
+  version?: string,
 ): Promise<void> {
   // A change of the hash alone would not reload the app.
   await page.goto("about:blank");
   const hash = new URLSearchParams({ tgWebAppData: initData(telegramUserId) });
   if (theme) hash.set("tgWebAppThemeParams", JSON.stringify(theme));
+  if (version) hash.set("tgWebAppVersion", version);
   await page.goto(`/#${hash.toString()}`);
 }
 
@@ -252,6 +255,108 @@ function supplierField(page: Page): Locator {
   return returnForm(page).getByRole("button", { name: /^Постачальник / });
 }
 
+test("a return's result keeps «← Постачальникам» and Telegram's «Назад», as its form and an invoice's result: each leads to «Постачальникам», «Готово» too (audit 2026-11-13, money P2-2 (б))", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const host = window as unknown as {
+      TelegramWebviewProxy: {
+        postEvent: (event: string, data: string) => void;
+      };
+      told: [string, unknown][];
+    };
+    host.told = [];
+    host.TelegramWebviewProxy = {
+      postEvent: (event, data) => {
+        host.told.push([event, data ? (JSON.parse(data) as unknown) : null]);
+      },
+    };
+  });
+  const told = (event: string): Promise<unknown> =>
+    page.evaluate(
+      (wanted) =>
+        (window as unknown as { told: [string, unknown][] }).told
+          .filter(([name]) => name === wanted)
+          .map(([, data]) => data)
+          .at(-1) ?? null,
+      event,
+    );
+  const press = (eventType: string): Promise<void> =>
+    page.evaluate((type) => {
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          data: JSON.stringify({ eventType: type }),
+          source: window.parent,
+        }),
+      );
+    }, eventType);
+  const coat = await received(page, hanna, fixture.network_centre_store_id, 3);
+  const supplier = `Назад ${randomUUID().slice(0, 6)}`;
+  await aSupplier(page, supplier);
+  await openAs(page, hanna, undefined, "8.0");
+  await openStore(page, "Центр CENTRE");
+  await section(page, "Постачальникам");
+  const list = page.getByRole("heading", {
+    name: "Постачальникам",
+    exact: true,
+  });
+  const result = page.getByRole("heading", {
+    name: `Повернено постачальнику «${supplier}»: 1 шт.`,
+  });
+  const arrow = page.getByRole("button", {
+    name: "Постачальникам",
+    exact: true,
+  });
+  /** One unit of M back, by Telegram's MainButton: its result. */
+  const returnOne = async (): Promise<void> => {
+    await page
+      .locator(".screen-title")
+      .getByRole("button", { name: "Повернути товар постачальнику" })
+      .click();
+    await expect(
+      page.getByRole("heading", { name: "Повернути постачальнику" }),
+    ).toBeVisible();
+    await pickSupplier(page, supplier, { of: returnForm(page) });
+    await chooseModel(page, coat);
+    await tapMore(page, "M", 1);
+    await expect
+      .poll(() => told("web_app_setup_main_button"))
+      .toMatchObject({
+        is_visible: true,
+        is_active: true,
+        text: "Повернути постачальнику · 1 шт.",
+      });
+    await press("main_button_pressed");
+    await expect(result).toBeFocused();
+    // On the result: «← Постачальникам» over its title, Telegram's «Назад»
+    // shown, «Готово» the MainButton.
+    await expect(arrow).toBeVisible();
+    await expect
+      .poll(() => told("web_app_setup_back_button"))
+      .toEqual({ is_visible: true });
+    await expect
+      .poll(() => told("web_app_setup_main_button"))
+      .toMatchObject({ is_visible: true, text: "Готово" });
+  };
+
+  // Telegram's «Назад»: «Постачальникам».
+  await returnOne();
+  await press("back_button_pressed");
+  await expect(list).toBeVisible();
+  await expect(result).toHaveCount(0);
+  await expect(returnRow(page, supplier)).toHaveCount(1);
+  // «← Постачальникам»: the same.
+  await returnOne();
+  await arrow.click();
+  await expect(list).toBeVisible();
+  await expect(returnRow(page, supplier)).toHaveCount(2);
+  // «Готово»: the same.
+  await returnOne();
+  await press("main_button_pressed");
+  await expect(list).toBeVisible();
+  await expect(returnRow(page, supplier)).toHaveCount(3);
+});
+
 test("goods go back to a supplier from a warehouse, and come back when it is cancelled", async ({
   page,
 }) => {
@@ -323,12 +428,17 @@ test("goods go back to a supplier from a warehouse, and come back when it is can
     page.getByText("Не записано. Перевірте повернення.", { exact: true }),
   ).toBeVisible();
   await sendBack(page, 2).click();
-  // Its stub: what went back, from where; «Готово» back to the list.
+  // Its stub: what went back, from where; «Готово» back to the list. Its
+  // «← Постачальникам» stays, as the form's (audit 2026-11-13, money P2-2
+  // (б)).
   await expect(
     page.getByRole("heading", {
       name: `Повернено постачальнику «${supplier}»: 2 шт.`,
     }),
   ).toBeFocused();
+  await expect(
+    page.getByRole("button", { name: "Постачальникам", exact: true }),
+  ).toBeVisible();
   await expect(page.locator(".stub-recorded")).toContainText(
     "склад «Склад мережі»",
   );
@@ -1265,6 +1375,25 @@ for (const [name, theme] of [
     await sendBack(page, 1).click();
     await expect(page.getByRole("alert")).toHaveText("Оберіть постачальника.");
     expect(sent.bodies).toHaveLength(0);
+    // Returned: its result's heading as «Продано 1 шт.»'s, under its «←
+    // Постачальникам» (audit 2026-11-13, money P2-2; review).
+    await pickSupplier(page, supplier, { of: returnForm(page) });
+    await sendBack(page, 1).click();
+    const done = page.getByRole("heading", {
+      name: `Повернено постачальнику «${supplier}»: 1 шт.`,
+    });
+    await expect(done).toBeFocused();
+    await expectResultHeading(done, { wraps: true });
+    const arrow = page.getByRole("button", {
+      name: "Постачальникам",
+      exact: true,
+    });
+    for (const part of [done, arrow, page.locator(".stub-line").first()])
+      expect(await contrast(part)).toBeGreaterThanOrEqual(4.5);
+    await expect(page.locator("html")).toHaveJSProperty("scrollWidth", 360);
+    await page.screenshot({
+      path: `test-results/supplier-return-done-${name}.png`,
+    });
   });
 
 /** The WCAG contrast of an element's text against what it is drawn on. */

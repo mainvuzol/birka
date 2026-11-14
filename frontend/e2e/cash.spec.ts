@@ -270,6 +270,10 @@ test.describe("«Оля»'s day at «Каса»", () => {
     await page.getByRole("button", { name: "Змінити спосіб оплати" }).click();
     // The sale: its sum large, its way now a pill.
     await expect(page.locator(".fix-what")).toHaveText("Продаж");
+    // The card a task's screen: the menu aside (audit 2026-11-13,
+    // orders-cash P2-4).
+    const menu = page.getByRole("navigation", { name: "Розділи" });
+    await expect(menu).toHaveCount(0);
     await expect(page.locator(".fix-sum")).toHaveText("700,00 грн");
     await expect(
       page.getByText("Зараз: Картка", { exact: true }),
@@ -287,6 +291,8 @@ test.describe("«Оля»'s day at «Каса»", () => {
     await expect(
       page.getByText("Спосіб оплати змінено: Картка → Готівка."),
     ).toBeVisible();
+    // «Каса» again, the menu with it.
+    await expect(menu).toBeVisible();
     expect(
       await page.evaluate(() => (window as unknown as { taps: number }).taps),
     ).toBe(3);

@@ -122,7 +122,8 @@ const surplus = closeOf({
   reason: "Розмін не записали",
   reason_by: "Марко",
   reason_required: true,
-  // Change put in and recorded late explains 50 of it.
+  // Change put in and recorded late explains 50 of it; a way fixed the
+  // next day and cash taken out against it, the other two, net nothing.
   explained: "50.00",
   unexplained: "300.00",
   explanations: [
@@ -132,6 +133,20 @@ const surplus = closeOf({
       by: "Марко",
       cash: "50.00",
       text: "розмін",
+    },
+    {
+      kind: "CORRECTION",
+      at: "2026-10-18T10:30:00Z",
+      by: "Олена",
+      cash: "100.00",
+      text: null,
+    },
+    {
+      kind: "TAKE_OUT",
+      at: "2026-10-18T12:00:00Z",
+      by: "Марко",
+      cash: "-100.00",
+      text: "пакети для «Центру», що їх привезли ввечері",
     },
   ],
 });
@@ -644,5 +659,101 @@ for (const [name, theme] of [
     await row(list, "20.10").getByRole("button").click();
     await page.screenshot({
       path: `test-results/cash-history-close-${name}.png`,
+    });
+  });
+
+for (const [name, theme] of [
+  ["light", { bg_color: "#ffffff", text_color: "#000000" }],
+  ["dark", { bg_color: "#17212b", text_color: "#f5f5f5" }],
+] as const)
+  test(`in the ${name} theme what explains a close's difference is a thread, as «Каса»'s cash taken out: when at the left, an eyelet on the thread, what it was 16/600 with a capital, its words a line in ink, who in the meta, the sum with its sign on the right, in the server's order; one line a sum at 360, at 4.5:1 (audit 2026-11-13, orders-cash P2-5)`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 360, height: 640 });
+    await stub(page);
+    const list = await history(page, theme);
+    await row(list, "17.10").getByRole("button").click();
+    const thread = page.getByRole("list", { name: "Що пояснює різницю" });
+    await expect(thread).toHaveClass(/\btimeline\b/);
+    const rows = thread.locator(":scope > li.timeline-row");
+    await expect(rows).toHaveCount(3);
+    // In the server's order, the words as they were.
+    await expect(rows.locator(".timeline-what")).toHaveText([
+      "внесено в касу",
+      "виправлення способу оплати",
+      "видано з каси",
+    ]);
+    // Another day than today: its date at the left, its time in the meta.
+    await expect(rows.locator(".timeline-day")).toHaveText([
+      "17.10",
+      "18.10",
+      "18.10",
+    ]);
+    await expect(rows.locator(".timeline-meta")).toHaveText([
+      /^\d{2}:\d{2} · Марко$/,
+      /^\d{2}:\d{2} · Олена$/,
+      /^\d{2}:\d{2} · Марко$/,
+    ]);
+    await expect(rows.locator(".timeline-sum")).toHaveText([
+      "+50,00 грн",
+      "+100,00 грн",
+      "−100,00 грн",
+    ]);
+    // Its words, where it has them, a line under what it was.
+    await expect(rows.nth(0).locator(".explain-text")).toHaveText("розмін");
+    await expect(rows.nth(1).locator(".explain-text")).toHaveCount(0);
+    await expect(rows.nth(2).locator(".explain-text")).toHaveText(
+      "пакети для «Центру», що їх привезли ввечері",
+    );
+    // The eyelet on the thread, hidden from a reader.
+    await expect(rows.locator(".timeline-node")).toHaveCount(3);
+    await expect(rows.locator(".timeline-node").first()).toHaveAttribute(
+      "aria-hidden",
+      "true",
+    );
+    const what = rows.nth(1).locator(".timeline-what");
+    await expect(what).toHaveCSS("font-size", "16px");
+    await expect(what).toHaveCSS("font-weight", "600");
+    expect(
+      await what.evaluate(
+        (node) => getComputedStyle(node, "::first-letter").textTransform,
+      ),
+    ).toBe("uppercase");
+    // Its words in ink, as what it was; who and when in pencil.
+    const words = rows.nth(0).locator(".explain-text");
+    const ink = await what.evaluate((node) => getComputedStyle(node).color);
+    await expect(words).toHaveCSS("color", ink);
+    expect(
+      await rows
+        .nth(0)
+        .locator(".timeline-meta")
+        .evaluate((node) => getComputedStyle(node).color),
+    ).not.toBe(ink);
+    // Each sum one line, right of its row, within the phone.
+    for (const index of [0, 1, 2]) {
+      const sum = rows.nth(index).locator(".timeline-sum");
+      const [box, size] = await Promise.all([
+        sum.boundingBox(),
+        sum.evaluate((node) => parseFloat(getComputedStyle(node).fontSize)),
+      ]);
+      if (!box) throw new Error("not laid out");
+      // Two lines would be twice the size at least.
+      expect(box.height).toBeLessThan(size * 1.6);
+      expect(box.x + box.width).toBeLessThanOrEqual(360);
+    }
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(360);
+    for (const part of [
+      rows.nth(2).locator(".timeline-day"),
+      rows.nth(2).locator(".timeline-what"),
+      rows.nth(2).locator(".explain-text"),
+      rows.nth(2).locator(".timeline-meta"),
+      rows.nth(2).locator(".timeline-sum"),
+    ])
+      expect(await contrast(part)).toBeGreaterThanOrEqual(4.5);
+    await thread.scrollIntoViewIfNeeded();
+    await page.screenshot({
+      path: `test-results/cash-close-explained-${name}.png`,
     });
   });

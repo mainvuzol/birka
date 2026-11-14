@@ -35,7 +35,10 @@ export function InvoiceRecorded({
   const settled = invoice.status === "SETTLED";
   return (
     <div className="paid-result invoice-result">
-      <h3 ref={heading} tabIndex={-1} className="result-title">
+      {/* The result's heading, 24/26 in the display face with its check,
+          as «Продано 1 шт.» (spec §6.30; audit 2026-11-13, money P2-2
+          (а)). */}
+      <h3 ref={heading} tabIndex={-1} className="result-title t-sheet">
         <RecordedMark />
         {title}
       </h3>

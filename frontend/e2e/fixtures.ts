@@ -1522,6 +1522,49 @@ export async function chevronTurn(link: Locator): Promise<number> {
 }
 
 /**
+ * A result's heading (spec §6.30): `t-sheet` 24/26, 800, in the display
+ * face, on one line unless its words may wrap, its check 28 before the
+ * words (audit 2026-11-13, money P2-2 (а)).
+ */
+export async function expectResultHeading(
+  title: Locator,
+  { wraps = false }: { wraps?: boolean } = {},
+): Promise<void> {
+  await expect(title).toBeVisible();
+  const look = await title.evaluate((node) => {
+    const style = getComputedStyle(node);
+    const probe = document.createElement("span");
+    probe.style.fontFamily = "var(--font-display)";
+    document.body.append(probe);
+    const display = getComputedStyle(probe).fontFamily;
+    probe.remove();
+    const words = [...node.childNodes].find(
+      (child) => child.nodeType === Node.TEXT_NODE && child.textContent?.trim(),
+    );
+    if (words === undefined) throw new Error("no words");
+    const range = document.createRange();
+    range.selectNodeContents(words);
+    const check = node.querySelector(":scope > svg.recorded-mark");
+    return {
+      size: style.fontSize,
+      weight: style.fontWeight,
+      line: style.lineHeight,
+      display: style.fontFamily === display,
+      lines: range.getClientRects().length,
+      check: check?.getBoundingClientRect().width,
+    };
+  });
+  expect(look).toEqual({
+    size: "24px",
+    weight: "800",
+    line: "26px",
+    display: true,
+    lines: wraps ? look.lines : 1,
+    check: 28,
+  });
+}
+
+/**
  * A section's caption (spec §4, «підпис розділу»; audit 2026-11-13,
  * orders-cash P2-2): `t-label` — 13/700 on a line of 16, in capitals by
  * the style, tracked 0.06 em, in pencil, in the text face whatever its
