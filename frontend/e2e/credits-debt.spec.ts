@@ -410,6 +410,146 @@ test("a debt says who and what in one line, what is owed first and large, how mu
   await expect(page.getByLabel(/^Сума/)).toHaveCount(0);
 });
 
+test("«Винні» one look on her card and on the debt's own screen as on S21: the debt's glyph, money-xl, «120 000,00 грн» one line at 360; «Історія» the section's caption (audit 2026-11-13, sale P2-4)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 740 });
+  // And a coat written off long ago, listed under the open two.
+  await serve(
+    page,
+    debt({
+      amount: "125000.00",
+      paid: "5000.00",
+      returned: "0.00",
+      cash_back: "0.00",
+      owed: "120000.00",
+    }),
+    undefined,
+    [
+      aside(),
+      debt({
+        goods: ["Пальто «Затишок» · M"],
+        status: "WRITTEN_OFF",
+        paid: "0.00",
+        returned: "0.00",
+        cash_back: "0.00",
+        written_off: "3000.00",
+        owed: "0.00",
+        opened_at: `${String(thisYear)}-03-01T10:00:00Z`,
+        closed_at: `${String(thisYear)}-04-01T10:00:00Z`,
+        last_payment_at: null,
+        entries: [],
+      }),
+    ],
+  );
+  // Another store's block, its read held: its place the money-xl line
+  // what is owed is (review).
+  let release: () => void = () => undefined;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/api/v1/credits/customers?**", async (route) => {
+    const params = new URL(route.request().url()).searchParams;
+    if (
+      params.get("limit") !== "5" ||
+      params.get("store_id") === fixture.store_id
+    ) {
+      await route.fallback();
+      return;
+    }
+    await held;
+    await route.fallback();
+  });
+  await page.goto(launch());
+  await openStore(page, "Основний MAIN");
+  await toTill(page);
+  await section(page, "Покупці");
+  await page.getByRole("button", { name: /^Відкрити борг: Оксана/ }).click();
+  const reading = page.locator(".customer-block .owed-lines .owed-sum").first();
+  await expect(reading).toBeAttached();
+  expect(Math.round((await reading.boundingBox())?.height ?? 0)).toBe(56);
+  await expect(reading.locator(".sum")).toHaveCSS("line-height", "56px");
+  release();
+  await expect(page.locator(".customer-block .owed-lines")).toHaveCount(0);
+  const colours = await page.evaluate(() => {
+    const probe = document.createElement("i");
+    document.body.append(probe);
+    const read = (name: string): string => {
+      probe.style.color = `var(${name})`;
+      return getComputedStyle(probe).color;
+    };
+    const said = { debt: read("--debt"), pencil: read("--pencil") };
+    probe.remove();
+    return said;
+  });
+  /** The sum's figures in money-xl, on one line with what stands beside
+   * them, inside the screen. */
+  const oneLine = async (line: Locator): Promise<void> => {
+    const sum = line.locator(".sum");
+    await expect(sum).toHaveCSS("font-size", "56px");
+    await expect(sum).toHaveCSS("line-height", "56px");
+    await expect(sum).toHaveCSS("font-weight", "800");
+    const box = await line.boundingBox();
+    const figures = await sum.boundingBox();
+    if (!box || !figures) throw new Error("not laid out");
+    expect(figures.height).toBeLessThan(1.5 * 56);
+    expect(box.height).toBeLessThan(1.5 * 56);
+    // The figures inside their line, never past it (review).
+    expect(figures.x + figures.width).toBeLessThanOrEqual(
+      box.x + box.width + 1,
+    );
+    const glyph = line.locator("svg.icon");
+    if ((await glyph.count()) === 1) {
+      const mark = await glyph.boundingBox();
+      if (!mark) throw new Error("not laid out");
+      expect(mark.y).toBeGreaterThanOrEqual(figures.y);
+      expect(mark.y + mark.height).toBeLessThanOrEqual(
+        figures.y + figures.height,
+      );
+    }
+  };
+  // Her card (spec S20 p. 5): the debt's glyph by what is owed.
+  const card = page.locator(".customer-owed");
+  await expect(card).toHaveText("120 000,00 грн");
+  await expect(card.locator("svg.icon")).toHaveCount(1);
+  await oneLine(card);
+  // Its written-off row closed for good, in `offline`'s grey (audit
+  // 2026-11-13, sale P2-5).
+  await expect(
+    page
+      .getByRole("list", { name: "Борги в магазині «Основний»" })
+      .getByRole("button", { name: /^Відкрити борг: Пальто/ })
+      .getByText("Списано", { exact: true }),
+  ).toHaveClass("sticker tone-offline");
+  await page.screenshot({ path: "test-results/credits-customer-owed-360.png" });
+  await page
+    .getByRole("list", { name: "Борги в магазині «Основний»" })
+    .getByRole("button", { name: /^Відкрити борг: Лоран/ })
+    .click();
+  // The debt's own screen: «Винні» as S21 says it, the glyph at 20 and the
+  // word in the debt's colour; what is owed in money-xl.
+  const owed = page.getByRole("group", { name: "Скільки винні" });
+  const what = owed.locator(".owed-what");
+  await expect(what).toHaveText("Винні");
+  const glyph = await what.locator("svg.icon").boundingBox();
+  expect([glyph?.width, glyph?.height]).toEqual([20, 20]);
+  await expect(what).toHaveCSS("color", colours.debt);
+  await expect(owed.locator(".owed-sum")).toHaveText("120 000,00 грн");
+  await oneLine(owed.locator(".owed-sum"));
+  // «Історія» the section's caption, as on her card.
+  const history = page.getByRole("heading", { name: "Історія", exact: true });
+  await expect(history).toHaveCSS("font-size", "13px");
+  await expect(history).toHaveCSS("font-weight", "700");
+  await expect(history).toHaveCSS("text-transform", "uppercase");
+  await expect(history).toHaveCSS("color", colours.pencil);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+  await page.screenshot({ path: "test-results/credits-debt-owed-360.png" });
+});
+
 test("a usual debt at 360 × 640 shows who, what is owed, and «Внесок» without scrolling", async ({
   page,
 }) => {
@@ -433,6 +573,13 @@ test("a usual debt at 360 × 640 shows who, what is owed, and «Внесок» w
     deposit(page),
   ])
     await expect(part).toBeInViewport();
+  // The whole of «Винні», its figures now 56, over the dock (audit
+  // 2026-11-13, sale P2-4; review).
+  await expect(owed).toBeInViewport({ ratio: 1 });
+  const card = await owed.boundingBox();
+  const dock = await page.locator(".order-dock").boundingBox();
+  if (!card || !dock) throw new Error("not laid out");
+  expect(card.y + card.height).toBeLessThanOrEqual(dock.y);
 });
 
 test("nothing written off or returned is said unless it is, and what is written off is", async ({
@@ -471,8 +618,10 @@ test("nothing written off or returned is said unless it is, and what is written 
   await page.goto("about:blank");
   await opened(page);
   await expect(page.locator(".debt-closed .sticker")).toHaveText("Списано");
+  // Closed for good: `offline`'s grey, apart from «Сплачено» (spec §6.18;
+  // audit 2026-11-13, sale P2-5).
   await expect(page.locator(".debt-closed .sticker")).toHaveClass(
-    /\btone-neutral\b/,
+    /\btone-offline\b/,
   );
   await expect(page.locator(".debt-closed")).toContainText(
     "Сплачено 1 000,00 грн з 3 000,00 грн · списано 2 000,00 грн",
@@ -1044,7 +1193,22 @@ for (const [name, theme, scheme] of [
     expect(
       await page.evaluate(() => document.documentElement.dataset.theme),
     ).toBe(scheme);
+    // «Винні» as on S21, the glyph and the word in the debt's colour, what
+    // is owed in money-xl; «Історія» the section's caption (audit
+    // 2026-11-13, sale P2-4).
+    const debtColour = await page.evaluate(() => {
+      const probe = document.createElement("i");
+      probe.style.color = "var(--debt)";
+      document.body.append(probe);
+      const colour = getComputedStyle(probe).color;
+      probe.remove();
+      return colour;
+    });
+    await expect(page.locator(".owed-what")).toHaveCSS("color", debtColour);
+    await expect(page.locator(".owed-sum .sum")).toHaveCSS("font-size", "56px");
     for (const part of [
+      page.locator(".owed-what"),
+      page.getByRole("heading", { name: "Історія", exact: true }),
       page.locator(".owed-sum"),
       page.locator(".owed-count"),
       page.locator(".debt-context"),
@@ -2150,6 +2314,55 @@ test.describe("«Продаж» › «Внесок»: a payment on a debt from t
     await expect(
       panel(page).getByRole("button", { name: "Картка" }),
     ).toBeEnabled();
+  });
+
+  test("S21 at its full height says «Винні» as a debt's own screen — the glyph and the word in the debt's colour, what is owed in money-xl; written off meanwhile, its «Списано» in `offline`'s grey (audit 2026-11-13, sale P2-4, P2-5; review)", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 360, height: 740 });
+    const one = coat();
+    await serve(page, one);
+    await page.route(`**/api/v1/credits/${one.id}/payments`, async (route) => {
+      await route.fulfill({
+        status: 409,
+        json: { code: "CONFLICT", message: "Credit changed", details: {} },
+      });
+    });
+    // Read again after the refusal: written off on another phone.
+    await page.route(`**/api/v1/credits/${one.id}`, async (route) => {
+      await route.fulfill({
+        json: {
+          ...one,
+          status: "WRITTEN_OFF",
+          owed: "0.00",
+          written_off: one.owed,
+          closed_at: `${String(thisYear)}-10-16T09:00:00Z`,
+        },
+      });
+    });
+    await atTheTill(page);
+    await page.getByRole("button", { name: /^Відкрити борг: / }).click();
+    const debtColour = await page.evaluate(() => {
+      const probe = document.createElement("i");
+      probe.style.color = "var(--debt)";
+      document.body.append(probe);
+      const colour = getComputedStyle(probe).color;
+      probe.remove();
+      return colour;
+    });
+    const what = page.locator(".debt-till .owed-what");
+    await expect(what).toHaveText("Винні");
+    await expect(what.locator("svg.icon")).toHaveCount(1);
+    await expect(what).toHaveCSS("color", debtColour);
+    const sum = page.locator(".debt-till .owed-sum .sum");
+    await expect(sum).toHaveCSS("font-size", "56px");
+    await expect(sum).toHaveCSS("line-height", "56px");
+    await keyIn(page, "500");
+    await panel(page).getByRole("button", { name: "Готівка" }).click();
+    await expect(page.getByRole("alert")).toContainText("Внесок не записано.");
+    const closed = page.locator(".debt-till .debt-closed .sticker");
+    await expect(closed).toHaveText("Списано");
+    await expect(closed).toHaveClass("sticker tone-offline");
   });
 
   test("paid off in full, the stub is knotted and names no total the customer no longer owes", async ({

@@ -796,6 +796,48 @@ async function sentWith(page: Page, waybill: string): Promise<string> {
   return id;
 }
 
+test("a customer owing nothing says how their debts closed: «Сплачено» paid, «Списано» in `offline`'s grey, closed both ways «Нічого не винні» neutral (audit 2026-11-13, sale P2-5)", async ({
+  page,
+}) => {
+  await shelves(page);
+  const closed = (
+    name: string,
+    phone: string,
+    statuses: readonly ("SETTLED" | "WRITTEN_OFF")[],
+  ): StubCustomer => {
+    const one = customer(name, phone, "Лоран шоколад · M", "0.00");
+    const [first] = one.credits;
+    return {
+      ...one,
+      open_debts: 0,
+      credits: statuses.map((status) => ({
+        ...first,
+        id: randomUUID(),
+        status,
+        owed: "0.00",
+        closed_at: "2026-10-10T10:00:00Z",
+      })),
+    };
+  };
+  await customers(page, [
+    closed("Олена Сплачена", "067 111 11 11", ["SETTLED"]),
+    closed("Олена Списана", "067 222 22 22", ["WRITTEN_OFF"]),
+    closed("Олена Обидва", "067 333 33 33", ["SETTLED", "WRITTEN_OFF"]),
+  ]);
+  await enter(page);
+  await search(page, "олена");
+  const pill = (name: string): Locator =>
+    group(page, "Покупці")
+      .getByRole("button", { name: new RegExp(`^Відкрити борг: ${name},`) })
+      .locator(".sticker");
+  await expect(pill("Олена Сплачена")).toHaveText("Сплачено");
+  await expect(pill("Олена Сплачена")).toHaveClass("sticker tone-paid");
+  await expect(pill("Олена Списана")).toHaveText("Списано");
+  await expect(pill("Олена Списана")).toHaveClass("sticker tone-offline");
+  await expect(pill("Олена Обидва")).toHaveText("Нічого не винні");
+  await expect(pill("Олена Обидва")).toHaveClass("sticker tone-neutral");
+});
+
 test("«Замовлення» by a waybill alone: the server's order by part of its waybill, its goods, carrier, waybill and step, never its sum; its card in «Замовлення»; back on «Сьогодні» by the menu, the search as left; from its list, forgotten", async ({
   page,
 }) => {

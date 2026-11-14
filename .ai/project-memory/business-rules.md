@@ -8081,6 +8081,9 @@ the frame TZ after stage 2 is built whole but for what its sections took.
     «Списано» on a debt keeps it too, though the spec names the offline
     grey for it (§6.18): the task changes no colour but paper's mark; the
     difference is named in the batch's report, «Not covered».
+    Revisited 2026-11-14 (audit 2026-11-13, batch 5, sale P2-5): «Списано»
+    is now `offline`, as §6.18 names it; a return row's store name
+    `neutral`, as a debt row's.
   - **28 on one line, a long one wraps** (decided here; the spec's padding
     is 0 8): 5 above and below a line of 18, so a sticker that must wrap at 360 grows a line of 18
     and its words never touch its edge. In a line of text it sits on the
@@ -9595,3 +9598,48 @@ one the server answered, none added or counted again on the phone.
   Натисніть ще раз — повторне збереження безпечне.» — no paper's words in
   the sheet; the frame's plate over the screen as before. «Брак» and the
   stocktake's start and end keep their words until В13-Т1.
+
+## Chosen in chat — 2026-11-14 (audit 2026-11-13, batch 5: the return's dock at the till's scale; the returns' blank tag and day captions as the till's; «Винні» one look; «Списано» `offline`; sale P2-1, P2-2, P2-4, P2-5)
+
+Chosen here on 2026-11-14, after batch 4 (#205) was merged («merged, go
+next»): the sale list's P2s that wait on no owner's answer — its quick wins
+P2-5, P2-2, P2-1 and its «Долг одним видом» P2-4 (P2-7 waits on В13-П1).
+Built as the task list gives them; what it did not give is decided here or
+a reading for the owner. No right, no server rule and no word changes;
+every sum is the one the server answered.
+- **The return's dock** (sale P2-1; spec §6.15): what comes back, its sum
+  `money-l` 32/34 as the till's tray says «Разом»; the button that hands it
+  back 56 (`--h-pay`), never smaller than the one that takes money. Its
+  words, ways and states as before. A reading: at 360 «Повернути покупцю
+  6 000,00 грн на картку» is two lines; the sum still blinks once when it
+  changes.
+- **The returns' blank tag** (sale P2-2; spec §6.28): nothing found here —
+  «За «…» продажів не знайдено.» its line, «Перевірте назву або очистіть
+  пошук.» its meta; nothing found at the other stores — its one sentence
+  the line, no meta (decided here: nothing to split). «Очистити», «Купили в
+  іншому магазині мережі? Шукати там» and the manager's line are the tag's
+  children in that order, centred with it, as the till's way on. Under
+  results, while read, or under a refused read, the other stores' offer
+  stands where it did (В3 (а)). The manager's line only in the blank tag
+  (decided here: in the moment the other stores wait for a word typed, no
+  list and no tag are drawn, and it no longer lingers alone there).
+- **A day's heading in the returns' list** (sale P2-2; spec §4): the
+  section's caption, `t-label` 13/700 in capitals, in pencil, as «В інших
+  магазинах мережі»; its 18 above and 8 under as before; its grey bar
+  while read 16 high, the caption's line.
+- **«Винні» one look** (sale P2-4; spec S20 p. 5, S21 p. 3, §6.17): a
+  debt's own screen says «Винні» as S21 does — the debt's glyph at 20 and
+  the word in the debt's colour — what is owed in `money-xl` 56/56; the
+  customer's card (S20) the same 56/56 by its glyph; «Історія» on a debt's
+  screen the section's caption, as on the card. S21 on a phone under 700
+  high keeps its 32 one line over the keypad (unchanged); a debt's screen
+  and the card keep 56 there (decided here: no keypad under them). A
+  reading: at 360 «120 000,00 грн» is one line on both; a million would
+  break before its kopecks — not measured. The card's grey bar while
+  another store is read is the 56 line too (review).
+- **Stickers** (sale P2-5; spec §6.18): «Списано» `offline` — a debt's
+  own screen, S21, the card's debt and its rows, «Покупці»'s and
+  «Сьогодні»'s customer rows when every debt was written off; «Нічого не
+  винні» stays `neutral`, «Сплачено» `paid`; a return row's «Магазин «…»»
+  `neutral`, as a debt row's. `offline` reads at 4.5:1 on its ground in
+  both themes.

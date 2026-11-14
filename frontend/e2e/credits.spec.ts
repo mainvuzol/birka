@@ -765,6 +765,10 @@ test("the owner writes a debt off, saying why, and a seller is not offered it", 
   ).toBeVisible();
   await expect(sheet).toHaveCount(0);
   await expect(page.locator(".customer-debt .sticker")).toHaveText("Списано");
+  // Closed for good: `offline`'s grey (audit 2026-11-13, sale P2-5).
+  await expect(page.locator(".customer-debt .sticker")).toHaveClass(
+    /\btone-offline\b/,
+  );
   await expect(
     page.getByRole("list", { name: "Історія покупця" }),
   ).toContainText("виїхав за кордон");
@@ -2072,6 +2076,9 @@ test("a written-off debt's reason is erased with its customer", async ({
     .filter({ hasText: model });
   await alone.click();
   await expect(page.locator(".debt-closed .sticker")).toHaveText("Списано");
+  await expect(page.locator(".debt-closed .sticker")).toHaveClass(
+    /\btone-offline\b/,
+  );
   const history = page.getByRole("list", { name: "Історія боргу" });
   await expect(history).not.toContainText(name);
   const closed = history.getByRole("listitem").filter({ hasText: "Списано" });

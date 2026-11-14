@@ -106,7 +106,11 @@ export function SaleRow({
               : "Продано під час збою"}
           </Sticker>
         )}
-        {!here && <Sticker>Магазин «{visible(sale.store_name)}»</Sticker>}
+        {/* A store's name `neutral`, as on a debt's row (audit 2026-11-13,
+            sale P2-5). */}
+        {!here && (
+          <Sticker tone="neutral">Магазин «{visible(sale.store_name)}»</Sticker>
+        )}
         {!returnable && <Sticker tone="neutral">Усе вже повернено</Sticker>}
       </span>
     </span>
