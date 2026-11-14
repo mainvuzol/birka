@@ -610,8 +610,9 @@ for (const [name, theme] of [
       first.locator(".way-pill"),
     ])
       expect(await contrast(part)).toBeGreaterThanOrEqual(4.5);
-    // On a list's white block (audit 2026-11-13, orders-cash P1-2).
-    await expectListBlock(rows(page), rows(page).getByRole("button"));
+    // On a list's white block (audit 2026-11-13, orders-cash P1-2); its
+    // rows drawn with no chevron, as that task list has them.
+    await expectListBlock(rows(page), rows(page).getByRole("button"), false);
     // Nothing wider than the phone.
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth),

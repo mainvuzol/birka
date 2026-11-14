@@ -455,10 +455,19 @@ test("unsold borrowed jackets go back to their supplier for nothing", async ({
   // None in hand: gone from «На руках», a knot under «Усе», nothing to
   // press.
   await expect(tag(page, coat)).toHaveCount(0);
-  await page
-    .getByRole("group", { name: "Яке позичене" })
-    .getByRole("button", { name: "Усе" })
-    .click();
+  const which = page.getByRole("group", { name: "Яке позичене" });
+  await which.getByRole("button", { name: "Усе" }).click();
+  // It filters this screen: pressed, never «the page» (audit 2026-11-13,
+  // frame P2-2).
+  await expect(which.getByRole("button", { name: "Усе" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await expect(which.getByRole("button", { name: "На руках" })).toHaveAttribute(
+    "aria-pressed",
+    "false",
+  );
+  await expect(which.locator("[aria-current]")).toHaveCount(0);
   await expect(tag(page, coat)).toHaveClass(/\btied\b/);
   await expect(tag(page, coat).getByRole("button")).toHaveCount(0);
   await expect(tag(page, coat)).toContainText("на руках 0");

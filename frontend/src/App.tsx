@@ -2419,6 +2419,7 @@ function Workspace({
         disabled={blocked}
         focus={modeChosen}
         focused={modeFocused}
+        kind="page"
         choose={(mode) => {
           setModeChosen(true);
           setTab(mode);

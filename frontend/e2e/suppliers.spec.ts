@@ -3,6 +3,8 @@ import {
   expect,
   addSupplier,
   countTaps,
+  expectEmpty,
+  expectListBlock,
   expectResultHeading,
   more,
   openStore,
@@ -651,11 +653,13 @@ test("goods held for an order are not offered to go back", async ({ page }) => {
   expect(held.status()).toBe(201);
   await newReturn(page);
   await page.getByRole("searchbox", { name: "Пошук моделі" }).fill(coat.model);
-  await expect(
-    page.getByText(
-      `За «${coat.model}» на складі «Склад мережі» вільного товару немає.`,
-    ),
-  ).toBeVisible();
+  // Said to a reader too, in the meta's words (audit 2026-11-13, money
+  // P2-1).
+  const none = page.getByRole("status").filter({
+    hasText: `За «${coat.model}» на складі «Склад мережі» вільного товару немає.`,
+  });
+  await expect(none).toBeVisible();
+  await expect(none).toHaveClass(/\bt-meta\b/);
   await expect(page.getByRole("list", { name: "Товар на складі" })).toHaveCount(
     0,
   );
@@ -811,6 +815,12 @@ test("read slowly, the suppliers' sheet and «Список постачальн�
   await expect(sheet).toHaveAttribute("data-ready", "");
   const inSheet = sheet.locator(".placeholder .supplier-rows > .supplier-row");
   await expect(inSheet).toHaveCount(3);
+  // A row 64 as every list's; the sheet white already, no block (audit
+  // 2026-11-13, money P2-4).
+  expect(
+    (await inSheet.first().boundingBox())?.height ?? 0,
+  ).toBeGreaterThanOrEqual(64);
+  await expect(sheet.locator(".list-block")).toHaveCount(0);
   await expect(
     sheet.getByRole("searchbox", { name: "Пошук постачальника" }),
   ).toBeVisible();
@@ -825,8 +835,10 @@ test("read slowly, the suppliers' sheet and «Список постачальн�
     page.getByRole("heading", { name: "Список постачальників" }),
   ).toBeVisible();
   // The places under the search field, both there at once.
+  // On the list's white block, as the rows they hold the place of (audit
+  // 2026-11-13, money P2-4).
   const grey = page.locator(
-    ".supplier-list-screen > .search-field ~ .placeholder .supplier-rows > .supplier-row",
+    ".supplier-list-screen > .search-field ~ .placeholder .list-block > .supplier-row",
   );
   await expect(grey).toHaveCount(3);
   const search = page.getByRole("searchbox", { name: "Пошук постачальника" });
@@ -850,6 +862,8 @@ test("read slowly, the suppliers' sheet and «Список постачальн�
   expect(
     Math.abs(((await first.boundingBox())?.y ?? Number.NaN) - top),
   ).toBeLessThanOrEqual(2);
+  const listed = page.getByRole("list", { name: "Постачальники" });
+  await expectListBlock(listed, listed.locator(".supplier-row"));
 
   // «Повернути постачальнику»: its warehouses as two grey choices.
   await page
@@ -865,11 +879,62 @@ test("read slowly, the suppliers' sheet and «Список постачальн�
   await expect(
     page.getByRole("status").filter({ hasText: "Завантажуємо склади…" }),
   ).toHaveClass(/\bvisually-hidden\b/);
+  // One warehouse's line holds the chips' row: the supplier's field under
+  // it stays where it stood (audit 2026-11-13, money P2-1).
+  const supplierField = page.locator(".supplier-return-new .pick-value");
+  const before = (await supplierField.boundingBox())?.y ?? Number.NaN;
+  const models = await holdReads(page, "catalog/stock-options");
   places();
-  await expect(
-    page.getByText("Склад «Склад мережі»", { exact: true }),
-  ).toBeVisible();
+  const one = page.getByText("Склад «Склад мережі»", { exact: true });
+  await expect(one).toBeVisible();
   await expect(chips).toHaveCount(0);
+  expect((await one.boundingBox())?.height).toBe(52);
+  expect(
+    Math.abs(((await supplierField.boundingBox())?.y ?? Number.NaN) - before),
+  ).toBeLessThanOrEqual(1);
+  // The models read slowly: three rows 64 as they come, no day, nothing
+  // said in sight (audit 2026-11-13, money P2-1).
+  const rows = page.locator(
+    ".placeholder .return-models > .sale-row.return-model",
+  );
+  await expect(rows).toHaveCount(3);
+  for (const row of await rows.all())
+    expect((await row.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(64);
+  await expect(page.locator(".placeholder .skeleton-day")).toHaveCount(0);
+  await expect(
+    page.getByRole("status").filter({ hasText: "Завантажуємо товари…" }),
+  ).toHaveClass(/\bvisually-hidden\b/);
+  models();
+  await expect(rows).toHaveCount(0);
+});
+
+test("a store with no warehouse to return from says so on the blank tag (audit 2026-11-13, money P2-1)", async ({
+  page,
+}) => {
+  await page.route("**/api/v1/stock-locations?**", async (route) => {
+    if (!route.request().url().includes(fixture.network_centre_store_id)) {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({ json: [] });
+  });
+  await openAs(page, hanna);
+  await openStore(page, "Центр CENTRE");
+  await section(page, "Постачальникам");
+  await page
+    .locator(".screen-title")
+    .getByRole("button", { name: "Повернути товар постачальнику" })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Повернути постачальнику" }),
+  ).toBeVisible();
+  await expectEmpty(
+    page.locator(".supplier-return-new .orders-empty"),
+    "Тут немає складу, з якого повертають.",
+  );
+  await expect(
+    page.getByRole("searchbox", { name: "Пошук моделі" }),
+  ).toHaveCount(0);
 });
 
 test("inside Telegram a return kept on the phone asks before Бірка closes off its form too, until its check confirms it (audit 2026-11-13, money P2-6)", async ({
@@ -1107,10 +1172,14 @@ test("the returns are narrowed to a supplier from its sheet: «Усі поста
   await expect(sheet.locator(".supplier-row").first()).toHaveText(
     "Усі постачальники",
   );
-  await expect(sheet.locator(".supplier-row").first()).toHaveAttribute(
-    "aria-current",
-    "true",
-  );
+  // One of a list chosen: a radio, as a catalogue's found goods (audit
+  // 2026-11-13, frame P2-2).
+  const choice = sheet.getByRole("radiogroup", { name: "Постачальник" });
+  await expect(
+    choice.getByRole("radio", { name: "Усі постачальники" }),
+  ).toHaveAttribute("aria-checked", "true");
+  await expect(choice.getByRole("radio", { checked: true })).toHaveCount(1);
+  await expect(sheet.locator(".supplier-row[aria-current]")).toHaveCount(0);
   await expect(
     sheet.getByRole("button", { name: /Новий постачальник/ }),
   ).toHaveCount(0);
@@ -1486,6 +1555,15 @@ for (const [name, theme] of [
       page.locator(".supplier-ways .cash-row-title").first(),
     ])
       expect(await contrast(part)).toBeGreaterThanOrEqual(4.5);
+    // The returns one white block, the ways a second, as «Гроші»'s rows
+    // (audit 2026-11-13, money P2-4).
+    const returns = page.getByRole("list", {
+      name: "Повернення постачальникам",
+    });
+    await expectListBlock(returns, returns.locator(".return-row"));
+    const ways = page.locator(".supplier-ways");
+    await expect(ways.getByRole("button")).toHaveCount(2);
+    await expectListBlock(ways, ways.locator(".sale-row"));
     await expect(page.locator("html")).toHaveJSProperty("scrollWidth", 360);
     await page.screenshot({
       path: `test-results/supplier-returns-${name}.png`,

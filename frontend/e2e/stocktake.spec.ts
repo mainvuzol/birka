@@ -1839,7 +1839,7 @@ test("a finished stocktake's «Розбіжності», a next page refused: th
     .getByRole("button", { name: "Показати розбіжності" })
     .click();
   const shown = history.getByRole("list", { name: "Розбіжності" });
-  await page.getByRole("button", { name: "Ще 50", exact: true }).click();
+  await page.getByRole("button", { name: "+ ще 50", exact: true }).click();
   await expect(shown.getByRole("listitem")).toHaveCount(50);
   await page.getByRole("button", { name: "Показати ще" }).click();
   const foot = history.locator(".read-failure");
@@ -1856,7 +1856,7 @@ test("a finished stocktake's «Розбіжності», a next page refused: th
   expect(asked).toEqual(["offset=50"]);
 });
 
-test("«Попередні»: the last three and «Ще N»; a finished one's differences five and «Ще N», each in the words of before (stage 2, goods task list, P0-2)", async ({
+test("«Попередні»: the last three and «+ ще N»; a finished one's differences five and «+ ще N», each in the words of before, the cursor on the first it brought (stage 2, goods task list, P0-2)", async ({
   page,
 }) => {
   const zero = {
@@ -1934,10 +1934,13 @@ test("«Попередні»: the last three and «Ще N»; a finished one's di
   await expect(
     rows.nth(1).getByRole("button", { name: "Показати розбіжності" }),
   ).toHaveCount(0);
-  await page.getByRole("button", { name: "Ще 2", exact: true }).click();
+  // «+ ще N», as everywhere, gone once pressed; the cursor on the first
+  // that was folded (audit 2026-11-13, frame P2-3).
+  await page.getByRole("button", { name: "+ ще 2", exact: true }).click();
   await expect(rows).toHaveCount(5);
+  await expect(rows.nth(3)).toBeFocused();
   await expect(
-    page.getByRole("button", { name: "Ще 2", exact: true }),
+    page.getByRole("button", { name: "+ ще 2", exact: true }),
   ).toHaveCount(0);
   await rows
     .first()
@@ -1948,8 +1951,9 @@ test("«Попередні»: the last three and «Ще N»; a finished one's di
   await expect(shown.getByRole("listitem").first()).toHaveText(
     "Модель 1 · M — −1 шт. (пораховано 1, Оля)",
   );
-  await page.getByRole("button", { name: "Ще 2", exact: true }).click();
+  await page.getByRole("button", { name: "+ ще 2", exact: true }).click();
   await expect(shown.getByRole("listitem")).toHaveCount(7);
+  await expect(shown.getByRole("listitem").nth(5)).toBeFocused();
   await expect(page.getByRole("button", { name: "Показати ще" })).toHaveCount(
     0,
   );

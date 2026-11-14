@@ -1283,7 +1283,9 @@ test("«Вчора», «Тиждень» and «Місяць» ask from the serve
   );
 });
 
-test("«Надійшло»'s periods wait for the server's today", async ({ page }) => {
+test("«Надійшло»'s periods wait for the server's today; meanwhile the table's place holds the rows it comes with but «Не вказано» — the corner, three ways, «Разом» — in their own heights (audit 2026-11-13, money P2-1)", async ({
+  page,
+}) => {
   await me(page);
   await s29(page);
   let release = (): void => undefined;
@@ -1301,13 +1303,30 @@ test("«Надійшло»'s periods wait for the server's today", async ({ page
   await menu(page).getByRole("button", { name: "Гроші", exact: true }).click();
   for (const name of ["Сьогодні", "Вчора", "Тиждень", "Місяць"])
     await expect(period(page, name)).toBeDisabled();
-  await expect(page.locator(".money-table")).toHaveCount(0);
+  // No figure yet: the table's place in grey, as many rows as it comes
+  // with, nothing said in sight.
+  const wait = page.locator(".table-wait");
+  await expect(wait.locator("tr")).toHaveCount(5);
+  await expect(wait.locator("table")).toHaveAttribute("aria-hidden", "true");
+  await expect(page.locator(".money-table-wrap:not(.table-wait)")).toHaveCount(
+    0,
+  );
+  await expect(wait.getByText("Готівка", { exact: true })).toBeHidden();
+  const tall = (await wait.boundingBox())?.height ?? Number.NaN;
   // Nothing dated is asked before the server has said its today.
   expect(early.length).toBeGreaterThan(0);
   expect(early.filter((search) => search.includes("date_"))).toEqual([]);
   release();
   await expect(period(page, "Тиждень")).toBeEnabled();
   await expect(table(page)).toHaveCount(5);
+  await expect(wait).toHaveCount(0);
+  // The table as tall as its place was: nothing under it jumps.
+  expect(
+    Math.abs(
+      ((await page.locator(".money-table-wrap").boundingBox())?.height ??
+        Number.NaN) - tall,
+    ),
+  ).toBeLessThanOrEqual(1);
 });
 
 test("a period kept while today's report was forgotten, and it cannot be read again: «Надійшло» says so with «Спробувати ще раз», never waits without end", async ({

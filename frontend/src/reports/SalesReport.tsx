@@ -11,13 +11,13 @@ import { ModeSwitch } from "@/shared/ModeSwitch";
 import { ScreenHeader } from "@/shared/ScreenHeader";
 import { Sheet } from "@/shared/Sheet";
 import { Unread } from "@/shared/Unread";
-import { Stamp, Waiting, staleOf, useNow } from "@/today/age";
+import { Stamp, staleOf, useNow } from "@/today/age";
 import { ageOf } from "@/today/reads";
 import { daysText, periodLead } from "./format";
 import type { Chosen, Range } from "./format";
 import { ReportEntries } from "./ReportEntries";
 import { ReportModels } from "./ReportModels";
-import { ReportTable } from "./ReportTable";
+import { ReportTable, ReportTableWait } from "./ReportTable";
 import { StoreSwitch } from "./StoreSwitch";
 
 /** The report's own screens, opened from its rows. */
@@ -270,7 +270,7 @@ export function SalesReport({
             setChosen(mode);
             setRange(today === undefined ? null : rangeOf(mode, today));
           }}
-          filters
+          kind="pressed"
           className="report-periods"
         />
         <button
@@ -311,16 +311,16 @@ export function SalesReport({
               }}
             />
           ) : (
-            <div className="money-table-wait" role="status">
-              <span className="visually-hidden">Рахуємо…</span>
-              {[0, 1, 2, 3, 4, 5].map((row) => (
-                <Waiting key={row} width="100%" />
-              ))}
-            </div>
+            <ReportTableWait />
           )
         ) : (
-          <>
-            <ReportTable report={data} across={across} />
+          <ReportTable report={data} across={across} />
+        )}
+        {/* The report's ways, one white block under the table, «Як
+            рахуємо» its last row; the table unread, alone in it (spec
+            §6.8; audit 2026-11-13, money P2-4). */}
+        <div className="list-block report-ways-block">
+          {data !== undefined && (
             <nav aria-label="Звіт про продажі" className="report-ways">
               <WayRow title="Моделі" way="models" open={open("models")} />
               <WayRow
@@ -329,15 +329,15 @@ export function SalesReport({
                 open={open("entries")}
               />
             </nav>
-          </>
-        )}
-        <WayRow
-          title="Як рахуємо"
-          way="how"
-          open={() => {
-            setHow(true);
-          }}
-        />
+          )}
+          <WayRow
+            title="Як рахуємо"
+            way="how"
+            open={() => {
+              setHow(true);
+            }}
+          />
+        </div>
       </section>
       {otherDays && (
         <OtherDays

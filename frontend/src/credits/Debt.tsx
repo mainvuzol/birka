@@ -18,6 +18,7 @@ import {
   inOwnWords,
   isConflict,
 } from "@/shared/api";
+import { Fold } from "@/shared/Fold";
 import { NoCustomerData } from "@/shared/NoCustomerData";
 import { visible } from "@/shared/visible";
 import { decimal, kopecks, money } from "@/orders/types";
@@ -505,7 +506,6 @@ export function Debt({
       <button
         type="button"
         className="more-goods"
-        aria-expanded={false}
         onClick={() => {
           setAllGoods(true);
         }}
@@ -636,18 +636,16 @@ export function Debt({
           {credit.entries.length > 0 && (
             // In place, on a tap: it never pushes the ways down (spec
             // S21).
-            <button
-              type="button"
-              className="quiet history-toggle"
-              aria-expanded={history}
-              aria-controls={history ? historyList : undefined}
-              onClick={() => {
+            <Fold
+              open={history}
+              toggle={() => {
                 setHistory(!history);
               }}
+              controls={historyList}
+              className="history-toggle"
             >
-              Історія · {number(credit.entries.length)}{" "}
-              <Icon name="chevron-right" size={16} />
-            </button>
+              Історія · {number(credit.entries.length)}
+            </Fold>
           )}
           {history && <History credit={credit} id={historyList} />}
           {takes && (

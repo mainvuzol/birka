@@ -2,6 +2,7 @@ import {
   test,
   expect,
   addModel,
+  expectFold,
   leaveNewModel,
   more,
   newModelSheet,
@@ -123,11 +124,15 @@ test("explicit catalog choice and opt-in alias feedback through real API", async
   await expect(page.getByRole("status")).toHaveText(`Модель обрано: ${loran}.`);
   // The name's answer is folded, never sent unasked.
   const fold = page.getByRole("button", { name: "Цей опис — назва товару?" });
-  await expect(fold).toHaveAttribute("aria-expanded", "false");
   await expect(
     page.getByRole("button", { name: "Так, це його назва" }),
   ).toHaveCount(0);
-  await fold.click();
+  // The one fold (audit 2026-11-13, frame P2-3; review).
+  await expectFold(
+    fold,
+    "Цей опис — назва товару?",
+    page.locator(".catalog-name-fold"),
+  );
   expect(feedbackCount).toBe(0);
   const response = page.waitForResponse(
     (r) => r.url().endsWith("/alias-feedback") && r.status() === 200,
@@ -777,7 +782,13 @@ test("in Telegram «Ще ознаки» go by Enter as their keys say: each «ne
   // The name's «next» goes to the colour (review).
   await sheet.getByLabel("Назва моделі", { exact: true }).press("Enter");
   await expect(sheet.getByLabel("Колір", { exact: true })).toBeFocused();
-  await sheet.getByRole("button", { name: "Ще ознаки" }).click();
+  // A fold's one look: the set's chevron after its words, what it opens
+  // named (audit 2026-11-13, frame P2-3).
+  await expectFold(
+    sheet.getByRole("button", { name: "Ще ознаки" }),
+    "Ще ознаки",
+    sheet.locator(".new-model-extra"),
+  );
   const sent: string[] = [];
   page.on("request", (request) => {
     if (request.method() !== "GET" && request.url().includes("/api/v1/"))
@@ -1006,11 +1017,21 @@ test("search selects an existing family outside preview without creating another
   expect(product.status()).toBe(201);
   const existing = (await product.json()) as { product_family_id: string };
   await sheet.getByRole("button", { name: "Ні, це нова модель" }).click();
-  // Another colour of a model the catalogue has, found by its name.
-  await sheet
-    .getByRole("group", { name: "Яка модель" })
-    .getByRole("button", { name: "Інший колір нашої моделі" })
-    .click();
+  // Another colour of a model the catalogue has, found by its name. The
+  // switch changes the form in the same sheet: pressed, never «the page»
+  // (audit 2026-11-13, frame P2-2).
+  const kind = sheet.getByRole("group", { name: "Яка модель" });
+  await expect(
+    kind.getByRole("button", { name: "Нова модель" }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await kind.getByRole("button", { name: "Інший колір нашої моделі" }).click();
+  await expect(
+    kind.getByRole("button", { name: "Інший колір нашої моделі" }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect(
+    kind.getByRole("button", { name: "Нова модель" }),
+  ).toHaveAttribute("aria-pressed", "false");
+  await expect(kind.locator("[aria-current]")).toHaveCount(0);
   // Asked as it is typed, no «Знайти модель», no Enter (goods task list
   // after stage 2, P1-5).
   await sheet.getByLabel("Пошук моделі в каталозі").fill(name);

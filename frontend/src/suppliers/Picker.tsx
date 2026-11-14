@@ -123,7 +123,8 @@ function PickField({
 }
 
 /** One supplier on the list (spec §6.8): the name, under it its meta; the
- * one chosen marked. */
+ * one chosen ticked. One of a list chosen: a radio, as a catalogue's found
+ * goods (audit 2026-11-13, frame P2-2). */
 function SupplierRow({
   name,
   meta,
@@ -138,11 +139,12 @@ function SupplierRow({
   pick: () => void;
 }): JSX.Element {
   return (
-    <li>
+    <li role="none">
       <button
         type="button"
+        role="radio"
         className="supplier-row"
-        aria-current={chosen ? "true" : undefined}
+        aria-checked={chosen}
         disabled={disabled}
         onClick={pick}
       >
@@ -212,7 +214,11 @@ function SupplierList({
         />
       ) : (
         <>
-          <ul className="supplier-rows">
+          <ul
+            className="supplier-rows"
+            role="radiogroup"
+            aria-label="Постачальник"
+          >
             {first}
             {found.map((supplier) => (
               <SupplierRow

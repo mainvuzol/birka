@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { JSX } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -8,6 +8,7 @@ import {
 } from "@tanstack/react-query";
 import { api } from "@/shared/api";
 import { Eyelet } from "@/shared/Eyelet";
+import { Fold } from "@/shared/Fold";
 import { ModeSwitch } from "@/shared/ModeSwitch";
 import { Sheet } from "@/shared/Sheet";
 import { Stub } from "@/shared/Stub";
@@ -333,7 +334,7 @@ export function Catalog({
               setFocusAt(null);
             }}
             disabled={blocked}
-            filters
+            kind="pressed"
           />
           {list.isPending ? (
             <Placeholder
@@ -526,6 +527,7 @@ function Detail({
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState("");
   const [naming, setNaming] = useState(false);
+  const namingFields = useId();
   const [foot, setFoot] = useState<HTMLElement | null>(null);
   const open = ["PENDING", "NEEDS_REVIEW"].includes(decision.status);
   const candidates = decision.preview.candidates;
@@ -770,18 +772,17 @@ function Detail({
         </>
       ) : (
         <div className="catalog-name">
-          <button
-            type="button"
-            className="quiet"
-            aria-expanded={naming}
-            onClick={() => {
+          <Fold
+            open={naming}
+            toggle={() => {
               setNaming(!naming);
             }}
+            controls={namingFields}
           >
             Цей опис — назва товару?
-          </button>
+          </Fold>
           {naming && (
-            <>
+            <div id={namingFields} className="catalog-name-fold">
               {aliasTooLong && (
                 <p>Опис задовгий для назви: назва — до 200 символів.</p>
               )}
@@ -847,7 +848,7 @@ function Detail({
                     </button>
                   </div>
                 ))}
-            </>
+            </div>
           )}
         </div>
       )}

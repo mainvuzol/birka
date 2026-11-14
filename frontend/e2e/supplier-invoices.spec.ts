@@ -5,6 +5,8 @@ import {
   dockOnMenu,
   expectEmpty,
   expectGlyphBeside,
+  expectHeldRow,
+  expectListBlock,
   expectResultHeading,
   expectSumRole,
   grn,
@@ -1619,6 +1621,15 @@ test("a payment kept on the phone is checked from another screen, and the till i
   await expect(banner).toContainText(/Чекає відповіді сервера з \d{2}:\d{2}\./);
   await expect(banner.locator(".check-line")).toHaveCount(0);
   await expect(page.locator(".stub-notice")).toHaveCount(0);
+  // «Ще» meanwhile: its row «Постачальникам» held, unfaded, its title in
+  // pencil (audit 2026-11-13, frame P2-4).
+  await more(page);
+  const way = sections(page).getByRole("button", {
+    name: "Постачальникам",
+    exact: true,
+  });
+  await expectHeldRow(way, way.locator(".more-label"));
+  await menu(page).getByRole("button", { name: "Гроші", exact: true }).click();
   await expect(
     page.getByRole("button", { name: "Продаж", exact: true }),
   ).toBeDisabled();
@@ -1791,7 +1802,9 @@ test("«Накладні» are tags: owed filled in ink, closed knotted, cancell
   await expect(suppliers.locator(".supplier-row").first()).toHaveText(
     "Усі постачальники",
   );
-  await expect(everyone).toHaveAttribute("aria-current", "true");
+  // A radio, the one chosen checked (audit 2026-11-13, frame P2-2).
+  await expect(everyone).toHaveAttribute("role", "radio");
+  await expect(everyone).toHaveAttribute("aria-checked", "true");
   await expect(
     suppliers.getByRole("button", { name: /Новий постачальник/ }),
   ).toHaveCount(0);
@@ -1920,6 +1933,10 @@ for (const [name, theme] of [
       page.locator(".invoice-total-line .t-row").first(),
     ])
       expect(await contrast(part)).toBeGreaterThanOrEqual(4.5);
+    // Those of the stores that do not trade: a row in a block of its own,
+    // the set's chevron 16 (audit 2026-11-13, money P2-4).
+    const elsewhere = page.locator(".invoice-elsewhere-block");
+    await expectListBlock(elsewhere, elsewhere.locator(".sale-row"));
     await page.screenshot({ path: `test-results/invoices-${name}.png` });
 
     await own.locator(".order-row").click();

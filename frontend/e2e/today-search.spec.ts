@@ -1,4 +1,14 @@
-import { test, expect, menu, openModel, openStore, section } from "./fixtures";
+import {
+  test,
+  expect,
+  expectHeldRow,
+  expectListBlock,
+  holdReads,
+  menu,
+  openModel,
+  openStore,
+  section,
+} from "./fixtures";
 import type { Locator, Page, Route } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -957,7 +967,7 @@ test("no group without its right in the open store, and no field without any", a
 // --- on the phone ------------------------------------------------------------
 
 for (const scheme of ["light", "dark"] as const)
-  test(`at 360 × 640 in the ${scheme} theme: the field over the day's one line, the groups' words at 4.5:1, nothing wider than the screen`, async ({
+  test(`at 360 × 640 in the ${scheme} theme: the field over the day's one line, the groups' words at 4.5:1, nothing wider than the screen; each group's rows on a list's white block under its caption, grey rows on it while read, a row taking no tap unfaded, its title in pencil (audit 2026-11-13, frame P2-4)`, async ({
     page,
   }) => {
     await page.emulateMedia({ colorScheme: scheme });
@@ -974,7 +984,38 @@ for (const scheme of ["light", "dark"] as const)
       expect(at.y + at.height).toBeLessThanOrEqual(folded.y);
       expect(folded.y + folded.height).toBeLessThanOrEqual(bar.y);
     }
-    await search(page, "лоран");
+    // Read slowly: two grey rows on the group's block (audit 2026-11-13,
+    // frame P2-4).
+    const answer = await holdReads(page, "catalog/stock-options");
+    await field(page).fill("лоран");
+    await expect(
+      group(page, "Товар").locator(".list-block[aria-hidden] > .sale-row"),
+    ).toHaveCount(2);
+    answer();
+    await expect(
+      group(page, "Товар").getByRole("button", { name: "Лоран шоколад" }),
+    ).toBeVisible();
+    // Each group on a list's white block, its caption over it.
+    for (const [name, count] of [
+      ["Товар", 2],
+      ["Покупці", 1],
+    ] as const) {
+      const block = group(page, name).locator(".list-block");
+      await expect(block.locator(".sale-row")).toHaveCount(count);
+      await expectListBlock(block, block.locator(".sale-row"));
+    }
+    for (const name of ["Товар", "Покупці"]) {
+      const caption = await group(page, name).locator("h2").boundingBox();
+      const block = await group(page, name)
+        .locator(".list-block")
+        .boundingBox();
+      expect(caption && block).toBeTruthy();
+      if (caption && block)
+        expect(caption.y + caption.height).toBeLessThanOrEqual(block.y);
+    }
+    await page.screenshot({
+      path: `test-results/today-search-block-${scheme}.png`,
+    });
     for (const part of [
       group(page, "Товар").locator("h2"),
       group(page, "Товар").locator(".cash-row-title").first(),
@@ -988,6 +1029,20 @@ for (const scheme of ["light", "dark"] as const)
         () => document.documentElement.scrollWidth <= window.innerWidth,
       ),
     ).toBe(true);
+    // A row taking no tap — held while a kept operation holds the screen —
+    // whatever its title's class: unfaded, its title in pencil, still read.
+    // Held here by hand: a kept operation keeps its own screen open, so
+    // «Сьогодні» is seldom in sight while one holds it (frame P2-4).
+    const row = group(page, "Товар").getByRole("button", {
+      name: "Лоран шоколад",
+    });
+    await row.evaluate((node) => {
+      (node as HTMLButtonElement).disabled = true;
+    });
+    await expectHeldRow(row, row.locator(".cash-row-title"));
+    expect(
+      await contrast(row.locator(".cash-row-title")),
+    ).toBeGreaterThanOrEqual(4.5);
     await search(page, "зебра");
     expect(await contrast(page.locator(".found-none"))).toBeGreaterThanOrEqual(
       4.5,

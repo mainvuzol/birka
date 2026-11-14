@@ -72,6 +72,7 @@ export function SupplierList({
             rows={3}
             day={false}
             rowShape={{ list: "supplier-rows", row: "supplier-row" }}
+            block
           />
         ) : suppliers.data === undefined ? (
           <Unread
@@ -87,7 +88,9 @@ export function SupplierList({
           />
         ) : (
           <>
-            <ul className="supplier-rows" aria-label="Постачальники">
+            {/* Rows 64 on a white block, as «Гроші»'s (audit 2026-11-13,
+                money P2-4). */}
+            <ul className="supplier-rows list-block" aria-label="Постачальники">
               {found.map((supplier) => (
                 <li key={supplier.id}>
                   <button
@@ -106,7 +109,11 @@ export function SupplierList({
                         </span>
                       )}
                     </span>
-                    <Icon name="chevron-right" size={16} />
+                    <Icon
+                      name="chevron-right"
+                      size={16}
+                      className="sale-open"
+                    />
                   </button>
                 </li>
               ))}

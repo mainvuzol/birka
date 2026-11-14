@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { JSX } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Fold } from "@/shared/Fold";
 import { api } from "@/shared/api";
 import { visible } from "@/shared/visible";
 import { CARRIED_TAP, usePanelRoom } from "@/shared/panel";
@@ -429,6 +430,7 @@ function Card({
     ]),
   );
   const [historyShown, setHistoryShown] = useState(false);
+  const historyList = useId();
   const [toast, setToast] = useState<{ text: string; times: number } | null>(
     null,
   );
@@ -648,19 +650,19 @@ function Card({
           // its day at the left, a filled eyelet, what it was, how it went
           // under it, when and by whom — first version first, as before.
           <>
-            <button
-              type="button"
-              className="quiet order-rare shipping-changes-title"
-              aria-expanded={historyShown}
-              onClick={() => {
+            <Fold
+              open={historyShown}
+              toggle={() => {
                 setHistoryShown((shown) => !shown);
               }}
+              controls={historyList}
+              className="order-rare shipping-changes-title"
             >
-              Історія доставки{" "}
-              <Icon name="chevron-right" size={16} className="link-chevron" />
-            </button>
+              Історія доставки
+            </Fold>
             {historyShown && (
               <ul
+                id={historyList}
                 className="timeline shipping-changes"
                 aria-label="Історія доставки"
               >

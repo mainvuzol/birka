@@ -142,10 +142,10 @@ function FoundRow({
   );
 }
 
-/** A group's place while it is read: two grey rows. */
+/** A group's place while it is read: two grey rows on the group's block. */
 function Waiting(): JSX.Element {
   return (
-    <div aria-hidden="true">
+    <div className="list-block" aria-hidden="true">
       {Array.from({ length: 2 }, (_, n) => (
         <div className="sale-row found-row" key={n}>
           <span className="sale-main">
@@ -188,7 +188,9 @@ function Group({
         <Waiting />
       ) : (
         <>
-          {rows.slice(0, SHOWN)}
+          {/* On a list's white block, as «Покупці»'s rows, its caption
+              above it (audit 2026-11-13, frame P2-4). */}
+          <div className="list-block">{rows.slice(0, SHOWN)}</div>
           {(more || rows.length > SHOWN) && (
             <p className="hint found-more">Знайдено більше — уточніть пошук.</p>
           )}

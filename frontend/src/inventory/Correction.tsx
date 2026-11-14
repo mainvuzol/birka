@@ -265,7 +265,7 @@ export function Correction({
             setRefusal("");
           }}
           disabled={working}
-          filters
+          kind="pressed"
         />
       )}
       <p className="t-row count-live" id={lineId}>
@@ -324,7 +324,6 @@ export function Correction({
         <button
           type="button"
           className="quiet correction-note"
-          aria-expanded="false"
           disabled={working}
           onClick={() => {
             setNoting(true);

@@ -232,8 +232,14 @@ export function Suppliers({
           disabled={false}
         />
         {returns.isPending ? (
-          // Three rows' places (money task list after stage 2, P1-3).
-          <Placeholder said="Завантажуємо повернення…" rows={3} day={false} />
+          // Three rows' places (money task list after stage 2, P1-3), on
+          // the list's block (audit 2026-11-13, money P2-4).
+          <Placeholder
+            said="Завантажуємо повернення…"
+            rows={3}
+            day={false}
+            block
+          />
         ) : returns.data === undefined ? (
           <Unread
             error={returns.error}
@@ -263,7 +269,12 @@ export function Suppliers({
           </Empty>
         ) : (
           <>
-            <ul className="return-rows" aria-label="Повернення постачальникам">
+            {/* One white block, as «Гроші»'s rows (spec §6.8; audit
+                2026-11-13, money P2-4). */}
+            <ul
+              className="return-rows list-block"
+              aria-label="Повернення постачальникам"
+            >
               {listed.map((item) => (
                 <ReturnRow
                   key={item.id}
@@ -300,7 +311,8 @@ export function Suppliers({
             )}
           </>
         )}
-        <div className="cash-rows supplier-ways">
+        {/* The ways, a block of their own under the returns. */}
+        <div className="cash-rows supplier-ways list-block">
           {openBorrowed && (
             <WayRow
               title="Позичене й під реалізацію"

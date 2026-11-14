@@ -2,6 +2,7 @@ import {
   test,
   expect,
   fromPaper,
+  expectFold,
   expectSeries,
   menu,
   namedFromPaper,
@@ -343,18 +344,14 @@ test("a card payment typed from paper never says to charge the card, and the deb
     .getByRole("button", { name: "Відкрити борг", exact: true })
     .click();
   const history = page.getByRole("button", { name: /^Історія · \d+/ });
-  await history.click();
   // Its chevron the set's 16, turned down while open, never a «›» (audit
-  // after stage 2, frame P2-2).
-  await expect(history).not.toContainText("›");
-  expect(
-    await history
-      .locator("svg.icon")
-      .evaluate(
-        (node) =>
-          Math.round(new DOMMatrix(getComputedStyle(node).transform).b) === 1,
-      ),
-  ).toBe(true);
+  // after stage 2, frame P2-2) — a fold's one look, what it opens named
+  // (audit 2026-11-13, frame P2-3).
+  await expectFold(
+    history,
+    /^Історія · \d+$/,
+    page.getByRole("list", { name: "Історія боргу" }),
+  );
   await expect(page.getByRole("list", { name: "Історія боргу" })).toContainText(
     "Внесок під час збою · хто прийняв: Ганна · внесено: Ліда",
   );

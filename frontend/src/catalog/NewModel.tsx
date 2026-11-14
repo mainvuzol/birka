@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import type { JSX } from "react";
 import { createPortal } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Fold } from "@/shared/Fold";
 import { ApiError, api } from "@/shared/api";
 import { Eyelet } from "@/shared/Eyelet";
 import { ModeSwitch } from "@/shared/ModeSwitch";
@@ -112,6 +113,7 @@ export function NewModel({
   const [picked, setPicked] = useState<{ system: string; code: string }[]>([]);
   const [typedSize, setTypedSize] = useState("");
   const [more, setMore] = useState(false);
+  const extraFields = useId();
   const [source, setSource] = useState("");
   const [category, setCategory] = useState("");
   const [garment, setGarment] = useState("");
@@ -503,6 +505,7 @@ export function NewModel({
               current={kind}
               choose={setKind}
               disabled={blocked}
+              kind="pressed"
               className="new-model-kind"
             />
             {kind === "new" ? (
@@ -699,18 +702,18 @@ export function NewModel({
                 </button>
               </div>
             </div>
-            <button
-              type="button"
-              className="quiet new-model-more"
-              aria-expanded={more}
-              onClick={() => {
+            <Fold
+              open={more}
+              toggle={() => {
                 setMore(!more);
               }}
+              controls={extraFields}
+              className="new-model-more"
             >
               Ще ознаки
-            </button>
+            </Fold>
             {more && (
-              <div className="new-model-extra">
+              <div id={extraFields} className="new-model-extra">
                 {kind === "new" && (
                   <>
                     <label>

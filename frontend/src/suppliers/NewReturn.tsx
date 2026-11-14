@@ -3,6 +3,7 @@ import type { JSX } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { isConflict } from "@/shared/api";
 import { Back } from "@/shared/Back";
+import { Empty } from "@/shared/Empty";
 import { Eyelet, RecordedMark } from "@/shared/Eyelet";
 import { Unread } from "@/shared/Unread";
 import { Placeholder } from "@/shared/Placeholder";
@@ -396,7 +397,8 @@ export function NewReturn({
               }}
             />
           ) : warehouses.length === 0 ? (
-            <p>Тут немає складу, з якого повертають.</p>
+            // The blank tag, the same line (audit 2026-11-13, money P2-1).
+            <Empty title="Тут немає складу, з якого повертають." />
           ) : only && locationId === only.id ? (
             <p className="t-row receive-place">Склад «{visible(only.name)}»</p>
           ) : (
@@ -546,7 +548,17 @@ export function NewReturn({
                 />
                 {stock.isPending ||
                 (stock.isPlaceholderData && found.length === 0) ? (
-                  <Placeholder said="Завантажуємо товари…" />
+                  // Three rows 64 as the models found come, no day (audit
+                  // 2026-11-13, money P2-1).
+                  <Placeholder
+                    said="Завантажуємо товари…"
+                    rows={3}
+                    day={false}
+                    rowShape={{
+                      list: "return-models",
+                      row: "sale-row return-model",
+                    }}
+                  />
                 ) : stock.data === undefined ? (
                   <Unread
                     error={stock.error}
@@ -555,7 +567,9 @@ export function NewReturn({
                     }}
                   />
                 ) : found.length === 0 ? (
-                  <p>
+                  // Said to a reader too, as «Список постачальників»'s
+                  // «Нічого не знайшли» (audit 2026-11-13, money P2-1).
+                  <p className="t-meta" role="status">
                     {query
                       ? `За «${visible(query)}» на складі «${visible(warehouse.name)}» вільного товару немає.`
                       : `На складі «${visible(warehouse.name)}» немає вільного товару.`}

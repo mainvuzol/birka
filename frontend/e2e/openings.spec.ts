@@ -2,6 +2,7 @@ import {
   test,
   expect,
   addModel,
+  expectFold,
   holdReads,
   listWay,
   rejectList,
@@ -1762,9 +1763,9 @@ test("«Новий список»: the way in a switch, the list its one field; 
   await way.getByRole("button", { name: "Вставити текст" }).click();
   await expect(lines).toHaveValue(typed);
 
-  // A tap opens the two; another closes them, their words kept.
-  await about.click();
-  await expect(about).toHaveAttribute("aria-expanded", "true");
+  // A tap opens the two — a fold's one look, what it opens named (audit
+  // 2026-11-13, frame P2-3); another closes them, their words kept.
+  await expectFold(about, "Ще про список", form.locator(".opening-extra"));
   await expect(source).toBeVisible();
   await captured.fill("вересень");
   await about.click();

@@ -363,7 +363,12 @@ test("damaged goods are written off by how many, whatever the balance", async ({
   );
   await type(page, 1);
   await expect(page.getByLabel("Примітка")).toHaveCount(0);
-  await page.getByRole("button", { name: "Додати примітку" }).click();
+  // Gone once pressed, as «+ ще N»: nothing «expanded» to say (audit
+  // 2026-11-13, frame P2-3; review).
+  const addNote = page.getByRole("button", { name: "Додати примітку" });
+  await expect(addNote).not.toHaveAttribute("aria-expanded");
+  await addNote.click();
+  await expect(addNote).toHaveCount(0);
   // Unfolded, the cursor in it.
   await expect(page.getByLabel("Примітка")).toBeFocused();
   await page.getByLabel("Примітка").fill("Пляма на рукаві");
