@@ -1304,6 +1304,43 @@ export async function expectListBlock(
     ]);
 }
 
+/** A sum's face, size and weight as drawn: `money-m` — 20/24 in the text
+ * face, 600, its figures even, never the condensed face below 22 (spec
+ * §5.5; audit 2026-11-13, frame P2-8) — or `money-l`, 32/34 in the display
+ * face, 800. */
+export async function expectSumRole(
+  sum: Locator,
+  role: "money-m" | "money-l",
+): Promise<void> {
+  const drawn = await sum.evaluate((node) => {
+    const style = getComputedStyle(node);
+    return {
+      condensed: style.fontFamily.includes("Fira Sans Extra Condensed"),
+      size: style.fontSize,
+      line: style.lineHeight,
+      weight: style.fontWeight,
+      figures: style.fontVariantNumeric,
+    };
+  });
+  expect(drawn).toEqual(
+    role === "money-m"
+      ? {
+          condensed: false,
+          size: "20px",
+          line: "24px",
+          weight: "600",
+          figures: "tabular-nums",
+        }
+      : {
+          condensed: true,
+          size: "32px",
+          line: "34px",
+          weight: "800",
+          figures: drawn.figures,
+        },
+  );
+}
+
 /** The shared empty place (spec §6.28; audit after stage 2, frame P2-1):
  * the blank tag 64 square in the edge, its one line 17/600 in ink — one
  * markup wherever nothing is yet. */

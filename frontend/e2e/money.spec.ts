@@ -1,4 +1,12 @@
-import { test, expect, listRow, menu, openStore } from "./fixtures";
+import {
+  test,
+  expect,
+  expectSumRole,
+  listRow,
+  menu,
+  openStore,
+  shippedFace,
+} from "./fixtures";
 import type { Locator, Page, Route } from "@playwright/test";
 import { createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -423,6 +431,80 @@ function lines(page: Page, name: string): Locator {
   return place(page, name).locator(".money-line");
 }
 
+/** A place's stores, each a column or a row: the line itself, or the open
+ * store's button in it. */
+function cells(page: Page, name: string): Locator {
+  return place(page, name).locator(".money-cell");
+}
+
+/** A place's figures, a store each, in its order. */
+function placeSums(page: Page, name: string): Locator {
+  return place(page, name).locator(".money-figure");
+}
+
+type Box = { x: number; y: number; width: number; height: number };
+
+async function boxOf(element: Locator): Promise<Box> {
+  const box = await element.boundingBox();
+  expect(box).not.toBeNull();
+  return box ?? { x: 0, y: 0, width: 0, height: 0 };
+}
+
+/** Two stores in a place: two columns side by side, a store's name, the
+ * words before its figure, the figure, the words after, each under the
+ * one before (audit 2026-11-13, money P1-1). */
+async function expectColumns(page: Page, name: string): Promise<void> {
+  const list = place(page, name).locator(".money-lines").first();
+  await expect(list).toHaveClass(/\bmoney-store-columns\b/);
+  // Under its title as any place's list, nothing of another's (review).
+  await expect(list).toHaveCSS("margin-top", "0px");
+  const all = await cells(page, name).all();
+  expect(all).toHaveLength(2);
+  const [left, right] = await Promise.all(all.map(boxOf));
+  expect(right?.x ?? 0).toBeGreaterThanOrEqual(
+    (left?.x ?? 0) + (left?.width ?? 0) + 15,
+  );
+  expect(Math.abs((right?.y ?? 0) - (left?.y ?? 0))).toBeLessThan(1);
+  for (const cell of all) {
+    const parts = [
+      cell.locator(".money-store"),
+      cell.locator(".money-before"),
+      cell.locator(".money-figure, .money-said"),
+      cell.locator(".money-after"),
+    ];
+    let above: Box | undefined;
+    for (const part of parts) {
+      if ((await part.count()) === 0) continue;
+      const box = await boxOf(part);
+      if (above)
+        expect(box.y).toBeGreaterThanOrEqual(above.y + above.height - 1);
+      above = box;
+    }
+  }
+}
+
+/** One store, or three and more: a row each — the name and its words at
+ * the left, the figure at the right of them (audit 2026-11-13, money
+ * P1-1). */
+async function expectRows(page: Page, name: string): Promise<void> {
+  const list = place(page, name).locator(".money-lines").first();
+  await expect(list).toHaveClass(/\bmoney-store-rows\b/);
+  // Under its title as any place's list, nothing of another's (review).
+  await expect(list).toHaveCSS("margin-top", "0px");
+  for (const cell of await cells(page, name).all()) {
+    const row = await boxOf(cell);
+    const store = await boxOf(cell.locator(".money-store"));
+    const figure = await boxOf(cell.locator(".money-figure, .money-said"));
+    expect(figure.x).toBeGreaterThanOrEqual(store.x + store.width);
+    expect(figure.y).toBeGreaterThanOrEqual(row.y - 1);
+    expect(figure.y + figure.height).toBeLessThanOrEqual(
+      row.y + row.height + 1,
+    );
+    for (const words of await cell.locator(".money-before, .money-after").all())
+      expect((await boxOf(words)).x + 1).toBeLessThan(figure.x);
+  }
+}
+
 function table(page: Page): Locator {
   return page.locator(".money-table tr");
 }
@@ -549,16 +631,87 @@ test("the owner's fourth tab is «Гроші»: each place on its own, a line a 
     "«Центр»: 38 000,00 грн · 3 накладні",
     "«Ринок»: 9 500,00 грн · 1 накладна",
   ]);
-  // What customers owe in a debt's colour, its twins «Винні» and the
-  // place's glyph; what is owed to suppliers in ink, its glyph too (money
-  // task list after stage 2, P1-1).
-  const owedColour = await token(page, "--owed");
+  // Two stores: every place two columns, each figure its store's alone —
+  // its name, the words before it, the figure, the words after, as the
+  // day's tag lays a store (audit 2026-11-13, money P1-1).
+  for (const [name, sums] of [
+    ["У касах", ["5 380,00 грн", "2 450,00 грн"]],
+    ["Картка сьогодні · звірте з чеком", ["1 850,00 грн", "1 200,00 грн"]],
+    ["Перекази сьогодні", ["2 700,00 грн", "0,00 грн"]],
+    ["Вам винні клієнти", ["8 400,00 грн", "2 600,00 грн"]],
+    ["Ви винні постачальникам", ["38 000,00 грн", "9 500,00 грн"]],
+  ] as const) {
+    await expectColumns(page, name);
+    await expect(placeSums(page, name)).toHaveText([...sums]);
+    // Narrower than 390, `money-m`: never the condensed face below 22
+    // (frame P2-8).
+    for (const sum of await placeSums(page, name).locator(".sum").all())
+      await expectSumRole(sum, "money-m");
+  }
+  await expect(
+    cells(page, "У касах").first().locator(".money-before"),
+  ).toHaveText("учора порахували");
+  await expect(
+    cells(page, "У касах").first().locator(".money-after"),
+  ).toHaveText("о 20:06");
+  await expect(
+    cells(page, "Вам винні клієнти").locator(".money-before"),
+  ).toHaveText(["Винні", "Винні"]);
+  await expect(
+    cells(page, "Вам винні клієнти").locator(".money-after"),
+  ).toHaveText(["4 людини", "2 людини"]);
+  await expect(
+    cells(page, "Ви винні постачальникам").locator(".money-after"),
+  ).toHaveText(["3 накладні", "1 накладна"]);
+  await expect(
+    cells(page, "Картка сьогодні · звірте з чеком").locator(
+      ".money-before, .money-after",
+    ),
+  ).toHaveCount(0);
+  // A store named as the day's tag names it, in ink; its words in pencil.
   const ink = await token(page, "--ink");
-  for (const line of await lines(page, "Вам винні клієнти").all())
-    expect(await colour(line)).toBe(owedColour);
+  const pencil = await token(page, "--pencil");
+  for (const store of await place(page, "У касах")
+    .locator(".money-cell .money-store")
+    .all()) {
+    await expect(store).toHaveClass(/\bt-label\b/);
+    await expect(store).toHaveCSS("text-transform", "uppercase");
+    expect(await colour(store)).toBe(ink);
+  }
+  for (const words of await page
+    .locator(".money-cell :is(.money-before, .money-after)")
+    .all())
+    if (!(await words.evaluate((node) => node.closest(".money-owes"))))
+      expect(await colour(words)).toBe(pencil);
+    else if (await words.evaluate((node) => node.matches(".money-after")))
+      expect(await colour(words)).toBe(pencil);
+  // What customers owe in a debt's colour — «Винні» and its figure — and
+  // the place's glyph; what is owed to suppliers in ink, its glyph too
+  // (money task list after stage 2, P1-1).
+  const owedColour = await token(page, "--owed");
+  for (const cell of await cells(page, "Вам винні клієнти").all()) {
+    expect(await colour(cell.locator(".money-before"))).toBe(owedColour);
+    expect(await colour(cell.locator(".money-figure"))).toBe(owedColour);
+    // Its kopecks and «грн» too, as a customer's card says a debt (review).
+    expect(await colour(cell.locator(".sum-kop"))).toBe(owedColour);
+    expect(await colour(cell.locator(".sum-unit"))).toBe(owedColour);
+    expect(await colour(cell.locator(".money-store"))).toBe(ink);
+  }
+  // The colon and the joints for a reader alone, never seen (review).
+  for (const hidden of await place(page, "Вам винні клієнти")
+    .locator(".money-cell > .visually-hidden")
+    .all()) {
+    const box = await boxOf(hidden);
+    expect(box.width * box.height).toBeLessThanOrEqual(1);
+  }
+  await expect(
+    cells(page, "Вам винні клієнти")
+      .first()
+      .locator(":scope > .visually-hidden"),
+  ).toHaveText([":", "·"]);
   expect(await colour(glyph(page, "Вам винні клієнти"))).toBe(owedColour);
-  for (const line of await lines(page, "Ви винні постачальникам").all())
-    expect(await colour(line)).toBe(ink);
+  for (const sum of await placeSums(page, "Ви винні постачальникам").all())
+    expect(await colour(sum)).toBe(ink);
   expect(await colour(glyph(page, "Ви винні постачальникам"))).toBe(ink);
   // «Накладні» read the open store alone: its line is the one way, the
   // place's title none (P1-2).
@@ -571,9 +724,22 @@ test("the owner's fourth tab is «Гроші»: each place on its own, a line a 
   await expect(invoices.locator("svg.sale-open")).toHaveCount(1);
   await expect(invoices).not.toContainText("›");
   expect((await invoices.boundingBox())?.height).toBeGreaterThanOrEqual(44);
-  expect((await invoices.boundingBox())?.width).toBe(
-    (await owing.locator(".money-lines").boundingBox())?.width,
+  // Its whole column the way, its chevron by the words after its figure
+  // (audit 2026-11-13, money P1-1).
+  expect(await boxOf(invoices)).toEqual(
+    await boxOf(owing.locator(".money-line").first()),
   );
+  await expect(invoices).toHaveClass(/\bmoney-cell\b/);
+  const chevron = await boxOf(invoices.locator("svg.sale-open"));
+  const after = await boxOf(invoices.locator(".money-after"));
+  expect(chevron.y).toBeLessThan(after.y + after.height);
+  expect(chevron.y + chevron.height).toBeGreaterThan(after.y);
+  expect(chevron.x).toBeGreaterThanOrEqual(after.x);
+  const column = await boxOf(invoices);
+  expect(chevron.x + chevron.width).toBeCloseTo(column.x + column.width, 0);
+  await expect(
+    owing.locator(".money-line").nth(1).getByRole("button"),
+  ).toHaveCount(0);
   await expect(page.locator(".money-rule")).toHaveText(
     "Кожне місце окремо — ніколи не складаємо в одну суму.",
   );
@@ -807,8 +973,12 @@ test("nobody owing in any store: each line «Ніхто не винен» in pen
     "«Ринок»: Ніхто не винен",
   ]);
   const pencil = await token(page, "--pencil");
-  for (const line of await lines(page, "Вам винні клієнти").all())
-    expect(await colour(line)).toBe(pencil);
+  for (const cell of await cells(page, "Вам винні клієнти").all())
+    expect(await colour(cell.locator(".money-said"))).toBe(pencil);
+  // One line where the figure would be, no figure (audit 2026-11-13, money
+  // P1-1).
+  await expect(placeSums(page, "Вам винні клієнти")).toHaveCount(0);
+  await expectColumns(page, "Вам винні клієнти");
   expect(await colour(glyph(page, "Вам винні клієнти"))).toBe(
     await token(page, "--ink"),
   );
@@ -916,6 +1086,13 @@ test("a place that cannot be read keeps its plate with «Спробувати щ
     "«Центр»: не вдалося прочитати",
     "«Ринок»: 9 500,00 грн · 1 накладна",
   ]);
+  // In pencil, in the figure's place (audit 2026-11-13, money P1-1).
+  const unreadLine = owing
+    .locator(".money-line")
+    .first()
+    .locator(".money-said");
+  await expect(unreadLine).toHaveClass(/\bmoney-unread\b/);
+  expect(await colour(unreadLine)).toBe(await token(page, "--pencil"));
   // The way stays, saying what it shows.
   await expect(
     owing.getByRole("button", {
@@ -1237,9 +1414,50 @@ test("a store that does not trade is the report's column with its mark, and a li
   );
   // Nobody owing, in pencil, as «Сьогодні» says it (money task list after
   // stage 2, P1-1).
-  expect(await colour(lines(page, "Вам винні клієнти").nth(2))).toBe(
-    await token(page, "--pencil"),
-  );
+  expect(
+    await colour(
+      lines(page, "Вам винні клієнти").nth(2).locator(".money-said"),
+    ),
+  ).toBe(await token(page, "--pencil"));
+  // Three stores: a row each, the figure at the right in `money-m`, the
+  // store that does not trade with its mark (audit 2026-11-13, money P1-1,
+  // frame P2-8).
+  for (const name of [
+    "У касах",
+    "Картка сьогодні · звірте з чеком",
+    "Перекази сьогодні",
+    "Вам винні клієнти",
+    "Ви винні постачальникам",
+  ])
+    await expectRows(page, name);
+  await expect(placeSums(page, "Картка сьогодні · звірте з чеком")).toHaveText([
+    "1 311 118 650,00 грн",
+    "1 311 104 200,00 грн",
+    "0,00 грн",
+  ]);
+  for (const sum of await page
+    .locator(".money-store-rows .money-figure .sum")
+    .all())
+    await expectSumRole(sum, "money-m");
+  await expect(
+    cells(page, "У касах").nth(2).locator(".money-store .sticker"),
+  ).toHaveText("в архіві");
+  await expect(
+    cells(page, "У касах").nth(2).locator(".money-store .sticker"),
+  ).toHaveCSS("text-transform", "none");
+  // The open store's row, the way: its parts in the middle of it (review).
+  const way = place(page, "Ви винні постачальникам").getByRole("button");
+  const wayBox = await boxOf(way);
+  const wayChevron = await boxOf(way.locator("svg.sale-open"));
+  expect(
+    Math.abs(
+      wayChevron.y + wayChevron.height / 2 - (wayBox.y + wayBox.height / 2),
+    ),
+  ).toBeLessThanOrEqual(2);
+  await page.screenshot({
+    path: "test-results/money-rows-360.png",
+    fullPage: true,
+  });
   await expect(lines(page, "Ви винні постачальникам").nth(2)).toHaveText(
     "«Старий» в архіві: Нічого не винні",
   );
@@ -1308,6 +1526,10 @@ test("a manager of one store: one column, and no suppliers' place without «supp
   await expect(lines(page, "У касах")).toHaveText([
     "«Центр»: учора порахували 5 380,00 грн о 20:06",
   ]);
+  // One store: a row, its figure at the right (audit 2026-11-13, money
+  // P1-1).
+  await expectRows(page, "У касах");
+  await expectRows(page, "Вам винні клієнти");
   await expect(place(page, "Ви винні постачальникам")).toHaveCount(0);
   await expect(page.getByText(/«Ринок»/)).toHaveCount(0);
 
@@ -1323,6 +1545,140 @@ test("a manager of one store: one column, and no suppliers' place without «supp
     menu(page).getByRole("button", { name: "Каса", exact: true }),
   ).toBeVisible();
 });
+
+test("the open store owing its suppliers nothing beside one that owes: its column still the whole way, as tall as the other's, its chevron by «Нічого не винні» (audit 2026-11-13, money P1-1; review)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  await me(page);
+  await s29(page);
+  await suppliers(page, centre, "0.00", 0);
+  await onMoney(page);
+  await expectColumns(page, "Ви винні постачальникам");
+  const owing = place(page, "Ви винні постачальникам");
+  const way = owing.getByRole("button");
+  await expect(way).toHaveAccessibleName(
+    "Накладні магазину «Центр»: Нічого не винні",
+  );
+  const [mine, other] = await owing.locator(".money-line").all();
+  if (!mine || !other) throw new Error("two stores");
+  // The other's column is the taller — its figure and its words after —
+  // and the way is as tall.
+  const otherBox = await boxOf(other);
+  expect(otherBox.height).toBeGreaterThan(
+    (await boxOf(way.locator(".money-said"))).height +
+      (await boxOf(way.locator(".money-store"))).height +
+      8,
+  );
+  expect(await boxOf(way)).toEqual(await boxOf(mine));
+  expect((await boxOf(way)).height).toBeCloseTo(otherBox.height, 0);
+  // Nothing after its line: the chevron beside the line itself.
+  const chevron = await boxOf(way.locator("svg.sale-open"));
+  const line = await boxOf(way.locator(".money-said"));
+  expect(chevron.y).toBeLessThan(line.y + line.height);
+  expect(chevron.y + chevron.height).toBeGreaterThan(line.y);
+});
+
+// --- a place's stores, by width (audit 2026-11-13, money P1-1) -------------
+
+for (const [name, theme] of [
+  ["light", { bg_color: "#ffffff", text_color: "#000000" }],
+  ["dark", { bg_color: "#17212b", text_color: "#f5f5f5" }],
+] as const)
+  test(`in the ${name} theme two stores are two columns: at 360 every figure \`money-m\` and «38 000,00 грн» on one line; at 390 32 in the display face, a million at 24 on one line, nothing wider than the phone (audit 2026-11-13, money P1-1, frame P2-8)`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 360, height: 640 });
+    // In the app's face, as it is meant to be seen.
+    await shippedFace(page);
+    await me(page);
+    await s29(page);
+    await onMoney(page, owner(theme));
+    await page.evaluate(() => document.fonts.ready);
+    const owing = placeSums(page, "Ви винні постачальникам");
+    await expect(owing.first()).toHaveText("38 000,00 грн");
+    for (const sum of await page.locator(".money-figure .sum").all())
+      await expectSumRole(sum, "money-m");
+    // One line, in its column.
+    for (const figure of await page.locator(".money-figure").all()) {
+      const box = await boxOf(figure);
+      expect(box.height).toBeLessThanOrEqual(24.5);
+      const cell = await boxOf(
+        figure.locator("xpath=ancestor::*[contains(@class,'money-cell')][1]"),
+      );
+      expect(box.x + box.width).toBeLessThanOrEqual(cell.x + cell.width + 0.5);
+    }
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(360);
+    await page.screenshot({
+      path: `test-results/money-columns-360-${name}.png`,
+    });
+
+    // From 390, 32 in the display face; a million at 24.
+    await suppliers(page, centre, "1250000.00", 3);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("about:blank");
+    await onMoney(page, owner(theme));
+    await expect(owing.first()).toHaveText("1 250 000,00 грн");
+    await page.evaluate(() => document.fonts.ready);
+    expect(
+      await page.evaluate(() =>
+        document.fonts.check(
+          '800 32px "Fira Sans Extra Condensed"',
+          "5 380,00 грн",
+        ),
+      ),
+    ).toBe(true);
+    for (const sum of await page
+      .locator(".money-store-columns .money-figure:not(.long) .sum")
+      .all())
+      await expectSumRole(sum, "money-l");
+    await expect(page.locator(".money-figure.long")).toHaveCount(1);
+    await expect(owing.first()).toHaveClass(/\blong\b/);
+    await expect(owing.first()).toHaveCSS("font-size", "24px");
+    await expect(owing.first().locator(".sum")).toHaveCSS("font-weight", "800");
+    // One line: under one and a half of its line, where two would be twice
+    // it.
+    const million = await boxOf(owing.first());
+    expect(million.height).toBeLessThan(1.5 * 34);
+    const column = await boxOf(cells(page, "Ви винні постачальникам").first());
+    expect(million.x + million.width).toBeLessThanOrEqual(
+      column.x + column.width + 0.5,
+    );
+    for (const figure of await page
+      .locator(".money-store-columns .money-figure:not(.long)")
+      .all())
+      expect((await boxOf(figure)).height).toBeLessThan(1.5 * 34);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(390);
+    // Narrower than 390, a million keeps its 24 in the display face, as the
+    // day's tag's; the rest `money-m`, nothing wider than the phone.
+    await page.setViewportSize({ width: 360, height: 640 });
+    await expect(owing.first()).toHaveCSS("font-size", "24px");
+    await expect(owing.first()).toHaveCSS("line-height", "34px");
+    await expect(owing.first().locator(".sum")).toHaveCSS("font-weight", "800");
+    await expect(placeSums(page, "Ви винні постачальникам").nth(1)).toHaveCSS(
+      "font-size",
+      "20px",
+    );
+    const narrow = await boxOf(owing.first());
+    const narrowColumn = await boxOf(
+      cells(page, "Ви винні постачальникам").first(),
+    );
+    expect(narrow.x + narrow.width).toBeLessThanOrEqual(
+      narrowColumn.x + narrowColumn.width + 0.5,
+    );
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(360);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.screenshot({
+      path: `test-results/money-columns-390-${name}.png`,
+      fullPage: true,
+    });
+  });
 
 // --- both themes ------------------------------------------------------------
 
@@ -1376,7 +1732,8 @@ for (const [name, theme, scheme] of [
     const owedColour = await token(page, "--owed");
     const owing = lines(page, "Вам винні клієнти").first();
     await expect(owing).toHaveClass(/\bmoney-owes\b/);
-    expect(await colour(owing)).toBe(owedColour);
+    expect(await colour(owing.locator(".money-figure"))).toBe(owedColour);
+    expect(await colour(owing.locator(".money-before"))).toBe(owedColour);
     expect(await colour(glyph(page, "Вам винні клієнти"))).toBe(owedColour);
     expect(owedColour).toBe(
       scheme === "dark" ? "rgb(255, 157, 110)" : "rgb(161, 56, 14)",
@@ -1395,7 +1752,9 @@ for (const [name, theme, scheme] of [
       page.locator(".money-place-title").first(),
       page.locator(".money-place-open").first(),
       page.locator(".money-line .money-store").first(),
-      page.locator(".money-line .money-said").first(),
+      page.locator(".money-line .money-before").first(),
+      page.locator(".money-line .money-figure").first(),
+      page.locator(".money-line .money-after").first(),
       page.locator(".money-note"),
       page.locator(".money-subhead"),
       page.locator(".money-rule"),
@@ -1410,9 +1769,12 @@ for (const [name, theme, scheme] of [
       // A debt's colour, and the open store's way (money task list after
       // stage 2, P1-1, P1-2).
       lines(page, "Вам винні клієнти").first().locator(".money-store"),
-      lines(page, "Вам винні клієнти").first().locator(".money-said"),
+      lines(page, "Вам винні клієнти").first().locator(".money-before"),
+      lines(page, "Вам винні клієнти").first().locator(".money-figure"),
+      lines(page, "Вам винні клієнти").first().locator(".money-after"),
       page.locator(".money-line-open .money-store"),
-      page.locator(".money-line-open .money-said"),
+      page.locator(".money-line-open .money-figure"),
+      page.locator(".money-line-open .money-after"),
     ])
       expect(await contrast(part)).toBeGreaterThanOrEqual(4.5);
     // «Надійшло»'s rows parted by a divider's hairline, never a control's

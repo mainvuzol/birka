@@ -9522,3 +9522,76 @@ and how, is as before.
     class — suppliers' rows and «Сьогодні»'s search rows while held keep
     their titles in pencil and no longer fade; the frame's P2-4 asks the
     same of any row.
+
+## Chosen in chat — 2026-11-14 (audit 2026-11-13, batch 4: «Гроші»'s places in store columns, a figure large; sums under 22 px in the text face; the invoice tag's sum `money-m`; the price sheet's no answer one text; money P1-1, P2-3, frame P2-8, goods P1-2 part 1)
+
+Chosen here on 2026-11-14, after batch 3 (#204) was merged («merged, go
+next»): the P1s left that wait on no owner's answer — the money list's P1-1,
+with the frame's P2-8 it depends on («the condensed face never below 22»)
+and the money list's P2-3 on the same rule; and the goods list's P1-2 part
+1, which needs no answer (its part 2 waits on В13-Т1). Built as the task
+lists give them; what they did not give is decided here or a reading for
+the owner. No right, no server rule, no word changes; every figure is the
+one the server answered, none added or counted again on the phone.
+- **«Де гроші зараз»** (money P1-1; spec S29 №4, §5.5 `money-l` «money
+  places»): this revisits the chat's choice «each place says a line a
+  store» (2026-11-12, batch 12) — a chat choice, not the owner's.
+  - A store's figure in its parts: the store's name as the day's tag names
+    a store (`label`, «Центр» in its quotes), the words before the figure
+    in `meta` pencil, the figure, the words after in `meta` pencil:
+    «учора порахували» · 5 380,00 грн · «о 20:06»; «Винні» · 8 400,00 грн ·
+    «4 людини»; 38 000,00 грн · «3 накладні»; the card's and transfers' a
+    figure alone. Heard, a store is the phrase it was — «Центр»: учора
+    порахували 5 380,00 грн о 20:06 — its colon and joints heard, never
+    seen.
+  - Two stores in a place, two columns, as the day's tag; one store, or
+    three and more, a row each — the name and its words at the left, the
+    figure at the right. Decided here: each place counts its own stores (a
+    place read in one store is a row even where another place has two).
+  - The figure 32/34 in the display face from 390 px; narrower, 20/24 in
+    the text face, 600, even figures (`money-m`); in a row, `money-m`
+    always. A million or more at 24 in the display face at any width, as
+    the day's tag's `long` — decided here: the task list says «as the day's
+    tag's», and the day's tag keeps it at 24 under 390 too.
+  - Where there is no figure — «Каса ще не рахувалась», «Ніхто не винен»,
+    «Нічого не винні», «не вдалося прочитати» — one line in the figure's
+    place, 15/20; «Ніхто не винен» and «не вдалося прочитати» in pencil,
+    the others in ink, as before; while read, a grey bar in the figure's
+    place.
+  - What customers owe: «Винні» and its figure in the debt's colour — its
+    kopecks and «грн» too, as a customer's card says a debt (decided here,
+    review) — the count after in pencil, the name in ink (before, the whole
+    line was in the debt's colour); what is owed to suppliers in ink.
+  - The open store of «Ви винні постачальникам» is the one way to its
+    «Накладні», as before: its whole column, or its whole row, the button,
+    44 high at least, as tall as the other store's column beside it
+    (review); its chevron by the words after the figure in a column, by the
+    line where there is no figure (review) — decided here: in a row, after
+    the figure at the row's right, its parts in the row's middle;
+    heard as before («Накладні магазину «Центр»: 38 000,00 грн · 3
+    накладні»); held, its words in pencil, nothing faded.
+  - Unchanged: «Сьогоднішня готівка — після вечірнього підрахунку.»,
+    «Видано сьогодні» with its lines a line each, the rule's line, the
+    places' plates, stamps and order; the day's tag is not shared as one
+    component with «Гроші» — decided here: the same proportions, each its
+    own markup (the frame's pass named no common column).
+  - A reading: a place read slowly grows once read — its bar one line, its
+    figure with its words two or three more; nothing is under the finger
+    then (the places are read as the screen opens).
+  - A reading: the parts are spans in the phrase's order, the colon and the
+    joints hidden from the eye alone; a phone's reader that stops on each
+    line of a column may read a store in three or four stops. Not measured
+    on a phone.
+- **Sums under 22 px** (frame P2-8; spec §5.5 «List money ≤ 20 px uses the
+  text face 600 tnum, never the condensed face below 22»): the day's tag's
+  store sums in rows, and in its two columns narrower than 390, and
+  «Гроші»'s figures the same, in the text face, 600, even figures; their
+  kopecks and «грн» as every sum's. 22 px and more stay in the display
+  face — a million's 24 included.
+- **The invoice tag's sum** (money P2-3): `money-m` as a model's price on its
+  tag — the text face, 20/24, 600, ink, beside the supplier's name.
+- **No answer in the price sheet** (goods P1-2 part 1): a gateway's 502, 503
+  or 504 says what a lost network says there — «Немає відповіді сервера.
+  Натисніть ще раз — повторне збереження безпечне.» — no paper's words in
+  the sheet; the frame's plate over the screen as before. «Брак» and the
+  stocktake's start and end keep their words until В13-Т1.

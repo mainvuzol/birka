@@ -19,6 +19,7 @@ import { methodLabels, notStated } from "@/shared/payment";
 import { ScreenHeader } from "@/shared/ScreenHeader";
 import { visible } from "@/shared/visible";
 import { Sticker } from "@/shared/Sticker";
+import { Sum } from "@/shared/Sum";
 import type { SupplierDebts } from "@/suppliers/types";
 import { Stamp, Waiting, dayLine, staleOf, useNow } from "@/today/age";
 import {
@@ -57,16 +58,19 @@ const stateWords: Record<StoreState, string> = {
 };
 
 /** «Центр», and its mark when it does not trade: «Гроші»'s and the
- * report's columns alike. */
+ * report's columns alike; a place's store named as the day's tag names it
+ * (`label`; audit 2026-11-13, money P1-1). */
 export function StoreName({
   name,
   state,
+  label = false,
 }: {
   name: string;
   state: StoreState;
+  label?: boolean;
 }): JSX.Element {
   return (
-    <span className="money-store">
+    <span className={label ? "money-store t-label" : "money-store"}>
       «{visible(name)}»
       {state !== "ACTIVE" && (
         <>
@@ -88,31 +92,74 @@ function dayMonth(day: string): string {
   return `${date}.${month}`;
 }
 
-/** «учора порахували 5 380,00 грн о 20:06»: the cash counted at the last
- * close, by the drawer's day — never what was to be there (G13). */
-function countedText(close: Close): string {
+/**
+ * What a place says of a store, in its parts (audit 2026-11-13, money
+ * P1-1): the words before its figure, the figure, the words after — a line
+ * each in the store's column — or one line where there is no figure. The
+ * parts stand in the phrase's order, its colon and joints hidden from the
+ * eye alone: «Центр»: учора порахували 5 380,00 грн о 20:06. A phone's
+ * reader may stop on each line (not measured).
+ */
+type Said =
+  | {
+      before?: string | undefined;
+      /** The figure as the server answered it, signed where it may be. */
+      sum: string;
+      /** A million or more: smaller, to keep to its column. */
+      long: boolean;
+      after?: string | undefined;
+      /** Between the figure and `after`, heard, never seen. */
+      joint?: string | undefined;
+    }
+  | {
+      line: ReactNode;
+      /** In pencil: what was never read. */
+      unread?: boolean | undefined;
+    };
+
+/** A figure of a place: its sum, and whether it is a million or more. */
+function sumOf(value: string): { sum: string; long: boolean } {
+  return {
+    sum: signed(value),
+    long: Math.abs(Number(value)) >= 1_000_000,
+  };
+}
+
+/** A store not read: what failed, or its figure's place in grey. */
+function unreadOr(failed: boolean): Said {
+  return failed
+    ? { line: unread, unread: true }
+    : { line: <Waiting width="6em" /> };
+}
+
+/** «учора порахували · 5 380,00 грн · о 20:06»: the cash counted at the
+ * last close, by the drawer's day — never what was to be there (G13). */
+function counted(close: Close): Said {
   const day =
     close.business_day === cashDay(0)
       ? "сьогодні"
       : close.business_day === cashDay(1)
         ? "учора"
         : dayMonth(close.business_day);
-  return `${day} порахували ${money(close.counted)} о ${timeOf(close.closed_at)}`;
+  return {
+    before: `${day} порахували`,
+    ...sumOf(close.counted),
+    after: `о ${timeOf(close.closed_at)}`,
+    joint: " ",
+  };
 }
 
 /** A store's drawer: its last count, or never counted, as «Сьогодні» says
  * it. */
-function drawerLine(
+function drawerSaid(
   drawer: UseQueryResult<Drawer>,
   close: UseQueryResult<Close> | undefined,
-): ReactNode {
-  if (drawer.data === undefined)
-    return drawer.isError ? unread : <Waiting width="12em" />;
+): Said {
+  if (drawer.data === undefined) return unreadOr(drawer.isError);
   if (drawer.data.next_is_opening || !drawer.data.last_close)
-    return "Каса ще не рахувалась";
-  if (close?.data === undefined)
-    return close?.isError ? unread : <Waiting width="12em" />;
-  return countedText(close.data);
+    return { line: "Каса ще не рахувалась" };
+  if (close?.data === undefined) return unreadOr(close?.isError === true);
+  return counted(close.data);
 }
 
 /** Customers owe this store something. */
@@ -120,22 +167,27 @@ function owes(debts: StoreDebts): boolean {
   return debts.customers > 0 && some(debts.owed);
 }
 
-/** «Винні 8 400,00 грн · 4 людини», this store's alone, the count never
+/** «Винні · 8 400,00 грн · 4 людини», this store's alone, the count never
  * parted from its word; «Ніхто не винен» — both as «Сьогодні» says them
  * (money task list after stage 2, P1-1; В-ГР1 (а)). */
-function debtsText(debts: StoreDebts): string {
+function debtsSaid(debts: StoreDebts): Said {
   return owes(debts)
-    ? `Винні ${money(debts.owed)} · ${String(debts.customers)}\u00a0${plural(
-        debts.customers,
-        "людина",
-        "людини",
-        "людей",
-      )}`
-    : "Ніхто не винен";
+    ? {
+        before: "Винні",
+        ...sumOf(debts.owed),
+        after: `${String(debts.customers)}\u00a0${plural(
+          debts.customers,
+          "людина",
+          "людини",
+          "людей",
+        )}`,
+        joint: " · ",
+      }
+    : { line: "Ніхто не винен" };
 }
 
-/** A customers' line in the colour of what it says: a debt's, its twin
- * «Винні» at its start; «Ніхто не винен» in pencil; nothing while read. */
+/** A customers' store in the colour of what it says: a debt's on «Винні»
+ * and its figure; «Ніхто не винен» in pencil; nothing while read. */
 function debtsTone(
   read: UseQueryResult<StoreDebts> | undefined,
 ): string | undefined {
@@ -144,46 +196,118 @@ function debtsTone(
 }
 
 /** «38 000,00 грн · 3 накладні» this store owes; «Нічого не винні». */
-function suppliersText(debts: SupplierDebts): string {
+function suppliersSaid(debts: SupplierDebts): Said {
   return debts.invoices > 0 && some(debts.owed)
-    ? `${money(debts.owed)} · ${String(debts.invoices)}\u00a0${plural(
-        debts.invoices,
-        "накладна",
-        "накладні",
-        "накладних",
-      )}`
-    : "Нічого не винні";
+    ? {
+        ...sumOf(debts.owed),
+        after: `${String(debts.invoices)}\u00a0${plural(
+          debts.invoices,
+          "накладна",
+          "накладні",
+          "накладних",
+        )}`,
+        joint: " · ",
+      }
+    : { line: "Нічого не винні" };
 }
 
-/** A line read by its own read: what it says, held while read. */
-function readLine<T>(
+/** A store read by its own read: what it says, held while read. */
+function readSaid<T>(
   read: UseQueryResult<T> | undefined,
-  text: (data: T) => string,
-  width: string,
-): ReactNode {
-  if (read === undefined) return null;
-  if (read.data === undefined)
-    return read.isError ? unread : <Waiting width={width} />;
-  return text(read.data);
+  said: (data: T) => Said,
+): Said {
+  if (read === undefined) return { line: null };
+  if (read.data === undefined) return unreadOr(read.isError);
+  return said(read.data);
 }
 
-/** A store's line in a place: its name, then what the place says of it. */
-function StoreLine({
+/** The phrase a store is heard as, after its name: «учора порахували
+ * 5 380,00 грн о 20:06»; none while read. */
+function phrase(said: Said): string | undefined {
+  if ("line" in said)
+    return typeof said.line === "string" ? said.line : undefined;
+  return `${said.before === undefined ? "" : `${said.before} `}${said.sum}${
+    said.after === undefined ? "" : `${said.joint ?? " "}${said.after}`
+  }`;
+}
+
+/** A store's parts in its column or row, after its name: the colon and
+ * the joint for a reader, never seen. */
+function Parts({ said }: { said: Said }): JSX.Element {
+  if ("line" in said)
+    return (
+      <>
+        <span className="visually-hidden">: </span>
+        <span
+          className={said.unread ? "money-said money-unread" : "money-said"}
+        >
+          {said.line}
+        </span>
+      </>
+    );
+  return (
+    <>
+      <span className="visually-hidden">: </span>
+      {said.before !== undefined && (
+        <span className="t-meta money-before">{said.before} </span>
+      )}
+      <span className={said.long ? "money-figure long" : "money-figure"}>
+        <Sum value={said.sum} />
+      </span>
+      {said.after !== undefined && (
+        <>
+          <span className="visually-hidden">{said.joint}</span>
+          <span className="t-meta money-after">{said.after}</span>
+        </>
+      )}
+    </>
+  );
+}
+
+/** A store in a place: its name, then what the place says of it. */
+function StoreSaid({
   store,
+  said,
   tone,
-  children,
 }: {
   store: Store;
+  said: Said;
   /** The colour of what it says: a debt's, or pencil. */
   tone?: string | undefined;
+}): JSX.Element {
+  return (
+    <li
+      className={
+        tone === undefined
+          ? "money-line money-cell"
+          : `money-line money-cell ${tone}`
+      }
+    >
+      <StoreName name={store.name} state={store.state} label />
+      <Parts said={said} />
+    </li>
+  );
+}
+
+/** A place's stores (audit 2026-11-13, money P1-1), as the day's tag lays
+ * them: two, two columns; one, or three and more, a row each. */
+function Stores({
+  count,
+  children,
+}: {
+  count: number;
   children: ReactNode;
 }): JSX.Element {
   return (
-    <li className={tone === undefined ? "money-line" : `money-line ${tone}`}>
-      <StoreName name={store.name} state={store.state} />
-      {": "}
-      <span className="money-said">{children}</span>
-    </li>
+    <ul
+      className={
+        count === 2
+          ? "money-lines money-store-columns"
+          : "money-lines money-store-rows"
+      }
+    >
+      {children}
+    </ul>
   );
 }
 
@@ -193,10 +317,12 @@ interface Way {
   disabled: boolean;
 }
 
-/** The open store's line of «Ви винні постачальникам»: the way to its
- * «Накладні», which read this store alone — the other stores' lines are no
- * way (money task list after stage 2, P1-2; Q-1 «if not»). */
-function InvoicesLine({
+/** The open store of «Ви винні постачальникам»: the way to its
+ * «Накладні», which read this store alone — the other stores are no way
+ * (money task list after stage 2, P1-2; Q-1 «if not»). Its whole column,
+ * or its whole row, the button, its chevron by what follows the figure
+ * (audit 2026-11-13, money P1-1). */
+function InvoicesStore({
   store,
   read,
   open,
@@ -207,26 +333,28 @@ function InvoicesLine({
   open: Way;
   held: boolean;
 }): JSX.Element {
-  const said = readLine(read, suppliersText, "10em");
+  const said = readSaid(read, suppliersSaid);
+  const heard = phrase(said);
   const mark = store.state === "ACTIVE" ? "" : ` ${stateWords[store.state]}`;
   return (
-    <li className="money-line">
+    <li className="money-line money-way">
       <button
         type="button"
-        className="money-line-open"
+        className="money-line-open money-cell"
         disabled={held || open.disabled}
         onClick={open.go}
         // What it shows, after where it goes.
         aria-label={`Накладні магазину «${visible(store.name)}»${mark}${
-          typeof said === "string" ? `: ${said}` : ""
+          heard === undefined ? "" : `: ${heard}`
         }`}
       >
-        <span>
-          <StoreName name={store.name} state={store.state} />
-          {": "}
-          <span className="money-said">{said}</span>
-        </span>
-        <Icon name="chevron-right" size={16} className="sale-open" />
+        <StoreName name={store.name} state={store.state} label />
+        <Parts said={said} />
+        <Icon
+          name="chevron-right"
+          size={16}
+          className="sale-open money-chevron"
+        />
       </button>
     </li>
   );
@@ -410,11 +538,10 @@ export function Money({
     .every((store) => drawers.get(store.id)?.data?.closed_today === true);
   const figuresOf = (store: Store): StoreFigures | undefined =>
     day.data?.stores.find((one) => one.store_id === store.id);
-  const wayLine = (store: Store, method: "CARD" | "TRANSFER"): ReactNode => {
-    if (day.data === undefined)
-      return day.isError ? unread : <Waiting width="7em" />;
+  const waySaid = (store: Store, method: "CARD" | "TRANSFER"): Said => {
+    if (day.data === undefined) return unreadOr(day.isError);
     const figures = figuresOf(store);
-    return figures ? signed(wayNet(figures, method)) : null;
+    return figures ? sumOf(wayNet(figures, method)) : { line: null };
   };
   // The report reads every store of these; one whose right came after it
   // was read waits for the next reading.
@@ -462,18 +589,20 @@ export function Money({
             reads={drawerReads}
             now={now}
           >
-            <ul className="money-lines">
+            <Stores count={withDrawer.length}>
               {withDrawer.map((store) => {
                 const drawer = drawers.get(store.id);
                 return (
                   drawer && (
-                    <StoreLine key={store.id} store={store}>
-                      {drawerLine(drawer, closes.get(store.id))}
-                    </StoreLine>
+                    <StoreSaid
+                      key={store.id}
+                      store={store}
+                      said={drawerSaid(drawer, closes.get(store.id))}
+                    />
                   )
                 );
               })}
-            </ul>
+            </Stores>
             {!allClosed && (
               <p className="t-meta money-note">
                 Сьогоднішня готівка — після вечірнього підрахунку.
@@ -507,13 +636,15 @@ export function Money({
               reads={[day]}
               now={now}
             >
-              <ul className="money-lines">
+              <Stores count={inReport.length}>
                 {inReport.map((store) => (
-                  <StoreLine key={store.id} store={store}>
-                    {wayLine(store, "CARD")}
-                  </StoreLine>
+                  <StoreSaid
+                    key={store.id}
+                    store={store}
+                    said={waySaid(store, "CARD")}
+                  />
                 ))}
-              </ul>
+              </Stores>
             </Place>
             <Place
               icon="transfer"
@@ -522,13 +653,15 @@ export function Money({
               reads={[day]}
               now={now}
             >
-              <ul className="money-lines">
+              <Stores count={inReport.length}>
                 {inReport.map((store) => (
-                  <StoreLine key={store.id} store={store}>
-                    {wayLine(store, "TRANSFER")}
-                  </StoreLine>
+                  <StoreSaid
+                    key={store.id}
+                    store={store}
+                    said={waySaid(store, "TRANSFER")}
+                  />
                 ))}
-              </ul>
+              </Stores>
             </Place>
           </>
         )}
@@ -542,22 +675,21 @@ export function Money({
             reads={[...debts.values()]}
             now={now}
           >
-            <ul className="money-lines">
+            <Stores count={owed.length}>
               {owed.map((store) => (
-                <StoreLine
+                <StoreSaid
                   key={store.id}
                   store={store}
                   tone={debtsTone(debts.get(store.id))}
-                >
-                  {readLine(debts.get(store.id), debtsText, "10em")}
-                </StoreLine>
+                  said={readSaid(debts.get(store.id), debtsSaid)}
+                />
               ))}
-            </ul>
+            </Stores>
           </Place>
         )}
         {owing.length > 0 && (
           // Its title no way: «Накладні» read the open store alone, so its
-          // line is (money task list after stage 2, P1-2).
+          // column is (money task list after stage 2, P1-2).
           <Place
             icon="supplier"
             title="Ви винні постачальникам"
@@ -565,10 +697,10 @@ export function Money({
             reads={[...suppliers.values()]}
             now={now}
           >
-            <ul className="money-lines">
+            <Stores count={owing.length}>
               {owing.map((store) =>
                 store.id === here && toInvoices ? (
-                  <InvoicesLine
+                  <InvoicesStore
                     key={store.id}
                     store={store}
                     read={suppliers.get(store.id)}
@@ -576,12 +708,14 @@ export function Money({
                     held={held}
                   />
                 ) : (
-                  <StoreLine key={store.id} store={store}>
-                    {readLine(suppliers.get(store.id), suppliersText, "10em")}
-                  </StoreLine>
+                  <StoreSaid
+                    key={store.id}
+                    store={store}
+                    said={readSaid(suppliers.get(store.id), suppliersSaid)}
+                  />
                 ),
               )}
-            </ul>
+            </Stores>
           </Place>
         )}
         <p className="t-meta money-rule">
