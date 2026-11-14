@@ -234,8 +234,14 @@ run with no retries, the source restored. A fresh seed before the run.
   `suppliers-pages`, `today-search`, `supplier-invoices`, `catalog`,
   `correct`, `outage-mark-debts-returns` — 139 of 141 in 4.1 min; the two
   were «Каса»'s correction rows with no chevron, then 2 of 2.
-- The whole suite: GitHub CI on the PR. No local full run, by the
-  user's word (2026-11-14).
+- The whole suite: GitHub CI on the PR (#211). No local full run, by
+  the user's word (2026-11-14).
+  - The first run: 1138 of 1140. The two were the report's slow journey,
+    both themes: with one store «Моделі» is read with no query, so the
+    hold by `?` never held it; the grey rows only flashed, caught locally
+    by luck. Both the report's read and «Моделі»'s are now held by their
+    path, with or without a query, until the journey lets them go: 6 of
+    6 (each theme three times), the journey's 8 mutants caught.
 - Journeys: 1140 by `--list` (1137 before).
 - Types: `tsc --noEmit` clean; the e2e config has 44 errors, all of
   them main's (main has 48).

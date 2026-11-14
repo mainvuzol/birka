@@ -711,6 +711,21 @@ function figures(sold: string, money: string): Figures {
 
 /** The report of today, `serverToday`, as the stores given; their sums
  * the server's own, «Усі разом» a sum no phone would make. */
+/** A read held until the journey says, with or without a query: today's
+ * report and one store's «Моделі» are read with none, so a glob's `?` never
+ * holds them (review; CI). */
+async function holdRead(page: Page, path: RegExp): Promise<() => void> {
+  let answer = (): void => undefined;
+  const held = new Promise<void>((resolve) => {
+    answer = resolve;
+  });
+  await page.route(path, async (route: Route) => {
+    await held;
+    await route.fallback();
+  });
+  return answer;
+}
+
 async function stubReport(
   page: Page,
   names: string[],
@@ -1328,16 +1343,9 @@ for (const scheme of ["light", "dark"] as const)
         });
       },
     );
-    // «Сьогодні» reads today's report first, with no query and under the
-    // report's own key: held from the start, the report finds it unread.
-    let report = (): void => undefined;
-    const reportHeld = new Promise<void>((resolve) => {
-      report = resolve;
-    });
-    await page.route(/\/api\/v1\/reports\/sales(\?.*)?$/, async (route) => {
-      await reportHeld;
-      await route.fallback();
-    });
+    // «Сьогодні» reads today's report first, under the report's own key:
+    // held from the start, the report finds it unread.
+    const report = await holdRead(page, /\/api\/v1\/reports\/sales(\?.*)?$/);
     await page.goto("about:blank");
     await page.goto(
       `/#${new URLSearchParams({ tgWebAppData: initData(owner, "Тест") }).toString()}`,
@@ -1376,7 +1384,10 @@ for (const scheme of ["light", "dark"] as const)
     });
 
     // «Моделі»: grey rows on the block while read, then the models on it.
-    const models = await holdReads(page, "reports/sales/models");
+    const models = await holdRead(
+      page,
+      /\/api\/v1\/reports\/sales\/models(\?.*)?$/,
+    );
     await toScreen(page, "Моделі");
     await expect(
       page.locator(".placeholder .list-block > .sale-row"),
