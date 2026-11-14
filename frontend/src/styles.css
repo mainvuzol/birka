@@ -5711,6 +5711,24 @@ nav.tab-bar {
     line-height: 24px;
   }
 }
+/* `money-m` (spec §5.5): a sum under 22 px — a store's in a row, in a
+   column narrower than 390 but for a million's 24 — in the text face, 600,
+   its figures even, never the condensed face; its kopecks and «грн» as
+   every sum's (audit 2026-11-13, frame P2-8). */
+.day-rows .day-store-sum .sum,
+.money-store-rows .money-figure .sum {
+  font-family: var(--font-text);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 389px) {
+  .day-store-sum:not(.long) .sum,
+  .money-figure:not(.long) .sum {
+    font-family: var(--font-text);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+}
 .day-store-head .t-meta,
 .day-drawer,
 .day-owed {
@@ -6191,36 +6209,155 @@ button.money-place-open {
 .money-line {
   overflow-wrap: anywhere;
 }
-/* What customers owe in a debt's colour, its twins «Винні» at the line's
-   start and the place's glyph; «Ніхто не винен» in pencil — as «Сьогодні»
-   says both. Never what is owed to suppliers (money task list after stage
-   2, P1-1). */
-.money-line.money-owes,
+/* A place's stores as the day's tag lays them (audit 2026-11-13, money
+   P1-1): two stores, two columns; one, or three and more, a row each. */
+.money-store-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 16px;
+}
+.money-store-rows {
+  display: grid;
+  gap: 8px;
+}
+/* A store in a column: its name as the day's tag names a store, the words
+   before its figure, the figure large, the words after — `meta` in pencil;
+   where it is the way, its chevron by the words after. Its colon and its
+   joints are heard, never seen. */
+.money-cell {
+  display: grid;
+  align-content: start;
+  min-width: 0;
+}
+.money-store-columns .money-cell {
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "name name"
+    "before before"
+    "figure figure"
+    "after chevron";
+  column-gap: 6px;
+}
+/* Nothing after the figure — nothing owed, unread, read — the chevron by
+   the figure's line (review). */
+.money-store-columns .money-cell:not(:has(.money-after)) {
+  grid-template-areas:
+    "name name"
+    "before before"
+    "figure chevron";
+}
+/* In a row: the name and its words at the left, the figure at the right
+   in `money-m`, the chevron after it. */
+.money-store-rows .money-cell {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-areas:
+    "name figure chevron"
+    "before figure chevron"
+    "after figure chevron";
+  align-items: center;
+}
+.money-cell .money-store {
+  grid-area: name;
+  min-width: 0;
+  font-weight: 700;
+}
+/* The mark of a store that does not trade, as everywhere: not the label's
+   capitals. */
+.money-cell .money-store .sticker {
+  letter-spacing: normal;
+  text-transform: none;
+}
+.money-before {
+  grid-area: before;
+}
+.money-after {
+  grid-area: after;
+}
+.money-before,
+.money-after {
+  color: var(--pencil);
+}
+.money-figure,
+.money-said {
+  grid-area: figure;
+  min-width: 0;
+}
+.money-chevron {
+  grid-area: chevron;
+  align-self: center;
+}
+.money-store-rows .money-figure,
+.money-store-rows .money-said {
+  margin-left: 12px;
+  text-align: right;
+}
+.money-store-rows .money-chevron {
+  margin-left: 6px;
+}
+/* The figure 32 in a column, as the day's tag's stores; a million or more
+   at 24 at any width, as there; narrower than 390, the rest `money-m`. Whatever
+   face draws it, it keeps to its column: it breaks before its kopecks or
+   its unit, and as a last resort inside its figures. */
+.money-store-columns .money-figure {
+  font-size: 32px;
+  line-height: 34px;
+  overflow-wrap: anywhere;
+}
+.money-store-columns .money-figure.long {
+  font-size: 24px;
+}
+/* Its kopecks and «грн» kept whole, without raising its line. */
+.money-store-columns .money-figure .sum-kop,
+.money-store-columns .money-figure .sum-unit {
+  display: inline-block;
+  line-height: 1;
+}
+.money-store-rows .money-figure {
+  font-size: 20px;
+  line-height: 24px;
+  white-space: nowrap;
+}
+@media (max-width: 389px) {
+  .money-store-columns .money-figure:not(.long) {
+    font-size: 20px;
+    line-height: 24px;
+  }
+}
+/* What customers owe in a debt's colour — «Винні» and its figure, its
+   kopecks and «грн» too, as a customer's card says a debt (review) — and the
+   place's glyph; «Ніхто не винен» in pencil, as what was never read. Never
+   what is owed to suppliers (money task list after stage 2, P1-1). */
+.money-owes .money-before,
+.money-owes .money-figure,
+.money-owes .money-figure .sum-kop,
+.money-owes .money-figure .sum-unit,
 .money-place-title .icon.money-owes {
   color: var(--owed);
 }
-.money-line.money-none {
+.money-none .money-said,
+.money-said.money-unread {
   color: var(--pencil);
 }
-/* The open store's line of «Ви винні постачальникам», the way to its
-   «Накладні»: 44 high, its chevron at the end (P1-2). */
+/* The open store of «Ви винні постачальникам», the way to its «Накладні»:
+   its whole column, or its whole row, 44 high at least (P1-2) — as tall as
+   the other store's column beside it (review); in a row, its parts in the
+   middle of it. */
+.money-way {
+  display: grid;
+}
+.money-store-rows button.money-cell {
+  align-content: center;
+}
 button.money-line-open {
-  display: flex;
-  align-items: center;
-  gap: 6px;
   width: 100%;
   min-height: 44px;
-  margin: -4px 0 0;
+  margin: 0;
   padding: 0;
   border: 0;
   background: none;
   color: inherit;
   font: inherit;
   text-align: left;
-}
-.money-line-open .sale-open {
-  flex: none;
-  margin-left: auto;
 }
 /* Held, it still reads: nothing faded over its money, its words in
    pencil, as a held row's (review). */
@@ -6758,11 +6895,13 @@ section.receive-list {
 .invoice-tag-head .order-tag-title {
   min-width: 0;
 }
+/* `money-m`, as a model's price on its tag: the text face, 600 — never the
+   condensed face below 22 (audit 2026-11-13, money P2-3). */
 .invoice-tag-sum {
   flex: none;
-  font-family: var(--font-display);
+  font-family: var(--font-text);
   font-size: 20px;
-  font-weight: 800;
+  font-weight: 600;
   line-height: 24px;
   color: var(--ink);
   white-space: nowrap;

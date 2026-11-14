@@ -2,6 +2,7 @@ import {
   test,
   expect,
   expectEmpty,
+  expectSumRole,
   holdReads,
   menu,
   openStore,
@@ -884,8 +885,10 @@ test("at 390 × 741, light and dark, the day-tag of «Центр + Ринок» 
           return getComputedStyle(node).color === pencil;
         }),
       ).toBe(true);
-      // The sum alone under them, on one line.
+      // The sum alone under them, on one line; 32 in the display face
+      // (audit 2026-11-13, frame P2-8).
       const sum = store.locator(".day-store-sum");
+      await expectSumRole(sum.locator(".sum"), "money-l");
       await expect(store.locator(".day-store-sold")).toHaveText(
         name === "Центр" ? "6 950,00 грн" : "5 100,00 грн",
       );
@@ -957,6 +960,13 @@ test("under 700 px the day-tag is one line naming both stores with their sums, b
     "12 050,00 грн",
   );
   await expect(column(page, "Центр")).toBeVisible();
+  // Narrower than 390, a store's sum at 20: `money-m`, never the condensed
+  // face below 22 (audit 2026-11-13, frame P2-8).
+  for (const name of ["Центр", "Ринок"])
+    await expectSumRole(
+      column(page, name).locator(".day-store-sum .sum"),
+      "money-m",
+    );
   // The cursor where the line stood: on the tag's heading.
   await expect(
     dayTag(page).getByRole("heading", { name: "Сьогодні досі" }),
@@ -1127,6 +1137,20 @@ test("a million in a store's day stays in its column, and the day's in the tag, 
     await orders(page, store, [0, 0, 0]);
   }
   await onToday(page);
+  // Narrower than 390, a million keeps its 24 in the display face; the
+  // other store's sum `money-m` (audit 2026-11-13, frame P2-8).
+  await page.setViewportSize({ width: 360, height: 741 });
+  const million = column(page, "Ринок").locator(".day-store-sum .sum");
+  await expect(million).toHaveCSS("font-size", "24px");
+  await expect(million).toHaveCSS("font-weight", "800");
+  expect(
+    await million.evaluate((node) => getComputedStyle(node).fontFamily),
+  ).toContain("Fira Sans Extra Condensed");
+  await expectSumRole(
+    column(page, "Центр").locator(".day-store-sum .sum"),
+    "money-m",
+  );
+  await page.setViewportSize({ width: 390, height: 741 });
   // The display face may come too late (`font-display: optional`), and the
   // device's is wider: the sums drawn in a wide one, Verdana here or DejaVu
   // Sans on CI's Linux.
@@ -1220,6 +1244,10 @@ test("three stores: a row each, each with its own debts", async ({ page }) => {
     "Старий0 шт.0,00 грнКаса відкритаВинні 500,00 грн · 1 людина",
   );
   await expect(tag.getByText(/^Винні /)).toHaveCount(3);
+  // A row's sum at 20: `money-m` (audit 2026-11-13, frame P2-8).
+  for (const sum of await tag.locator(".day-rows .day-store-sum .sum").all())
+    await expectSumRole(sum, "money-m");
+  await expect(tag.locator(".day-rows .day-store-sum .sum")).toHaveCount(3);
   // Under 700 px, three stores' line as before: the day's sum and units
   // (audit after stage 2, frame P0-2).
   await page.setViewportSize({ width: 360, height: 640 });

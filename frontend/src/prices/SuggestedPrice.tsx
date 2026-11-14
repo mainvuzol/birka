@@ -2,7 +2,13 @@ import { useId, useRef, useState } from "react";
 import type { JSX, RefObject } from "react";
 import { createPortal } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ApiError, api, isConflict, refusedWrite } from "@/shared/api";
+import {
+  ApiError,
+  api,
+  isConflict,
+  refusedWrite,
+  unreachable,
+} from "@/shared/api";
 import { Eyelet } from "@/shared/Eyelet";
 import { Keypad } from "@/shared/Keypad";
 import { ModeSwitch } from "@/shared/ModeSwitch";
@@ -317,7 +323,10 @@ function Form({
       } else {
         if (isConflict(error)) await refetch();
         setProblem(
-          error instanceof ApiError
+          // No answer is one trouble, one text, whether the network or a
+          // gateway (502–504) lost it; the paper's words are the frame's
+          // plate over the screen (audit 2026-11-13, goods P1-2, part 1).
+          error instanceof ApiError && !unreachable(error)
             ? refusedWrite(
                 error,
                 "Ціну не збережено.",

@@ -5,6 +5,7 @@ import {
   dockOnMenu,
   expectEmpty,
   expectGlyphBeside,
+  expectSumRole,
   grn,
   menu,
   more,
@@ -1858,6 +1859,14 @@ test("at 390 × 844 the total and three tags show at once, at 360 × 640 the tot
   expect(look.lines).toBeGreaterThanOrEqual(2);
   expect(look.cut).toBe(false);
   expect(look.inside).toBe(true);
+  // `money-m`, as a model's price on its tag: the text face, 20/24, 600 —
+  // on one line beside the name's first (audit 2026-11-13, money P2-3).
+  const tagSum = longTag.locator(".invoice-tag-sum");
+  await expectSumRole(tagSum, "money-m");
+  const sumBox = await tagSum.boundingBox();
+  const nameBox = await longTag.locator(".order-tag-title").boundingBox();
+  expect(sumBox?.height ?? 0).toBeLessThan(1.5 * 24);
+  expect(Math.abs((sumBox?.y ?? 0) - (nameBox?.y ?? 0))).toBeLessThanOrEqual(4);
   await expect(longTag.locator(".order-tag-title")).toHaveText(long);
   await expect(page.locator("html")).toHaveJSProperty("scrollWidth", 360);
 

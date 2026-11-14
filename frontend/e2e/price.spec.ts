@@ -13,7 +13,7 @@ import {
   section,
   sellsFrom,
 } from "./fixtures";
-import type { Locator, Page, Request } from "@playwright/test";
+import type { Locator, Page, Request, Route } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 
@@ -676,6 +676,37 @@ test("a price someone else changed meanwhile is not overwritten unseen", async (
   );
   await expect(sheet.getByText("Зараз: 1 700,00 грн")).toBeVisible();
   // Now seen, it is saved over.
+  await save(sheet, "1 850,00").click();
+  await expect(sheet).toHaveCount(0);
+  await expect(hero).toContainText("Ціна продажу 1 850,00 грн");
+});
+
+test("no answer to a price saved is one text whoever lost it — the network, or a gateway's 502, 503, 504: «Немає відповіді сервера. Натисніть ще раз — повторне збереження безпечне.», never the paper's words in the sheet; pressed again, it is saved (audit 2026-11-13, goods P1-2, part 1)", async ({
+  page,
+}) => {
+  const priced = await model(page, await token(page));
+  await enter(page, seller);
+  const hero = await detail(page, priced.name);
+  const sheet = await priceSheet(page, priced.name);
+  await sheet.getByLabel("Нова ціна, грн").fill("1850");
+  const said =
+    "Немає відповіді сервера. Натисніть ще раз — повторне збереження безпечне.";
+  for (const lost of ["network", 502, 503, 504] as const) {
+    const lose = async (route: Route): Promise<void> => {
+      if (lost === "network") await route.abort();
+      else if (lost === 503)
+        await route.fulfill({
+          status: 503,
+          json: { code: "SERVER_UNAVAILABLE", message: "No" },
+        });
+      else await route.fulfill({ status: lost, body: "Bad Gateway" });
+    };
+    await page.route("**/api/v1/catalog/prices", lose, { times: 1 });
+    await save(sheet, "1 850,00").click();
+    await expect(sheet.getByRole("alert")).toHaveText(said);
+    await expect(sheet).not.toContainText("папері");
+    await expect(save(sheet, "1 850,00")).toBeEnabled();
+  }
   await save(sheet, "1 850,00").click();
   await expect(sheet).toHaveCount(0);
   await expect(hero).toContainText("Ціна продажу 1 850,00 грн");
