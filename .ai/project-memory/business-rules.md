@@ -9712,3 +9712,86 @@ changes.
   «Попередні», an opening's «Модель») take the display face from the `h2`
   rule, while every `h3` and `p` caption is in the text face. Left as
   they are in this batch.
+
+
+## Chosen in chat — 2026-11-14 (audit 2026-11-13, batch 7: one operation's card a task's screen; what explains a close's difference a thread; an invoice's results' heading, a supplier return's result's way back; more than is owed said as a set-off is typed; orders-cash P2-4, P2-5, money P2-2, P2-5 (а))
+
+Chosen here on 2026-11-14, after batch 6 (#207) was merged («merged, go
+next»): the orders-cash list's last two points that wait on no one (P2-4,
+P2-5), and the money list's quick wins left after batch 4 (P2-2, P2-5
+(а)). Built as the task lists give them; what they did not give is decided
+here or a reading for the owner. No right, no server rule, no word, no sum
+and nothing sent changes.
+- **One operation's card a task's screen** (orders-cash P2-4; spec §3,
+  §6.5; В-ЗП6 (а) until answered, as the other task screens): while one
+  operation's card of «Змінити спосіб оплати» stands — the seller's own,
+  from the list or straight from the receipt, and the owner's and
+  managers' of any day — «Каса» tells the app it is a task's screen, as
+  the count does: the menu steps aside. The seller's list of operations and
+  the day's list keep the menu; «← Каса», Telegram's «Назад» and «Інша
+  операція» as before.
+  - Read here: the task list's ««Змінити на «…»» в той же точке, что
+    сейчас, относительно низа видимой области» — the dock stands where its
+    flow puts it, under the card. At 360 × 640 and 390 × 844 the card fits the screen, and the
+    dock's bottom is where it was with the menu (507 px from the top,
+    measured on both, a sale's card). Where the card is taller than the
+    screen — an order's sale with its five ways a row each, the owner's
+    card with the close's note and «Інша операція», or any card at 360 ×
+    400 — the dock sticks at the screen's foot, where the menu stood:
+    before, over the menu, so «Змінити на «…»» is the menu's height (64)
+    lower there, as the count's dock and every task screen's. A reading
+    for the owner: the task list's criterion holds for a card that fits;
+    for a taller one the dock takes the menu's place, never a gap where
+    the menu was.
+  - Decided here: «Змінити магазин» is held on the card, as on every task
+    screen (the store line's hold); whether a task screen shows it at all
+    is the frame's P2-1.
+- **What explains a close's difference** (orders-cash P2-5; spec §6.21): a
+  thread, as «Каса»'s cash taken out and put in — at the left when, a
+  filled eyelet on the thread, what it was 16/600, its words where it has
+  them a line in ink under it (16/400, as an order's change of shipping),
+  who in the meta, the sum on the right with its sign («+50,00 грн»,
+  «−100,00 грн»), one line. The server's order, sums and what it holds
+  as before; its name for a reader «Що пояснює різницю»; the period's
+  figures and the lines of the carrier's COD and prepayment as before.
+  - Decided here: the task list's «время (`whenOf`)» is said as «Каса»'s
+    own thread says it — today its time, another day its date at the left
+    and its time first in the meta; `whenOf`'s «17.10, 12:00» does not fit
+    the 44 px column on one line.
+  - Decided here: «виправлення способу оплати», «видано з каси» and
+    «внесено в касу» are read as written, drawn with a capital as a row's
+    first word (as the nights' rows); the words do not change.
+- **An invoice's results' heading** (money P2-2 (а); spec §6.30):
+  «Накладну записано» and «Оплату записано» are `t-sheet` 24/26, 800, in
+  the display face, the check 28 before the words, one line at 360 — as
+  «Продано 1 шт.» and «Повернено постачальнику …»; their level, focus,
+  stub and «Готово» as before. The supplier return's result keeps its
+  own heading's 24 under its new «←» (`pushed` off, as receiving's
+  result), its words wrapping to two lines at 360 as before. A kept payment confirmed later («Оплату
+  записано один раз») is the kept operation's compact block, as before.
+- **A supplier return's result keeps its way back** (money P2-2 (б); spec
+  §3): «← Постачальникам» over its title and Telegram's «Назад» stay, as
+  on its form and on an invoice's result; each leads to «Постачальникам»,
+  as «Готово» does. Before, it had neither, since its first build (stage
+  2, money P0-4, #174). Not touched: the 2026-10-29 note «a result with
+  no «←» … a return's … shows none», which named the till's return of a
+  sale (`all-on-the-tag-back-report.md`), and «Продано N шт.» /
+  «Повернено постачальнику …» of «Позичене й під реалізацію».
+- **More than is owed in «Зарахувати повернення»** (money P2-5 (а); spec
+  §6 p. 6): said as the sum is typed, under the field, in the payment's
+  line (14/600, the danger colour, `role="alert"`) and words it had on a
+  press — «Це більше, ніж винні: залишок … Решту зарахуйте на іншу
+  накладну.»; the field invalid and described by it; «Зарахувати {сума}»
+  held. The whole debt is not more. A refusal after a press says it all:
+  the line waits until the sum is changed. A return chosen and a sum to
+  the kopeck are checked on a press as before; the server checks as
+  before. (б) — «Не списувати», the question without the sum — waits on
+  В13-Г2.
+  - Decided here (review): a sum still being typed, its comma last
+    («4001,»), is said on as it stands — the line does not go and come
+    back at the comma, the button stays held; a press over the debt is
+    stopped in the sheet too, as the payment's second check.
+  - A reading for later: the payment's own line (`InvoicePay`) still goes
+    at a trailing comma for one key, and both hide the line after any
+    refusal until the sum changes — kept as the payment's, the refusal's
+    words saying what changed.

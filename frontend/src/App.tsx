@@ -1133,7 +1133,8 @@ function Workspace({
   // A payment's form open at the till, or from «Покупці»: the menu steps
   // aside (spec S21).
   const [depositTask, setDepositTask] = useState(false);
-  // And while the cash is counted («Усе на бірці» sections task list, P1-2).
+  // And while the cash is counted («Усе на бірці» sections task list, P1-2),
+  // or one operation's way is changed (audit 2026-11-13, orders-cash P2-4).
   const [cashTask, setCashTask] = useState(false);
   // And while a supplier's invoice is paid (stage 2, money task list, P0-2).
   const [invoiceTask, setInvoiceTask] = useState(false);

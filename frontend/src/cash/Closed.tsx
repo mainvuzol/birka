@@ -16,14 +16,14 @@ import { ResultScreen } from "@/shared/ResultScreen";
 import { Unread } from "@/shared/Unread";
 import { Sticker } from "@/shared/Sticker";
 import { DoneLine } from "./DoneLine";
-import { dayOf } from "./errors";
+import { dayOf, timeOf } from "./errors";
 import {
   cardParts,
+  dateOf,
   moved,
   nothing,
   signed,
   unclosedText,
-  whenOf,
 } from "./format";
 import { ClosePlaceholder } from "./Placeholders";
 import type { Close } from "./types";
@@ -246,14 +246,39 @@ export function PeriodDetails({ close }: { close: Close }): JSX.Element {
         </p>
       )}
       {close.explanations.length > 0 && (
-        <ul aria-label="Що пояснює різницю">
-          {close.explanations.map((item, index) => (
-            <li key={`${item.at}:${String(index)}`}>
-              {whenOf(item.at)} · {explanationLabels[item.kind]} ·{" "}
-              {moved(item.cash)} · {visible(item.by)}
-              {item.text && ` · ${visible(item.text)}`}
-            </li>
-          ))}
+        // A thread, as «Каса»'s cash taken out and put in (spec §6.21; audit
+        // 2026-11-13, orders-cash P2-5): when at the left — today its time,
+        // before its day, its time in the meta, as «Каса»'s —, a filled
+        // eyelet on the thread, what it was 16/600, its words a line in ink
+        // under it, who in the meta, the sum on the right with its sign. In
+        // the order the server answers.
+        <ul className="timeline explain-thread" aria-label="Що пояснює різницю">
+          {close.explanations.map((item, index) => {
+            const today =
+              new Date(item.at).toDateString() === new Date().toDateString();
+            return (
+              <li className="timeline-row" key={`${item.at}:${String(index)}`}>
+                <span className="timeline-day">
+                  {today ? timeOf(item.at) : dateOf(item.at)}
+                </span>
+                <span className="timeline-node" aria-hidden="true" />
+                <span className="timeline-main">
+                  <span className="timeline-what">
+                    {explanationLabels[item.kind]}
+                  </span>
+                  {item.text && (
+                    <span className="explain-text">{visible(item.text)}</span>
+                  )}
+                  <span className="timeline-meta">
+                    {[today ? null : timeOf(item.at), visible(item.by)]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </span>
+                </span>
+                <span className="timeline-sum">{moved(item.cash)}</span>
+              </li>
+            );
+          })}
         </ul>
       )}
     </>

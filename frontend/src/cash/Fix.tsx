@@ -1,4 +1,4 @@
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { JSX, ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { money } from "@/orders/types";
@@ -51,6 +51,26 @@ function momentOf(at: string): string {
     : whenOf(at);
 }
 
+/**
+ * One operation's card is a task's screen, as the count (audit 2026-11-13,
+ * orders-cash P2-4; spec §3): while it stands, the menu steps aside; the
+ * list of operations keeps it. The dock with «Змінити на «…»» stays in its
+ * flow under a card that fits the screen, where it stood with the menu, and
+ * sticks at the screen's foot, where the menu stood, under a taller one.
+ */
+export function useTaskWhile(
+  shown: boolean,
+  task: (shown: boolean) => void,
+): void {
+  useEffect(() => {
+    if (!shown) return;
+    task(true);
+    return () => {
+      task(false);
+    };
+  }, [shown, task]);
+}
+
 /** «← Каса», as on the count's screen; held while a change is on its way. */
 function ToCash({
   back,
@@ -81,6 +101,7 @@ export function FixStep({
   disabled,
   send,
   back,
+  task,
 }: {
   store: Store;
   token: string;
@@ -91,8 +112,11 @@ export function FixStep({
   send: (body: CashBody) => Promise<JournalOutcome<CashAnswer>>;
   /** Back to «Каса»: what was recorded, or null. */
   back: (done: string | null) => void;
+  /** The menu steps aside while one operation's card stands. */
+  task: (shown: boolean) => void;
 }): JSX.Element {
   const [chosen, setChosen] = useState<FixTarget | null>(initial);
+  useTaskWhile(chosen !== null, task);
   // A change on its way: no way out until it is answered, as the till's
   // dock holds (review, 2026-11-09).
   const [sending, setSending] = useState(false);

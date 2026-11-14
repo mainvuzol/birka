@@ -1207,6 +1207,129 @@ test("the owner's and managers' correction takes the same card: the operation's 
   ]);
 });
 
+/** The dock with «Змінити на «…»» where its own flow puts it: under the
+ * card, not pulled anywhere (its top as it is when it is not sticky). */
+async function dockInFlow(page: Page): Promise<boolean> {
+  return page.locator(".pay-panel").evaluate((panel) => {
+    const element = panel as HTMLElement;
+    const now = element.getBoundingClientRect().top;
+    element.style.position = "static";
+    const flow = element.getBoundingClientRect().top;
+    element.style.position = "";
+    return Math.abs(now - flow) < 0.5;
+  });
+}
+
+test("one operation's card is a task's screen: the menu steps aside while it stands — the seller's own and the owner's any day — and comes back on the list and «Каса»; «Змінити на «…»» where it stood, the dock where the menu stood on a short screen (audit 2026-11-13, orders-cash P2-4)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  await record(page);
+  const state: Parameters<typeof stub>[1] = {
+    now: drawer(),
+    method: { ...sale },
+  };
+  await stub(page, state);
+  await open(page);
+  await cash(page);
+  const menu = page.getByRole("navigation", { name: "Розділи" });
+  await expect(menu).toBeVisible();
+  await page
+    .getByRole("button", { name: "Змінити спосіб оплати", exact: true })
+    .click();
+  // The list of operations keeps the menu.
+  const rows = page.getByRole("list", { name: "Ваші операції" });
+  await expect(rows.getByRole("listitem")).toHaveCount(3);
+  await expect(menu).toBeVisible();
+  await rows.getByRole("button").first().click();
+  await expect(page.locator(".fix-sum")).toHaveText("700,00 грн");
+  await expect(menu).toHaveCount(0);
+  // «Змінити на «…»» at the point it stood with the menu: in its flow
+  // under the card, within the phone.
+  await page
+    .getByRole("group", { name: "Новий спосіб оплати" })
+    .getByRole("button", { name: "Готівка", exact: true })
+    .click();
+  const change = page.getByRole("button", { name: "Змінити на «Готівка»" });
+  expect(await dockInFlow(page)).toBe(true);
+  const box = await change.boundingBox();
+  expect((box?.y ?? 640) + (box?.height ?? 0)).toBeLessThanOrEqual(640);
+  // «← Каса»: «Каса», and the menu with it.
+  await page.getByRole("button", { name: "Назад до каси" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Каса", exact: true }),
+  ).toBeVisible();
+  await expect(menu).toBeVisible();
+
+  // A short screen: the card is taller, and its dock sticks where the menu
+  // stood, at the screen's foot.
+  await page.setViewportSize({ width: 360, height: 400 });
+  await page
+    .getByRole("button", { name: "Змінити спосіб оплати", exact: true })
+    .click();
+  await rows.getByRole("button").first().click();
+  await expect(page.locator(".fix-sum")).toHaveText("700,00 грн");
+  await expect(menu).toHaveCount(0);
+  await expect
+    .poll(async () => {
+      const dock = await page.locator(".pay-panel").boundingBox();
+      return Math.round((dock?.y ?? 0) + (dock?.height ?? 0));
+    })
+    .toBe(400);
+  await page.getByRole("button", { name: "Назад до каси" }).click();
+  await expect(menu).toBeVisible();
+
+  // An order's sale, its five ways a row each, is taller than 360 × 640
+  // too: its dock at the foot, where the menu stood (review).
+  await page.setViewportSize({ width: 360, height: 640 });
+  state.method = { ...sale, is_order: true };
+  await page
+    .getByRole("button", { name: "Змінити спосіб оплати", exact: true })
+    .click();
+  await rows.getByRole("button").first().click();
+  await expect(
+    page
+      .getByRole("group", { name: "Новий спосіб оплати" })
+      .getByRole("button"),
+  ).toHaveCount(5);
+  await expect(menu).toHaveCount(0);
+  await expect
+    .poll(async () => {
+      const dock = await page.locator(".pay-panel").boundingBox();
+      return Math.round((dock?.y ?? 0) + (dock?.height ?? 0));
+    })
+    .toBe(640);
+  expect(await dockInFlow(page)).toBe(false);
+  await page.getByRole("button", { name: "Назад до каси" }).click();
+  await expect(menu).toBeVisible();
+  state.method = { ...sale };
+
+  // The owner's and managers' any day: the day's list keeps the menu, the
+  // card does not; «Інша операція» the list again, the menu with it.
+  state.now = drawer({ may_correct: true });
+  await open(page);
+  await cash(page);
+  await page
+    .getByRole("button", { name: "Змінити спосіб оплати", exact: true })
+    .click();
+  const events = page.getByRole("list", { name: "Операції дня" });
+  await expect(events.getByRole("button").first()).toBeVisible();
+  await expect(menu).toBeVisible();
+  await events.getByRole("button").first().click();
+  await expect(page.locator(".fix-sum")).toHaveText("700,00 грн");
+  await expect(menu).toHaveCount(0);
+  await page.getByRole("button", { name: "Інша операція" }).click();
+  await expect(events).toBeVisible();
+  await expect(menu).toBeVisible();
+  await events.getByRole("button").first().click();
+  await expect(menu).toHaveCount(0);
+  await page.getByRole("button", { name: "Назад до каси" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Каса", exact: true }),
+  ).toBeVisible();
+  await expect(menu).toBeVisible();
+});
+
 /** The WCAG contrast of an element's text against what it is drawn on. */
 async function contrast(element: Locator): Promise<number> {
   return element.evaluate((node) => {

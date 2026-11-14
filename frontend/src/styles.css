@@ -1144,6 +1144,16 @@ section.backups {
 .nights .timeline-what::first-letter {
   text-transform: uppercase;
 }
+/* What explains a close's difference, the same thread (audit 2026-11-13,
+   orders-cash P2-5): «виправлення способу оплати» read as written, drawn
+   with a capital as a row's first word; its words a line in ink under it,
+   as an order's change of shipping. */
+.explain-thread .timeline-what::first-letter {
+  text-transform: uppercase;
+}
+.explain-text {
+  overflow-wrap: anywhere;
+}
 
 /* A return: one row per sale line (spec §6.8; stage 2, orders task list,
    P0-6) — the model and size 17/600, the price and what may come back in

@@ -72,7 +72,8 @@ function modelsOf(items: StockOption[]): Model[] {
  * поверненні». Telegram's MainButton «Повернути постачальнику · 3 шт.»
  * records it: a return moves goods, never money. Refused, the words say
  * why over it and what was counted stays; recorded, its stub, and «Готово»
- * goes back to «Постачальникам». The menu is aside meanwhile.
+ * goes back to «Постачальникам», as its «←» and Telegram's «Назад» still
+ * do. The menu is aside meanwhile.
  */
 export function NewReturn({
   store,
@@ -323,15 +324,27 @@ export function NewReturn({
   if (returned)
     return (
       <section className="receipt receive-done">
+        {/* «← Постачальникам» and Telegram's «Назад» stay, as the form's
+            and an invoice's result's (audit 2026-11-13, money P2-2 (б)):
+            «Готово» is not the one way out. */}
         <ScreenHeader
           ref={title}
           focusable
+          // The result's own heading, never a pushed screen's 28 under its
+          // «←», as receiving's result.
+          pushed={false}
           className="result-title t-sheet"
           title={
             <>
               <RecordedMark />
               {returnedText(returned)}
             </>
+          }
+          back={
+            <Back go={back}>
+              <span aria-hidden="true">← </span>
+              Постачальникам
+            </Back>
           }
         />
         <Stub state="recorded">
