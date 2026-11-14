@@ -522,6 +522,13 @@ test("a warehouse is counted cell by cell, each difference applied at once, and 
     name: "Завершити інвентаризацію складу «Склад інвентаризації»?",
   });
   await expect(end).toHaveAttribute("data-ready", "");
+  // Its «not now» is every confirming sheet's «Скасувати», never «Ще ні»:
+  // the sheet closes, nothing finished (audit 2026-11-13, frame P2-6).
+  await expect(end.getByRole("button", { name: "Ще ні" })).toHaveCount(0);
+  await end.getByRole("button", { name: "Скасувати", exact: true }).click();
+  await expect(end).toHaveCount(0);
+  await page.getByRole("button", { name: "Завершити", exact: true }).click();
+  await expect(end).toHaveAttribute("data-ready", "");
   await expect(end.locator(".finish-sum")).toHaveText([
     "Нестача 2 шт.",
     "Надлишок 1 шт.",

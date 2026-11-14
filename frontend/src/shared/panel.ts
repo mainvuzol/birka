@@ -6,6 +6,15 @@ import type { RefObject } from "react";
  * 2026-10-24). */
 export const CARRIED_TAP = 700;
 
+/** The panels and docks standing now: a toast rises over whichever stands
+ * where it would be (spec §6.23; audit 2026-11-13, frame P2-5). */
+const standing = new Set<HTMLElement>();
+
+/** The panels and docks standing now, for a toast to keep clear of. */
+export function docks(): HTMLElement[] {
+  return [...standing];
+}
+
 /**
  * A panel held at the bottom of the screen, under the thumb — the till's
  * (redesign P0-4) and the return's (returns task list, P0-4): its height is
@@ -30,10 +39,14 @@ export function usePanelRoom(
       root.style.setProperty(room, `${String(element.offsetHeight)}px`);
     };
     keep();
+    // The till's search held at the top is no dock: a toast never rises
+    // over it (review).
+    if (room !== "--find-h") standing.add(element);
     const watch = new ResizeObserver(keep);
     watch.observe(element);
     return () => {
       watch.disconnect();
+      standing.delete(element);
       root.style.removeProperty(room);
     };
   }, [panel, shown, room]);

@@ -1896,7 +1896,9 @@ function FinishSheet({
             disabled={finishing}
             onClick={close}
           >
-            Ще ні
+            {/* The confirming sheet's one «not now» (audit 2026-11-13,
+                frame P2-6). */}
+            Скасувати
           </button>
         </div>
       }

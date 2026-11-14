@@ -1481,6 +1481,105 @@ test("a payment whose answer is lost is resent unchanged, and paid once", async 
   await expect(page.locator(".stub-notice")).toHaveCount(0);
 });
 
+test("inside Telegram a payment kept on the phone asks before Бірка closes off its own screen, after a reload too, until its check confirms it; «Нова накладна» asks while a supplier or a sum is typed, never once recorded or left (audit 2026-11-13, money P2-6)", async ({
+  page,
+}) => {
+  const supplier = `Закриття ${randomUUID().slice(0, 6)}`;
+  await anInvoice(page, await aSupplier(page, supplier), "900.00");
+  let first = true;
+  await page.route("**/api/v1/supplier-invoices/*/payments", async (route) => {
+    if (first) {
+      first = false;
+      // The server takes it; the answer never arrives.
+      await route.fetch();
+      await route.abort("connectionreset");
+    } else await route.continue();
+  });
+  const closing = async (): Promise<unknown> =>
+    (await told(page, "web_app_setup_closing_behavior")).at(-1);
+  await invoicesAt(page, hanna, { telegram: true });
+  await open(page, supplier);
+  await telegramSays(page, "main_button_pressed");
+  await keyIn(page, "300");
+  await payButton(page).click();
+  await expect(page.locator(".stub-notice .stub-kept")).toBeVisible();
+  // Off the payment, whose own sum asked: kept, Telegram still asks.
+  await back(page, "Накладна").click();
+  await expect(
+    page.getByRole("heading", { name: supplier, level: 1 }),
+  ).toBeVisible();
+  await expect(page.locator(".keypad")).toHaveCount(0);
+  expect(await closing()).toEqual({ need_confirmation: true });
+  // Read from the phone after a reload: asked from the first.
+  await page.reload();
+  await openStore(page, "Центр CENTRE");
+  await expect(
+    page.getByRole("heading", { name: "Накладні", exact: true }),
+  ).toBeVisible();
+  await expect.poll(closing).toEqual({ need_confirmation: true });
+  const kept = page.locator(".stub-notice .stub");
+  await kept
+    .getByRole("button", { name: "Перевірити результат оплати" })
+    .click();
+  await expect(
+    kept.getByRole("heading", { name: "Оплату записано один раз" }),
+  ).toBeVisible();
+  await expect.poll(closing).toEqual({ need_confirmation: false });
+  await kept.getByRole("button", { name: "Зрозуміло" }).click();
+
+  // «Нова накладна»: nothing typed, nothing asked; a supplier chosen, it
+  // asks; «←» lets it go.
+  const newInvoice = page.getByRole("button", {
+    name: "Записати накладну",
+    exact: true,
+  });
+  await newInvoice.click();
+  await expect(
+    page.getByRole("heading", { name: "Нова накладна", level: 1 }),
+  ).toBeVisible();
+  expect(await closing()).toEqual({ need_confirmation: false });
+  await page
+    .getByRole("button", { name: "Постачальник Оберіть", exact: true })
+    .click();
+  const suppliers = await sheet(page, "Постачальник");
+  await suppliers
+    .getByRole("searchbox", { name: "Пошук постачальника" })
+    .fill(supplier);
+  await suppliers
+    .locator(".supplier-row")
+    .filter({ has: page.getByText(supplier, { exact: true }) })
+    .click();
+  await expect.poll(closing).toEqual({ need_confirmation: true });
+  await back(page, "Накладні").click();
+  await expect(
+    page.getByRole("heading", { name: "Накладні", exact: true }),
+  ).toBeVisible();
+  await expect.poll(closing).toEqual({ need_confirmation: false });
+  // A sum alone asks too; recorded, it is let go.
+  await newInvoice.click();
+  await page.getByLabel("Сума за накладною, грн").fill("400");
+  await expect.poll(closing).toEqual({ need_confirmation: true });
+  await page
+    .getByRole("button", { name: "Постачальник Оберіть", exact: true })
+    .click();
+  const again = await sheet(page, "Постачальник");
+  await again
+    .getByRole("searchbox", { name: "Пошук постачальника" })
+    .fill(supplier);
+  await again
+    .locator(".supplier-row")
+    .filter({ has: page.getByText(supplier, { exact: true }) })
+    .click();
+  await page
+    .locator(".order-dock")
+    .getByRole("button", { name: "Записати накладну", exact: true })
+    .click();
+  await expect(
+    result(page).getByRole("heading", { name: "Накладну записано" }),
+  ).toBeVisible();
+  await expect.poll(closing).toEqual({ need_confirmation: false });
+});
+
 test("a payment kept on the phone is checked from another screen, and the till is free once it is confirmed", async ({
   page,
 }) => {

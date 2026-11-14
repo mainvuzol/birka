@@ -9795,3 +9795,68 @@ and nothing sent changes.
     at a trailing comma for one key, and both hide the line after any
     refusal until the sum changes — kept as the payment's, the refusal's
     words saying what changed.
+
+## Chosen in chat — 2026-11-14 (audit 2026-11-13, batch 8: no «Змінити магазин» on a task's screen; a session's end in S02's words, kept said only where it is; one «not now»; Telegram's closing question for every kept operation and «Нова накладна»; a toast over the dock; frame P2-1, P2-6, P2-5 pp. 3, 5, money P2-6)
+
+The audit's next batch in its own order, «merged, go next» after #208:
+the frame's points that wait on no one and the money list's P2-6, which
+shares the closing question's one place in the code. No request body,
+right or rule of what is recorded changes.
+
+- **No «Змінити магазин» on a task's screen** (frame P2-1; spec S21 №2,
+  S26 №2; P7): a payment's form at the till, the cash counted, an
+  operation's card, an invoice paid, a supplier, a return, an
+  order's goods back to the warehouse, a count, a list's line, «Нове
+  замовлення» — the header draws the store's line alone, the whole width;
+  «←» and Telegram's «Назад» the way out, as before. Elsewhere as before:
+  shown for whoever has two stores, held while an operation holds the
+  store. S21's «Оксана Петренко · «Основний» · з 01.10» is one line at
+  360 (before, two beside the held button); an order's goods back, two
+  lines at most (before, three).
+  - Reviews the orders-cash after-stage-2 task list's P1-2 «held» on the
+    order's return: that was the list's choice, not the owner's.
+- **A session's end** (frame P2-6; spec S02): «Сесію завершено. Закрийте
+  Бірку й відкрийте знову кнопкою в боті.», and « Незавершене
+  збережено.» only while this phone keeps an operation of the person
+  signed in — a journal's key, `birka:<scope>-pending:<organization>:
+  <user>:<store>` or the orders' `birka:pending:…`, any store. Only the
+  keys' names are read.
+  - Decided here: «this person» is the organization and user the app read
+    from `/me`; before that read, or with storage that cannot be read,
+    nothing is promised. Another person's key on the same phone, or
+    another network's, is not theirs.
+  - Not touched: the door's own 401 (launch data refused) keeps «Відкрийте
+    застосунок знову кнопкою в боті вашого магазину.»; the crash screen
+    still says a command is kept when any person's is (a screen may break
+    before the person is known) — it reads the same keys through the same
+    function now.
+  - The stocktake's finish sheet: «Ще ні» → «Скасувати», every confirming
+    sheet's one «not now». The rest of the rule (P2-6 p. 3) holds as
+    built: «Не скасовувати» where the sheet's action is itself a cancel;
+    «Не списувати» waits on В13-Г2.
+- **Telegram's closing question for every kept operation** (frame P2-5
+  p. 3; money P2-6; spec §6 rule 2, S12 «on while kept»): beside the
+  sale, the return, the payment on a debt, the delivery, the correction,
+  the count, an order's step and «Каса» — a catalogue operation, a
+  catalogue correction, a store's state, an invoice's operation (a
+  payment, a set-off, a write-off, a cancel, borrowed goods marked sold)
+  and goods sent back to a supplier (borrowed ones too). A first send
+  still on its way is not counted, as the others': its form says so.
+  - Decided here: the catalogue's journal marks its first send as the
+    shared journal does (`firstSend`), read only by the question; what it
+    sends and keeps is as before.
+- **«Нова накладна» asks before closing** (money P2-6): while a supplier
+  is chosen or a sum on the invoice typed and it is not recorded, as its
+  payment and a new return ask; recorded or left by «←», it does not.
+  - Decided here: the task list's «поставщик или сумма» as written — a
+    note or «сплачено одразу» typed alone does not ask.
+- **A toast over the dock** (frame P2-5 p. 5; spec §6.23 «16 px above the
+  dock/tab bar»): a toast stands 16 over the menu, and 16 over a dock or
+  a panel that stands in its place — outside Telegram, an order's card's
+  dock at the foot; followed while the toast stands, never lifted past
+  the screen's top. The till's search held at the top is not a dock.
+  - Decided here: measured, not the task list's «меню + `--pay-panel-h`
+    + 16»: a dock in its flow higher up — the till's panel under a short
+    basket, a card that fits the screen — would have the toast lifted
+    onto it. Where the dock stands higher, the toast keeps its place over
+    the menu, under the dock.

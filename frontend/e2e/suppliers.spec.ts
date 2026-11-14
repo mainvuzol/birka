@@ -825,6 +825,92 @@ test("read slowly, the suppliers' sheet and «Список постачальн�
   await expect(chips).toHaveCount(0);
 });
 
+test("inside Telegram a return kept on the phone asks before Бірка closes off its form too, until its check confirms it (audit 2026-11-13, money P2-6)", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const host = window as unknown as {
+      TelegramWebviewProxy: {
+        postEvent: (event: string, data: string) => void;
+      };
+      told: [string, unknown][];
+    };
+    host.told = [];
+    host.TelegramWebviewProxy = {
+      postEvent: (event, data) => {
+        host.told.push([event, data ? (JSON.parse(data) as unknown) : null]);
+      },
+    };
+  });
+  const told = (event: string): Promise<unknown> =>
+    page.evaluate(
+      (wanted) =>
+        (window as unknown as { told: [string, unknown][] }).told
+          .filter(([name]) => name === wanted)
+          .map(([, data]) => data)
+          .at(-1) ?? null,
+      event,
+    );
+  const coat = await received(page, hanna, fixture.network_centre_store_id, 2);
+  const supplier = `Закриття ${randomUUID().slice(0, 6)}`;
+  await aSupplier(page, supplier);
+  let first = true;
+  await page.route("**/api/v1/supplier-returns", async (route) => {
+    if (route.request().method() === "POST" && first) {
+      first = false;
+      // The server takes it; the answer never arrives.
+      await route.fetch();
+      await route.abort("connectionreset");
+    } else await route.continue();
+  });
+  await openAs(page, hanna, undefined, "8.0");
+  await openStore(page, "Центр CENTRE");
+  await section(page, "Постачальникам");
+  await page
+    .locator(".screen-title")
+    .getByRole("button", { name: "Повернути товар постачальнику" })
+    .click();
+  await pickSupplier(page, supplier, { of: returnForm(page) });
+  await chooseModel(page, coat);
+  await tapMore(page, "M", 1);
+  await expect
+    .poll(() => told("web_app_setup_main_button"))
+    .toMatchObject({
+      is_visible: true,
+      is_active: true,
+      text: "Повернути постачальнику · 1 шт.",
+    });
+  await page.evaluate(() => {
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        data: JSON.stringify({ eventType: "main_button_pressed" }),
+        source: window.parent,
+      }),
+    );
+  });
+  const kept = page.locator(".stub-notice .stub");
+  await expect(kept).toHaveClass(/\bstub-kept\b/);
+  await expect
+    .poll(() => told("web_app_setup_closing_behavior"))
+    .toEqual({ need_confirmation: true });
+  // Off the form, whose units asked: kept, Telegram still asks.
+  await page
+    .getByRole("button", { name: "Постачальникам", exact: true })
+    .click();
+  await expect(returnForm(page)).toHaveCount(0);
+  await expect(kept).toHaveClass(/\bstub-kept\b/);
+  expect(await told("web_app_setup_closing_behavior")).toEqual({
+    need_confirmation: true,
+  });
+  await kept
+    .getByRole("button", { name: "Перевірити результат повернення" })
+    .click();
+  await expect(kept).toHaveClass(/\bstub-recorded\b/);
+  await expect
+    .poll(() => told("web_app_setup_closing_behavior"))
+    .toEqual({ need_confirmation: false });
+});
+
 test("inside Telegram a size's ±1 on «Повернути постачальнику» is felt both ways, «Менше» held at none is not (money task list after stage 2, P2-4)", async ({
   page,
 }) => {

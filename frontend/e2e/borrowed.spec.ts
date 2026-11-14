@@ -672,6 +672,59 @@ test("a «Продано» whose answer is lost is resent unchanged, and counted
   expect(await onHand(page, lotId)).toBe(1);
 });
 
+test("inside Telegram a «Продано» kept on the phone asks before Бірка closes, never while its first send is on its way, and lets it go once its check confirms it (audit 2026-11-13, money P2-6)", async ({
+  page,
+}) => {
+  const coat = await aModel(page);
+  const supplier = await aSupplier(page);
+  await borrowed(page, coat, supplier.id, 2);
+  let release = (): void => undefined;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let first = true;
+  await page.route("**/api/v1/supplier-invoices/sold", async (route) => {
+    if (first) {
+      first = false;
+      // Held on its way, then taken by the server, its answer lost.
+      await gate;
+      await route.fetch();
+      await route.abort("connectionreset");
+    } else await route.continue();
+  });
+  await openAs(page, hanna, undefined, true);
+  const closing = (): Promise<unknown> =>
+    page.evaluate(
+      () =>
+        (window as unknown as { told: [string, unknown][] }).told
+          .filter(([event]) => event === "web_app_setup_closing_behavior")
+          .map(([, data]) => data)
+          .at(-1) ?? null,
+    );
+  await section(page, "Позичене й під реалізацію");
+  const sheet = await lotSheet(page, coat, "verb");
+  const sent = page.waitForRequest(
+    (request) =>
+      request.method() === "POST" &&
+      new URL(request.url()).pathname === "/api/v1/supplier-invoices/sold",
+  );
+  await sheet
+    .getByRole("button", { name: "Позначити проданим · 1 шт." })
+    .click();
+  await sent;
+  // On its way the first time: its button's ring says so, nothing asked.
+  expect(await closing()).toBeNull();
+  release();
+  const kept = page.locator(".stub-notice .stub");
+  await expect(kept).toHaveClass(/\bstub-kept\b/);
+  await expect.poll(closing).toEqual({ need_confirmation: true });
+  await kept
+    .getByRole("button", { name: "Перевірити результат продажу позиченого" })
+    .click();
+  await expect(kept).toHaveClass(/\bstub-recorded\b/);
+  await expect.poll(closing).toEqual({ need_confirmation: false });
+});
+
 test("a return of borrowed goods whose answer is lost is «Позичене»'s: its stub there, a banner on «Постачальникам»", async ({
   page,
 }) => {

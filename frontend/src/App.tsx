@@ -8,6 +8,7 @@ import {
   ApiError,
   errorText,
   inOwnWords,
+  keepFor,
   UNREACHABLE,
 } from "@/shared/api";
 import { isTillMethod, methodHow, methodLabels } from "@/shared/payment";
@@ -451,6 +452,12 @@ export function App(): JSX.Element {
     staleTime: Infinity,
     gcTime: 0,
   });
+  // Whose kept operations a session's end may say are kept (audit
+  // 2026-11-13, frame P2-6).
+  const person = me.data;
+  useEffect(() => {
+    if (person) keepFor(person.organization_id, person.user_id);
+  }, [person]);
   const [storeId, setStoreId] = useState("");
   /**
    * Read again what the app knows of this person. Once there is a token, that
@@ -2864,14 +2871,16 @@ function Workspace({
   // An order's step answered is recorded: only its order is not shown yet.
   const keptStep =
     pending && !firstSend && !pending.acknowledged ? pending : null;
-  // The line under every screen's title: «Змінити магазин» held, too, while
-  // a payment's form stands at the till or the cash is counted: «←» is its
-  // only way out (spec S21, S26; review, 2026-10-29).
+  // The line under every screen's title. On a task's screen — a payment's
+  // form at the till, the cash counted, an invoice paid… — no «Змінити
+  // магазин» at all: «←» is its only way out, and the line takes the whole
+  // width (spec S21, S26; audit 2026-11-13, frame P2-1; before, it stood
+  // held there). Elsewhere held while an operation holds the store.
   const line: WorkspaceLine = {
     store: store.name,
     person: me.display_name,
-    changeStore,
-    changeHeld: blocked || taskScreen,
+    changeStore: taskScreen ? undefined : changeStore,
+    changeHeld: blocked,
   };
   // Telegram asks before Бірка closes while the till's basket holds goods —
   // on the till or left for a while — or a sale waits to be checked; the
@@ -2898,7 +2907,19 @@ function Workspace({
         !(countCommand.busy && countCommand.firstSend)) ||
       keptStep !== null ||
       (cashCommand.pending !== null &&
-        !(cashCommand.busy && cashCommand.firstSend)),
+        !(cashCommand.busy && cashCommand.firstSend)) ||
+      // A catalogue operation's, a correction's and a store's state kept
+      // too (audit 2026-11-13, frame P2-5), and the suppliers': an
+      // invoice's operation — a payment, a set-off, what was borrowed sold
+      // … — and goods sent back (money P2-6).
+      (catalogCommand.pending !== null &&
+        !(catalogCommand.busy && catalogCommand.firstSend)) ||
+      (correctionCommand.pending !== null &&
+        !(correctionCommand.busy && correctionCommand.firstSend)) ||
+      (stateCommand.pending !== null &&
+        !(stateCommand.busy && stateCommand.firstSend)) ||
+      keptInvoice !== null ||
+      keptSupplierReturn !== null,
   );
   useLockPortrait(basketGoods);
   // The phone's memory unread, a journal or more: one plate, a line each
