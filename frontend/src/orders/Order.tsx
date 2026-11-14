@@ -656,7 +656,8 @@ function Card({
                 setHistoryShown((shown) => !shown);
               }}
             >
-              Історія доставки <span aria-hidden="true">›</span>
+              Історія доставки{" "}
+              <Icon name="chevron-right" size={16} className="link-chevron" />
             </button>
             {historyShown && (
               <ul
@@ -697,7 +698,7 @@ function Card({
             }}
           >
             {writeLater ? "ТТН ще немає — вписати" : "Змінити доставку"}{" "}
-            <span aria-hidden="true">›</span>
+            <Icon name="chevron-right" size={16} className="link-chevron" />
           </button>
         )}
         {["DISPATCHED", "ARRIVED"].includes(order.status) &&
@@ -711,7 +712,8 @@ function Card({
               disabled={blocked}
               onClick={takeBack}
             >
-              Товар повернувся на склад <span aria-hidden="true">›</span>
+              Товар повернувся на склад{" "}
+              <Icon name="chevron-right" size={16} className="link-chevron" />
             </button>
           )}
         {/* At the card's foot, asked first: a cancel is for good, and the

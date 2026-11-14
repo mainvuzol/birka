@@ -1,6 +1,7 @@
 import {
   test,
   expect,
+  expectCaption,
   expectGlyphBeside,
   expectListBlock,
   listRow,
@@ -443,7 +444,9 @@ test("«Видати з каси»: a sheet over «Каса», what for as chips
     },
   ]);
   expect(await taps()).toBe(4);
+  // The chip felt as a choice (audit 2026-11-13, orders-cash P2-3).
   expect(await buzzes(page)).toEqual([
+    { type: "selection_change" },
     { type: "notification", notification_type: "success" },
   ]);
 });
@@ -680,6 +683,7 @@ test("cash taken out and refused is said over the panel, the sum kept and the cu
   await expect(sum(page)).toHaveValue("150");
   await expect(sum(page)).toBeFocused();
   expect(await buzzes(page)).toEqual([
+    { type: "selection_change" },
     { type: "notification", notification_type: "error" },
   ]);
   await moveButton(page).click();
@@ -850,11 +854,30 @@ test("«Змінити спосіб оплати»: the seller's operations as r
   await page
     .getByRole("button", { name: "Змінити спосіб оплати", exact: true })
     .click();
-  await expect(page.locator(".cash-context")).toHaveText(
-    "Ваші операції після останнього закриття",
-  );
+  // One context line, the store's; «Ваші операції після останнього
+  // закриття» the list's caption over its rows (audit 2026-11-13,
+  // orders-cash P2-2).
+  await expect(page.locator(".cash-fix .cash-context")).toHaveCount(0);
+  const caption = page.getByRole("heading", {
+    name: "Ваші операції після останнього закриття",
+    level: 2,
+  });
+  await expectCaption(caption);
   const rows = page.getByRole("list", { name: "Ваші операції" });
   await expect(rows.getByRole("listitem")).toHaveCount(3);
+  const [over, list] = await Promise.all([
+    caption.boundingBox(),
+    rows.boundingBox(),
+  ]);
+  if (!over || !list) throw new Error("not laid out");
+  expect(over.y + over.height).toBeLessThanOrEqual(list.y);
+  expect(list.y - (over.y + over.height)).toBeLessThanOrEqual(12);
+  // Two lines at most at 360, within the phone.
+  expect(over.height).toBeLessThanOrEqual(32);
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(360);
+  await page.screenshot({ path: "test-results/cash-fix-list.png" });
   const first = rows.getByRole("button").first();
   await expect(first.locator(".fix-time")).toHaveText(/^\d{2}:\d{2}$/);
   await expect(first.locator(".cash-row-title")).toHaveText("Продаж");
@@ -880,6 +903,18 @@ test("«Змінити спосіб оплати»: the seller's operations as r
   await expect(
     ways.getByRole("button", { name: "Картка зараз", exact: true }),
   ).toBeDisabled();
+  // «зараз» at the reading floor, 14; the way it is under still the ways'
+  // 54 (audit 2026-11-13, orders-cash P2-2).
+  const now = ways.getByRole("button", { name: "Картка зараз", exact: true });
+  await expect(now.locator(".fix-now")).toHaveCSS("font-size", "14px");
+  expect((await now.boundingBox())?.height).toBe(54);
+  expect(
+    (
+      await ways
+        .getByRole("button", { name: "Готівка", exact: true })
+        .boundingBox()
+    )?.height,
+  ).toBe(54);
   await expect(panelButton(page)).toHaveText("Оберіть новий спосіб");
   await expect(panelButton(page)).toBeDisabled();
   await ways.getByRole("button", { name: "Готівка", exact: true }).click();
@@ -910,9 +945,130 @@ test("«Змінити спосіб оплати»: the seller's operations as r
     },
   ]);
   expect(await taps()).toBe(5);
+  // The way felt as a choice (audit 2026-11-13, orders-cash P2-3).
   expect(await buzzes(page)).toEqual([
+    { type: "selection_change" },
     { type: "notification", notification_type: "success" },
   ]);
+});
+
+test("a choice in «Каса» is felt once as it changes, never again on the same — a chip of «Видати з каси», a new way; the notes' key says «done» and puts the keyboard away (audit 2026-11-13, orders-cash P2-3)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  await record(page);
+  const server = await stub(page, { now: drawer(), method: { ...sale } });
+  await open(page);
+  await cash(page);
+  const selection = { type: "selection_change" };
+  await page
+    .getByRole("button", { name: "Видати з каси", exact: true })
+    .click();
+  const out = await moveSheet(page, "Видати з каси");
+  const kinds = out.getByRole("group", { name: "Кому чи на що" });
+  await kinds.getByRole("button", { name: "Витрати", exact: true }).click();
+  expect(await buzzes(page)).toEqual([selection]);
+  await kinds.getByRole("button", { name: "Витрати", exact: true }).click();
+  expect(await buzzes(page)).toEqual([selection]);
+  await kinds
+    .getByRole("button", { name: "Кур’єру постачальника", exact: true })
+    .click();
+  expect(await buzzes(page)).toEqual([selection, selection]);
+  // A line's key: «done», the keyboard put away, what was typed kept —
+  // nothing sent, though the sheet's button could send it.
+  await sum(page).fill("150");
+  await expect(moveButton(page)).toBeEnabled();
+  const note = out.getByLabel("На що (необов’язково)");
+  await expect(note).toHaveAttribute("enterkeyhint", "done");
+  await note.fill("пакети");
+  await note.press("Enter");
+  await expect(note).not.toBeFocused();
+  await expect(note).toHaveValue("пакети");
+  await expect(out).toBeVisible();
+  expect(server.sent.movements ?? []).toHaveLength(0);
+  // Left by the scrim: nothing sent.
+  await page.mouse.click(180, 20);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await page
+    .getByRole("button", { name: "Змінити спосіб оплати", exact: true })
+    .click();
+  await page
+    .getByRole("list", { name: "Ваші операції" })
+    .getByRole("button")
+    .first()
+    .click();
+  const ways = page.getByRole("group", { name: "Новий спосіб оплати" });
+  await ways.getByRole("button", { name: "Готівка", exact: true }).click();
+  expect(await buzzes(page)).toEqual([selection, selection, selection]);
+  await ways.getByRole("button", { name: "Готівка", exact: true }).click();
+  expect(await buzzes(page)).toEqual([selection, selection, selection]);
+  await ways.getByRole("button", { name: "Переказ", exact: true }).click();
+  expect(await buzzes(page)).toEqual([
+    selection,
+    selection,
+    selection,
+    selection,
+  ]);
+  await expect(panelButton(page)).toBeEnabled();
+  const why = page.getByLabel("Пояснення (необов’язково)");
+  await expect(why).toHaveAttribute("enterkeyhint", "done");
+  await why.fill("помилка");
+  await why.press("Enter");
+  await expect(why).not.toBeFocused();
+  await expect(why).toHaveValue("помилка");
+  expect(server.sent.corrections ?? []).toHaveLength(0);
+});
+
+test("the list's caption stands over its rows' places while they are read and over a refused read, never over the blank tag (audit 2026-11-13, orders-cash P2-2)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  await stub(page, { now: drawer(), method: { ...sale } });
+  // The seller's operations: the first read held, then refused; the next
+  // read none.
+  let answer = (): void => undefined;
+  const held = new Promise<void>((done) => {
+    answer = done;
+  });
+  let reads = 0;
+  await page.route("**/api/v1/cash/events?**", async (route) => {
+    reads += 1;
+    if (reads === 1) {
+      await held;
+      await route.fulfill({
+        status: 500,
+        json: { code: "INTERNAL_ERROR", message: "Internal error" },
+      });
+      return;
+    }
+    await route.fulfill({ json: { items: [] } });
+  });
+  await open(page);
+  await cash(page);
+  await page
+    .getByRole("button", { name: "Змінити спосіб оплати", exact: true })
+    .click();
+  const caption = page.getByRole("heading", {
+    name: "Ваші операції після останнього закриття",
+    level: 2,
+  });
+  const places = page.locator(".cash-fix .placeholder");
+  await expect(places).toBeVisible();
+  await expectCaption(caption);
+  const [over, under] = await Promise.all([
+    caption.boundingBox(),
+    places.boundingBox(),
+  ]);
+  if (!over || !under) throw new Error("not laid out");
+  expect(over.y + over.height).toBeLessThanOrEqual(under.y);
+  answer();
+  const refused = page.locator(".cash-fix .read-failure");
+  await expect(refused).toBeVisible();
+  await expectCaption(caption);
+  await refused.getByRole("button", { name: "Спробувати ще раз" }).click();
+  await expect(page.locator(".cash-fix .orders-empty")).toBeVisible();
+  await expect(caption).toHaveCount(0);
+  await expect(page.locator(".cash-fix .cash-context")).toHaveCount(0);
 });
 
 test("an order's sale offers its five ways, a row each; a way changed meanwhile is read again, and the way it now has is no longer to be chosen (cash task list, P1-3; B6.1)", async ({
@@ -974,6 +1130,7 @@ test("an order's sale offers its five ways, a row each; a way changed meanwhile 
   await expect(panelButton(page)).toHaveText("Оберіть новий спосіб");
   await expect(panelButton(page)).toBeDisabled();
   expect(await buzzes(page)).toEqual([
+    { type: "selection_change" },
     { type: "notification", notification_type: "error" },
   ]);
 });
@@ -1043,7 +1200,9 @@ test("the owner's and managers' correction takes the same card: the operation's 
     to_method: "CASH",
   });
   expect(await buzzes(page)).toEqual([
+    { type: "selection_change" },
     { type: "notification", notification_type: "error" },
+    { type: "selection_change" },
     { type: "notification", notification_type: "success" },
   ]);
 });

@@ -106,7 +106,7 @@ export function Collected({
         ref={heading}
         tabIndex={-1}
         aria-describedby={sentence}
-        className="result-title"
+        className="result-title t-sheet"
       >
         {!kept && <RecordedMark />}
         {kept ? "Продаж записано один раз" : "Продаж записано"}

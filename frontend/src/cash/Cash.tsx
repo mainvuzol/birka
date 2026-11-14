@@ -801,7 +801,9 @@ export function Cash({
             </div>
             {data.movements.length > 0 && (
               <>
-                <h3 className="cash-subhead">Видано й внесено після закриття</h3>
+                <h3 className="t-label cash-subhead">
+                  Видано й внесено після закриття
+                </h3>
                 <ul
                   className="timeline cash-moves"
                   aria-label="Видано й внесено"

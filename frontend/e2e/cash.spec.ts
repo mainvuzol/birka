@@ -4,6 +4,7 @@ import {
   confirmClose,
   test,
   expect,
+  expectCaption,
   expectEmpty,
   fillLine,
   menu,
@@ -369,6 +370,11 @@ test.describe("«Оля»'s day at «Каса»", () => {
         .filter({ hasText: /^Записано: Витрати, 150,00\sгрн\.$/ })
         .locator(".eyelet-filled"),
     ).toHaveCount(1);
+    // Its caption the section's, as the card's «У посилці» (audit
+    // 2026-11-13, orders-cash P2-2).
+    await expectCaption(
+      page.getByRole("heading", { name: "Видано й внесено після закриття" }),
+    );
     // On the history's thread: today its time at the left, what for, who,
     // and the sum out (cash task list, P0-1; P2-2).
     const given = page
@@ -639,6 +645,13 @@ test.describe("«Оля»'s day at «Каса»", () => {
       page.locator(".cash-fix .orders-empty"),
       "Після останнього закриття ви ще нічого не провели.",
     );
+    // No caption over it to say its words twice (audit 2026-11-13,
+    // orders-cash P2-2).
+    await expect(
+      page.getByRole("heading", {
+        name: "Ваші операції після останнього закриття",
+      }),
+    ).toHaveCount(0);
   });
 
   test("the owner reads the closes, and explains the difference with cash taken out and recorded late", async ({

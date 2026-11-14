@@ -652,7 +652,8 @@ export function Orders({
                   change({ ...view, gone: true });
                 }}
               >
-                Скасовані й повернені на склад <span aria-hidden="true">›</span>
+                Скасовані й повернені на склад{" "}
+                <Icon name="chevron-right" size={16} className="link-chevron" />
               </button>
             )}
         </>

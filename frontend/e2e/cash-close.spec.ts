@@ -2,6 +2,8 @@ import {
   closeSheet,
   confirmClose,
   dockOnMenu,
+  expectCaption,
+  expectLinkChevron,
   test,
   expect,
   menu,
@@ -351,11 +353,20 @@ test("the count: the card reads the drawer again, a task's screen with the app's
   await expect(page.getByRole("button", { name: "Кома" })).toBeVisible();
   // The reminders the owner kept, here (В1 (а)).
   for (const text of [
-    "Спершу запишіть видане з каси ›",
+    "Спершу запишіть видане з каси",
     "Поки рахуєте, не продавайте.",
     "Спершу внесіть усе з паперу й перевірте, чи нічого не чекає на інших телефонах.",
   ])
     await expect(page.getByText(text, { exact: true })).toBeVisible();
+  // The first reminder's way on the set's chevron, never a typed «›» (audit
+  // 2026-11-13, orders-cash P2-1).
+  await expectLinkChevron(
+    page.getByRole("button", {
+      name: "Спершу запишіть видане з каси",
+      exact: true,
+    }),
+    "Спершу запишіть видане з каси",
+  );
   const close = page.getByRole("button", { name: "Закрити касу", exact: true });
   const panel = page.locator(".pay-panel");
   // At 360×640: the reminders, then the sum, the keypad and the dock,
@@ -972,6 +983,14 @@ test("inside Telegram the count is a task's screen — kept upright, closing ask
   await expect(
     page.getByText("Поки причину не записано, інші розділи недоступні."),
   ).toBeVisible();
+  // Its field's key makes a new line (audit 2026-11-13, orders-cash P2-3).
+  await expect(page.locator(".cash-reason-form textarea")).toHaveAttribute(
+    "enterkeyhint",
+    "enter",
+  );
+  await page.getByRole("button", { name: "Продаж під час збою" }).click();
+  // Chosen again, nothing more is felt: a choice is felt as it changes
+  // (audit 2026-11-13, orders-cash P2-3).
   await page.getByRole("button", { name: "Продаж під час збою" }).click();
   await expect
     .poll(main)
@@ -982,8 +1001,11 @@ test("inside Telegram the count is a task's screen — kept upright, closing ask
   ).toBeVisible();
   expect(reasons).toEqual(["Продаж під час збою"]);
   await expect(page.locator(".stub")).toHaveClass(/\bstub-settled\b/);
+  // The reason's chip felt as a choice, once (audit 2026-11-13,
+  // orders-cash P2-3).
   expect(await told("web_app_trigger_haptic_feedback")).toEqual([
     { type: "notification", notification_type: "warning" },
+    { type: "selection_change" },
     { type: "notification", notification_type: "success" },
   ]);
   await expect.poll(main).toMatchObject({ is_visible: false });
@@ -1063,6 +1085,82 @@ test("Telegram buzzes once when the close is recorded and once when it is refuse
     { type: "notification", notification_type: "error" },
     { type: "notification", notification_type: "success" },
   ]);
+});
+
+test("«Так, закрити» on its way hides Telegram's «Назад», and neither it, Escape nor the scrim closes the sheet; refused, «Назад» is the count's again (audit 2026-11-13, orders-cash P2-3)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  // What the app tells Telegram of its «Назад», shown or not.
+  await page.addInitScript(() => {
+    const host = window as unknown as {
+      TelegramWebviewProxy: {
+        postEvent: (event: string, data: string) => void;
+      };
+      backs: boolean[];
+    };
+    host.backs = [];
+    host.TelegramWebviewProxy = {
+      postEvent: (event, data) => {
+        if (event === "web_app_setup_back_button")
+          host.backs.push(
+            (JSON.parse(data) as { is_visible: boolean }).is_visible,
+          );
+      },
+    };
+  });
+  const back = (): Promise<boolean | undefined> =>
+    page.evaluate(() =>
+      (window as unknown as { backs: boolean[] }).backs.at(-1),
+    );
+  const state: { now: Drawer; answer: Record<string, unknown> | number } = {
+    now: drawer(),
+    answer: 422,
+  };
+  await stubDrawer(page, state);
+  // The close's answer held until it is let go.
+  let posted = 0;
+  let answer = (): void => undefined;
+  const held = new Promise<void>((done) => {
+    answer = done;
+  });
+  await page.route("**/api/v1/cash/closes?**", async (route, request) => {
+    if (request.method() === "POST") {
+      posted += 1;
+      await held;
+    }
+    await route.fallback();
+  });
+  await cash(page, olya, { version: "6.1" });
+  await card(page).click();
+  await field(page).fill("2000");
+  await page.getByRole("button", { name: "Закрити касу", exact: true }).click();
+  const sheet = await closeSheet(page);
+  await expect.poll(back).toBe(true);
+  await confirmClose(page);
+  await expect.poll(() => posted).toBe(1);
+  await expect.poll(back).toBe(false);
+  // Pressed anyway, Escape and the scrim: the sheet stays.
+  await page.evaluate(() => {
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        data: JSON.stringify({ eventType: "back_button_pressed" }),
+        source: window.parent,
+      }),
+    );
+  });
+  await sheet.focus();
+  await page.keyboard.press("Escape");
+  await page.mouse.click(180, 20);
+  await expect(sheet).toBeVisible();
+  expect(posted).toBe(1);
+  // Refused: the sheet goes, why over the dock, «Назад» the count's again.
+  answer();
+  await expect(page.getByRole("alert")).toHaveText(
+    /^Касу сьогодні вже закрито о \d{2}:\d{2} · Олена\./,
+  );
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect.poll(back).toBe(true);
 });
 
 test("a close short or over, by any sum, is felt as a warning, not a success — under a hryvnia too, which wants no reason (spec §4.4; «Усе на бірці» task list, P1-2)", async ({
@@ -1198,8 +1296,15 @@ for (const [name, theme, scheme] of [
       page.locator(".cash-moves .timeline-what").first(),
       page.locator(".cash-moves .timeline-meta").first(),
       page.locator(".cash-moves .timeline-sum").first(),
+      page.locator(".cash-subhead"),
     ])
       expect(await contrast(part)).toBeGreaterThanOrEqual(4.5);
+    // The list's caption the section's, on one line at 360 (audit
+    // 2026-11-13, orders-cash P2-2).
+    await expectCaption(page.locator(".cash-subhead"));
+    expect((await page.locator(".cash-subhead").boundingBox())?.height).toBe(
+      16,
+    );
     // The ink tag stays dark in either theme (owner decision, 2026-10-21;
     // spec §6.11), its own 1 px edge setting it off the dark background:
     // the cut shape filled with the edge, the face 1 px inside it.

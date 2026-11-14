@@ -1,5 +1,6 @@
 import { expect, test as base } from "@playwright/test";
 import type { Locator, Page } from "@playwright/test";
+import { icons } from "../src/shared/icons";
 
 /**
  * Playwright's `test`, except that:
@@ -1454,4 +1455,110 @@ export async function expectOwed(scope: Locator, sum: string): Promise<void> {
     return [getComputedStyle(node).color, want];
   });
   expect(colour).toBe(owed);
+}
+
+/**
+ * A link's way on (audit 2026-11-13, orders-cash P2-1): never a typed «›»,
+ * the set's chevron 16 in pencil after its words and on their line, hidden
+ * from a reader — the link's name its words alone, as before.
+ */
+export async function expectLinkChevron(
+  link: Locator,
+  name: string,
+): Promise<void> {
+  await expect(link).toBeVisible();
+  await expect(link).not.toContainText("›");
+  await expect(link).toHaveAccessibleName(name);
+  await expect(link.locator("svg.link-chevron")).toHaveCount(1);
+  const look = await link.evaluate((button, want) => {
+    const chevron = button.querySelector("svg.link-chevron");
+    if (chevron === null) throw new Error("no chevron");
+    const probe = document.createElementNS(chevron.namespaceURI, "svg");
+    probe.innerHTML = want;
+    const pencil = document.createElement("span");
+    pencil.style.color = "var(--pencil)";
+    document.body.append(pencil);
+    const colour = getComputedStyle(pencil).color;
+    pencil.remove();
+    const texts = [...button.childNodes].filter(
+      (child) => child.nodeType === Node.TEXT_NODE && child.textContent?.trim(),
+    );
+    const first = texts[0];
+    const last = texts.at(-1);
+    if (first === undefined || last === undefined) throw new Error("no words");
+    const range = document.createRange();
+    range.setStartBefore(first);
+    range.setEndAfter(last);
+    const words = range.getBoundingClientRect();
+    const box = chevron.getBoundingClientRect();
+    const middle = box.top + box.height / 2;
+    return {
+      set: chevron.innerHTML === probe.innerHTML,
+      size: [box.width, box.height],
+      pencil: getComputedStyle(chevron).color === colour,
+      after: box.left >= words.right,
+      line: middle >= words.top && middle <= words.bottom,
+      hidden: chevron.getAttribute("aria-hidden"),
+    };
+  }, icons["chevron-right"]);
+  expect(look).toEqual({
+    set: true,
+    size: [16, 16],
+    pencil: true,
+    after: true,
+    line: true,
+    hidden: "true",
+  });
+}
+
+/** How far a link's chevron is turned, in degrees: 0 unturned. */
+export async function chevronTurn(link: Locator): Promise<number> {
+  return link.locator("svg.link-chevron").evaluate((node) => {
+    const { transform } = getComputedStyle(node);
+    if (transform === "none") return 0;
+    const matrix = new DOMMatrix(transform);
+    return Math.round((Math.atan2(matrix.b, matrix.a) * 180) / Math.PI);
+  });
+}
+
+/**
+ * A section's caption (spec §4, «підпис розділу»; audit 2026-11-13,
+ * orders-cash P2-2): `t-label` — 13/700 on a line of 16, in capitals by
+ * the style, tracked 0.06 em, in pencil, in the text face whatever its
+ * heading's level — as the card's «У посилці».
+ */
+export async function expectCaption(caption: Locator): Promise<void> {
+  await expect(caption).toBeVisible();
+  await expect(caption).toHaveClass(/(?:^|\s)t-label(?:\s|$)/);
+  const look = await caption.evaluate((node) => {
+    const style = getComputedStyle(node);
+    const pencil = document.createElement("span");
+    pencil.style.color = "var(--pencil)";
+    document.body.append(pencil);
+    const colour = getComputedStyle(pencil).color;
+    pencil.remove();
+    const text = document.createElement("span");
+    text.style.fontFamily = "var(--font-text)";
+    document.body.append(text);
+    const face = getComputedStyle(text).fontFamily;
+    text.remove();
+    return {
+      case: style.textTransform,
+      size: style.fontSize,
+      weight: style.fontWeight,
+      line: style.lineHeight,
+      tracking: style.letterSpacing,
+      pencil: style.color === colour,
+      text: style.fontFamily === face,
+    };
+  });
+  expect(look).toEqual({
+    case: "uppercase",
+    size: "13px",
+    weight: "700",
+    line: "16px",
+    tracking: "0.78px",
+    pencil: true,
+    text: true,
+  });
 }

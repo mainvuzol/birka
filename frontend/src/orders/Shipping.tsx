@@ -22,7 +22,9 @@ import type { Carrier, Destination, Order } from "./types";
  * Telegram's MainButton or the sheet's own. Every earlier version stays in
  * its history. Opened to write the waybill, the cursor is in it. Refused,
  * why over what was typed; Telegram asks before closing while anything was
- * changed; its «Назад» closes the sheet.
+ * changed; its «Назад» closes the sheet — hidden, and nothing closes it,
+ * while «Зберегти доставку» is on its way (audit 2026-11-13, orders-cash
+ * P2-3).
  */
 export function Shipping({
   order,
@@ -109,7 +111,12 @@ export function Shipping({
   return (
     <Sheet
       title="Доставка"
-      close={close}
+      // «Зберегти доставку» on its way: no way out until it is answered
+      // (audit 2026-11-13, orders-cash P2-3).
+      close={() => {
+        if (!waiting) close();
+      }}
+      held={waiting}
       said={meta}
       foot={
         main ? undefined : (
@@ -181,6 +188,7 @@ export function Shipping({
                 autoFocus={focusField}
                 value={note}
                 maxLength={1000}
+                enterKeyHint="enter"
                 aria-describedby={hint}
                 onChange={(event) => {
                   setNote(event.target.value);
