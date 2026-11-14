@@ -357,6 +357,39 @@ export function denied(error: unknown): boolean {
   return error instanceof ApiError && error.status === 403;
 }
 
+/**
+ * Whether this phone keeps an operation sent and not yet answered. Only
+ * those are kept: each journal (`birka:<scope>-pending:<organization>:
+ * <user>:<store>`, the drawer's `birka:cash-pending:…` among them, and the
+ * orders' `birka:pending:…`) is written just before its request and removed
+ * once its outcome is known. `whose`, «{organization}:{user}:», narrows it
+ * to one person's.
+ *
+ * Only the keys' names are looked at, never their values: those hold
+ * customers' names and phones. Storage that cannot be read promises nothing.
+ */
+export function keptOnPhone(whose = ""): boolean {
+  const mine = `pending:${whose}`;
+  try {
+    for (let index = 0; index < localStorage.length; index += 1) {
+      const name = localStorage.key(index);
+      if (name?.startsWith("birka:") && name.includes(mine)) return true;
+    }
+  } catch {
+    /* Blocked or broken storage: say only what is true without it. */
+  }
+  return false;
+}
+
+/** The person signed in, «{organization}:{user}:», once known. */
+let keeper: string | null = null;
+
+/** The person signed in: a session's end says their operations are kept
+ * only where the phone keeps one (audit 2026-11-13, frame P2-6). */
+export function keepFor(organizationId: string, userId: string): void {
+  keeper = `${organizationId}:${userId}:`;
+}
+
 export function errorText(error: unknown): string {
   // The server was not reached: the shop sells on paper (ADR-0013 §3).
   if (unreachable(error)) return UNREACHABLE;
@@ -396,8 +429,13 @@ export function errorText(error: unknown): string {
     return error.details.state === "ARCHIVED"
       ? "Магазин закрито, він в архіві: операції в ньому не проводяться."
       : "Магазин заблоковано власником: операції в ньому зупинено.";
+  // The session ended: S02's words, and that what was unfinished is kept
+  // only where the phone keeps this person's operation (audit 2026-11-13,
+  // frame P2-6).
   if (error.status === 401)
-    return "Сесія завершилась. Закрийте й відкрийте застосунок у Telegram. Незавершену команду збережено.";
+    return `Сесію завершено. Закрийте Бірку й відкрийте знову кнопкою в боті.${
+      keeper !== null && keptOnPhone(keeper) ? " Незавершене збережено." : ""
+    }`;
   // One person past their requests, on all their phones together (owner
   // decision, 2026-10-10; ADR-0020): nothing was done, so wait and repeat.
   // Never «не записано»: a kept operation's banner says to type it from

@@ -39,6 +39,10 @@ interface State {
    * 2026-10-03): «Це інша назва» confirms those words, never others.
    */
   refused: Command | null;
+  /** `busy` is the operation's first send, not a kept one's resend:
+   * Telegram's closing question waits until its answer is lost, as every
+   * journal's (audit 2026-11-13, frame P2-5). */
+  firstSend: boolean;
 }
 export const useCatalogCommand = create<State>(() => ({
   pending: null,
@@ -46,6 +50,7 @@ export const useCatalogCommand = create<State>(() => ({
   error: null,
   kept: false,
   refused: null,
+  firstSend: false,
 }));
 /**
  * The catalogue's journal on this phone, for the store open now — its key,
@@ -321,7 +326,7 @@ export async function submitCatalogCommand(
     };
     localStorage.setItem(key, JSON.stringify(pending));
     written = true;
-    useCatalogCommand.setState({ pending });
+    useCatalogCommand.setState({ pending, firstSend: !ambiguous });
     try {
       if (command.path !== base) {
         const target = await api<Decision>(
@@ -393,6 +398,6 @@ export async function submitCatalogCommand(
     useCatalogCommand.setState({ error, kept: ambiguous, refused: command });
     return null;
   } finally {
-    useCatalogCommand.setState({ busy: false });
+    useCatalogCommand.setState({ busy: false, firstSend: false });
   }
 }

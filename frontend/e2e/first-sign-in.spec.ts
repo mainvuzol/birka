@@ -306,7 +306,7 @@ test("launch data too old to sign in says to open the app again from the bot, an
   await expect(page.getByRole("alert")).toHaveText(
     "Відкрийте застосунок знову кнопкою в боті вашого магазину.",
   );
-  await expect(page.getByText(/Незавершену команду збережено/)).toHaveCount(0);
+  await expect(page.getByText(/збережено/)).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "Спробувати ще раз" }),
   ).toBeVisible();

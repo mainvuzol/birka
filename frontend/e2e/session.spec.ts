@@ -246,12 +246,20 @@ test("a seller at a blocked store opens it with «Спробувати ще ра
   }
 });
 
-test("a session past its 12 hours asks for the app to be opened again, and never signs in with the old launch data", async ({
+test("a session past its 12 hours asks for the app to be opened again in S02's words, says the unfinished is kept only where the phone keeps this person's, and never signs in with the old launch data (audit 2026-11-13, frame P2-6)", async ({
   page,
 }) => {
   await settle(page, market, "BLOCKED");
   try {
+    const read = page.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname === "/api/v1/me" && response.ok(),
+    );
     await openAs(page, petro);
+    const me = (await (await read).json()) as {
+      organization_id: string;
+      user_id: string;
+    };
     await openStore(page, /^Ринок MARKET/);
     const signIns = await launchDataExpired(page);
     let reads = 0;
@@ -262,15 +270,42 @@ test("a session past its 12 hours asks for the app to be opened again, and never
         json: { code: "SESSION_EXPIRED", message: "Session has expired" },
       });
     });
+    const ended =
+      "Сесію завершено. Закрийте Бірку й відкрийте знову кнопкою в боті.";
+    const kept = `${ended} Незавершене збережено.`;
+    const keep = (name: string): Promise<void> =>
+      page.evaluate((key) => {
+        localStorage.setItem(key, "{}");
+      }, name);
+    const again = async (): Promise<void> => {
+      await page.getByRole("button", { name: "Спробувати ще раз" }).click();
+    };
 
-    await page.getByRole("button", { name: "Спробувати ще раз" }).click();
+    // Nothing kept on the phone: not a word of it. Each step below says
+    // other words than the one before, so each waits for its own answer.
+    await again();
     const told = page.getByRole("alert");
-    await expect(told).toHaveText(
-      "Сесія завершилась. Закрийте й відкрийте застосунок у Telegram. Незавершену команду збережено.",
+    await expect(told).toHaveText(ended);
+    // This person's sale, kept in another store: kept.
+    const sale = `birka:sale-pending:${me.organization_id}:${me.user_id}:${randomUUID()}`;
+    await keep(sale);
+    await again();
+    await expect(told).toHaveText(kept);
+    // Another person's sale, and one of another network's: not this one's.
+    await page.evaluate((key) => {
+      localStorage.removeItem(key);
+    }, sale);
+    await keep(
+      `birka:sale-pending:${me.organization_id}:${randomUUID()}:${market}`,
     );
-    await page.getByRole("button", { name: "Спробувати ще раз" }).click();
-    await expect.poll(() => reads).toBe(2);
-    await expect(told).toHaveText(/^Сесія завершилась/);
+    await keep(`birka:sale-pending:${randomUUID()}:${me.user_id}:${market}`);
+    await again();
+    await expect(told).toHaveText(ended);
+    // This person's order, its step sent and not answered: kept.
+    await keep(`birka:pending:${me.organization_id}:${me.user_id}:${market}`);
+    await again();
+    await expect(told).toHaveText(kept);
+    expect(reads).toBe(4);
     expect(signIns.sent).toBe(0);
   } finally {
     await settle(page, market, "ACTIVE");

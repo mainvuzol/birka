@@ -1846,6 +1846,11 @@ test.describe("«Продаж» › «Внесок»: a payment on a debt from t
     await expect(
       tillWays(page).getByRole("button", { name: "Внесок", exact: true }),
     ).toHaveAttribute("aria-current", "page");
+    // The till's list is a store's screen: «Змінити магазин» on its line.
+    const change = page
+      .locator(".store-line")
+      .getByRole("button", { name: "Змінити магазин" });
+    await expect(change).toBeEnabled();
     await page
       .getByRole("button", { name: /^Відкрити борг: Оксана Петренко,/ })
       .click();
@@ -1862,12 +1867,9 @@ test.describe("«Продаж» › «Внесок»: a payment on a debt from t
       page.getByRole("navigation", { name: "Розділи" }),
     ).toHaveCount(0);
     // Nor another store from the header: «←» is S21's only way out (review,
-    // 2026-10-29).
-    await expect(
-      page
-        .locator(".store-line")
-        .getByRole("button", { name: "Змінити магазин" }),
-    ).toBeDisabled();
+    // 2026-10-29), and a task's screen has no «Змінити магазин» at all
+    // (audit 2026-11-13, frame P2-1; before, it stood held).
+    await expect(change).toHaveCount(0);
     const owed = page.getByRole("group", { name: "Скільки винні" });
     await expect(owed.locator(".owed-what")).toHaveText("Винні");
     await expect(owed.locator(".owed-what svg")).toHaveCount(1);
@@ -2568,7 +2570,7 @@ test.describe("«Продаж» › «Внесок»: a payment on a debt from t
     ["light", { bg_color: "#ffffff", text_color: "#000000" }, "light"],
     ["dark", { bg_color: "#17212b", text_color: "#f5f5f5" }, "dark"],
   ] as const)
-    test(`at 360 × 640 in the ${name} theme, S21's keypad and its three ways are in view without scrolling, and read at 4.5:1`, async ({
+    test(`at 360 × 640 in the ${name} theme, S21's keypad and its three ways are in view without scrolling, and read at 4.5:1; its line one line, no «Змінити магазин» beside it (audit 2026-11-13, frame P2-1)`, async ({
       page,
     }) => {
       await page.setViewportSize({ width: 360, height: 640 });
@@ -2578,6 +2580,21 @@ test.describe("«Продаж» › «Внесок»: a payment on a debt from t
         await page.evaluate(() => document.documentElement.dataset.theme),
       ).toBe(scheme);
       await page.getByRole("button", { name: /^Відкрити борг: / }).click();
+      // Who owes and where, the whole width: one line of the meta's 19 at
+      // 360 — wider than the 186 left beside the button, where it took two.
+      const line = page.locator(".store-line .t-meta");
+      await expect(line).toHaveText("Оксана Петренко · «Основний» · з 01.10");
+      await expect(
+        page
+          .locator(".store-line")
+          .getByRole("button", { name: "Змінити магазин" }),
+      ).toHaveCount(0);
+      expect(
+        await line.evaluate((node) => node.getBoundingClientRect().height),
+      ).toBeLessThanOrEqual(19 * 1.5);
+      expect(
+        await line.evaluate((node) => node.getBoundingClientRect().width),
+      ).toBeGreaterThan(186);
       await keyIn(page, "2500");
       for (const one of [
         "1",

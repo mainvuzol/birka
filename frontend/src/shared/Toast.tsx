@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { JSX } from "react";
-import { CARRIED_TAP } from "./panel";
+import { CARRIED_TAP, docks } from "./panel";
 
 /** With a way back, a toast stays this long (spec §6.23). */
 export const UNDO_FOR = 5_000;
@@ -57,8 +57,48 @@ export function Toast({
       window.clearTimeout(wait);
     };
   }, []);
+  // Over the menu, 16 over it; and 16 over a dock or a panel that stands
+  // there, so the dock's button is never under it (spec §6.23; audit
+  // 2026-11-13, frame P2-5). A dock higher up — in its flow under content
+  // shorter than the screen — leaves the toast its place. Never lifted past
+  // the screen's top. Followed while the toast stands, a frame at a time: a
+  // sticky dock moves as the page scrolls, the keyboard opens, a screen
+  // changes under it.
+  const self = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const toast = self.current;
+    if (!toast) return;
+    let frame = 0;
+    const place = (): void => {
+      let lift = 0;
+      const standing = docks();
+      if (standing.length > 0) {
+        // The menu's height, as the menu sets it on the page's root.
+        const menu =
+          parseFloat(
+            document.documentElement.style.getPropertyValue("--menu-h"),
+          ) || 0;
+        const floor = window.innerHeight - menu - 16;
+        const top = floor - toast.offsetHeight;
+        for (const dock of standing) {
+          const box = dock.getBoundingClientRect();
+          if (box.height > 0 && box.top < floor && box.bottom > top)
+            lift = Math.max(lift, window.innerHeight - box.top + 16);
+        }
+        lift = Math.min(lift, window.innerHeight - toast.offsetHeight - 8);
+      }
+      const bottom = lift > 0 ? `${String(lift)}px` : "";
+      if (toast.style.bottom !== bottom) toast.style.bottom = bottom;
+      frame = window.requestAnimationFrame(place);
+    };
+    place();
+    return () => {
+      window.cancelAnimationFrame(frame);
+    };
+  }, []);
   return (
     <div
+      ref={self}
       className={action === undefined ? "toast toast-alone" : "toast"}
       role={live ? "status" : undefined}
       onFocus={() => {

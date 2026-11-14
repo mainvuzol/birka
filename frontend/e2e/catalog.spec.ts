@@ -332,6 +332,69 @@ test("a proposal kept on the phone is felt once, a warning; its later checks, lo
   expect(await buzzes()).toEqual(warned);
 });
 
+test("a proposal kept on the phone asks before Бірка closes, never while its first send is on its way, and lets it go once its check answers it (audit 2026-11-13, frame P2-5)", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const host = window as unknown as {
+      TelegramWebviewProxy: {
+        postEvent: (event: string, data: string) => void;
+      };
+      closing: unknown[];
+    };
+    host.closing = [];
+    host.TelegramWebviewProxy = {
+      postEvent: (event, data) => {
+        if (event === "web_app_setup_closing_behavior")
+          host.closing.push(JSON.parse(data) as unknown);
+      },
+    };
+  });
+  const closing = (): Promise<unknown> =>
+    page.evaluate(() =>
+      (window as unknown as { closing: unknown[] }).closing.at(-1),
+    );
+  await page.goto(launch("8.0"));
+  await openStore(page, "Основний MAIN");
+  await section(page, "Перевірка каталогу");
+  const sheet = await draft(page, "Запис, що питає перед закриттям");
+  let release = (): void => undefined;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let posts = 0;
+  await page.route("**/api/v1/catalog/match-decisions", async (route) => {
+    if (route.request().method() !== "POST") {
+      await route.continue();
+      return;
+    }
+    posts += 1;
+    if (posts === 1) {
+      await gate;
+      await route.fetch();
+      await route.abort("failed");
+    } else await route.continue();
+  });
+  const sent = page.waitForRequest(
+    (request) =>
+      request.method() === "POST" &&
+      new URL(request.url()).pathname === "/api/v1/catalog/match-decisions",
+  );
+  await pressMain(page);
+  await sent;
+  // On its way the first time: the sheet's to say, nothing asked.
+  expect(await closing()).toBeUndefined();
+  release();
+  const again = sheet.getByRole("button", {
+    name: "Перевірити результат операції",
+  });
+  await expect(again).toBeEnabled();
+  await expect.poll(closing).toEqual({ need_confirmation: true });
+  await again.click();
+  await expect(sheet.getByText("Може, це модель, що вже є?")).toBeVisible();
+  await expect.poll(closing).toEqual({ need_confirmation: false });
+});
+
 test("catalog change rejects stale confirmation through real API", async ({
   page,
 }) => {

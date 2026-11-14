@@ -4,8 +4,9 @@ import { visible } from "./visible";
 
 /** The line under every screen's title in a store: the store, who works in
  * it, and «Змінити магазин» for whoever has two stores or more — one tap
- * from any screen of a store («Усе на бірці» task list, P0-4), held as the
- * menu is. */
+ * from any screen of a store («Усе на бірці» task list, P0-4), held while
+ * an operation holds the store, and none on a task's screen (audit
+ * 2026-11-13, frame P2-1). */
 export interface WorkspaceLine {
   store: string;
   person: string;

@@ -2030,6 +2030,50 @@ test("inside Telegram «Зберегти назву» is the rename sheet's Main
   await expect.poll(main).toMatchObject({ is_visible: false });
 });
 
+test("inside Telegram a correction kept on the phone asks before Бірка closes, never while its first send is on its way, and lets it go once its check answers it (audit 2026-11-13, frame P2-5)", async ({
+  page,
+}) => {
+  const { told, fire } = await telegram(page);
+  const bearer = await token(page);
+  const name = `Закриття ${randomUUID().slice(0, 8)}`;
+  await model(page, bearer, { concept: name, variant: { color: "графіт" } }, 0);
+  // The first attempt held on its way, then lost, and lost again until let.
+  const first = gate();
+  let lost = true;
+  let attempts = 0;
+  await page.route("**/api/v1/catalog/models/*/rename", async (route) => {
+    attempts += 1;
+    if (attempts === 1) await first.held;
+    if (lost) await route.abort("connectionfailed");
+    else await route.continue();
+  });
+  const closing = async (): Promise<unknown> =>
+    (await told("web_app_setup_closing_behavior")).at(-1) ?? null;
+  await enter(page, "Моделі", "7.0");
+  await open(page, name, /графіт/);
+  const sheet = await renameSheet(page);
+  await sheet.getByLabel("Колір", { exact: true }).fill("сірий");
+  const sent = page.waitForRequest((request) =>
+    new URL(request.url()).pathname.endsWith("/rename"),
+  );
+  await fire("main_button_pressed");
+  await sent;
+  // On its way the first time: the MainButton's ring says so, nothing
+  // asked.
+  expect(await closing()).toBeNull();
+  first.release();
+  await expect(
+    page.getByRole("heading", { name: "Зміну каталогу ще не підтверджено" }),
+  ).toBeVisible();
+  await expect.poll(closing).toEqual({ need_confirmation: true });
+  lost = false;
+  await checked(
+    page,
+    page.getByText(`Назву змінено: «${name} графіт» → «${name} сірий».`),
+  );
+  await expect.poll(closing).toEqual({ need_confirmation: false });
+});
+
 test("the merge's question fits Telegram's popup: long names shortened alike with «…», the question whole (stage 2, goods task list, P1-2)", async ({
   page,
 }) => {

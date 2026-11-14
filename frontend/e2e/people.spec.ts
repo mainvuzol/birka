@@ -61,7 +61,7 @@ test("someone the shop has not added sees their Telegram ID, and is let in once 
   ).toBeVisible();
   await expect(page.getByText(String(stranger))).toBeVisible();
   // Not "the session ended": nothing the person does here would help.
-  await expect(page.getByText(/Сесія завершилась/)).toHaveCount(0);
+  await expect(page.getByText(/Сесію завершено/)).toHaveCount(0);
 
   expect(
     people(

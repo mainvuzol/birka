@@ -23,7 +23,7 @@ import { ResultScreen } from "@/shared/ResultScreen";
 import { ScreenHeader } from "@/shared/ScreenHeader";
 import { SendingLine } from "@/shared/Sending";
 import { Sum } from "@/shared/Sum";
-import { buzz, useMainButton } from "@/shared/telegram";
+import { buzz, useAskBeforeClosing, useMainButton } from "@/shared/telegram";
 import { Empty } from "@/shared/Empty";
 import { Placeholder } from "@/shared/Placeholder";
 import { ageOf } from "@/today/reads";
@@ -779,6 +779,10 @@ function NewInvoice({
   const sum = useRef<HTMLInputElement>(null);
   const dock = useRef<HTMLDivElement>(null);
   usePanelRoom(dock, recorded === null);
+  // A supplier chosen or a sum typed, the invoice not yet recorded:
+  // Telegram asks before Бірка closes, as its payment does (audit
+  // 2026-11-13, money P2-6).
+  useAskBeforeClosing(recorded === null && (supplier !== "" || amount !== ""));
 
   function submit(): void {
     setProblem(null);

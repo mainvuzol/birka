@@ -1889,6 +1889,67 @@ test("«Скопіювати ТТН» puts the waybill exactly as it was written
   expect(await buzzes(page)).toEqual([]);
 });
 
+test("outside Telegram a toast stands 16 over the card's dock where the dock stands at the foot, and over the menu where the dock stands higher, in its flow: never over the dock's button (spec §6.23; audit 2026-11-13, frame P2-5)", async ({
+  page,
+}) => {
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+  await page.setViewportSize({ width: 360, height: 640 });
+  await open(
+    page,
+    { order: order({ status: "DISPATCHED", waybill: "20451234" }), sent: [] },
+    undefined,
+    null,
+  );
+  const dock = page.locator(".order-dock");
+  await expect(dock.locator("button")).toBeVisible();
+  const said = page
+    .getByRole("status")
+    .filter({ hasText: /^ТТН скопійовано$/ });
+  const copy = page.getByRole("button", { name: "Скопіювати ТТН" });
+  /** Where the toast, the dock and the menu stand, by the viewport. */
+  const where = (): Promise<{
+    toast: { top: number; bottom: number };
+    dock: { top: number; bottom: number };
+    menu: number;
+    height: number;
+  }> =>
+    page.evaluate(() => {
+      const box = (selector: string): { top: number; bottom: number } => {
+        const found = document.querySelector(selector)?.getBoundingClientRect();
+        return { top: found?.top ?? NaN, bottom: found?.bottom ?? NaN };
+      };
+      return {
+        toast: box(".toast"),
+        dock: box(".order-dock"),
+        menu:
+          document.querySelector("nav.tab-bar")?.getBoundingClientRect().top ??
+          window.innerHeight,
+        height: window.innerHeight,
+      };
+    });
+  // The card is taller than the screen: its dock at the foot, over the
+  // menu; the toast 16 over the dock.
+  await copy.click();
+  await expect(said).toBeVisible();
+  await expect
+    .poll(async () => {
+      const now = await where();
+      return Math.round(now.dock.top - now.toast.bottom);
+    })
+    .toBe(16);
+  const low = await where();
+  expect(low.dock.bottom).toBeLessThanOrEqual(low.menu + 1);
+  await expect(said).toHaveCount(0, { timeout: 8_000 });
+  // A screen the card fits: its dock in its flow, higher up; the toast
+  // keeps its place, 16 over the menu, under the dock.
+  await page.setViewportSize({ width: 360, height: 1600 });
+  await copy.click();
+  await expect(said).toBeVisible();
+  const high = await where();
+  expect(high.dock.bottom).toBeLessThan(high.toast.top);
+  expect(Math.round(high.menu - high.toast.bottom)).toBe(16);
+});
+
 test("«Відправити»'s sheet: the parcel by its warehouses, Нова пошта's one line and Укрпошта's none, abroad its note and no customer's data; Enter puts the keyboard away and sends nothing; while typed Telegram asks before closing, and its «Назад» closes the sheet («Усе на бірці» sections task list, P0-3)", async ({
   page,
 }) => {
@@ -2519,18 +2580,25 @@ test("goods come back on a task's screen: the menu aside, the order's goods the 
   await expect
     .poll(() => main(page))
     .toMatchObject({ is_visible: true, text: "Прибув на пошту" });
+  // The card is a store's screen: «Змінити магазин» on its line.
+  await expect(
+    page
+      .locator(".store-line:visible")
+      .getByRole("button", { name: "Змінити магазин" }),
+  ).toBeEnabled();
   const row = page.getByRole("button", { name: "Товар повернувся на склад" });
   await row.click();
   await expect(
     page.getByRole("heading", { name: "Товар повернувся на склад" }),
   ).toBeFocused();
-  // A task's screen: the menu steps aside, «Змінити магазин» held.
+  // A task's screen: the menu steps aside, and no «Змінити магазин» on its
+  // line (audit 2026-11-13, frame P2-1; before, it stood held).
   await expect(sections).toHaveCount(0);
   await expect(
     page
-      .locator(".store-line")
+      .locator(".store-line:visible")
       .getByRole("button", { name: "Змінити магазин" }),
-  ).toBeDisabled();
+  ).toHaveCount(0);
   // Its one line: the store and the goods, two lines at most at 360.
   const line = page.locator(".store-line p:visible");
   await expect(line).toHaveText("Основний · Лоран шоколад · M × 2 + ще 1");
@@ -2648,7 +2716,7 @@ test("goods come back on a task's screen: the menu aside, the order's goods the 
   expect(server.sent).toHaveLength(1);
 });
 
-test("a long product's line under «Товар повернувся на склад» is three lines at most at 360 beside «Змінити магазин», two without it, never past the screen (orders and «Каса» task list after stage 2, P1-2; review)", async ({
+test("a long product's line under «Товар повернувся на склад» is two lines at most at 360, the whole width with no «Змінити магазин» beside it, never past the screen (orders and «Каса» task list after stage 2, P1-2; review; audit 2026-11-13, frame P2-1)", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 360, height: 640 });
@@ -2669,6 +2737,12 @@ test("a long product's line under «Товар повернувся на скл�
   };
   await warehouses(page);
   await open(page, server);
+  // On the card, «Змінити магазин» beside its line.
+  await expect(
+    page
+      .locator(".store-line:visible")
+      .locator("button", { hasText: "Змінити магазин" }),
+  ).toBeVisible();
   await page.getByRole("button", { name: "Товар повернувся на склад" }).click();
   const line = page.locator(".store-line p:visible");
   await expect(line).toHaveText(
@@ -2681,19 +2755,14 @@ test("a long product's line under «Товар повернувся на скл�
           parseFloat(getComputedStyle(node).lineHeight),
       ),
     );
-  // The screen's own, not the card's hidden under it.
-  const change = page
-    .locator(".store-line:visible")
-    .locator("button", { hasText: "Змінити магазин" });
-  await expect(change).toBeVisible();
-  expect(await lines()).toBeLessThanOrEqual(3);
-  await change.evaluate((node) => {
-    (node as HTMLElement).style.display = "none";
-  });
+  // The screen's own, not the card's hidden under it: no «Змінити
+  // магазин» there, so two lines at most, where beside it there were three.
+  await expect(
+    page
+      .locator(".store-line:visible")
+      .locator("button", { hasText: "Змінити магазин" }),
+  ).toHaveCount(0);
   expect(await lines()).toBeLessThanOrEqual(2);
-  await change.evaluate((node) => {
-    (node as HTMLElement).style.display = "";
-  });
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth),
   ).toBeLessThanOrEqual(360);

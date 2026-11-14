@@ -1,6 +1,6 @@
 import { Component, useEffect, useState } from "react";
 import type { JSX, ReactNode } from "react";
-import { UNREACHABLE } from "@/shared/api";
+import { keptOnPhone, UNREACHABLE } from "@/shared/api";
 import { Banner } from "@/shared/Banner";
 import { BlankTag } from "@/shared/BlankTag";
 import { Icon } from "@/shared/Icon";
@@ -8,27 +8,11 @@ import { useReach } from "@/shared/reach";
 import { release, reportError } from "@/shared/report";
 import { connectTelegram } from "@/shared/telegram";
 
-/**
- * Whether the phone keeps a command that was sent and whose answer is not
- * known yet. Only those are saved: each journal
- * (`birka:<scope>-pending:…`, the drawer's `birka:cash-pending:…` among
- * them, and the orders' `birka:pending:…`) is written just before its
- * request and removed once its outcome is known. A basket still being filled
- * lives only on the screen.
- *
- * Only the keys' names are looked at, never their values: those hold
- * customers' names and phones. Storage that cannot be read promises nothing.
- */
+/** Whether the phone keeps a command that was sent and whose answer is not
+ * known yet, anyone's: a screen may break before the person is known. A
+ * basket still being filled lives only on the screen. */
 function unansweredCommandKept(): boolean {
-  try {
-    for (let index = 0; index < localStorage.length; index += 1) {
-      const name = localStorage.key(index);
-      if (name?.startsWith("birka:") && name.includes("pending:")) return true;
-    }
-  } catch {
-    /* Blocked or broken storage: say only what is true without it. */
-  }
-  return false;
+  return keptOnPhone();
 }
 
 /**

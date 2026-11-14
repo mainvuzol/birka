@@ -930,6 +930,81 @@ test("a kept change refused on its check as having recorded nothing keeps the ke
   await expect(page.locator(".stub-kept")).toHaveCount(0);
 });
 
+test("a change kept on the phone asks before Бірка closes, never while its first send is on its way, and lets it go once its check answers it (audit 2026-11-13, frame P2-5)", async ({
+  page,
+}) => {
+  await settle(page, fixture.network_market_store_id, "ACTIVE");
+  await page.addInitScript(() => {
+    const host = window as unknown as {
+      TelegramWebviewProxy: {
+        postEvent: (event: string, data: string) => void;
+      };
+      closing: unknown[];
+    };
+    host.closing = [];
+    host.TelegramWebviewProxy = {
+      postEvent: (event, data) => {
+        if (event === "web_app_setup_closing_behavior")
+          host.closing.push(JSON.parse(data) as unknown);
+      },
+    };
+  });
+  const closing = (): Promise<unknown> =>
+    page.evaluate(() =>
+      (window as unknown as { closing: unknown[] }).closing.at(-1),
+    );
+  let release = (): void => undefined;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let first = true;
+  await page.route("**/api/v1/stores/*/state", async (route) => {
+    if (first) {
+      first = false;
+      // Held on its way, then taken by the server, its answer lost.
+      await gate;
+      await route.fetch();
+      await route.abort("connectionreset");
+    } else await route.continue();
+  });
+  try {
+    await storesSection(page);
+    const market = await storeScreen(page, "Ринок");
+    await market.getByRole("button", { name: "Заблокувати" }).click();
+    const sheet = await stateSheet(page, "Заблокувати «Ринок»?");
+    await sheet.getByLabel(/^Причина/).fill("Перевірка");
+    const sent = page.waitForRequest(
+      (request) =>
+        request.method() === "POST" &&
+        new URL(request.url()).pathname.endsWith("/state"),
+    );
+    await sheet
+      .getByRole("button", { name: "Так, заблокувати «Ринок»" })
+      .click();
+    await sent;
+    // On its way the first time: its sheet's to say, nothing asked.
+    expect(await closing()).toBeUndefined();
+    release();
+    const kept = market.locator(".stub-kept");
+    await expect(
+      kept.getByRole("heading", {
+        name: "Зміну стану магазину ще не підтверджено",
+      }),
+    ).toBeVisible();
+    await expect.poll(closing).toEqual({ need_confirmation: true });
+    await kept
+      .getByRole("button", {
+        name: "Перевірити результат зміни",
+        exact: true,
+      })
+      .click();
+    await expect(page.locator(".stub-recorded")).toBeVisible();
+    await expect.poll(closing).toEqual({ need_confirmation: false });
+  } finally {
+    await settle(page, fixture.network_market_store_id, "ACTIVE");
+  }
+});
+
 test("a change whose answer is lost is resent unchanged, and done once", async ({
   page,
 }) => {
