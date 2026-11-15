@@ -1361,6 +1361,46 @@ export async function expectListBlock(
   }
 }
 
+/** A warning said at once (audit 2026-11-13, goods P2-5): its plate — the
+ * warning's ground and edge — led by its first line in the warning's colour,
+ * 600, never a heading; nothing in it a heading. */
+export async function expectNoticeLead(
+  plate: Locator,
+  lead: Locator,
+): Promise<void> {
+  await expect(plate.getByRole("heading")).toHaveCount(0);
+  const drawn = await lead.evaluate((node) => {
+    const probe = document.createElement("span");
+    probe.style.color = "var(--warn)";
+    probe.style.backgroundColor = "var(--warn-bg)";
+    document.body.append(probe);
+    const said = {
+      warn: getComputedStyle(probe).color,
+      ground: getComputedStyle(probe).backgroundColor,
+    };
+    probe.remove();
+    const plate = node.closest(".notice");
+    return {
+      // A line, the plate's first (review).
+      first: node.tagName === "P" && plate?.firstElementChild === node,
+      colour: getComputedStyle(node).color === said.warn,
+      // Its own room under it, in any sheet (review).
+      under: getComputedStyle(node).marginBottom,
+      weight: getComputedStyle(node).fontWeight,
+      ground:
+        plate !== null &&
+        getComputedStyle(plate).backgroundColor === said.ground,
+    };
+  });
+  expect(drawn).toEqual({
+    first: true,
+    colour: true,
+    under: "6px",
+    weight: "600",
+    ground: true,
+  });
+}
+
 /** A sum's face, size and weight as drawn: `money-m` — 20/24 in the text
  * face, 600, its figures even, never the condensed face below 22 (spec
  * §5.5; audit 2026-11-13, frame P2-8) — or `money-l`, 32/34 in the display

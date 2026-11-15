@@ -3570,7 +3570,13 @@ function Workspace({
               adjustmentUnsettled ||
               returnUnsettled ||
               creditUnsettled ||
-              cashUnsettled
+              cashUnsettled ||
+              // As the till: whatever holds every other tab holds a delivery
+              // too (audit 2026-11-13, Д4; review).
+              storesUnsettled ||
+              supplierUnsettled ||
+              invoiceUnsettled ||
+              correctionUnsettled
             }
           />
         ) : // Never opened without the right: nothing is said of the rule
@@ -3675,7 +3681,14 @@ function Workspace({
               receiptCommand.pending !== null ||
               adjustmentUnsettled ||
               creditUnsettled ||
-              cashUnsettled
+              cashUnsettled ||
+              // As «Продати» and «Внесок»: whatever holds every other tab
+              // holds a return too — a kept return confirmed while another
+              // operation is kept leaves it held (audit 2026-11-13, Д4).
+              storesUnsettled ||
+              supplierUnsettled ||
+              invoiceUnsettled ||
+              correctionUnsettled
             }
           />
         ) : // Never opened without the right: nothing is said of the rule
@@ -3774,7 +3787,13 @@ function Workspace({
               receiptCommand.pending !== null ||
               adjustmentUnsettled ||
               returnUnsettled ||
-              cashUnsettled
+              cashUnsettled ||
+              // As «Внесок»: whatever holds every other tab holds «Покупці»
+              // too (audit 2026-11-13, Д4; review).
+              storesUnsettled ||
+              supplierUnsettled ||
+              invoiceUnsettled ||
+              correctionUnsettled
             }
           />
         ) : // Never opened without the right: nothing is said of the rule

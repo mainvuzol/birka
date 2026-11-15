@@ -10020,3 +10020,53 @@ recorded changes; one line's words change («Ще N» → «+ ще N»).
     come. Decided here: the wait draws one store's column — how many
     stores, only the answer says; a store's name over two lines may still
     add its second line.
+
+## Chosen in chat — 2026-11-15 (audit 2026-11-13, batch 11: the catalogue's last plates with a heading and its radios; a rename's fork as «Нова модель»'s «Схожі»; a return held by whatever holds the till; goods P2-5, frame Д4)
+
+«Yes, both» after #211: the one task of the audit's lists that waited on
+no one, goods P2-5, with the developer's check Д4 of the frame's list. No
+request body, right or catalogue rule changes; no words change.
+
+- **A warning's plate led by its line** (goods P2-5; spec §6.16 «the
+  warning line»): «Схожа назва вже є» — in «Нова модель», over a delivery
+  and in a model's rename — and «Поки що не можна об’єднати» of a merge
+  have no heading. Their first line is in the warning's colour, 600; under
+  it, as before, what is alike and «Взяти «…»», or the reasons as a list.
+  - Decided here: the plate stays — a warning said at once is the
+    direction's plate and triangle, «a name already taken» among them (cash
+    P2-3, orders P2-3, stage 2 P0-2). Only its heading goes.
+- **A rename's fork as «Нова модель»'s «Схожі»** (goods P2-5; the owner's
+  reading, line 6: rows with «Це вона», no circles, no headings in frames):
+  «З такою назвою вже є модель. Це вона — чи окрема модель зі схожою
+  назвою?» is the fork's line, said at once; the models the server names
+  are rows, each with «Це вона», pressed when chosen; «Окрема модель зі
+  схожою назвою», a quiet button under them, pressed when chosen, opens
+  «Чим відрізняється модель». No plate, no radios, nothing chosen
+  beforehand; «Зберегти назву» holds until one is — and, for another model,
+  until what tells it apart is written (ADR-0002), as before.
+  - Decided here: «Окрема модель…» pressed puts the cursor in «Чим
+    відрізняється модель», which it needs; pressed, it looks as a chosen
+    «Це вона» (review).
+  - Decided here (review): the fork's line is a question, said politely
+    (a status), never a refusal's or a warning's alert — nothing has gone
+    wrong yet.
+  - Decided here (review): a word of the name changed, what was chosen in
+    the fork and what was written in «Чим відрізняється модель» are
+    forgotten — they answered for the name as it was; nothing is carried
+    on unseen (P6 «ничего не угадываем»).
+  - Decided here (found while proving): a rename's answer that comes
+    after a word of the name was changed is not shown — it answers for
+    words no longer typed. Before, a server's «Це вона — чи окрема…» for
+    the name as sent could come back over the name as typed.
+  - Not touched: «Окрема модель зі схожою назвою» of «Нова модель»'s own
+    form, a checkbox — no radio, and not the fork the task names.
+- **A return held by whatever holds the till** (frame Д4; developer's
+  check): «Повернення» is held by the same kept operations as «Продати» and
+  «Внесок» — a store's state, a supplier's return, an invoice's operation
+  and a correction now among them. A kept return confirmed while one of
+  those is still kept leaves «Повернення» held: no other return begins
+  until it settles, as one unconfirmed operation at a time has it.
+  - Decided here (review): «Прийшов товар» and «Покупці» had the same gap
+    and are held the same way — a kept delivery or write-off confirmed
+    while one of those four is kept leaves no new delivery or payment to
+    begin. No other screen's list lacked them.

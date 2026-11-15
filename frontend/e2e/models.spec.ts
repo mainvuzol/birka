@@ -3,6 +3,7 @@ import {
   expect,
   addModel,
   expectFold,
+  expectNoticeLead,
   FAILED_REQUEST_ID,
   fillLine,
   leaveNewModel,
@@ -553,10 +554,16 @@ test("nothing is merged into a retired model: the preview says so and the merge 
   await enter(page, "Моделі");
   await open(page, name, new RegExp(colour.typo));
   await mergeWith(page, name, `${name} ${colour.right} — Прибрана`);
-  // What stops it, as rows under their heading (P1-2).
+  // What stops it, as rows under its first line — a warning's plate led by
+  // a line in the warning's colour, never a heading (P1-2; audit
+  // 2026-11-13, goods P2-5).
   const blockers = page.getByRole("alert").filter({
-    has: page.getByRole("heading", { name: "Поки що не можна об’єднати" }),
+    hasText: "Поки що не можна об’єднати",
   });
+  await expectNoticeLead(
+    blockers,
+    blockers.getByText("Поки що не можна об’єднати", { exact: true }),
+  );
   await expect(blockers.getByRole("listitem")).toHaveText([
     "Модель, що лишається, прибрана. Спершу поверніть її.",
   ]);
@@ -645,6 +652,15 @@ test("a rename warns of a similar word, and taking the word in use saves it", as
   await sheet.getByLabel("Колір", { exact: true }).fill(colour.typo);
   await saveName(sheet).click();
   await expect(sheet.getByText("Схожа назва вже є")).toBeVisible();
+  // A warning's plate led by its line, no heading (audit 2026-11-13, goods
+  // P2-5).
+  const alike = sheet.getByRole("alert").filter({
+    hasText: "Схожа назва вже є",
+  });
+  await expectNoticeLead(
+    alike,
+    alike.getByText("Схожа назва вже є", { exact: true }),
+  );
   await expect(
     sheet.getByText(
       `Колір: «${colour.typo}» схоже на «${colour.right}», що вже є в каталозі.`,
@@ -962,11 +978,119 @@ test("only a person with the right in every store is offered a merge", async ({
   await enter(page, "Моделі");
   await open(page, `${name} друга`, /друга графіт/);
   const sheet = await renameSheet(page);
+  // What each choice sends (review).
+  const renames: Record<string, unknown>[] = [];
+  page.on("request", (request) => {
+    if (request.method() === "POST" && request.url().endsWith("/rename"))
+      renames.push(request.postDataJSON() as Record<string, unknown>);
+  });
+  await sheet.getByLabel("Назва моделі", { exact: true }).fill(name);
+  const asked = page.waitForResponse(
+    (r) => r.request().method() === "POST" && r.url().endsWith("/rename"),
+  );
+  await saveName(sheet).click();
+  const ambiguous = (await (await asked).json()) as {
+    code: string;
+    details: { candidate_family_ids: string[] };
+  };
+  expect(ambiguous.code).toBe("CATALOG_AMBIGUOUS");
+  // The fork as «Нова модель»'s «Схожі» asks it: the question said to a
+  // reader as it comes, never drawn as a refusal; the models as rows with
+  // «Це вона», «Окрема модель зі схожою назвою» under them — no plate, no
+  // circles, nothing chosen beforehand, and the name not saved until one is
+  // (audit 2026-11-13, goods P2-5; review).
+  const fork = sheet.locator(".rename-fork");
+  const question = fork.getByRole("status");
+  await expect(question).toHaveText(
+    "З такою назвою вже є модель. Це вона — чи окрема модель зі схожою назвою?",
+  );
+  expect(
+    await question.evaluate((node) => [
+      getComputedStyle(node).backgroundColor,
+      getComputedStyle(node, "::before").content,
+    ]),
+  ).toEqual(["rgba(0, 0, 0, 0)", "none"]);
+  await expect(sheet.getByRole("alert")).toHaveCount(0);
+  await expect(sheet.getByRole("radio")).toHaveCount(0);
+  await expect(fork.locator(".notice")).toHaveCount(0);
+  await expect(fork).not.toHaveClass(/\bnotice\b/);
+  const it = fork.getByRole("button", {
+    name: `Це вона: ${name}`,
+    exact: true,
+  });
+  const apart = fork.getByRole("button", {
+    name: "Окрема модель зі схожою назвою",
+    exact: true,
+  });
+  await expect(it).toHaveAttribute("aria-pressed", "false");
+  await expect(apart).toHaveAttribute("aria-pressed", "false");
+  await expect(saveName(sheet)).toBeDisabled();
+  // The other way opens what tells it apart, the cursor in it, and looks
+  // chosen as a chosen «Це вона» would.
+  await apart.click();
+  await expect(apart).toHaveAttribute("aria-pressed", "true");
+  const how = sheet.getByLabel("Чим відрізняється модель");
+  await expect(how).toBeFocused();
+  expect(
+    await apart.evaluate((node) => {
+      const probe = document.createElement("span");
+      probe.style.backgroundColor = "var(--chosen)";
+      document.body.append(probe);
+      const chosen = getComputedStyle(probe).backgroundColor;
+      probe.remove();
+      return getComputedStyle(node).backgroundColor === chosen;
+    }),
+  ).toBe(true);
+  await expect(saveName(sheet)).toBeDisabled();
+  // Written, it is sent as another model, with no model of the fork's —
+  // answered here as the server answered before, so nothing is renamed.
+  await how.fill("Інший крій для тесту");
+  await page.route(
+    "**/api/v1/catalog/models/*/rename",
+    async (route) => {
+      await route.fulfill({ status: 409, json: ambiguous });
+    },
+    { times: 1 },
+  );
+  await saveName(sheet).click();
+  await expect.poll(() => renames.length).toBe(2);
+  expect(renames[1]).toMatchObject({
+    product_family_id: null,
+    new_model: true,
+    distinction_note: "Інший крій для тесту",
+  });
+  // A word changed: the fork answered for the words as they were, so what
+  // was chosen is not carried on — asked again, nothing is chosen; and the
+  // answer still on its way, for the words before, is not shown (found
+  // while proving).
+  await sheet.getByLabel("Назва моделі", { exact: true }).fill(`${name} `);
+  await expect(fork).toHaveCount(0);
   await sheet.getByLabel("Назва моделі", { exact: true }).fill(name);
   await saveName(sheet).click();
-  // The same model, and the same colour: the name is that one's.
-  await sheet.getByRole("radio", { name, exact: true }).check();
+  await expect(it).toHaveAttribute("aria-pressed", "false");
+  await expect(apart).toHaveAttribute("aria-pressed", "false");
+  await expect.poll(() => renames.length).toBe(3);
+  expect(renames[2]).toMatchObject({
+    product_family_id: null,
+    new_model: false,
+    distinction_note: null,
+  });
+  // The same model, and the same colour: the name is that one's — the other
+  // way let go.
+  await apart.click();
+  await it.click();
+  await expect(it).toHaveAttribute("aria-pressed", "true");
+  await expect(apart).toHaveAttribute("aria-pressed", "false");
+  await expect(how).toHaveCount(0);
   await saveName(sheet).click();
+  await expect.poll(() => renames.length).toBe(4);
+  expect(renames[3]).toMatchObject({
+    new_model: false,
+    distinction_note: null,
+  });
+  expect(ambiguous.details.candidate_family_ids).toContain(
+    renames[3]?.product_family_id,
+  );
   await expect(
     sheet.getByText("Така назва вже є в іншої моделі.", { exact: true }),
   ).toBeVisible();

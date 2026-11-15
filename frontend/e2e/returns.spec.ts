@@ -405,6 +405,72 @@ test("a return whose outcome is unknown blocks the app until it is resent unchan
   expect(sent.bodies).toHaveLength(2);
 });
 
+test("a kept return confirmed while the phone keeps an invoice operation it cannot read leaves «Повернення» held, as the till and «Внесок» are (audit 2026-11-13, frame Д4)", async ({
+  page,
+}) => {
+  // Whoever may see the suppliers' invoices: their kept operation is read.
+  await page.route("**/api/v1/me", async (route) => {
+    const response = await route.fetch();
+    const body = (await response.json()) as {
+      stores: { permissions: string[] }[];
+    };
+    for (const store of body.stores)
+      store.permissions = [...new Set([...store.permissions, "supplier:debt"])];
+    await route.fulfill({ response, json: body });
+  });
+  const { model } = await sold(page, 2);
+  let first = true;
+  await page.route("**/api/v1/sales/*/refunds", async (route) => {
+    if (first) {
+      first = false;
+      await route.abort("connectionreset");
+    } else await route.continue();
+  });
+  await find(page, model);
+  await page.getByRole("button", { name: "Оформити повернення" }).click();
+  await returnUnits(page, { intact: 1 });
+  await page
+    .getByRole("button", { name: "Повернути покупцю 3 000,00 грн готівкою" })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Повернення ще не підтверджено" }),
+  ).toBeVisible();
+  // The phone keeps an invoice operation too, one it cannot read; Бірка is
+  // opened again, on «Повернення» and its kept return.
+  await page.evaluate(() => {
+    const kept = Object.keys(localStorage).find((key) =>
+      key.startsWith("birka:return-pending:"),
+    );
+    if (kept === undefined) throw new Error("no kept return");
+    localStorage.setItem(
+      kept.replace("birka:return-pending:", "birka:supplier-invoice-pending:"),
+      "{not an invoice",
+    );
+  });
+  await page.goto("about:blank");
+  await page.goto(launch());
+  await openStore(page, "Основний MAIN");
+  await expect(
+    page
+      .getByRole("alert")
+      .filter({ hasText: "збережену операцію з накладною" }),
+  ).toBeVisible();
+  // Opened again, the phone checks the kept return by itself.
+  await expect(
+    page.getByRole("heading", { name: "Повернення записано один раз" }),
+  ).toBeVisible();
+  // The return settled, the invoice is not: no other return begins.
+  await page.getByLabel("Що повертають?").fill(model);
+  await page.getByLabel("Що повертають?").press("Enter");
+  await expect(page.getByRole("article")).toHaveCount(1);
+  await expect(
+    page.getByRole("button", { name: /^Оформити повернення/ }),
+  ).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "Продаж", exact: true }),
+  ).toBeDisabled();
+});
+
 test("money back on a card goes through the terminal, and a transfer is sent", async ({
   page,
 }) => {

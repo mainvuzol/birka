@@ -408,6 +408,16 @@ function RenameSheet({
   const [family, setFamily] = useState<string | null>(null);
   const [separate, setSeparate] = useState(false);
   const [note, setNote] = useState("");
+  // «Окрема модель зі схожою назвою» pressed: the cursor in what tells it
+  // apart, which it needs (audit 2026-11-13, goods P2-5).
+  const how = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    if (separate) how.current?.focus();
+  }, [separate]);
+  // Each word typed counts: an answer come for words changed since they
+  // were sent is not shown — it asks of words no longer typed (found while
+  // proving; the review's own rule below).
+  const edits = useRef(0);
   const [foot, setFoot] = useState<HTMLElement | null>(null);
   const similar = similarFrom(refusal);
   const candidates =
@@ -449,6 +459,12 @@ function RenameSheet({
   function change(name: Field, text: string): void {
     setFields({ ...fields, [name]: text });
     setRefusal(null);
+    edits.current += 1;
+    // The fork answered for the words as they were: changed, nothing chosen
+    // is carried on, unseen (review; P6 «ничего не угадываем»).
+    setFamily(null);
+    setSeparate(false);
+    setNote("");
   }
 
   async function submit(similarConfirmed: boolean): Promise<void> {
@@ -465,6 +481,7 @@ function RenameSheet({
       if (given) variant[name] = given;
     }
     if (length) variant.length_cm = length;
+    const asked = edits.current;
     const refused = await send({
       kind: "rename",
       product_variant_id: card.product_variant_id,
@@ -478,6 +495,7 @@ function RenameSheet({
       distinction_note: separate ? note.trim() : null,
       similar_confirmed: similarConfirmed,
     });
+    if (edits.current !== asked) return;
     setRefusal(refused);
     // Refused for what it says of the words: every word in sight.
     if (
@@ -661,8 +679,13 @@ function RenameSheet({
             </section>
           )}
           {candidates.length > 0 && (
-            <section className="notice" role="alert">
-              <p>
+            // The fork as «Нова модель»'s «Схожі» asks it: the question, said
+            // to a reader as it comes but never drawn as a refusal, the models
+            // as rows with «Це вона», «Окрема модель зі схожою назвою» under
+            // them; nothing chosen beforehand, no plate and no circles (audit
+            // 2026-11-13, goods P2-5; review).
+            <section className="rename-fork">
+              <p className="new-model-ask" role="status">
                 З такою назвою вже є модель. Це вона — чи окрема модель зі
                 схожою назвою?
               </p>
@@ -674,38 +697,46 @@ function RenameSheet({
                   }}
                 />
               )}
-              {(families.data?.items ?? [])
-                .filter((item) => candidates.includes(item.family_id))
-                .map((item) => (
-                  <label key={item.family_id} className="check">
-                    <input
-                      type="radio"
-                      name="family"
-                      checked={!separate && family === item.family_id}
-                      onChange={() => {
-                        setFamily(item.family_id);
-                        setSeparate(false);
-                      }}
-                    />
-                    {familyLabel(item)}
-                  </label>
-                ))}
-              <label className="check">
-                <input
-                  type="radio"
-                  name="family"
-                  checked={separate}
-                  onChange={() => {
-                    setSeparate(true);
-                    setFamily(null);
-                  }}
-                />
+              <ul className="new-model-candidates">
+                {(families.data?.items ?? [])
+                  .filter((item) => candidates.includes(item.family_id))
+                  .map((item) => (
+                    <li key={item.family_id}>
+                      <span className="new-model-name">
+                        <strong>{familyLabel(item)}</strong>
+                      </span>
+                      <button
+                        type="button"
+                        className="quiet"
+                        aria-pressed={!separate && family === item.family_id}
+                        aria-label={`Це вона: ${familyLabel(item)}`}
+                        onClick={() => {
+                          buzz("selection");
+                          setFamily(item.family_id);
+                          setSeparate(false);
+                        }}
+                      >
+                        Це вона
+                      </button>
+                    </li>
+                  ))}
+              </ul>
+              <button
+                type="button"
+                className="quiet"
+                aria-pressed={separate}
+                onClick={() => {
+                  setSeparate(true);
+                  setFamily(null);
+                }}
+              >
                 Окрема модель зі схожою назвою
-              </label>
+              </button>
               {separate && (
                 <label>
                   Чим відрізняється модель
                   <textarea
+                    ref={how}
                     enterKeyHint="enter"
                     required
                     maxLength={1000}
@@ -1005,7 +1036,7 @@ function MergeScreen({
             </p>
             {blockers.length > 0 && (
               <section className="notice merge-blockers" role="alert">
-                <h3>Поки що не можна об’єднати</h3>
+                <p className="notice-lead">Поки що не можна об’єднати</p>
                 <ul>
                   {blockers.map((blocker) => (
                     <li key={blocker.reason}>{blockerText(blocker)}</li>

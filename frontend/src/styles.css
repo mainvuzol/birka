@@ -889,6 +889,27 @@ nav:not(.tab-bar, .more-list) {
   background: var(--chosen);
   color: var(--on-chosen);
 }
+/* A rename's fork as «Нова модель»'s «Схожі» asks it: the question, the
+   models' rows, the other way and what tells it apart under them (audit
+   2026-11-13, goods P2-5). */
+.rename-fork {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+.rename-fork > :is(.new-model-candidates, label, .notice) {
+  align-self: stretch;
+}
+.rename-fork > button {
+  min-height: var(--touch);
+}
+/* Chosen, the other way looks as a chosen «Це вона» (review). */
+.rename-fork > button[aria-pressed="true"] {
+  border-color: var(--chosen);
+  background: var(--chosen);
+  color: var(--on-chosen);
+}
 .new-model-kind {
   grid-auto-columns: auto;
 }
@@ -3967,6 +3988,14 @@ span.cash-difference > .difference-sign {
 .notice[role="alert"] > h3:first-child,
 .notice[role="alert"] > h4:first-child {
   margin-top: 0;
+}
+/* A plate led by its first line, never a heading: in the warning's colour,
+   600 — «Схожа назва вже є», «Поки що не можна об’єднати» (audit 2026-11-13,
+   goods P2-5). */
+.notice .notice-lead {
+  margin: 0 0 6px;
+  color: var(--warn);
+  font-weight: 600;
 }
 /* What is said under a field or a task, 14 px on every screen of «Каса»
    (cash task list, P2-3). */
@@ -7808,9 +7837,6 @@ label.way-option {
   margin: 0;
   padding-left: 0;
   list-style: none;
-}
-.merge-blockers h3 {
-  margin: 0 0 6px;
 }
 .merge-blockers ul {
   margin: 0;

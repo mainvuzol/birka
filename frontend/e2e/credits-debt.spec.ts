@@ -972,6 +972,78 @@ test("the owner's write-off behind the ⋯, at the end of a long history, asks w
   await expect(page.locator(".paid-result")).toHaveCount(0);
 });
 
+test("a kept write-off confirmed while the phone keeps an invoice operation it cannot read leaves «Покупці» held, as the till is (audit 2026-11-13, frame Д4; review)", async ({
+  page,
+}) => {
+  // Whoever may see the suppliers' invoices: their kept operation is read.
+  await page.route("**/api/v1/me", async (route) => {
+    const response = await route.fetch();
+    const body = (await response.json()) as {
+      stores: { permissions: string[] }[];
+    };
+    for (const store of body.stores)
+      store.permissions = [...new Set([...store.permissions, "supplier:debt"])];
+    await route.fulfill({ response, json: body });
+  });
+  const one = debt();
+  await serveDebt(page, one);
+  let first = true;
+  await page.route(`**/api/v1/credits/${one.id}/write-off`, async (route) => {
+    if (first) {
+      first = false;
+      await route.abort("connectionreset");
+      return;
+    }
+    await route.fulfill({
+      json: {
+        ...one,
+        status: "WRITTEN_OFF",
+        owed: "0.00",
+        written_off: "1234.56",
+        closed_at: `${String(thisYear)}-10-16T09:00:00Z`,
+      },
+    });
+  });
+  await opened(page);
+  await writeOff(page, "1 234,56 грн");
+  await expect(
+    page.getByRole("heading", { name: "Списання ще не підтверджено" }),
+  ).toBeVisible();
+  // The phone keeps an invoice operation too, one it cannot read; Бірка is
+  // opened again, on «Покупці» and its kept write-off.
+  await page.evaluate(() => {
+    const kept = Object.keys(localStorage).find((key) =>
+      key.startsWith("birka:credit-pending:"),
+    );
+    if (kept === undefined) throw new Error("no kept write-off");
+    localStorage.setItem(
+      kept.replace("birka:credit-pending:", "birka:supplier-invoice-pending:"),
+      "{not an invoice",
+    );
+  });
+  await page.goto("about:blank");
+  await page.goto(launch());
+  await openStore(page, "Основний MAIN");
+  await expect(
+    page
+      .getByRole("alert")
+      .filter({ hasText: "збережену операцію з накладною" }),
+  ).toBeVisible();
+  // Opened again, the phone checks the kept write-off by itself.
+  await expect(
+    page.getByRole("heading", { name: "Списання записано один раз" }),
+  ).toBeVisible();
+  // The write-off settled, the invoice is not: no payment begins.
+  await page.getByRole("button", { name: /^Відкрити борг: Оксана/ }).click();
+  await expect(
+    page.getByRole("heading", { name: "Оксана Петренко", level: 1 }),
+  ).toBeVisible();
+  await expect(deposit(page)).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "Продаж", exact: true }),
+  ).toBeDisabled();
+});
+
 test("inside Telegram a write-off's result keeps its own way back: the dock's main, «Відкрити борг» quiet under the stub, Telegram's MainButton put away with the debt's «Внесок» (owner, 2026-10-18; audit 2026-11-13, sale P1-1)", async ({
   page,
 }) => {
