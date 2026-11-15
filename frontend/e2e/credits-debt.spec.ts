@@ -1023,7 +1023,13 @@ test("a kept write-off confirmed while the phone keeps an invoice operation it c
   });
   await page.goto("about:blank");
   await page.goto(launch());
-  await openStore(page, "Основний MAIN");
+  // At the door, the store: the kept write-off opens «Покупці», whose line
+  // under its title is its own words, never the store's — so not
+  // openStore, which reads the store there.
+  await page.getByRole("button", { name: "Основний MAIN" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Покупці", level: 1 }),
+  ).toBeVisible();
   await expect(
     page
       .getByRole("alert")
