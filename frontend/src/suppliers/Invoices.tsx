@@ -1249,7 +1249,9 @@ function InvoicePlaceholder(): JSX.Element {
  * thread — filled once recorded, hollow once cancelled, with its sticker —
  * what it was and its sum, who, the store that paid and the note. One that
  * may be cancelled is a button the line's whole width, opening the sheet
- * that asks why; the others are never pressed.
+ * that asks why, the set's chevron at its end (spec §6.8; audit 2026-11-15,
+ * money P1-2); the others are never pressed, the chevron's place empty so
+ * every line reads in one column.
  */
 function EntryRow({
   entry,
@@ -1288,6 +1290,15 @@ function EntryRow({
           </>
         )}
       </span>
+      {cancel ? (
+        <Icon
+          name="chevron-right"
+          size={16}
+          className="sale-open timeline-open"
+        />
+      ) : (
+        <span className="timeline-open" aria-hidden="true" />
+      )}
     </>
   );
   return cancel ? (

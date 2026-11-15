@@ -264,6 +264,14 @@ async def test_only_goods_free_to_sell_go_back(maker):
     # Refused after the return's lookup: it says nothing was recorded, so a
     # phone whose answer was lost settles it (ADR-0013 §1).
     assert too_many.json()["details"]["recorded"] is False
+    # Which line, and how many are free: the phone marks that line (audit
+    # 2026-11-15, money P1-3).
+    short = too_many.json()["details"]
+    assert (short["product_variant_id"], short["size_id"], short["available"]) == (
+        variant,
+        size,
+        2,
+    )
 
     async with api(maker, shops.scope(shops.primary_store)) as client:
         held = await client.post(
@@ -287,6 +295,8 @@ async def test_only_goods_free_to_sell_go_back(maker):
     # One of the two is held for a customer.
     refused = await send(maker, shops, document(shops, supplier_id, (variant, size, 2)))
     assert refused.json()["code"] == "INSUFFICIENT_STOCK"
+    # Free is what is not held: one.
+    assert refused.json()["details"]["available"] == 1
     fits = await send(maker, shops, document(shops, supplier_id, (variant, size, 1)))
     assert fits.status_code == 201, fits.text
 

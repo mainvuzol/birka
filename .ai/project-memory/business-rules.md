@@ -10126,3 +10126,118 @@ record changes; no words on a screen change.
   is «Дії з моделлю» for a screen reader, as «Дії з накладною», «Дії з
   боргом» and «Дії зі списком» — not «Ще дії з моделлю». Nothing on the
   screen changes.
+
+## Chosen in chat — 2026-11-15 (audit 2026-11-15, batch 1: a session's end one screen; a kept attempt's fate on its stub alone; «Покупці»'s rows dated; the cash move on Бірка's keypad; one order of stores; a cancellable line's chevron; a return's short line marked; frame P1-1, P1-2, sale P1-1, orders-cash P1-1, money P1-1, P1-2, P1-3)
+
+The audit's seven P1s, picked in chat as one batch. No request body,
+right or rule of what is recorded changes; nothing is counted on the
+phone. One word on a screen changes: the move's sum is «Сума, грн».
+
+- **A session's end is one screen** (frame P1-1; spec S02, «session
+  ended»; §7.4). Any 401 to a request sent with the token, of any code but
+  `NO_ACCESS`, ends the session for the app: the blank «Вхід через
+  Telegram» in S02's words — « Незавершене збережено.» only where the
+  phone keeps this person's operation (audit 2026-11-13, frame P2-6) — in
+  place of the workplace: no menu, no plate, no «Спробувати ще раз», mid-
+  work as at the door. Nothing more is asked with that token: `/me` is no
+  longer read, and the app's other reads stop with the workplace. The way
+  out is Telegram's «Закрити» and the bot's button; the refused token is
+  never replaced by the launch data (owner decision, 2026-10-03).
+  - Not changed: `NO_ACCESS` is S03's, its «Спробувати ще раз» reading
+    access again, at the door and mid-work (a section's read that meets it
+    says so where it stood, the menu kept); a sign-in with no token
+    (launch data refused, 429, no answer) as before; kept operations stay
+    on the phone and are checked at the next opening; their stubs are not
+    drawn on the end screen, as at the door before.
+  - Decided here: the end is in memory only — opening the app again from
+    the bot signs in anew.
+  - Decided here (review): Telegram's question before closing stays by its
+    own rule (§4.4, rule 2): asked as the session ended — a basket's goods
+    or an operation kept — it is asked on the end screen, where nothing can
+    change any more; at the door, where nothing held it, it is not.
+- **A kept attempt's fate on its stub alone** (frame P1-2; В-ЗП1 (а)):
+  while a journal keeps its attempt — the sale's, a delivery's, a
+  return's, a debt's payment, a stock correction, a stocktake's count, an
+  order's step — and its last send had no answer, the frame draws no red
+  plate for it. The paper's sentence stands once, over the screen; what
+  became of the attempt is its stub's to say. Any answer of the server's
+  own (5xx «ще не підтверджено: сервер не зміг відповісти…», 409, 400/422,
+  429, 401 — above) and an attempt the phone could not keep keep their
+  plate, as before. The invoices' and the suppliers' were so already.
+  Nothing in the journals changes: the error, the misses, the resend.
+  - Found (review of this batch, not changed): a sale whose attempt the
+    phone could not write (its memory full) is never sent, says «Не
+    вдалося виконати операцію. Спробуйте ще раз.» — and its stub still
+    stands, held in memory alone, saying not to type it from paper. Left
+    for its own task: it is the sale's journal.
+- **«Покупці»'s rows dated** (sale P1-1; spec S19 pp. 6–12): after the
+  phone and the goods (or «N борги») — owing: «останній внесок 19.10» by
+  the latest payment among the row's debts, or «з 18.10» by the earliest
+  opened when none was paid; nothing owed («Сплачені», «Списані»):
+  «закрито 05.10» by the latest close, its sticker saying how; no close
+  known — no date. `shortDay`: the year only when not this one. The date
+  is whole (no break inside it), heard with the row. In every mode of
+  «Покупці»; never at the till's «Внесок», nor on «Сьогодні»'s search. The
+  rows' order is the server's, as before.
+  - Decided here: «закрито», not S19's «сплачено 05.10» — the sticker on
+    the right already says «Сплачено» or «Списано» (owner decision,
+    2026-10-18), and «закрито {дд.мм}» is the card's and the detail's
+    word.
+- **The cash move on Бірка's keypad** (orders-cash P1-1; spec §6.25):
+  «Видати з каси» and «Внести в касу» take the sum on the keypad, as the
+  count, a debt's payment and an invoice's payment: the phone's keyboard
+  never opens over the sheet's «Видати 150,00 грн». A chip no longer puts
+  the cursor anywhere — the keys are the next step, already in view; a
+  refusal puts it back in the sum, which stays. On a phone ≤ 700 high the
+  keys are 44 and the sum's box 64, as the count's dock. «Вкажіть суму з
+  точністю до копійок.» stays for a sum pasted or typed on an outer
+  keyboard (the keypad gives two figures after the comma at most). The
+  note stays a field with the phone's keyboard, only when touched.
+  - Decided here: the keypad's label is «Сума, грн», as a debt's and an
+    invoice's payment — the keypad has no «грн» of its own beside the sum.
+  - Decided here: «Внести в касу», one kind, no longer puts the cursor in
+    the sum as it opens: the keypad is the first thing, its keys in view.
+    This and the chip revise «the chip puts the cursor in «Сума»» and «the
+    cursor in «Сума» at once» of «Видати з каси» and «Внести в касу»
+    (built 2026-10-22, above); on a computer the sum is clicked first.
+  - Left (review): the keypad takes nothing wrong — keys, a computer's
+    keyboard or a paste alike — so «Вкажіть суму з точністю до копійок.»
+    can no longer show; it stays as the task list's guard. A paste the
+    keypad does not take changes nothing, as the count's.
+- **One order of stores on «Гроші»** (money P1-1; S29 №4, №10): «Ви винні
+  постачальникам» keeps the report's order, as every other place, with any
+  number of stores — this revises «It comes first» of the money task list
+  after stage 2, P1-2 (above), chosen in chat, not by the owner. The open
+  store's column (its line, from three stores) stays the one way to its
+  «Накладні» wherever it stands; its name for a reader and its chevron as
+  before.
+- **A cancellable line says so** (money P1-2; spec §6.8): in an invoice's
+  «Історія», a payment or a set-off that may be cancelled ends in the
+  set's chevron, 16, in pencil, after its sum; every other line keeps the
+  chevron's place empty, so the sums stand in one column. The pressed
+  line is at least 44 high. The tap, the sheet asking why, and what a
+  reader hears are as before; the ⋯'s «Спершу скасуйте її оплати й
+  заліки.» unchanged.
+- **A return's short line marked** (money P1-3 (а)): a return refused as
+  more than is free (`INSUFFICIENT_STOCK`) keeps «У поверненні» as typed;
+  the line the server named (its model and size) carries a warning's
+  sticker «вільно N» on a line of its own under its count, N the server's
+  `available` (never below 0), heard with that line's «Прибрати»; the
+  warehouse's goods are read again, so the model found again says what is
+  free now. The mark goes with «Прибрати» of that line, another warehouse,
+  and the next send; another line taken out keeps it (review). A shortfall
+  named of another warehouse than the return's marks nothing (review).
+  Nothing is counted on the phone; the return's request is unchanged. The
+  backend's answer names `location_id`, `product_variant_id`, `size_id` and
+  `available` (a test now holds the last three).
+  - Decided here: the warehouse is read again on any `INSUFFICIENT_STOCK`,
+    as on a conflict, whether or not the server names the line.
+  - Decided here (review): a model left open as the return is refused so,
+    or as changed meanwhile, nothing counted on it, is put away: its sizes
+    said what was free before; found again, it says what is free now.
+  - Left (review): the server names the first short line only (in its own
+    order), so a second short line is marked after the next send; «вільно
+    N» is what was free at the refusal, and the server checks again on
+    each send.
+  - Left for the owner (В15-Г1): the refusal's words, «… Оновіть і
+    перевірте кількість.», stay until answered.

@@ -1091,6 +1091,132 @@ test("inside Telegram a size's ±1 on «Повернути постачальн�
   await expect.poll(impacts).toEqual([light, light, light]);
 });
 
+test("a return refused as more than is free marks the line the server named with what is free, keeps the list, and the model found again says what is free now; another line taken out keeps the mark, its own takes it for good, and the model again goes back in four taps — five when added to the list first (audit 2026-11-15, money P1-3)", async ({
+  page,
+}) => {
+  const coat = await received(page, hanna, fixture.network_centre_store_id, 3, [
+    "M",
+    "L",
+    "S",
+  ]);
+  const sent = posts(page, "/api/v1/supplier-returns");
+  await newReturn(page);
+  await addOne(page, `Менше ${randomUUID().slice(0, 6)}`, returnForm(page));
+  await chooseModel(page, coat);
+  await tapMore(page, "M", 3);
+  await tapMore(page, "L", 1);
+  await tapMore(page, "S", 1);
+  const list = page.getByRole("region", { name: "У поверненні" });
+  // A shortfall named of another warehouse marks nothing here (review).
+  await page.route(
+    "**/api/v1/supplier-returns",
+    async (route) => {
+      await route.fulfill({
+        status: 409,
+        json: {
+          code: "INSUFFICIENT_STOCK",
+          message: "Not enough stock for this operation",
+          details: {
+            location_id: randomUUID(),
+            product_variant_id: coat.variant,
+            size_id: coat.size,
+            requested: 3,
+            available: 1,
+            correctable: false,
+          },
+        },
+      });
+    },
+    { times: 1 },
+  );
+  await sendBack(page, 5).click();
+  await expect(
+    page.getByRole("alert").filter({ hasText: /^Вільного товару вже менше/ }),
+  ).toBeVisible();
+  await expect(list.locator(".line")).toHaveCount(3);
+  await expect(list.locator(".return-short")).toHaveCount(0);
+  // The model open again, nothing counted on it, as the return is sent.
+  await chooseModel(page, coat);
+  await expect(
+    page.getByRole("group", { name: /^Розмір M, вільно 3$/ }),
+  ).toBeVisible();
+  // Meanwhile two of M go back from another phone: one is free.
+  const meanwhile = await page.request.post("/api/v1/supplier-returns", {
+    headers: await headersOf(page, hanna),
+    data: {
+      command_id: randomUUID(),
+      store_id: fixture.network_centre_store_id,
+      location_id: fixture.network_shared_location_id,
+      supplier_id: await aSupplier(page, `Інший ${randomUUID().slice(0, 6)}`),
+      lines: [
+        { product_variant_id: coat.variant, size_id: coat.size, quantity: 2 },
+      ],
+      note: null,
+    },
+  });
+  expect(meanwhile.status()).toBe(201);
+  await sendBack(page, 5).click();
+  await expect.poll(() => sent.bodies.length).toBe(2);
+  await expect(
+    page.getByRole("alert").filter({ hasText: /^Вільного товару вже менше/ }),
+  ).toBeVisible();
+  // The list stays; the line the server named says what is free, on a
+  // warning's sticker with its triangle, heard with its «Прибрати».
+  const size = (code: string): Locator =>
+    list.locator(".line").filter({ hasText: `${coat.model} беж · ${code}` });
+  await expect(list.locator(".line")).toHaveCount(3);
+  // Its sizes said what was free before: it is put away (review).
+  await expect(
+    page.getByRole("group", { name: /^Розмір M, вільно/ }),
+  ).toHaveCount(0);
+  const mark = size("M").locator(".return-short .sticker");
+  await expect(mark).toHaveText("вільно 1");
+  await expect(mark).toHaveClass(/\btone-warn\b/);
+  await expect(mark.locator("svg")).toHaveCount(1);
+  const takeOut = size("M").getByRole("button", {
+    name: `Прибрати ${coat.model} беж · M`,
+  });
+  await expect(takeOut).toHaveAccessibleDescription("вільно 1");
+  await expect(size("L").locator(".return-short")).toHaveCount(0);
+  await expect(
+    size("L").getByRole("button", { name: `Прибрати ${coat.model} беж · L` }),
+  ).not.toHaveAttribute("aria-describedby");
+  // Another line taken out: M is still short, its mark stays (review).
+  await size("S")
+    .getByRole("button", { name: `Прибрати ${coat.model} беж · S` })
+    .click();
+  await expect(list.locator(".line")).toHaveCount(2);
+  await expect(mark).toHaveText("вільно 1");
+  await expect(takeOut).toHaveAccessibleDescription("вільно 1");
+  // Taken out, the model found again says what is free now, never what it
+  // said before: the warehouse was read again.
+  const taps = await countTaps(page);
+  await takeOut.click();
+  await expect(list.locator(".return-short")).toHaveCount(0);
+  await chooseModel(page, coat);
+  await expect(
+    page.getByRole("group", { name: /^Розмір M, вільно 1$/ }),
+  ).toBeVisible();
+  await tapMore(page, "M", 1);
+  // Added to the list first: the same size again, its old mark never back
+  // on it (review).
+  await page.getByRole("button", { name: "Додати ще модель" }).click();
+  await expect(list.locator(".line")).toHaveCount(2);
+  await expect(list.locator(".return-short")).toHaveCount(0);
+  await sendBack(page, 2).click();
+  await expect.poll(() => sent.bodies.length).toBe(3);
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  // Four taps sent at once, one more to add it to the list.
+  expect(await taps()).toBe(5);
+  expect(
+    (sent.bodies.at(-1) as { lines: { size_id: string; quantity: number }[] })
+      .lines,
+  ).toEqual([
+    expect.objectContaining({ size_id: coat.sizes[1], quantity: 1 }),
+    expect.objectContaining({ size_id: coat.size, quantity: 1 }),
+  ]);
+});
+
 test("a supplier is never written twice: the one on the list is picked", async ({
   page,
 }) => {

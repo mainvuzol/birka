@@ -319,7 +319,7 @@ test.describe("«Оля»'s day at «Каса»", () => {
       page.getByText("Накладну й оплату за нею запише менеджер."),
     ).toBeVisible();
     await kinds.getByRole("button", { name: "Витрати", exact: true }).click();
-    await page.getByLabel("Сума", { exact: true }).fill("150");
+    await page.getByLabel("Сума, грн", { exact: true }).fill("150");
     await expect(
       page.getByLabel("На що (необов’язково)"),
     ).toHaveAccessibleDescription("Без імен і телефонів покупців.");
@@ -360,7 +360,7 @@ test.describe("«Оля»'s day at «Каса»", () => {
     ).toHaveText(
       /^Не записано: поки форма була відкрита, касу закрили о \d{2}:\d{2} · Олена\. Якщо гроші взяли чи внесли вже після закриття — запишіть ще раз\. Якщо до нього — це запише менеджер до того закриття\.$/,
     );
-    await expect(page.getByLabel("Сума", { exact: true })).toHaveValue("150");
+    await expect(page.getByLabel("Сума, грн", { exact: true })).toHaveValue("150");
     await page.getByRole("button", { name: "Видати 150,00 грн" }).click();
     await expect(
       page.getByText("Записано: Витрати, 150,00 грн."),
@@ -700,7 +700,7 @@ test.describe("«Оля»'s day at «Каса»", () => {
     const kinds = page.getByRole("group", { name: "Кому чи на що" });
     await expect(kinds.getByRole("button")).toHaveCount(3);
     await kinds.getByRole("button", { name: "Власнику", exact: true }).click();
-    await page.getByLabel("Сума", { exact: true }).fill("50");
+    await page.getByLabel("Сума, грн", { exact: true }).fill("50");
     await page
       .getByLabel("Коли?")
       .selectOption({ label: `До закриття ${dayOf(today.business_day)}` });

@@ -413,6 +413,9 @@ test("under the title's line, the field; from two letters the open store's «Т�
   await expect(group(page, "Покупці").getByRole("button")).toHaveAccessibleName(
     "Відкрити борг: Ірина Лоранська, винні 1 500,00 грн",
   );
+  // No date in the row: «Покупці»'s own say when (audit 2026-11-15, sale
+  // P1-1).
+  await expect(group(page, "Покупці").locator(".debt-when")).toHaveCount(0);
   // Every word typed, in every row, as typed.
   await search(page, "лоран шоколад");
   for (const one of await texts(

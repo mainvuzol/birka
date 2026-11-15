@@ -294,7 +294,7 @@ for (const [path, name, notTaken] of [
         .getByRole("group", { name: "Кому чи на що" })
         .getByRole("button", { name: "Витрати", exact: true })
         .click();
-      await page.getByLabel("Сума", { exact: true }).fill("150");
+      await page.getByLabel("Сума, грн", { exact: true }).fill("150");
       press = page.getByRole("button", { name: "Видати 150,00 грн" });
     } else {
       await page
@@ -354,7 +354,7 @@ test("a note the server cannot keep says so in «Каса»'s words, what was ty
     .getByRole("group", { name: "Кому чи на що" })
     .getByRole("button", { name: "Витрати", exact: true })
     .click();
-  await page.getByLabel("Сума", { exact: true }).fill("150");
+  await page.getByLabel("Сума, грн", { exact: true }).fill("150");
   await page.getByLabel("На що (необов’язково)").fill("пакети");
   await page.getByRole("button", { name: "Видати 150,00 грн" }).click();
   await expect(page.getByRole("alert")).toHaveText(

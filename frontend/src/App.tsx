@@ -9,7 +9,9 @@ import {
   errorText,
   inOwnWords,
   keepFor,
+  sessionEndedText,
   UNREACHABLE,
+  unreachable,
 } from "@/shared/api";
 import { isTillMethod, methodHow, methodLabels } from "@/shared/payment";
 import type { PaymentMethod, TillMethod } from "@/shared/payment";
@@ -22,6 +24,7 @@ import {
   waitsText,
 } from "@/shared/reach";
 import { setScreen } from "@/shared/report";
+import { useSessionEnd } from "@/shared/sessionEnd";
 import { visible } from "@/shared/visible";
 import { Opening } from "@/shared/Placeholder";
 import { Icon } from "@/shared/Icon";
@@ -29,6 +32,7 @@ import { Toast } from "@/shared/Toast";
 import { Banner } from "@/shared/Banner";
 import { CheckLine, Kept, Settled } from "@/shared/Kept";
 import {
+  askingBeforeClosing,
   buzz,
   connectTelegram,
   telegramInitData,
@@ -442,12 +446,15 @@ export function App(): JSX.Element {
     gcTime: 0,
   });
   const token = session.data?.token;
+  // The server refused the token: nothing more is asked with it (audit
+  // 2026-11-15, frame P1-1).
+  const ended = useSessionEnd((state) => state.ended);
   // Who this person is, and what each store lets them do: read with the
   // token, and read again whenever that may have changed.
   const me = useQuery({
     queryKey: ["me"],
     queryFn: () => api<Me>("/me", token),
-    enabled: token !== undefined,
+    enabled: token !== undefined && !ended,
     retry: false,
     staleTime: Infinity,
     gcTime: 0,
@@ -488,19 +495,42 @@ export function App(): JSX.Element {
     }
   }
   const failure = session.error ?? me.error;
+  // The session ended — the server refused the token, mid-work or at the
+  // door, for any reason but `NO_ACCESS` (below): one screen in S02's words
+  // instead of the workplace, nothing to press, no menu, no plates (audit
+  // 2026-11-15, frame P1-1; spec S02, «session ended»). The same token would
+  // be refused again, and it is never replaced by the launch data (owner
+  // decision, 2026-10-03): Telegram's «Закрити» and the bot's button are
+  // the way. What the phone keeps is checked at the next opening.
+  const over =
+    ended ||
+    (token !== undefined &&
+      failure instanceof ApiError &&
+      failure.status === 401 &&
+      failure.code !== "NO_ACCESS");
+  // Telegram's question before closing stays by its own rule (spec §4.4,
+  // rule 2): asked as the session ends — the workplace held it, a basket's
+  // goods or an operation kept — it is asked on the end screen, where
+  // nothing can change any more (review). Read before the workplace lets
+  // it go; at the door nothing held it.
+  const [askedAtEnd, setAskedAtEnd] = useState<boolean | null>(null);
+  if (over && askedAtEnd === null) setAskedAtEnd(askingBeforeClosing());
+  useAskBeforeClosing(over && askedAtEnd === true);
   // Named while drawn, before anything below can throw: a note of a broken
   // screen says which. A store's own screens name themselves.
-  setScreen(me.data === undefined ? "sign-in" : "store-choice");
+  setScreen(
+    over ? "session-ended" : me.data === undefined ? "sign-in" : "store-choice",
+  );
   if (
-    (failure instanceof ApiError && failure.code === "NO_ACCESS") ||
-    asking
+    !over &&
+    ((failure instanceof ApiError && failure.code === "NO_ACCESS") || asking)
   )
     return <NoAccess checkAgain={checkAgain} />;
   // A sign-in that failed: the same blank tag, its words as they were
   // («Усе на бірці» task list, P1-4; К12), the app's name over it, where
   // «Доступу ще немає» says whose Telegram opened it (owner, 2026-10-15,
   // В4) — the screen's own title its heading.
-  if (failure)
+  if (failure || over)
     return (
       <main className="before-store">
         <p className="opened-as app-name">
@@ -512,7 +542,9 @@ export function App(): JSX.Element {
         <BlankTag>
           <h1 className="t-title-l">Вхід через Telegram</h1>
           <p role="alert">
-            {failure.message === "TELEGRAM_REQUIRED"
+            {over
+              ? sessionEndedText()
+              : failure?.message === "TELEGRAM_REQUIRED"
               ? "Відкрийте застосунок кнопкою в Telegram-боті вашого магазину."
               : token === undefined &&
                   failure instanceof ApiError &&
@@ -530,9 +562,11 @@ export function App(): JSX.Element {
                     "Не вдалося увійти. Відкрийте застосунок знову кнопкою в боті вашого магазину.",
                   )}
           </p>
-          <button type="button" className="text-button" onClick={readAgain}>
-            Спробувати ще раз
-          </button>
+          {!over && (
+            <button type="button" className="text-button" onClick={readAgain}>
+              Спробувати ще раз
+            </button>
+          )}
         </BlankTag>
       </main>
     );
@@ -2872,6 +2906,15 @@ function Workspace({
   // An order's step answered is recorded: only its order is not shown yet.
   const keptStep =
     pending && !firstSend && !pending.acknowledged ? pending : null;
+  // Said on its stub: a journal that keeps its attempt, last sent with no
+  // answer, draws no red plate of its own — the paper's sentence stands
+  // once, over the screen, and what became of the attempt is its stub's
+  // to say («ще не підтверджено… не вносьте її з паперу»), as the
+  // invoices' and the suppliers' already were (`keptSaid`; audit
+  // 2026-11-15, frame P1-2; В-ЗП1 (а)). Any answer of the server's own,
+  // and an attempt the phone could not keep, keep their plate.
+  const onStub = (kept: unknown, failed: unknown): boolean =>
+    Boolean(kept) && unreachable(failed);
   // The line under every screen's title. On a task's screen — a payment's
   // form at the till, the cash counted, an invoice paid… — no «Змінити
   // магазин» at all: «←» is its only way out, and the line takes the whole
@@ -3072,7 +3115,7 @@ function Workspace({
           </button>
         </Banner>
       )}
-      {saleCommand.error !== null && (
+      {saleCommand.error !== null && !onStub(keptSale, saleCommand.error) && (
         <p role="alert">
           {saleErrorText(
             saleCommand.error,
@@ -3111,11 +3154,12 @@ function Workspace({
           </button>
         </Settled>
       )}
-      {receiptCommand.error !== null && (
-        <p role="alert">
-          {receiptErrorText(receiptCommand.error, receiptCommand.misses)}
-        </p>
-      )}
+      {receiptCommand.error !== null &&
+        !onStub(keptReceipt, receiptCommand.error) && (
+          <p role="alert">
+            {receiptErrorText(receiptCommand.error, receiptCommand.misses)}
+          </p>
+        )}
       {keptReturn && (
         <Kept
           own={tab === "returns"}
@@ -3147,11 +3191,12 @@ function Workspace({
           </button>
         </Settled>
       )}
-      {returnCommand.error !== null && (
-        <p role="alert">
-          {returnErrorText(returnCommand.error, returnCommand.misses)}
-        </p>
-      )}
+      {returnCommand.error !== null &&
+        !onStub(keptReturn, returnCommand.error) && (
+          <p role="alert">
+            {returnErrorText(returnCommand.error, returnCommand.misses)}
+          </p>
+        )}
       {keptCredit && (
         <Kept
           own={
@@ -3227,17 +3272,18 @@ function Workspace({
           </button>
         </Settled>
       )}
-      {creditCommand.error !== null && (
-        <p role="alert">
-          {creditErrorText(
-            creditCommand.error,
-            // Still kept: its own kind; settled as refused: the one it was.
-            creditCommand.pending?.body.kind ?? creditRefused.kind,
-            creditRefused.way,
-            creditCommand.misses,
-          )}
-        </p>
-      )}
+      {creditCommand.error !== null &&
+        !onStub(keptCredit, creditCommand.error) && (
+          <p role="alert">
+            {creditErrorText(
+              creditCommand.error,
+              // Still kept: its own kind; settled as refused: the one it was.
+              creditCommand.pending?.body.kind ?? creditRefused.kind,
+              creditRefused.way,
+              creditCommand.misses,
+            )}
+          </p>
+        )}
       {adjustmentCommand.pending && (
         <Kept
           own={correcting}
@@ -3272,14 +3318,15 @@ function Workspace({
           </button>
         </Settled>
       )}
-      {adjustmentCommand.error !== null && (
-        <p role="alert">
-          {adjustmentErrorText(
-            adjustmentCommand.error,
-            adjustmentCommand.misses,
-          )}
-        </p>
-      )}
+      {adjustmentCommand.error !== null &&
+        !onStub(adjustmentCommand.pending, adjustmentCommand.error) && (
+          <p role="alert">
+            {adjustmentErrorText(
+              adjustmentCommand.error,
+              adjustmentCommand.misses,
+            )}
+          </p>
+        )}
       {countCommand.pending && (
         <Kept
           own={tab === "stocktaking"}
@@ -3312,11 +3359,12 @@ function Workspace({
           </button>
         </Settled>
       )}
-      {countCommand.error !== null && (
-        <p role="alert">
-          {countErrorText(countCommand.error, countCommand.misses)}
-        </p>
-      )}
+      {countCommand.error !== null &&
+        !onStub(countCommand.pending, countCommand.error) && (
+          <p role="alert">
+            {countErrorText(countCommand.error, countCommand.misses)}
+          </p>
+        )}
       {/* The invoices' and the suppliers' kept operations, as the sale's —
           checked by their button alone, so nothing says the phone checks
           every 20 s (G11; stage 2, money task list, P0-6; В1 (а)). */}
@@ -3418,6 +3466,7 @@ function Workspace({
         </Settled>
       )}
       {error !== null &&
+        !onStub(keptStep, error) &&
         // A new order refused: said on its screen, over «Куди», or on its
         // line (stage 2, orders task list, P0-5); a step refused in its
         // sheet, there.

@@ -1,8 +1,9 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 import type { JSX, ReactNode, RefObject } from "react";
 import { decimal, kopecks, money } from "@/orders/types";
 import type { Store } from "@/orders/types";
 import { Eyelet } from "@/shared/Eyelet";
+import { Keypad } from "@/shared/Keypad";
 import { NoCustomerData } from "@/shared/NoCustomerData";
 import type { JournalOutcome } from "@/shared/journal";
 import { SendingLine } from "@/shared/Sending";
@@ -24,10 +25,11 @@ import type {
  * Cash taken out, or put in for change (B5; cash task list, P1-2), in a
  * sheet over the screen it was opened from (spec §6.29; «Усе на бірці»
  * sections task list, P1-1) — «Каса», or the count, whose sum stays: what
- * for as chips, nothing chosen until the person chooses, then the sum, the
- * cursor already in it, and the app's «Видати 150,00 грн» under it, never
- * Telegram's MainButton — it moves money. Cash put in has one kind: the
- * field is the first thing, and the cursor is in it.
+ * for as chips, nothing chosen until the person chooses, then the sum on
+ * Бірка's keypad, as the count's — the phone's keyboard never opens over
+ * the sheet's button (spec §6.25; audit 2026-11-15, orders-cash P1-1) —
+ * and the app's «Видати 150,00 грн» under it, never Telegram's MainButton:
+ * it moves money. Cash put in has one kind: the keypad is the first thing.
  *
  * Recorded when it moves: the newest close the form read is sent with it,
  * so a record that reaches the server after a colleague's close is put on
@@ -62,9 +64,9 @@ export function Move({
   back: (done: string | null) => void;
 }): JSX.Element {
   const hint = useId();
-  const id = useId();
   const wrong = useId();
-  const field = useRef<HTMLInputElement>(null);
+  // The keypad's: the sum, where the cursor goes back after a refusal.
+  const pad = useRef<HTMLDivElement>(null);
   const [sending, setSending] = useState(false);
   const kinds = drawer.movement_kinds.filter(
     (kind) => directionOf(kind) === direction,
@@ -78,15 +80,15 @@ export function Move({
   const [forClose, setForClose] = useState("");
   const [problem, setProblem] = useState<string | null>(null);
   // «150,» is a sum still being typed, never said to be wrong; nothing, or
-  // nothing at all, is no sum to move.
+  // nothing at all, is no sum to move. The keypad takes nothing wrong —
+  // keys, a computer's keyboard or a paste alike, two figures after the
+  // comma at most — so «Вкажіть суму з точністю до копійок.» stays only as
+  // the guard the task list keeps (audit 2026-11-15, orders-cash P1-1
+  // p. 6; review).
   const cents =
     amount.trim() === "" ? null : kopecks(amount.trim().replace(/[.,]$/, ""));
   const unread = amount.trim() !== "" && cents === null;
   const sum = cents !== null && cents > 0n ? cents : null;
-  // One kind: nothing to choose, the sum first.
-  useEffect(() => {
-    if (kinds.length === 1) field.current?.focus();
-  }, [kinds.length]);
 
   async function record(): Promise<void> {
     if (kind === null || sum === null || sending) return;
@@ -117,7 +119,7 @@ export function Move({
       // Said in the sheet, what was typed kept, the cursor back in it.
       buzz("error");
       setProblem(cashErrorText(outcome.error, false, "movement"));
-      requestAnimationFrame(() => field.current?.focus());
+      requestAnimationFrame(() => pad.current?.querySelector("input")?.focus());
     }
     // Unknown: the sheet stays, held under «Каса»'s banner, what was typed
     // kept — refused later, it is there to record again; confirmed, «Каса»
@@ -169,8 +171,6 @@ export function Move({
                   if (kind !== each) buzz("selection");
                   setKind(each);
                   setProblem(null);
-                  // Chosen: the sum next, the keyboard already up.
-                  field.current?.focus();
                 }}
               >
                 {movementLabels[each]}
@@ -187,32 +187,19 @@ export function Move({
               : "Накладну й оплату за нею запише менеджер."}
           </p>
         )}
-        <label className="count-label" htmlFor={id}>
-          Сума
-        </label>
-        <div className="count-field move-field">
-          <input
-            id={id}
-            ref={field}
-            inputMode="decimal"
-            enterKeyHint="done"
-            autoComplete="off"
-            placeholder="0"
+        {/* The next step after a chip: the keys, already in view. */}
+        <div className="move-pad" ref={pad}>
+          <Keypad
+            label="Сума, грн"
             value={amount}
-            disabled={disabled}
-            aria-invalid={unread}
-            aria-describedby={unread ? wrong : undefined}
-            onChange={(event) => {
-              setAmount(event.target.value);
+            change={(next) => {
+              setAmount(next);
               setProblem(null);
             }}
-            onKeyDown={(event) => {
-              if (event.key !== "Enter") return;
-              event.preventDefault();
-              event.currentTarget.blur();
-            }}
+            disabled={disabled}
+            invalid={unread}
+            {...(unread ? { describedBy: wrong } : {})}
           />
-          <span aria-hidden="true">грн</span>
         </div>
         {unread && (
           <p className="hint" role="alert" id={wrong}>
@@ -233,7 +220,7 @@ export function Move({
               setNote(event.target.value);
             }}
             onKeyDown={(event) => {
-              // As the sum's: the keyboard put away, the dock in view.
+              // The keyboard put away, the sheet's button in view.
               if (event.key !== "Enter") return;
               event.preventDefault();
               event.currentTarget.blur();

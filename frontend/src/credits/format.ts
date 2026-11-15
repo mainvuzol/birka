@@ -1,5 +1,5 @@
 import { visible } from "@/shared/visible";
-import type { Credit } from "./types";
+import type { Credit, Customer } from "./types";
 
 /**
  * A customer's two letters, for their mark (spec §6.26; «Усе на бірці»
@@ -46,6 +46,53 @@ export function goodsOf(credit: Credit): string {
   const [first, ...rest] = credit.goods.map(visible);
   if (first === undefined) return "";
   return rest.length > 0 ? `${first} + ще ${String(rest.length)}` : first;
+}
+
+/** The latest, or the earliest, of the times given; null with none. */
+function pick(
+  times: readonly (string | null)[],
+  later: boolean,
+): string | null {
+  let found: string | null = null;
+  for (const at of times)
+    if (
+      at !== null &&
+      (found === null ||
+        (later
+          ? Date.parse(at) > Date.parse(found)
+          : Date.parse(at) < Date.parse(found)))
+    )
+      found = at;
+  return found;
+}
+
+/**
+ * When, for a customer's row in «Покупці» (spec S19 pp. 6–12; audit
+ * 2026-11-15, sale P1-1), from their debts as the list read them — nothing
+ * counted again. Owing: «останній внесок 19.10» by the latest payment, or
+ * «з 18.10» by the earliest opened when none was paid. Nothing owed:
+ * «закрито 05.10» by the latest close, its sticker saying how. Null when
+ * there is no date to say.
+ */
+export function rowWhen(customer: Customer): string | null {
+  const { credits } = customer;
+  if (customer.open_debts > 0) {
+    const paid = pick(
+      credits.map((credit) => credit.last_payment_at),
+      true,
+    );
+    if (paid !== null) return `останній внесок ${shortDay(paid)}`;
+    const opened = pick(
+      credits.map((credit) => credit.opened_at),
+      false,
+    );
+    return opened === null ? null : `з ${shortDay(opened)}`;
+  }
+  const closed = pick(
+    credits.map((credit) => credit.closed_at),
+    true,
+  );
+  return closed === null ? null : `закрито ${shortDay(closed)}`;
 }
 
 /** «з 01.10 · останній внесок 12.10». */

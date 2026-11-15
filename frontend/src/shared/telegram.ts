@@ -349,6 +349,8 @@ function postNew(method: string, params?: Record<string, unknown>): void {
 interface Held {
   hold: (on: boolean) => void;
   settle: () => void;
+  /** Whether a mounted screen holds it now, told or not yet. */
+  holding: () => boolean;
 }
 
 /**
@@ -385,6 +387,7 @@ function held(
       settle();
     },
     settle,
+    holding: () => holds > 0,
   };
 }
 
@@ -413,6 +416,11 @@ const closing = held((on) => {
  */
 export function useAskBeforeClosing(on: boolean): void {
   useHeld(closing, on);
+}
+
+/** Whether a screen asks Telegram, now, to ask before Бірка closes. */
+export function askingBeforeClosing(): boolean {
+  return closing.holding();
 }
 
 /** Telegram's lock keeps the screen as it is, upright or not: asked only

@@ -519,7 +519,7 @@ test("cash taken out is recorded from the count in a sheet over it, the count's 
     .getByRole("group", { name: "Кому чи на що" })
     .getByRole("button", { name: "Витрати", exact: true })
     .click();
-  await sheet.getByLabel("Сума", { exact: true }).fill("150");
+  await sheet.getByLabel("Сума, грн", { exact: true }).fill("150");
   await sheet.getByRole("button", { name: "Видати 150,00 грн" }).click();
   await expect(sheet).toHaveCount(0);
   await expect(
