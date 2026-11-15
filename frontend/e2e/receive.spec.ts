@@ -1,6 +1,7 @@
 import {
   test,
   expect,
+  expectNoticeLead,
   addModel,
   countTaps,
   dockOnMenu,
@@ -528,6 +529,69 @@ test("a delivery whose outcome is unknown blocks the app until it is resent unch
   // recorded again (review, 2026-11-03).
   await expect(page.getByRole("region", { name: "У поставці" })).toHaveCount(0);
   await expect(recordReceipt(page, 0)).toBeDisabled();
+});
+
+test("a kept delivery confirmed while the phone keeps an invoice operation it cannot read leaves «Прийшов товар» held, as the till is (audit 2026-11-13, frame Д4; review)", async ({
+  page,
+}) => {
+  // Whoever may see the suppliers' invoices: their kept operation is read.
+  await page.route("**/api/v1/me", async (route) => {
+    const response = await route.fetch();
+    const body = (await response.json()) as {
+      stores: { permissions: string[] }[];
+    };
+    for (const store of body.stores)
+      store.permissions = [...new Set([...store.permissions, "supplier:debt"])];
+    await route.fulfill({ response, json: body });
+  });
+  let first = true;
+  await page.route("**/api/v1/inventory/receipts", async (route) => {
+    if (first) {
+      first = false;
+      await route.abort("connectionfailed");
+    } else await route.continue();
+  });
+  await enter(page);
+  await receiveInto(page, "Каса-склад");
+  await find(page, "лоран");
+  await page.getByRole("radio", { name: /Лоран шоколад/ }).click();
+  await plus(page, "M", 1);
+  await recordReceipt(page, 1).click();
+  await expect(
+    page.getByRole("heading", { name: "Приймання ще не підтверджено" }),
+  ).toBeVisible();
+  // The phone keeps an invoice operation too, one it cannot read; Бірка is
+  // opened again, on «Прийшов товар» and its kept delivery.
+  await page.evaluate(() => {
+    const kept = Object.keys(localStorage).find((key) =>
+      key.startsWith("birka:receipt-pending:"),
+    );
+    if (kept === undefined) throw new Error("no kept delivery");
+    localStorage.setItem(
+      kept.replace("birka:receipt-pending:", "birka:supplier-invoice-pending:"),
+      "{not an invoice",
+    );
+  });
+  await page.goto("about:blank");
+  await page.goto(launch());
+  await openStore(page, "Основний MAIN");
+  await expect(
+    page
+      .getByRole("alert")
+      .filter({ hasText: "збережену операцію з накладною" }),
+  ).toBeVisible();
+  // Opened again, the phone checks the kept delivery by itself.
+  await expect(
+    page.getByRole("heading", { name: "Приймання записано один раз" }),
+  ).toBeVisible();
+  // The delivery settled, the invoice is not: no other delivery begins.
+  await expect(
+    page.getByRole("heading", { name: "Прийшов товар" }),
+  ).toBeVisible();
+  await expect(page.getByLabel("Пошук у каталозі")).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "Продаж", exact: true }),
+  ).toBeDisabled();
 });
 
 test("a read that fails again keeps the warehouses and the sizes counted, and the button records what is shown", async ({
@@ -1469,8 +1533,16 @@ test("a name spelt like one the catalogue uses is offered its spelling, never gi
   await sheet.getByLabel("Назва моделі", { exact: true }).fill(typo);
   await sizeCell(sheet, "M").click();
   await addModel(sheet).click();
-  // Offered, not put in its place.
+  // Offered, not put in its place: a warning's plate led by its line, no
+  // heading (audit 2026-11-13, goods P2-5).
   await expect(sheet.getByText("Схожа назва вже є")).toBeVisible();
+  const alike = sheet.getByRole("alert").filter({
+    hasText: "Схожа назва вже є",
+  });
+  await expectNoticeLead(
+    alike,
+    alike.getByText("Схожа назва вже є", { exact: true }),
+  );
   await expect(sheet.getByLabel("Назва моделі", { exact: true })).toHaveValue(
     typo,
   );

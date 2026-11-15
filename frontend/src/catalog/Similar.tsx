@@ -7,6 +7,8 @@ import type { SimilarWord } from "./modelTypes";
  * A similar name the catalogue already uses (owner decision, 2026-10-03):
  * what was typed, the spelling in use and the models with it, and a way to
  * take that spelling. Confirming it is another name is the caller's button.
+ * Said at once, a warning's plate; «Схожа назва вже є» its first line in the
+ * warning's colour, no heading (audit 2026-11-13, goods P2-5).
  */
 export function Similar({
   words,
@@ -17,7 +19,7 @@ export function Similar({
 }): JSX.Element {
   return (
     <section className="notice" role="alert">
-      <h3>Схожа назва вже є</h3>
+      <p className="notice-lead">Схожа назва вже є</p>
       {words.map((word) => (
         <div key={`${word.field}:${word.typed}`}>
           <p>{similarText(word)}</p>
