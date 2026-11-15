@@ -2153,7 +2153,8 @@ button.sale-row:disabled .sale-goods {
   font-weight: 600;
   overflow-wrap: anywhere;
 }
-.debt-phone {
+.debt-phone,
+.debt-when {
   white-space: nowrap;
 }
 .debt-owed {
@@ -3634,6 +3635,15 @@ section.cash-count {
     height: 64px;
     margin: 6px 0;
   }
+  /* «Видати з каси» and «Внести в касу» on a short phone: the keys and the
+     sum as the count's (audit 2026-11-15, orders-cash P1-1). */
+  .move-pad {
+    --h-key: 44px;
+  }
+  .move-pad .keypad-sum {
+    height: 64px;
+    margin: 6px 0;
+  }
   /* S21 on a short phone too: «Винні» and what is owed seen over the dock
      unscrolled (audit after stage 2, sale P1-3). */
   .debt-till .till-dock {
@@ -3834,11 +3844,6 @@ span.cash-difference > .difference-sign {
 .cash-move .chip {
   padding: 8px 10px;
   font-size: 15px;
-}
-.move-field input {
-  font-family: var(--font-display);
-  font-size: 34px;
-  font-weight: 800;
 }
 /* A way changed (cash task list, P1-3): the operations as rows by time,
    never a sum (G32); one operation's sum large, its way a pill, the ways as
@@ -6872,6 +6877,12 @@ p.receive-place {
 .receive-list h2 {
   margin: 0;
 }
+/* The line a return was refused for, as more than is free (audit
+   2026-11-15, money P1-3): what is free, on a warning's sticker under its
+   count — only that line grows. */
+.return-short {
+  margin: 0;
+}
 /* The field a supplier is chosen by (stage 2, money task list, P0-3): its
    name over a button 52 high, as the search, with what is chosen and a
    chevron; the sheet's rows in the lists' rhythm, 56 high, the chosen one
@@ -7088,7 +7099,7 @@ p.receive-place {
    its whole width; a cancelled one's node hollow, its sticker under it. */
 .timeline-press {
   width: 100%;
-  min-height: 0;
+  min-height: var(--touch);
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -7099,6 +7110,14 @@ p.receive-place {
 .timeline-node.hollow {
   background: var(--card);
   box-shadow: inset 0 0 0 1.5px var(--edge);
+}
+/* A line that may be cancelled says so by the set's chevron, in pencil at
+   its end; the others keep the place empty (spec §6.8; audit 2026-11-15,
+   money P1-2). */
+.timeline-open {
+  width: 16px;
+  height: 16px;
+  margin-top: 3px;
 }
 .timeline-main .sticker {
   margin-top: 4px;

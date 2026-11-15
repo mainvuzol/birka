@@ -604,6 +604,7 @@ export function Credits({
             listed={listed}
             here={store.id}
             open={till ? openAtTill : openCard(store, true)}
+            dated={!till}
           />
         )}
         {askElsewhere && (
@@ -887,12 +888,16 @@ function Rows({
   here,
   label = "Хто винен",
   open,
+  dated = true,
 }: {
   customers: UseInfiniteQueryResult<InfiniteData<CustomerPage>>;
   listed: readonly Customer[];
   here: string;
   label?: string;
   open: (customer: Customer) => void;
+  /** «Покупці»'s rows say their date; the till's «Внесок» does not (audit
+   * 2026-11-15, sale P1-1). */
+  dated?: boolean;
 }): JSX.Element {
   return (
     <>
@@ -917,6 +922,7 @@ function Rows({
               open={() => {
                 open(each);
               }}
+              dated={dated}
             />
           </div>
         ))}

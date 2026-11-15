@@ -1151,7 +1151,30 @@ test("a payment or an invoice recorded by mistake is cancelled, saying why", asy
   await page.keyboard.press("Escape");
   await expect(actions).toHaveCount(0);
 
-  await line(page, "Оплата 500,00 грн").getByRole("button").click();
+  // Where: the payment that may be cancelled says so by the set's chevron
+  // at its end, in pencil, its line at least 44 high (audit 2026-11-15,
+  // money P1-2).
+  const paid = line(page, "Оплата 500,00 грн");
+  const chevron = paid.getByRole("button").locator("svg.timeline-open");
+  await expect(chevron).toBeVisible();
+  const pencil = await page.evaluate(() => {
+    const probe = document.createElement("span");
+    probe.style.color = "var(--pencil)";
+    document.body.append(probe);
+    const colour = getComputedStyle(probe).color;
+    probe.remove();
+    return colour;
+  });
+  await expect(chevron).toHaveCSS("color", pencil);
+  expect(
+    (await paid.getByRole("button").boundingBox())?.height ?? 0,
+  ).toBeGreaterThanOrEqual(44);
+  const mainRight = async (): Promise<number> => {
+    const box = await paid.locator(".timeline-main").boundingBox();
+    return box ? box.x + box.width : Number.NaN;
+  };
+  const before = await mainRight();
+  await paid.getByRole("button").click();
   const why = await sheet(page, "Скасувати: оплата 500,00 грн");
   await expect(
     why.getByRole("button", { name: "Так, скасувати" }),
@@ -1161,6 +1184,12 @@ test("a payment or an invoice recorded by mistake is cancelled, saying why", asy
   await expect(line(page, "Оплата 500,00 грн")).toContainText(
     "гроші не віддали",
   );
+  // Cancelled, it is pressed no more: no chevron, its place kept, the
+  // line's words where they were.
+  await expect(paid.getByRole("button")).toHaveCount(0);
+  await expect(paid.locator("svg.timeline-open")).toHaveCount(0);
+  await expect(paid.locator(".timeline-open")).toHaveCount(1);
+  expect(await mainRight()).toBeCloseTo(before, 0);
   await expect(owes(page).locator(".invoice-owed-sum")).toHaveText(
     "2 000,00 грн",
   );
@@ -1233,6 +1262,14 @@ test("what is left is written off by the owner, never by a manager", async ({
   await expect(line(page, "Списано 1 500,00 грн")).toContainText(
     "Тест · постачальник пробачив",
   );
+  // A write-off is never cancelled: no chevron, its place kept (audit
+  // 2026-11-15, money P1-2).
+  await expect(
+    line(page, "Списано 1 500,00 грн").locator("svg.timeline-open"),
+  ).toHaveCount(0);
+  await expect(
+    line(page, "Списано 1 500,00 грн").locator(".timeline-open"),
+  ).toHaveCount(1);
   // Final: nothing of it pressed, nothing behind a ⋯, nothing to pay.
   await expect(history(page).getByRole("button")).toHaveCount(0);
   await expect(
@@ -1373,6 +1410,14 @@ test("an archived store's invoice is paid by a store that trades", async ({
   await expect(line(page, "Оплата 100,00 грн").first()).toContainText(
     "сплатив магазин «Центр»",
   );
+  // A payment may be cancelled where it may be made now: its chevron says
+  // so here too (audit 2026-11-15, money P1-2).
+  await expect(
+    line(page, "Оплата 100,00 грн")
+      .first()
+      .getByRole("button")
+      .locator("svg.timeline-open"),
+  ).toBeVisible();
   expect(paid.bodies).toEqual([
     {
       command_id: expect.any(String) as string,

@@ -6,6 +6,7 @@ import {
   section,
   expectOneSticker,
   expectEmpty,
+  tillWays,
 } from "./fixtures";
 import type { Locator, Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
@@ -1397,6 +1398,118 @@ test("«Сплачені» and «Списані» each ask their own status, eac
   await statusWay(page, "Винні зараз").click();
   await expect(rows(page)).toHaveCount(1);
   expect(asked.at(-1)?.get("status")).toBe("OPEN");
+});
+
+test("a row in «Покупці» says when they last paid, since when they owe, or when it closed — whole, heard with the row — and never at the till's «Внесок» (audit 2026-11-15, sale P1-1)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  const year = new Date().getFullYear();
+  const lastYear = String((year - 1) % 100).padStart(2, "0");
+  await summary(page);
+  await customers(page, [
+    customer("Ірина Коваль", "050 765 43 21", [
+      debt("Альпака сіра · L", "2500.00", {
+        last_payment_at: `${String(year)}-10-12T10:00:00Z`,
+      }),
+      debt("Лоран шоколад · M", "1500.00", {
+        opened_at: `${String(year)}-09-01T10:00:00Z`,
+        last_payment_at: `${String(year)}-10-19T10:00:00Z`,
+      }),
+    ]),
+    customer("Оксана Петренко", "067 123 45 67", [
+      debt("Лоран шоколад · M", "2000.00", {
+        opened_at: `${String(year)}-10-18T10:00:00Z`,
+      }),
+    ]),
+    customer("Дарина Мельник", "067 000 12 34", [
+      debt("Тоскана віскі · M", "5000.00", {
+        opened_at: `${String(year - 1)}-10-01T10:00:00Z`,
+      }),
+      debt("Альпака сіра · S", "1000.00", {
+        opened_at: `${String(year)}-02-01T10:00:00Z`,
+      }),
+    ]),
+    customer("Марта Бойко", "063 111 22 33", [
+      debt("Альпака сіра · L", "0.00", {
+        status: "SETTLED",
+        last_payment_at: `${String(year)}-10-09T10:00:00Z`,
+        closed_at: `${String(year)}-10-02T10:00:00Z`,
+      }),
+      debt("Лоран шоколад · S", "0.00", {
+        status: "SETTLED",
+        closed_at: `${String(year)}-10-05T10:00:00Z`,
+      }),
+    ]),
+    customer("Петро Ткач", "097 444 55 66", [
+      debt("Лоран шоколад · M", "0.00", {
+        status: "WRITTEN_OFF",
+        closed_at: `${String(year)}-10-07T10:00:00Z`,
+      }),
+    ]),
+    customer("Іван Сірий", "063 000 00 01", [
+      debt("Альпака сіра · M", "0.00", { status: "SETTLED" }),
+    ]),
+  ]);
+  await credits(page);
+  const row = (name: string): Locator =>
+    page.getByRole("button", { name: new RegExp(`^Відкрити борг: ${name}`) });
+  // The latest payment among the row's debts, not the debt's own opening.
+  await expect(row("Ірина").locator(".sale-meta")).toHaveText(
+    "050 765 43 21 · 2 борги · останній внесок 19.10",
+  );
+  // None paid: since the earliest opened.
+  await expect(row("Оксана").locator(".sale-meta")).toHaveText(
+    "067 123 45 67 · Лоран шоколад · M · з 18.10",
+  );
+  // Of another year: its year said.
+  await expect(row("Дарина").locator(".sale-meta")).toHaveText(
+    `067 000 12 34 · 2 борги · з 01.10.${lastYear}`,
+  );
+  // Heard with the row, after who it is.
+  await expect(row("Ірина")).toHaveAccessibleDescription(
+    "050 765 43 21 · 2 борги · останній внесок 19.10",
+  );
+  // Whole: the date is never parted from its word, nor from its number.
+  await expect(row("Ірина").locator(".debt-when")).toHaveCSS(
+    "white-space",
+    "nowrap",
+  );
+  // The sum, the order and the tap are as they were.
+  await expect(row("Ірина").locator(".debt-owed")).toHaveText("4 000,00 грн");
+
+  // Closed: when, by the latest close; its sticker says how.
+  await statusWay(page, "Сплачені").click();
+  await expect(row("Марта").locator(".sale-meta")).toHaveText(
+    "063 111 22 33 · 2 борги · закрито 05.10",
+  );
+  await expect(row("Марта").getByText("Сплачено", { exact: true })).toHaveClass(
+    "sticker tone-paid",
+  );
+  // No close known: no date.
+  await expect(row("Іван").locator(".sale-meta")).toHaveText(
+    "063 000 00 01 · Альпака сіра · M",
+  );
+  await statusWay(page, "Списані").click();
+  await expect(row("Петро").locator(".sale-meta")).toHaveText(
+    "097 444 55 66 · Лоран шоколад · M · закрито 07.10",
+  );
+  await expect(row("Петро").getByText("Списано", { exact: true })).toHaveClass(
+    /\btone-offline\b/,
+  );
+
+  // The till's «Внесок» lists the same people with no date.
+  await page
+    .getByRole("navigation", { name: "Розділи" })
+    .getByRole("button", { name: "Продаж", exact: true })
+    .click();
+  await tillWays(page)
+    .getByRole("button", { name: "Внесок", exact: true })
+    .click();
+  await expect(row("Ірина").locator(".sale-meta")).toHaveText(
+    "050 765 43 21 · 2 борги",
+  );
+  await expect(page.locator(".debt-when")).toHaveCount(0);
 });
 
 test("under «Сплачені» a customer of two paid debts says «Сплачено», never «Нічого не винні»: they may owe here now (review, 2026-11-01)", async ({

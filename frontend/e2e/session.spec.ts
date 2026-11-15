@@ -1,5 +1,6 @@
 import {
   changeStore,
+  comeBack,
   test,
   expect,
   menu,
@@ -251,25 +252,42 @@ test("a session past its 12 hours asks for the app to be opened again in S02's w
 }) => {
   await settle(page, market, "BLOCKED");
   try {
-    const read = page.waitForResponse(
-      (response) =>
-        new URL(response.url()).pathname === "/api/v1/me" && response.ok(),
-    );
-    await openAs(page, petro);
-    const me = (await (await read).json()) as {
-      organization_id: string;
-      user_id: string;
-    };
-    await openStore(page, /^Ринок MARKET/);
-    const signIns = await launchDataExpired(page);
+    // From `refusing` on, the server refuses the token: each state of the
+    // phone's storage is a new opening, read with a fresh token, whose
+    // store's «Спробувати ще раз» meets the end (audit 2026-11-15, frame
+    // P1-1: the end has none of its own to press).
+    let refusing = false;
     let reads = 0;
+    let signIns = 0;
+    await page.route("**/api/v1/auth/telegram", async (route) => {
+      if (refusing) signIns += 1;
+      await route.fallback();
+    });
     await page.route("**/api/v1/me", async (route) => {
+      if (!refusing) {
+        await route.fallback();
+        return;
+      }
       reads += 1;
       await route.fulfill({
         status: 401,
         json: { code: "SESSION_EXPIRED", message: "Session has expired" },
       });
     });
+    let me = { organization_id: "", user_id: "" };
+    const opened = async (): Promise<void> => {
+      refusing = false;
+      const read = page.waitForResponse(
+        (response) =>
+          new URL(response.url()).pathname === "/api/v1/me" && response.ok(),
+      );
+      await openAs(page, petro);
+      me = (await (await read).json()) as typeof me;
+      await openStore(page, /^Ринок MARKET/);
+      await expect(
+        page.getByRole("heading", { name: /^Магазин заблоковано власником з/ }),
+      ).toBeVisible();
+    };
     const ended =
       "Сесію завершено. Закрийте Бірку й відкрийте знову кнопкою в боті.";
     const kept = `${ended} Незавершене збережено.`;
@@ -277,21 +295,30 @@ test("a session past its 12 hours asks for the app to be opened again in S02's w
       page.evaluate((key) => {
         localStorage.setItem(key, "{}");
       }, name);
-    const again = async (): Promise<void> => {
+    const told = page.getByRole("alert");
+    const end = async (words: string): Promise<void> => {
+      refusing = true;
       await page.getByRole("button", { name: "Спробувати ще раз" }).click();
+      await expect(told).toHaveText(words);
+      await expect(
+        page.getByRole("heading", { name: "Вхід через Telegram" }),
+      ).toBeVisible();
+      // Nothing to press: the same token would be refused again.
+      await expect(
+        page.getByRole("button", { name: "Спробувати ще раз" }),
+      ).toHaveCount(0);
     };
 
-    // Nothing kept on the phone: not a word of it. Each step below says
-    // other words than the one before, so each waits for its own answer.
-    await again();
-    const told = page.getByRole("alert");
-    await expect(told).toHaveText(ended);
+    // Nothing kept on the phone: not a word of it.
+    await opened();
+    await end(ended);
     // This person's sale, kept in another store: kept.
+    await opened();
     const sale = `birka:sale-pending:${me.organization_id}:${me.user_id}:${randomUUID()}`;
     await keep(sale);
-    await again();
-    await expect(told).toHaveText(kept);
+    await end(kept);
     // Another person's sale, and one of another network's: not this one's.
+    await opened();
     await page.evaluate((key) => {
       localStorage.removeItem(key);
     }, sale);
@@ -299,17 +326,126 @@ test("a session past its 12 hours asks for the app to be opened again in S02's w
       `birka:sale-pending:${me.organization_id}:${randomUUID()}:${market}`,
     );
     await keep(`birka:sale-pending:${randomUUID()}:${me.user_id}:${market}`);
-    await again();
-    await expect(told).toHaveText(ended);
+    await end(ended);
     // This person's order, its step sent and not answered: kept.
+    await opened();
     await keep(`birka:pending:${me.organization_id}:${me.user_id}:${market}`);
-    await again();
-    await expect(told).toHaveText(kept);
+    await end(kept);
+    // The app coming back asks nothing with the refused token.
+    await comeBack(page);
+    await page.waitForTimeout(500);
     expect(reads).toBe(4);
-    expect(signIns.sent).toBe(0);
+    expect(signIns).toBe(0);
   } finally {
     await settle(page, market, "ACTIVE");
   }
+});
+
+for (const who of [
+  { name: "a seller from the till", id: hanna, store: "", first: "Продаж" },
+  {
+    name: "the owner from «Сьогодні»",
+    id: owner,
+    store: "Центр CENTRE",
+    first: "Сьогодні",
+  },
+])
+  test(`a session that ends mid-work — ${who.name} — is one screen in S02's words: no menu, no plate, nothing to press, and nothing more asked with its token (audit 2026-11-15, frame P1-1)`, async ({
+    page,
+  }) => {
+    await openAs(page, who.id);
+    if (who.store) await openStore(page, who.store);
+    await menu(page)
+      .getByRole("button", { name: who.first, exact: true })
+      .click();
+    await expect(
+      page.getByRole("heading", { name: who.first, exact: true }),
+    ).toBeVisible();
+    // Whatever the screen reads as it opens is read before the end.
+    await page.waitForLoadState("networkidle");
+    // From now on the server refuses the token; launch data is never sent.
+    let asked = 0;
+    let signIns = 0;
+    await page.route("**/api/v1/**", async (route, request) => {
+      if (new URL(request.url()).pathname === "/api/v1/auth/telegram")
+        signIns += 1;
+      else asked += 1;
+      await route.fulfill({
+        status: 401,
+        json: { code: "SESSION_EXPIRED", message: "Session has expired" },
+      });
+    });
+    // The next read: «Гроші» opened.
+    await menu(page)
+      .getByRole("button", { name: "Гроші", exact: true })
+      .click();
+    await expect(page.getByRole("alert")).toHaveText(
+      "Сесію завершено. Закрийте Бірку й відкрийте знову кнопкою в боті.",
+    );
+    await expect(
+      page.getByRole("heading", { name: "Вхід через Telegram" }),
+    ).toBeVisible();
+    await expect(page.locator(".blank-tag")).toHaveCount(1);
+    await expect(menu(page)).toHaveCount(0);
+    await expect(page.locator(".read-failure")).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "Спробувати ще раз" }),
+    ).toHaveCount(0);
+    // At 360 × 640, light and dark: the title on one line, the screen whole
+    // — nothing wider or taller than the phone.
+    await page.setViewportSize({ width: 360, height: 640 });
+    const title = page.getByRole("heading", { name: "Вхід через Telegram" });
+    for (const scheme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme: scheme });
+      expect(
+        await title.evaluate((node) => {
+          const range = document.createRange();
+          range.selectNodeContents(node);
+          return new Set(
+            [...range.getClientRects()].map((rect) => Math.round(rect.top)),
+          ).size;
+        }),
+      ).toBe(1);
+      expect(
+        await page.evaluate(() => [
+          document.documentElement.scrollWidth,
+          document.documentElement.scrollHeight,
+        ]),
+      ).toEqual([360, 640]);
+    }
+    await page.emulateMedia({ colorScheme: "light" });
+    expect(asked).toBeGreaterThan(0);
+    // Nothing more is asked with the refused token: not as the app comes
+    // back, not by itself.
+    const before = asked;
+    await comeBack(page);
+    await page.waitForTimeout(1000);
+    expect(asked).toBe(before);
+    expect(signIns).toBe(0);
+  });
+
+test("«Доступ до магазину закрито» mid-work is no session's end: the screen says it where it was read, as before (audit 2026-11-15, frame P1-1)", async ({
+  page,
+}) => {
+  await openAs(page, hanna);
+  await expect(menu(page)).toBeVisible();
+  await page.waitForLoadState("networkidle");
+  await page.route("**/api/v1/**", async (route) => {
+    await route.fulfill({
+      status: 401,
+      json: { code: "NO_ACCESS", message: "No access" },
+    });
+  });
+  await section(page, "Каса");
+  await expect(
+    page
+      .locator(".read-failure")
+      .getByText("Доступ до магазину закрито. Зверніться до власника."),
+  ).toBeVisible();
+  await expect(menu(page)).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Вхід через Telegram" }),
+  ).toHaveCount(0);
 });
 
 test("a sign-in refused for too many attempts says to wait, and the next one signs in", async ({

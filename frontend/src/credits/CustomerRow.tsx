@@ -5,7 +5,7 @@ import { money } from "@/orders/types";
 import { number, plural } from "@/openings/types";
 import { Icon } from "@/shared/Icon";
 import { Sticker } from "@/shared/Sticker";
-import { goodsOf, initialsOf } from "./format";
+import { goodsOf, initialsOf, rowWhen } from "./format";
 import { erasedCustomer, statusLabels } from "./types";
 import type { Customer } from "./types";
 
@@ -26,12 +26,17 @@ export function debtsCount(count: number): string {
  * Found at the till in another store of this person's, it opens nothing and
  * says where the payment is taken (spec S08; «Усе на бірці» task list,
  * P0-3).
+ *
+ * In «Покупці», `dated`: when they last paid, since when they owe, or when
+ * it closed, after the goods (spec S19; audit 2026-11-15, sale P1-1). Not at
+ * the till's «Внесок», nor on «Сьогодні»'s search.
  */
 export function CustomerRow({
   customer,
   here,
   open,
   held = false,
+  dated = false,
 }: {
   customer: Customer;
   /** This store: another's debt is named by its store. */
@@ -40,6 +45,8 @@ export function CustomerRow({
   open: (() => void) | { takenAt: string };
   /** Found on «Сьогодні» while a kept operation holds its verbs. */
   held?: boolean;
+  /** «Покупці»'s own row: its date said. */
+  dated?: boolean;
 }): JSX.Element {
   const meta = useId();
   const name = visible(customer.customer_name ?? erasedCustomer);
@@ -63,6 +70,7 @@ export function CustomerRow({
     ? `винні ${money(customer.owed)}`
     : (closed ?? "").toLowerCase();
   const takenAt = typeof open === "function" ? null : open.takenAt;
+  const when = dated ? rowWhen(customer) : null;
   const inside = (
     <>
       <span className="debt-mark" aria-hidden="true">
@@ -83,6 +91,13 @@ export function CustomerRow({
               </>
             )}
             {only ? goodsOf(only) : debtsCount(customer.credits.length)}
+            {/* Its date whole, on the next line if it must be. */}
+            {when !== null && (
+              <>
+                {"\u00a0· "}
+                <span className="debt-when">{when}</span>
+              </>
+            )}
           </span>
           {takenAt !== null ? (
             <Sticker tone="neutral">

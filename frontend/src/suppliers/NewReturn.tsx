@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { JSX } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { isConflict } from "@/shared/api";
+import { ApiError, isConflict } from "@/shared/api";
 import { Back } from "@/shared/Back";
 import { Empty } from "@/shared/Empty";
 import { Eyelet, RecordedMark } from "@/shared/Eyelet";
@@ -9,6 +9,7 @@ import { Unread } from "@/shared/Unread";
 import { Placeholder } from "@/shared/Placeholder";
 import { SearchField } from "@/shared/SearchField";
 import { ScreenHeader } from "@/shared/ScreenHeader";
+import { Sticker } from "@/shared/Sticker";
 import { Stub } from "@/shared/Stub";
 import { usePanelRoom } from "@/shared/panel";
 import { buzz, useAskBeforeClosing, useMainButton } from "@/shared/telegram";
@@ -37,6 +38,35 @@ interface Listed {
   line: ReturnBody["lines"][number];
   name: string;
   size: string;
+}
+
+/** A line refused as more than is free: where, which, and how many are. */
+interface Short {
+  place: string;
+  variant: string;
+  size: string;
+  available: number;
+}
+
+/** The line the server named in `INSUFFICIENT_STOCK` for the warehouse the
+ * return was sent from, as it names it (its model, its size, what is
+ * free); null for any other answer, another warehouse, and a server that
+ * names none. */
+function shortOf(error: unknown, place: string): Short | null {
+  if (!(error instanceof ApiError) || error.code !== "INSUFFICIENT_STOCK")
+    return null;
+  const {
+    location_id: location,
+    product_variant_id: variant,
+    size_id: size,
+    available,
+  } = error.details;
+  return location === place &&
+    typeof variant === "string" &&
+    typeof size === "string" &&
+    typeof available === "number"
+    ? { place, variant, size, available: Math.max(0, available) }
+    : null;
 }
 
 /** A size's code on its stepper: «?» for one not known. */
@@ -127,6 +157,11 @@ export function NewReturn({
   const [note, setNote] = useState("");
   const [validation, setValidation] = useState("");
   const [refusal, setRefusal] = useState<string | null>(null);
+  // The line refused as more than is free, marked in the list with what is
+  // free until that line is taken out, the warehouse changes or the return
+  // is sent again (audit 2026-11-15, money P1-3).
+  const [short, setShort] = useState<Short | null>(null);
+  const shortId = useId();
   const [returned, setReturned] = useState<SupplierReturn | null>(null);
 
   // Where the cursor goes once the model changes: its name once chosen,
@@ -157,6 +192,7 @@ export function NewReturn({
     setList([]);
     setValidation("");
     setRefusal(null);
+    setShort(null);
   }
 
   const counted = model
@@ -223,6 +259,7 @@ export function NewReturn({
 
   async function send(): Promise<void> {
     setRefusal(null);
+    setShort(null);
     if (!warehouse) return;
     if (!supplierId) {
       setValidation("Оберіть постачальника.");
@@ -263,9 +300,20 @@ export function NewReturn({
       ]);
     } else if (outcome.kind === "refused") {
       buzz("error");
-      // Changed in a way it does not name: the warehouse read again.
-      if (isConflict(outcome.error))
+      // Changed in a way it does not name, or less is free than is sent:
+      // the warehouse read again, so a model found again shows what is
+      // free now (audit 2026-11-15, money P1-3). Nothing is counted here.
+      // A model left open, nothing counted on it, is put away: its sizes
+      // were what was free before (review).
+      if (
+        isConflict(outcome.error) ||
+        (outcome.error instanceof ApiError &&
+          outcome.error.code === "INSUFFICIENT_STOCK")
+      ) {
         void cache.invalidateQueries({ queryKey: ["sale-stock"] });
+        setModel(null);
+      }
+      setShort(shortOf(outcome.error, warehouse.id));
       setRefusal(refusalText(outcome.error));
     }
   }
@@ -620,29 +668,49 @@ export function NewReturn({
           {list.length > 0 && (
             <section className="receive-list" aria-label="У поверненні">
               <h2 className="t-label">У поверненні</h2>
-              {list.map((one, index) => (
-                <div
-                  className="line"
-                  key={`${one.line.product_variant_id}:${one.line.size_id}`}
-                >
-                  <strong>
-                    {visible(one.name)} · {visible(one.size)}
-                  </strong>
-                  <span>{one.line.quantity} шт.</span>
-                  <button
-                    type="button"
-                    className="quiet"
-                    aria-label={`Прибрати ${visible(one.name)} · ${visible(one.size)}`}
-                    onClick={() => {
-                      setList(list.filter((_, at) => at !== index));
-                      setValidation("");
-                      setRefusal(null);
-                    }}
+              {list.map((one, index) => {
+                // The line the server named short: what is free, on a
+                // warning's sticker, heard with its «Прибрати».
+                const marked =
+                  short !== null &&
+                  short.place === warehouse?.id &&
+                  one.line.product_variant_id === short.variant &&
+                  one.line.size_id === short.size
+                    ? short
+                    : null;
+                return (
+                  <div
+                    className="line"
+                    key={`${one.line.product_variant_id}:${one.line.size_id}`}
                   >
-                    Прибрати {visible(one.name)}
-                  </button>
-                </div>
-              ))}
+                    <strong>
+                      {visible(one.name)} · {visible(one.size)}
+                    </strong>
+                    <span>{one.line.quantity} шт.</span>
+                    {marked && (
+                      <p className="t-meta return-short" id={shortId}>
+                        <Sticker tone="warn">вільно {marked.available}</Sticker>
+                      </p>
+                    )}
+                    <button
+                      type="button"
+                      className="quiet"
+                      aria-label={`Прибрати ${visible(one.name)} · ${visible(one.size)}`}
+                      {...(marked ? { "aria-describedby": shortId } : {})}
+                      onClick={() => {
+                        setList(list.filter((_, at) => at !== index));
+                        setValidation("");
+                        setRefusal(null);
+                        // Only its own mark goes with it: another line
+                        // still short keeps what is free (review).
+                        if (marked) setShort(null);
+                      }}
+                    >
+                      Прибрати {visible(one.name)}
+                    </button>
+                  </div>
+                );
+              })}
             </section>
           )}
           <label>

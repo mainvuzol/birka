@@ -1,5 +1,6 @@
 import { fileProblemText, isFileIssue } from "@/openings/fileErrors";
 import { noteAnswered, noteUnreachable } from "@/shared/reach";
+import { noteSessionEnded } from "@/shared/sessionEnd";
 import { visible } from "@/shared/visible";
 
 /**
@@ -176,6 +177,11 @@ export async function api<T>(
       validationIssues(data?.detail),
       typeof more === "number" && Number.isInteger(more) && more > 0 ? more : 0,
     );
+    // A token the server no longer takes: the session ended, and the app
+    // asks nothing more with it (audit 2026-11-15, frame P1-1). `NO_ACCESS`
+    // is S03's own, with its own «Спробувати ще раз».
+    if (token && error.status === 401 && error.code !== "NO_ACCESS")
+      noteSessionEnded();
     // Whether the server is reachable, for the phone's own checks
     // (ADR-0013 §4.2).
     if (unreachable(error)) noteUnreachable();
@@ -390,6 +396,15 @@ export function keepFor(organizationId: string, userId: string): void {
   keeper = `${organizationId}:${userId}:`;
 }
 
+/** S02's words for a session that ended, and that what was unfinished is
+ * kept only where the phone keeps this person's operation (audit
+ * 2026-11-13, frame P2-6). */
+export function sessionEndedText(): string {
+  return `Сесію завершено. Закрийте Бірку й відкрийте знову кнопкою в боті.${
+    keeper !== null && keptOnPhone(keeper) ? " Незавершене збережено." : ""
+  }`;
+}
+
 export function errorText(error: unknown): string {
   // The server was not reached: the shop sells on paper (ADR-0013 §3).
   if (unreachable(error)) return UNREACHABLE;
@@ -432,10 +447,7 @@ export function errorText(error: unknown): string {
   // The session ended: S02's words, and that what was unfinished is kept
   // only where the phone keeps this person's operation (audit 2026-11-13,
   // frame P2-6).
-  if (error.status === 401)
-    return `Сесію завершено. Закрийте Бірку й відкрийте знову кнопкою в боті.${
-      keeper !== null && keptOnPhone(keeper) ? " Незавершене збережено." : ""
-    }`;
+  if (error.status === 401) return sessionEndedText();
   // One person past their requests, on all their phones together (owner
   // decision, 2026-10-10; ADR-0020): nothing was done, so wait and repeat.
   // Never «не записано»: a kept operation's banner says to type it from

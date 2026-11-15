@@ -341,8 +341,18 @@ async function cash(page: Page): Promise<void> {
   ).toBeVisible();
 }
 
+/** The sum, on Бірка's keypad (audit 2026-11-15, orders-cash P1-1). */
 function sum(page: Page): Locator {
-  return page.getByLabel("Сума", { exact: true });
+  return page.getByLabel("Сума, грн", { exact: true });
+}
+
+/** The sheet's keys, pressed by their names: «1», «Кома», «Стерти». */
+async function keyIn(page: Page, keys: readonly string[]): Promise<void> {
+  for (const key of keys)
+    await page
+      .locator(".move-pad")
+      .getByRole("button", { name: key, exact: true })
+      .click();
 }
 
 function panelButton(page: Page): Locator {
@@ -355,7 +365,7 @@ function moveButton(page: Page): Locator {
   return page.locator(".cash-move-button");
 }
 
-test("«Видати з каси»: a sheet over «Каса», what for as chips, nothing chosen; the chip puts the cursor in «Сума»; «Видати 150,00 грн» the sheet's own button — four taps and the sum (cash task list, P1-2; «Усе на бірці» sections task list, P1-1)", async ({
+test("«Видати з каси»: a sheet over «Каса», what for as chips, nothing chosen; the sum on Бірка's keypad, its keys in view, the phone's keyboard never; «Видати 150,00 грн» the sheet's own button — four taps and the sum (cash task list, P1-2; «Усе на бірці» sections task list, P1-1; audit 2026-11-15, orders-cash P1-1)", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 360, height: 640 });
@@ -400,30 +410,46 @@ test("«Видати з каси»: a sheet over «Каса», what for as chips
   await expect(
     kinds.getByRole("button", { name: "Витрати", exact: true }),
   ).toHaveAttribute("aria-pressed", "true");
-  await expect(sum(page)).toBeFocused();
-  await expect(sum(page)).toHaveAttribute("inputmode", "decimal");
+  // The sum on Бірка's keypad, as the count's: the phone's keyboard never
+  // opens over the sheet's button, the keys already in view; the chip
+  // leaves the cursor where it was (audit 2026-11-15, orders-cash P1-1).
+  await expect(sum(page)).not.toBeFocused();
+  await expect(sum(page)).toHaveAttribute("inputmode", "none");
+  await expect(page.locator(".move-pad .keypad-key")).toHaveCount(12);
   // A sum still being typed is never said to be wrong; nothing is no sum.
   await sum(page).fill("150,");
   await expect(page.getByRole("alert")).toHaveCount(0);
   await expect(moveButton(page)).toHaveText("Видати 150,00 грн");
-  await sum(page).fill("150,555");
-  await expect(page.getByRole("alert")).toHaveText(
-    "Вкажіть суму з точністю до копійок.",
-  );
-  await expect(moveButton(page)).toBeDisabled();
   await sum(page).fill("0");
   await expect(moveButton(page)).toBeDisabled();
-  await sum(page).fill("150");
+  // Typed by its keys: two figures after the comma at most, so «150,555»
+  // stops at «150,55»; ⌫ takes them back.
+  await sum(page).fill("");
+  const before = await taps();
+  await keyIn(page, ["1", "5", "0", "Кома", "5", "5", "5"]);
+  await expect(sum(page)).toHaveValue("150,55");
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(moveButton(page)).toHaveText("Видати 150,55 грн");
+  await keyIn(page, ["Стерти", "Стерти", "Стерти"]);
+  await expect(sum(page)).toHaveValue("150");
+  const keyed = (await taps()) - before;
   await page.getByLabel("На що (необов’язково)").fill("пакети");
-  // The field and the sheet's button together at 360×640, the button 52 px
-  // tall at its foot.
-  const field = await page.locator(".count-field").boundingBox();
+  // The sum, its keys and the sheet's button together at 360×640, the
+  // button 52 px tall at its foot.
+  const pad = await page.locator(".move-pad").boundingBox();
   const button = await moveButton(page).boundingBox();
-  if (!field || !button) throw new Error("not laid out");
-  expect(field.y).toBeGreaterThanOrEqual(0);
-  expect(field.y + field.height).toBeLessThanOrEqual(button.y);
+  if (!pad || !button) throw new Error("not laid out");
+  expect(pad.y).toBeGreaterThanOrEqual(0);
+  expect(pad.y + pad.height).toBeLessThanOrEqual(button.y);
   expect(button.y + button.height).toBeLessThanOrEqual(640);
   expect(button.height).toBeGreaterThanOrEqual(52);
+  // On a short phone the keys as the count's: 44.
+  expect(
+    (await page.locator(".move-pad .keypad-key").first().boundingBox())?.height,
+  ).toBe(44);
+  expect(
+    (await page.locator(".move-pad .keypad-sum").boundingBox())?.height,
+  ).toBe(64);
   await moveButton(page).click();
   await expect(
     page.getByText("Записано: Витрати, 150,00 грн.", { exact: true }),
@@ -443,7 +469,8 @@ test("«Видати з каси»: a sheet over «Каса», what for as chips
       after_close_id: lastClose.id,
     },
   ]);
-  expect(await taps()).toBe(4);
+  // Four taps, and the sum's keys.
+  expect((await taps()) - keyed).toBe(4);
   // The chip felt as a choice (audit 2026-11-13, orders-cash P2-3).
   expect(await buzzes(page)).toEqual([
     { type: "selection_change" },
@@ -619,7 +646,7 @@ test("cash taken out and a way changed, on their way, wait as the till's dock: t
   expect(server.sent.movements).toHaveLength(1);
 });
 
-test("«Внести в касу»: one kind, nothing to choose, the cursor in «Сума» at once — three taps and the sum (cash task list, P1-2)", async ({
+test("«Внести в касу»: one kind, nothing to choose, Бірка's keypad first — three taps and the sum (cash task list, P1-2; audit 2026-11-15, orders-cash P1-1)", async ({
   page,
 }) => {
   const server = await stub(page, { now: drawer(), method: sale });
@@ -636,8 +663,10 @@ test("«Внести в касу»: one kind, nothing to choose, the cursor in �
   await expect(page.getByRole("group", { name: "Кому чи на що" })).toHaveCount(
     0,
   );
-  await expect(sum(page)).toBeFocused();
-  await sum(page).fill("100");
+  await expect(sum(page)).toHaveAttribute("inputmode", "none");
+  const before = await taps();
+  await keyIn(page, ["1", "0", "0"]);
+  const keyed = (await taps()) - before;
   await page.getByRole("button", { name: "Внести 100,00 грн" }).click();
   await expect(
     page.getByText("Записано: Розмін, 100,00 грн.", {
@@ -653,7 +682,8 @@ test("«Внести в касу»: one kind, nothing to choose, the cursor in �
       after_close_id: lastClose.id,
     },
   ]);
-  expect(await taps()).toBe(3);
+  // Three taps, and the sum's keys.
+  expect((await taps()) - keyed).toBe(3);
 });
 
 test("cash taken out and refused is said over the panel, the sum kept and the cursor in it; pressed again it is a new command (cash task list, P1-2)", async ({

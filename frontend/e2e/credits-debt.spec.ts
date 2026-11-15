@@ -2521,6 +2521,9 @@ test.describe("«Продаж» › «Внесок»: a payment on a debt from t
     await expect(row).toContainText("Внесок приймає «Другий»");
     await expect(row).toContainText("2 000,00 грн");
     await expect(row.getByRole("button")).toHaveCount(0);
+    // At the till, no date, as the store's own rows (audit 2026-11-15,
+    // sale P1-1).
+    await expect(row.locator(".debt-when")).toHaveCount(0);
     // On a list's white block, as the store's own (audit after stage 2,
     // frame P2-2).
     expect(

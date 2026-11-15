@@ -553,11 +553,11 @@ export function Money({
   const owedNow = owed.some(
     (store) => debtsTone(debts.get(store.id)) === "money-owes",
   );
-  // The open store's line first, as in «Покупці»; the others in the
-  // report's order.
-  const owing = shown
-    .filter((store) => suppliers.has(store.id))
-    .sort((a, b) => Number(b.id === here) - Number(a.id === here));
+  // In the report's order, as every other place: a store's column never
+  // moves from one place to the next, the open store's the way to its
+  // «Накладні» wherever it stands (spec S29 №4, №10; audit 2026-11-15, money
+  // P1-1 — it came first before).
+  const owing = shown.filter((store) => suppliers.has(store.id));
   const cameData = cameIn.data;
   const columns = cameData?.stores ?? [];
   const ways = wayRows.filter(

@@ -871,7 +871,7 @@ test("each way from «Гроші» comes back with «← Гроші»: «Пок�
   }
 });
 
-test("from «Ринок», «Ви винні постачальникам» puts its line first, the one way, to «Ринок»'s own «Накладні»; «Центр»'s is a line without one; «Закриття · Ринок» opens «Ринок»'s closes; a manager of one store is two taps from «Накладні» (money task list after stage 2, P1-2)", async ({
+test("from «Ринок», «Ви винні постачальникам» keeps the report's order, as every place: «Центр»'s column a line without a way, «Ринок»'s after it the one way, to its own «Накладні»; «Закриття · Ринок» opens «Ринок»'s closes; a manager of one store is two taps from «Накладні» (money task list after stage 2, P1-2; audit 2026-11-15, money P1-1)", async ({
   page,
 }) => {
   await me(page);
@@ -880,21 +880,33 @@ test("from «Ринок», «Ви винні постачальникам» puts
   await openStore(page, "Ринок");
   await menu(page).getByRole("button", { name: "Гроші", exact: true }).click();
   const owing = place(page, "Ви винні постачальникам");
+  // Each store's column where it stands in every other place: «Центр»,
+  // then «Ринок» — never moved for the open store (audit 2026-11-15, money
+  // P1-1).
   await expect(owing.locator(".money-line")).toHaveText([
-    "«Ринок»: 9 500,00 грн · 1 накладна",
     "«Центр»: 38 000,00 грн · 3 накладні",
+    "«Ринок»: 9 500,00 грн · 1 накладна",
   ]);
-  await expect(owing.getByRole("button")).toHaveCount(1);
-  await expect(
-    owing.locator(".money-line").first().getByRole("button"),
-  ).toHaveAccessibleName(
-    "Накладні магазину «Ринок»: 9 500,00 грн · 1 накладна",
-  );
-  // The other places keep the report's order.
   await expect(lines(page, "Вам винні клієнти")).toHaveText([
     /^«Центр»: /,
     /^«Ринок»: /,
   ]);
+  await expect(owing.getByRole("button")).toHaveCount(1);
+  await expect(
+    owing.locator(".money-line").nth(1).getByRole("button"),
+  ).toHaveAccessibleName(
+    "Накладні магазину «Ринок»: 9 500,00 грн · 1 накладна",
+  );
+  await expect(
+    owing.locator(".money-line").first().getByRole("button"),
+  ).toHaveCount(0);
+  // The way as tall as the column beside it.
+  const [centreLine, marketLine] = await owing.locator(".money-line").all();
+  if (!centreLine || !marketLine) throw new Error("two stores");
+  expect((await boxOf(marketLine)).height).toBeCloseTo(
+    (await boxOf(centreLine)).height,
+    0,
+  );
   await expect(moneyRow(page, /./)).toHaveText([
     "Звіт про продажі",
     "Закриття · Ринок",

@@ -2,6 +2,7 @@ import {
   basketDone,
   basketSheet,
   changeStore,
+  comeBack,
   confirmClose,
   test,
   expect,
@@ -5890,6 +5891,12 @@ test.describe("12. every journal's kept operation is the sale's stub (stage 2, o
         ).toBeLessThanOrEqual(360);
       }
       await page.emulateMedia({ colorScheme: "light" });
+      // Its resend lost, no plate of its own says the paper's sentence
+      // again: the stub says what became of it (audit 2026-11-15, frame
+      // P1-2).
+      await expect(
+        page.getByRole("alert").filter({ hasText: "Продавайте на папері" }),
+      ).toHaveCount(0);
 
       // Over «Ще», a banner with the same words; checked from it, its title
       // stands and the ring turns on its check line.
@@ -6028,4 +6035,237 @@ test.describe("12. every journal's kept operation is the sale's stub (stage 2, o
     await expect.poll(asks(told)).toEqual({ need_confirmation: false });
     for (const resend of sent) expect(resend).toBe(sent[0]);
   });
+});
+
+test.describe("12. a kept operation sent with no answer says the paper's sentence once, over the screen, and what became of it on its stub (audit 2026-11-15, frame P1-2)", () => {
+  /** The paper's sentence once — the banner over the screen — and no
+   * refusal's plate saying it again (В-ЗП1 (а)). */
+  async function onceOverTheScreen(page: Page): Promise<void> {
+    await expect(paperBanner(page)).toHaveText(UNREACHABLE);
+    await expect(page.getByText(UNREACHABLE)).toHaveCount(1);
+    await expect(
+      page.getByRole("alert").filter({ hasText: "Продавайте на папері" }),
+    ).toHaveCount(0);
+  }
+
+  test("a sale pressed with no answer: its stub over the till says not to type it from paper, and nothing says «внесіть продажі» beside it", async ({
+    page,
+  }) => {
+    const server = await serve(page);
+    await openTill(page);
+    await basket(page);
+    await soldWithNoAnswer(page, server);
+    // Nothing answers from now: the banner stands while the till reads.
+    await gone(page);
+    await comeBack(page);
+    await onceOverTheScreen(page);
+    await expect(
+      page.getByRole("heading", { name: "Продаж ще не підтверджено" }),
+    ).toBeVisible();
+    await expect(
+      page.getByText(/і не вносьте її з паперу: телефон перевірить її сам\./),
+    ).toBeVisible();
+    expect(
+      await page.evaluate((key) => localStorage.getItem(key), saleKey),
+    ).not.toBeNull();
+  });
+
+  const since = new Date(Date.now() - 30 * 60_000).toISOString();
+  const order = "2c4e6a80-1b3d-4f5a-8c7e-9d0f1a2b3c1f";
+  for (const kept of [
+    {
+      name: "a return",
+      key: `birka:return-pending:${ids.organization}:${ids.user}:${ids.store}`,
+      path: `/sales/${ids.sale}/refunds`,
+      title: "Повернення ще не підтверджено",
+      stored: {
+        key: randomUUID(),
+        ambiguous: true,
+        since,
+        body: {
+          store_id: ids.store,
+          sale_id: ids.sale,
+          command_id: randomUUID(),
+          lines: [
+            {
+              sale_item_id: "2c4e6a80-1b3d-4f5a-8c7e-9d0f1a2b3c13",
+              quantity: 1,
+              restock: true,
+              condition: "INTACT",
+            },
+          ],
+          reason: null,
+          payment_method: "CASH",
+        },
+      },
+    },
+    {
+      name: "a debt's payment",
+      key: creditKey,
+      path: `/credits/${ids.credit}/payments`,
+      title: "Внесок ще не підтверджено",
+      stored: {
+        key: randomUUID(),
+        ambiguous: true,
+        since,
+        body: {
+          kind: "payment",
+          store_id: ids.store,
+          credit_id: ids.credit,
+          command_id: randomUUID(),
+          amount: "500.00",
+          payment_method: "CASH",
+        },
+      },
+    },
+    {
+      name: "an order's step",
+      key: orderKey,
+      path: `/orders/${order}/dispatch`,
+      title: "Операцію «Відправлено» ще не підтверджено",
+      stored: {
+        path: `/orders/${order}/dispatch`,
+        body: { command_id: randomUUID() },
+        label: "Відправлено",
+        orderId: order,
+        ambiguous: true,
+        since,
+      },
+    },
+  ])
+    test(`${kept.name}, checked as the store opens and not answered: its stub, no refusal's plate`, async ({
+      page,
+    }) => {
+      await seed(page, { [kept.key]: JSON.stringify(kept.stored) });
+      await serve(page);
+      let sent = 0;
+      await on(page, kept.path, async (route) => {
+        sent += 1;
+        await route.abort("connectionreset");
+      });
+      await page.goto(launch());
+      await openStore(page, /Подільський/);
+      // Checked by itself as the store opens — again as each read answers
+      // and the server seems back.
+      await expect.poll(() => sent).toBeGreaterThan(0);
+      const stub = page.getByRole("heading", { name: kept.title });
+      await expect(stub).toBeVisible();
+      await gone(page);
+      await comeBack(page);
+      await onceOverTheScreen(page);
+      await expect(stub).toBeVisible();
+      expect(
+        await page.evaluate((key) => localStorage.getItem(key), kept.key),
+      ).not.toBeNull();
+    });
+
+  test("a sale the server answers with its own error keeps its plate: «ще не підтверджено: сервер не зміг відповісти»", async ({
+    page,
+  }) => {
+    const server = await serve(page);
+    await openTill(page);
+    await basket(page);
+    server.sale = async (route) => {
+      await route.fulfill({
+        status: 500,
+        json: { code: "INTERNAL_ERROR", message: "Внутрішня помилка сервера." },
+      });
+    };
+    await pay(page, "Готівка").click();
+    await expect(
+      page.getByRole("heading", { name: "Продаж ще не підтверджено" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("alert").filter({
+        hasText:
+          "Продаж ще не підтверджено: сервер не зміг відповісти. Перевірте результат ще раз — двічі він не запишеться.",
+      }),
+    ).toBeVisible();
+  });
+
+  test("a sale the phone could not keep keeps its plate: nothing sent, the refusal said where it was pressed", async ({
+    page,
+  }) => {
+    const server = await serve(page);
+    await openTill(page);
+    await basket(page);
+    // The phone's memory refuses the sale's attempt.
+    await page.evaluate(() => {
+      const set = Reflect.get(Storage.prototype, "setItem");
+      Storage.prototype.setItem = function (key: string, value: string) {
+        if (key.startsWith("birka:sale-pending:"))
+          throw new DOMException("full", "QuotaExceededError");
+        set.call(this, key, value);
+      };
+    });
+    await pay(page, "Готівка").click();
+    await expect(page.getByRole("alert")).toHaveText(
+      "Не вдалося виконати операцію. Спробуйте ще раз.",
+    );
+    expect(server.sales).toHaveLength(0);
+  });
+});
+
+test("a sale pressed after the session ended is kept on the phone, and the app is one screen in S02's words saying so, with nothing to press and nothing more asked (audit 2026-11-15, frame P1-1)", async ({
+  page,
+}) => {
+  // Opened in Telegram, every event it is told kept to read.
+  await page.addInitScript(() => {
+    const host = window as unknown as {
+      TelegramWebviewProxy: {
+        postEvent: (event: string, data: string) => void;
+      };
+      told: [string, unknown][];
+    };
+    host.told = [];
+    host.TelegramWebviewProxy = {
+      postEvent: (event, data) => {
+        host.told.push([event, data ? (JSON.parse(data) as unknown) : null]);
+      },
+    };
+  });
+  const asks = (): Promise<unknown> =>
+    page.evaluate(
+      () =>
+        (window as unknown as { told: [string, unknown][] }).told
+          .filter(([name]) => name === "web_app_setup_closing_behavior")
+          .map(([, data]) => data)
+          .at(-1) ?? null,
+    );
+  const server = await serve(page);
+  await page.goto(`${launch()}&tgWebAppVersion=9.1`);
+  await openStore(page, /Подільський/);
+  await page.getByRole("button", { name: "Продаж", exact: true }).click();
+  await basket(page);
+  server.sale = async (route) => {
+    await route.fulfill({
+      status: 401,
+      json: { code: "AUTHENTICATION_FAILED", message: "Authentication failed" },
+    });
+  };
+  await pay(page, "Готівка").click();
+  await expect(page.getByRole("alert")).toHaveText(
+    "Сесію завершено. Закрийте Бірку й відкрийте знову кнопкою в боті. Незавершене збережено.",
+  );
+  await expect(
+    page.getByRole("heading", { name: "Вхід через Telegram" }),
+  ).toBeVisible();
+  await expect(menu(page)).toHaveCount(0);
+  await expect(
+    page.getByRole("heading", { name: "Продаж ще не підтверджено" }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Спробувати ще раз" }),
+  ).toHaveCount(0);
+  expect(
+    await page.evaluate((key) => localStorage.getItem(key), saleKey),
+  ).not.toBeNull();
+  expect(server.sales).toHaveLength(1);
+  // Telegram still asks before Бірка closes: the sale is kept (review).
+  await expect.poll(asks).toEqual({ need_confirmation: true });
+  const asked = await gone(page);
+  await comeBack(page);
+  await page.waitForTimeout(1000);
+  expect(asked).toEqual([]);
+  expect(await asks()).toEqual({ need_confirmation: true });
 });
