@@ -1401,9 +1401,13 @@ test("a return whose answer is lost is resent unchanged, and takes the goods onc
   await expect(
     page.getByRole("button", { name: "Скасувати повернення" }),
   ).toBeDisabled();
+  // Back, the returns read again (no «Оновити» by the title, audit 2026-11-13;
+  // review).
+  const returns = page.waitForRequest("**/api/v1/supplier-returns?**");
   await page
     .getByRole("button", { name: "Постачальникам", exact: true })
     .click();
+  await returns;
   await expect(
     page.getByRole("button", { name: "Замовлення", exact: true }),
   ).toBeDisabled();

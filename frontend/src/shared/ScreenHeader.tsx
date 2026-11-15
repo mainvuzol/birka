@@ -27,9 +27,9 @@ let atTop: string | undefined;
  * own title as the page's heading — a tab's first screen at 34, a screen
  * opened from another at 28, under its «←» — and under it one line of
  * context, «{Магазин} · {Ім’я}», with «Змінити магазин» at its right. What
- * stood beside a screen's title, «Оновити» or «До списку», stands there
- * still. A title not read yet keeps its place while it is read, so nothing
- * moves when it comes.
+ * stood beside a screen's title, «До списку» or a section's «+», stands
+ * there still; «Оновити» does not (audit 2026-11-13). A title not read
+ * yet keeps its place while it is read, so nothing moves when it comes.
  *
  * A screen begins at its top (spec §6.2; audit after stage 2, frame P1-3):
  * one reset, here, before the screen is painted — whenever a header is
@@ -51,6 +51,11 @@ export const ScreenHeader = forwardRef<
     back?: ReactNode;
     /** Opened from another screen: by its «←», unless said. */
     pushed?: boolean;
+    /** Beside the title: a section's «+», «До списку», «Нова пропозиція».
+     * Never «Оновити»: a list is read as its screen opens and as the app
+     * comes back, and a read that failed says so with its own «Спробувати
+     * ще раз» (design direction §5, «Шапка экрана»; audit 2026-11-13, as
+     * returns and orders before; chosen in chat 2026-11-15). */
     aside?: ReactNode;
     /** Its aside goes under the title when the two do not fit one line —
      * the device's face drawn, its text larger — never breaking the

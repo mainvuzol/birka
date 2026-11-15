@@ -208,6 +208,9 @@ export function SalesReport({
             <Back
               go={() => {
                 setView("table");
+                // Back to the table: read again, as on opening — «Оновити» is
+                // gone from the title (audit 2026-11-13; review).
+                void report.refetch();
               }}
               label="Назад до «Звіт про продажі»"
             >
@@ -244,19 +247,10 @@ export function SalesReport({
         title="Звіт про продажі"
         back={back && <BackToMore back={back} />}
         lead={lead}
-        aside={
-          <button
-            className="quiet"
-            disabled={report.isFetching}
-            onClick={() => {
-              void report.refetch();
-            }}
-          >
-            Оновити
-          </button>
-        }
       />
-      <section className="report">
+      {/* Read again while it stands: a reader is told to wait for it
+          (decided here, 2026-11-15 — no «Оновити» says it any more). */}
+      <section className="report" aria-busy={report.isFetching || undefined}>
         <ModeSwitch<Chosen>
           label="Період"
           modes={periods}

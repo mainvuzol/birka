@@ -355,19 +355,6 @@ export function Damaged({
         title="Брак"
         focusable
         back={back && <BackToMore back={back} />}
-        aside={
-          <button
-            type="button"
-            className="quiet"
-            disabled={units.isFetching}
-            onClick={() => {
-              setSaid(null);
-              void units.refetch();
-            }}
-          >
-            Оновити
-          </button>
-        }
       />
       <section className="goods-part damaged">
         {readOnly && (

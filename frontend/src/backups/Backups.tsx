@@ -31,6 +31,7 @@ export function useBackups(
   token: string,
   scopeKey: string,
   enabled: boolean,
+  opened = false,
 ): UseQueryResult<State> {
   return useQuery({
     queryKey: ["backups", scopeKey],
@@ -41,6 +42,9 @@ export function useBackups(
     // «Сьогодні» reads them («Усе на бірці» task list, P0-6).
     staleTime: 60_000,
     refetchInterval: 5 * 60 * 1000,
+    // The screen itself asks each time it opens: «Оновити» is gone from
+    // its header (audit 2026-11-13; chosen in chat 2026-11-15).
+    ...(opened ? { refetchOnMount: "always" as const } : {}),
   });
 }
 
@@ -96,23 +100,12 @@ export function Backups({
   // The verdict in view as the screen opens, whatever «Ще» was scrolled to
   // (stage 2, admin task list, P0-5): the header's (audit after stage 2,
   // frame P1-3).
-  const backups = useBackups(token, scopeKey, true);
+  const backups = useBackups(token, scopeKey, true, true);
   return (
     <>
       <ScreenHeader
         title="Резервні копії"
         back={back && <BackToMore back={back} />}
-        aside={
-          <button
-            className="quiet"
-            disabled={backups.isFetching}
-            onClick={() => {
-              void backups.refetch();
-            }}
-          >
-            Оновити
-          </button>
-        }
       />
       {/* The one question first and largest — are the data safe — what is
           wrong now under it, the nights as a thread, the explanation one

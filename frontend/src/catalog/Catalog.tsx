@@ -6,7 +6,7 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { api } from "@/shared/api";
+import { ApiError, api } from "@/shared/api";
 import { Eyelet } from "@/shared/Eyelet";
 import { Fold } from "@/shared/Fold";
 import { ModeSwitch } from "@/shared/ModeSwitch";
@@ -84,8 +84,8 @@ function feedbackSaid(
 
 /**
  * «Перевірка каталогу» (stage 2, goods task list, P1-1): the queue one switch
- * — «Чекають · Підтверджені · Відхилені» — over its rows, «Оновити» and
- * «Нова пропозиція» in the header; a proposal its own screen, its words
+ * — «Чекають · Підтверджені · Відхилені» — over its rows, «Нова
+ * пропозиція» in the header; a proposal its own screen, its words
  * large, the candidates rows with «Це вона», «Підтвердити: …» its one button,
  * «Створити нову» the sheet «Нова модель» at its third step, «Відхилити» a
  * sheet with the reason. The name's answer folded under «Цей опис — назва
@@ -193,8 +193,26 @@ export function Catalog({
       await cache.invalidateQueries({
         queryKey: ["catalog-decisions", journalKey],
       });
-    } else if (!resent && after.pending === null && after.error !== null)
-      buzz("error");
+    } else {
+      if (!resent && after.pending === null && after.error !== null)
+        buzz("error");
+      // Refused as changed meanwhile: the proposal and the queue are read
+      // again, the refusal over them — «Оновити» is gone from the title (audit
+      // 2026-11-13; review).
+      if (
+        after.pending === null &&
+        after.error instanceof ApiError &&
+        after.error.status === 409
+      )
+        await Promise.all([
+          cache.invalidateQueries({
+            queryKey: ["catalog-decision", journalKey],
+          }),
+          cache.invalidateQueries({
+            queryKey: ["catalog-decisions", journalKey],
+          }),
+        ]);
+    }
   }
   // A first attempt's refusal goes with this screen: back from another tab,
   // the queue opens without it.
@@ -209,6 +227,9 @@ export function Catalog({
     setMaking(false);
     setSelected(null);
     setSuccess("");
+    // Back to the queue: read again, as on opening — «Оновити» is gone from the
+    // title (audit 2026-11-13; review).
+    void list.refetch();
   };
   return (
     <>
@@ -237,19 +258,8 @@ export function Catalog({
           )
         }
         aside={
-          <div className="catalog-ways">
-            <button
-              type="button"
-              className="quiet"
-              disabled={blocked}
-              onClick={() => {
-                setSuccess("");
-                void (selected ? detail.refetch() : list.refetch());
-              }}
-            >
-              Оновити
-            </button>
-            {!selected && (
+          !selected && (
+            <div className="catalog-ways">
               <button
                 type="button"
                 className="quiet"
@@ -262,8 +272,8 @@ export function Catalog({
               >
                 Нова пропозиція
               </button>
-            )}
-          </div>
+            </div>
+          )
         }
       />
       {success && (

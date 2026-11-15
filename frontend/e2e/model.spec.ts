@@ -750,7 +750,7 @@ test("whoever sells only: «Прийшов товар» alone — no price to ch
   await expect(
     page.getByRole("button", { name: "Прийшов товар" }),
   ).toBeVisible();
-  for (const name of ["Змінити ціну", "Виправити залишок", "Ще дії з моделлю"])
+  for (const name of ["Змінити ціну", "Виправити залишок", "Дії з моделлю"])
     await expect(page.getByRole("button", { name })).toHaveCount(0);
   await more(page);
   const goods = page.getByRole("navigation", { name: "Ще" });
@@ -791,7 +791,9 @@ test("«Прийшов товар» opens receiving with the model chosen, and �
   ).toBeVisible();
   await expect(tab).toBeFocused();
 
-  await page.getByRole("button", { name: "Ще дії з моделлю" }).click();
+  await page
+    .getByRole("button", { name: "Дії з моделлю", exact: true })
+    .click();
   const sheet = page.getByRole("dialog", { name });
   // A tap carried from the ⋯ is let go for a moment.
   await expect(sheet).toHaveAttribute("data-ready", "");

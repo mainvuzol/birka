@@ -1005,10 +1005,13 @@ test("at 360 px, light and dark, the lists, a list's big tag and a line's screen
     });
     await page.getByRole("button", { name: "Назад до списку" }).click();
     await expect(line).toHaveCount(0);
-    // The lists: «← Початкові залишки» over the title (P0-1).
+    // The lists: «← Початкові залишки» over the title (P0-1), read again
+    // as they come back (no «Оновити» by the title, audit 2026-11-13; review).
+    const lists = page.waitForRequest("**/api/v1/snapshots?**");
     await page
       .getByRole("button", { name: "Назад до «Початкові залишки»" })
       .click();
+    await lists;
     await expect(
       page.getByRole("article", { name: `Список ${name}` }),
     ).toContainText("Розібрано 0 з 3 · не товар 1");

@@ -1,4 +1,12 @@
-import { test, expect, more, openStore, refuseOnce, section } from "./fixtures";
+import {
+  test,
+  expect,
+  comeBack,
+  more,
+  openStore,
+  refuseOnce,
+  section,
+} from "./fixtures";
 import type { Locator, Page, Request } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -683,7 +691,11 @@ test("«Брак» opens on its first segment with something in it, oldest first
   );
   await expect(page.locator(".orders-empty-mark")).toBeVisible();
   shown = [shown[1]];
-  await page.getByRole("button", { name: "Оновити" }).click();
+  // Read again as the app comes back (no «Оновити» by the title, audit
+  // 2026-11-13).
+  const read = page.waitForResponse("**/api/v1/damaged-units?**");
+  await comeBack(page);
+  await read;
   await segment(page, /^На перевірці/).click();
   await expect(page.locator(".orders-empty")).toHaveText(
     "Зараз ніхто не оглядає.",
@@ -711,8 +723,15 @@ test("«Брак» opens on its first segment with something in it, oldest first
     "У «Брак» зараз нічого немає.",
   );
   await expect(page.getByRole("group", { name: "Які речі" })).toHaveCount(0);
-  await page.getByRole("button", { name: "Оновити" }).click();
-  await expect(said(page)).toHaveCount(0);
+  // Read again as the app comes back: what became of it stays said, the
+  // empty «Брак» under it (decided here, 2026-11-15: «Оновити», which let
+  // it go, is gone from the title).
+  const again = page.waitForResponse("**/api/v1/damaged-units?**");
+  await comeBack(page);
+  await again;
+  await expect(said(page)).toHaveText(
+    "Списали: Підтверджена · розмір невідомий",
+  );
   await expect(page.locator(".orders-empty")).toHaveText(
     "У «Брак» зараз нічого немає.",
   );

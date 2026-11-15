@@ -205,6 +205,9 @@ export function Openings({
         task={task}
         close={() => {
           setOpenId(null);
+          // Back to the lists: read again, as on opening — «Оновити» is gone
+          // from the title (audit 2026-11-13; review).
+          void lists.refetch();
         }}
       />
     );
@@ -225,6 +228,10 @@ export function Openings({
         cancel={() => {
           fromNew.current = true;
           setCreating(false);
+          // Back to the lists: read again, as on opening — a list a lost send
+          // made among them; «Оновити» is gone from the title (audit
+          // 2026-11-13; review).
+          void lists.refetch();
         }}
       />
     );
@@ -235,17 +242,6 @@ export function Openings({
         focusable
         title="Початкові залишки"
         back={back && <BackToMore back={back} />}
-        aside={
-          <button
-            className="quiet"
-            disabled={lists.isFetching}
-            onClick={() => {
-              void lists.refetch();
-            }}
-          >
-            Оновити
-          </button>
-        }
       />
       <section className="openings">
         {lists.isPending ? (

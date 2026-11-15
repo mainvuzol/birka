@@ -1,4 +1,12 @@
-import { test, expect, menu, more, openStore, section } from "./fixtures";
+import {
+  test,
+  expect,
+  comeBack,
+  menu,
+  more,
+  openStore,
+  section,
+} from "./fixtures";
 import type { Locator, Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -179,7 +187,14 @@ test("«Залишки»: a chip a warehouse, none taken until tapped; its model
   ).toHaveCount(1);
   // The words of the old rows are gone (P2-5).
   await expect(page.getByText(/^(На складі|Доступно|Розмір):/)).toHaveCount(0);
-  await page.getByRole("button", { name: "Оновити", exact: true }).click();
+  // Read again as the app comes back, writing nothing (audit 2026-11-13:
+  // no «Оновити» by the title).
+  await expect(
+    page.getByRole("button", { name: "Оновити", exact: true }),
+  ).toHaveCount(0);
+  const again = page.waitForRequest("**/api/v1/catalog/stock-options?**");
+  await comeBack(page);
+  await again;
   await expect(tag).toBeVisible();
   expect(writes).toEqual([]);
   expect(
@@ -341,7 +356,7 @@ test("stock access denial hides stale balances and offers retry", async ({
   await page.route("**/api/v1/catalog/stock-options?**", async (route) => {
     await route.fulfill({ status: 403, json: { code: "PERMISSION_DENIED" } });
   });
-  await page.getByRole("button", { name: "Оновити", exact: true }).click();
+  await comeBack(page);
   await expect(page.getByRole("alert")).toContainText("Немає доступу");
   // The warning's plate, «Спробувати ще раз» (audit after stage 2, goods
   // P1-1).
@@ -370,7 +385,7 @@ test("read again and refused for anything but the right: the tags read stand und
     }
     await route.fallback();
   });
-  await page.getByRole("button", { name: "Оновити", exact: true }).click();
+  await comeBack(page);
   const plate = page.locator(".read-failure");
   await expect(plate).toBeVisible();
   await expect(loran).toBeVisible();
@@ -579,7 +594,7 @@ test("revoked warehouse clears its visible stock and selection", async ({
       json: rows.filter((row) => row.name !== "Основний склад"),
     });
   });
-  await page.getByRole("button", { name: "Оновити", exact: true }).click();
+  await comeBack(page);
   await expect(
     page.getByText("Обраний склад більше не доступний. Оберіть інший склад."),
   ).toBeVisible();
@@ -594,7 +609,7 @@ test("revoked warehouse clears its visible stock and selection", async ({
   await page.route("**/api/v1/stock-locations?**", async (route) => {
     await route.fulfill({ json: [] });
   });
-  await page.getByRole("button", { name: "Оновити", exact: true }).click();
+  await comeBack(page);
   // Nothing said of the rule (stage 2, goods task list, P1-5); the blank
   // tag, the same words (audit 2026-11-13, goods P2-1).
   const none = page.locator(".orders-empty", {

@@ -2,6 +2,7 @@ import {
   test,
   expect,
   gridCell,
+  comeBack,
   holdReads,
   openModel,
   openStore,
@@ -203,7 +204,8 @@ test("«Перевірка каталогу» read slowly: three proposals' rows
     has_more: true,
   };
   const first = heldAnswer(twenty);
-  // «Оновити» after the next page failed: held, then refused.
+  // Read again as the app comes back after the next page failed: held,
+  // then refused.
   let refuseAgain = (): void => undefined;
   const againHeld = new Promise<void>((resolve) => {
     refuseAgain = resolve;
@@ -273,9 +275,10 @@ test("«Перевірка каталогу» read slowly: three proposals' rows
   await expect(more).toHaveCount(0);
   await expect(rows).toHaveCount(20);
 
-  // «Оновити» while the next page's failure stands: the rows stay, its
-  // retry at their foot held while they are read.
-  await page.getByRole("button", { name: "Оновити", exact: true }).click();
+  // Read again as the app comes back while the next page's failure stands
+  // (no «Оновити» by the title, audit 2026-11-13): the rows stay, its retry
+  // at their foot held while they are read.
+  await comeBack(page);
   await expect.poll(() => firstReads).toBe(2);
   await expect(retry).toBeDisabled();
   await expect(rows).toHaveCount(20);

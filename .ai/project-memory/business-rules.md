@@ -10070,3 +10070,59 @@ request body, right or catalogue rule changes; no words change.
     and are held the same way — a kept delivery or write-off confirmed
     while one of those four is kept leaves no new delivery or payment to
     begin. No other screen's list lacked them.
+
+## Chosen in chat — 2026-11-15 (audit 2026-11-13, batch 12: no «Оновити» by any screen's title; the model menu's one name for a reader)
+
+After #212 every task left in the audit's five lists waits on the owner.
+Picked in chat from the findings outside the lists: «Оновити» in the
+header, «decide once for all» (the money and goods passes), and the model
+menu's name for a reader (the frame pass). No request body, right or
+record changes; no words on a screen change.
+
+- **No «Оновити» by any screen's title** (design direction §5, «Шапка
+  экрана»: the title, one line of context, «Змінити магазин» on the
+  right): «Позичене й під реалізацію», «Постачальникам», «Накладні»,
+  «Перевірка каталогу», «Магазини», «Брак», «Залишки», «Початкові
+  залишки», «Резервні копії» and «Звіт про продажі» lose it, as returns
+  and orders did before. Each list is read as its screen opens and as the
+  app comes back; a read that failed says so where it stood, with its own
+  «Спробувати ще раз», as before. The «+» of «Постачальникам» and
+  «Накладні» and «Нова пропозиція» of «Перевірка каталогу» stay.
+  - Chosen ahead of the owner: the frame pass had left this one rule for
+    after the owner approves the stage-2 screens (its §12, «Что не
+    трогаем»). An owner's reading; the button comes back by screen if
+    the owner wants it.
+  - Decided here: «Резервні копії» asks each time it opens, though «Ще»
+    read the copies a moment ago — it was the one list read at most once a
+    minute; as the app comes back it is still asked at most once a minute,
+    as «Сьогодні» reads them.
+  - Decided here: what «Брак» said of a decision («Списали: …») stays as
+    its list is read again when the app comes back; «Оновити», which let
+    it go, is gone. It goes with the next press, or, where «Брак» is left
+    empty and nothing is to press, as the screen is left (review).
+  - Decided here (review): a list is read again on the way back to it
+    inside its screen too — from a list of «Початкові залишки» or «Новий
+    список», a proposal of «Перевірка каталогу», a store of «Магазини», a
+    return of «Постачальникам», «Моделі» or «Продажі й повернення» of the
+    report — as on opening.
+  - Decided here (review): «Накладні»'s total never read says «не вдалося
+    прочитати» in its place and has one plate whose «Спробувати ще раз»
+    asks it again, as «Сьогодні»'s tags; «Оновити» was its only way.
+  - Decided here (review): a decision of «Перевірка каталогу» refused as
+    changed meanwhile has the proposal and the queue read again under the
+    refusal. Its words «Оновіть перегляд» stay, as «Оновіть список…» of a
+    slow answer and of «Початкові залишки» — the owner's reading: nothing
+    called «Оновити» is left to press; leaving the screen or the app reads
+    again.
+  - Decided here (review): «Звіт про продажі» tells a reader it is being
+    read again (`aria-busy`) while a read is on its way; nothing is drawn.
+  - Left (review): as the app comes back, «Залишки» reads its warehouses
+    and their goods at once, where «Оновити» read the warehouses first — a
+    warehouse taken away may show «Немає доступу» a moment before it goes.
+    Telegram Desktop may not say the app came back when another window
+    was on top (`visibilitychange`): the lists are read again when the
+    screen is opened.
+- **The model menu's one name for a reader:** the «⋯» of a model's detail
+  is «Дії з моделлю» for a screen reader, as «Дії з накладною», «Дії з
+  боргом» and «Дії зі списком» — not «Ще дії з моделлю». Nothing on the
+  screen changes.
