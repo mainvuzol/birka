@@ -946,9 +946,9 @@ nav:not(.tab-bar, .more-list) {
   flex-direction: column;
   gap: 12px;
 }
-/* «Перевірка каталогу» (P1-1): «Оновити» and «Нова пропозиція» in the
-   header; the queue's rows on the paper, its words in quotes and its
-   sticker; a proposal's words large. */
+/* «Перевірка каталогу» (P1-1): «Нова пропозиція» in the header; the
+   queue's rows on the paper, its words in quotes and its sticker; a
+   proposal's words large. */
 .catalog-ways {
   display: flex;
   flex-wrap: wrap;
@@ -6961,8 +6961,8 @@ p.receive-place {
 .supplier-in-place {
   margin: 0 0 16px;
 }
-/* «Накладні» (stage 2, money task list, P0-1): the «+» and «Оновити» by the
-   title; the total in ink, never the debts' red, its age beside it; the
+/* «Накладні» (stage 2, money task list, P0-1): the «+» by the title; the
+   total in ink, never the debts' red, its age beside it; the
    invoices as tags, their sums on the right in ink; «Накладні магазинів,
    що не працюють ›» a row under them. */
 .invoice-head-ways {

@@ -619,7 +619,9 @@ test("found goods that turn out to be held are counted against what is held", as
       .getByRole("heading", { level: 1, name: lorans })
       .textContent()) ?? "";
   // From the model's ⋯.
-  await page.getByRole("button", { name: "Ще дії з моделлю" }).click();
+  await page
+    .getByRole("button", { name: "Дії з моделлю", exact: true })
+    .click();
   const sheet = page.getByRole("dialog", { name });
   await expect(sheet).toHaveAttribute("data-ready", "");
   await sheet.getByRole("button", { name: "Інвентаризація" }).click();
@@ -797,7 +799,7 @@ test("correcting stock needs inventory:adjust, which a seller does not hold", as
   });
   await enter(page);
   await expect(here(page)).toBeVisible();
-  for (const name of ["Виправити залишок", "Ще дії з моделлю"])
+  for (const name of ["Виправити залишок", "Дії з моделлю"])
     await expect(page.getByRole("button", { name })).toHaveCount(0);
   // Nor «Інвентаризація», where goods found are counted.
   await more(page);

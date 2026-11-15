@@ -913,11 +913,18 @@ test.describe("trouble on the server, in «Резервні копії»", () =>
 
     // Quiet: a row that waits, its title the watcher's words, what it means
     // under them.
-    const refresh = page.getByRole("button", { name: "Оновити" });
+    // Opened again, the screen asks again (no «Оновити» by its title, audit
+    // 2026-11-13).
+    const again = async (): Promise<void> => {
+      await page.getByRole("button", { name: "Назад до «Ще»" }).click();
+      await sections(page)
+        .getByRole("button", { name: /^Резервні копії/ })
+        .click();
+    };
     const quiet =
       "Поки він мовчить, бот нічого не напише — ні про копії, ні про сервер. Перевірте його за інструкцією сервера.";
     lookedMinutesAgo = 40;
-    await refresh.click();
+    await again();
     const silent = page.locator('[data-server="SILENT"]');
     await expect(silent).toBeVisible();
     await expect(watcher).toHaveRole("heading");
@@ -926,7 +933,7 @@ test.describe("trouble on the server, in «Резервні копії»", () =>
     await expect(silent.locator(".backups-why")).toHaveText(quiet);
 
     lookedMinutesAgo = null;
-    await refresh.click();
+    await again();
     await expect(watcher).toHaveText("Сторож ще не перевіряв сервер.");
     await expect(silent.locator(".backups-why")).toHaveText(quiet);
     // The section shows the quiet watcher; the tab is marked for trouble only.

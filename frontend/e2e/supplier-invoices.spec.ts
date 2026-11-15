@@ -386,6 +386,14 @@ test("an invoice is recorded on its own screen and paid in parts until it is set
   const recorded = posts(page, /\/api\/v1\/supplier-invoices$/);
   const paid = posts(page, /\/payments$/);
   await invoicesAt(page, hanna);
+  // «+» by the title, and nothing else: the list is read as it opens and
+  // as the app comes back (audit 2026-11-13; chosen in chat 2026-11-15).
+  await expect(
+    page.getByRole("button", { name: "Записати накладну", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Оновити", exact: true }),
+  ).toHaveCount(0);
   // «+» by the title: a screen of its own, nothing chosen beforehand, no
   // native list anywhere (stage 2, money task list, P0-1, P0-3).
   await page
@@ -2265,15 +2273,33 @@ test("nothing owed: the blank mark, what is so now, what an invoice is, and «З
       await route.fulfill({ json: { items: [], has_more: false } });
     },
   );
+  // The total's first read fails: «не вдалося прочитати» in its place and one
+  // plate whose «Спробувати ще раз» asks it again (no «Оновити» by the title,
+  // audit 2026-11-13; review).
+  let totalFails = true;
   await page.route(
     (url) => url.pathname === "/api/v1/supplier-invoices/summary",
     async (route) => {
+      if (totalFails) {
+        await route.fulfill({
+          status: 500,
+          json: { code: "INTERNAL_ERROR", message: "boom" },
+        });
+        return;
+      }
       await route.fulfill({
         json: { owed: "0.00", invoices: 0, suppliers: [] },
       });
     },
   );
   await invoicesAt(page, hanna);
+  const total = page.locator(".invoice-total");
+  await expect(total).toContainText("не вдалося прочитати");
+  const plate = page.locator(".read-failure");
+  await expect(plate).toHaveCount(1);
+  totalFails = false;
+  await plate.getByRole("button", { name: "Спробувати ще раз" }).click();
+  await expect(plate).toHaveCount(0);
   await expect(page.locator(".invoice-total-line")).toHaveText(
     "Нічого не винні",
   );

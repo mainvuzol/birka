@@ -309,7 +309,7 @@ test("«Ще» says what waits under each row, its count the row's one colour, a
   await expect(page.locator("body")).not.toContainText("⚠");
 });
 
-test("at 360 × 640, «Ще» scrolled to its foot, every row of the owner's opens its screen at the top, its heading whole in view, and «←» brings «Ще» back at its top; «Товар і каталог»'s rows too (audit after stage 2, frame P1-3)", async ({
+test("at 360 × 640, «Ще» scrolled to its foot, every row of the owner's opens its screen at the top, its heading whole in view, no «Оновити» by it, and «←» brings «Ще» back at its top; «Товар і каталог»'s rows too (audit after stage 2, frame P1-3; audit 2026-11-13)", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 360, height: 640 });
@@ -347,6 +347,11 @@ test("at 360 × 640, «Ще» scrolled to its foot, every row of the owner's ope
         page.locator("h1").filter({ visible: true }).first(),
       ).toBeInViewport({ ratio: 1 });
       expect(await top()).toBe(0);
+      // No «Оновити» by its title: read as it opens and as the app comes
+      // back (audit 2026-11-13; chosen in chat 2026-11-15).
+      await expect(
+        page.getByRole("button", { name: "Оновити", exact: true }),
+      ).toHaveCount(0);
       opened.push(label);
       // «←», whichever list it names: the screen it names at its top too.
       await page

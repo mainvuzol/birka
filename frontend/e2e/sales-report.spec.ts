@@ -1,6 +1,7 @@
 import {
   test,
   expect,
+  comeBack,
   countTaps,
   expectListBlock,
   grn,
@@ -393,9 +394,13 @@ async function toScreen(
 }
 
 async function backToReport(page: Page): Promise<void> {
+  // Read again as it comes back (no «Оновити» by the title, audit
+  // 2026-11-13; review).
+  const again = page.waitForRequest("**/api/v1/reports/sales**");
   await page
     .getByRole("button", { name: "Назад до «Звіт про продажі»" })
     .click();
+  await again;
   await expect(
     page.getByRole("heading", { name: "Звіт про продажі", exact: true }),
   ).toBeVisible();
@@ -885,6 +890,11 @@ async function ownReport(
   await openStore(page, "Центр CENTRE");
   await section(page, "Звіт про продажі");
   await expect(table(page)).toBeVisible();
+  // Nothing by the title: read as it opens and as the app comes back
+  // (audit 2026-11-13; chosen in chat 2026-11-15).
+  await expect(
+    page.getByRole("button", { name: "Оновити", exact: true }),
+  ).toHaveCount(0);
 }
 
 /** Nothing in the period, as every list of stage 2 says it (spec §6.28;
@@ -1080,9 +1090,14 @@ for (const [name, theme, scheme] of [
     await backToReport(page);
     await expect(table(page)).toBeVisible();
     expect(await wrap.evaluate((node) => node.scrollLeft)).toBe(end);
-    // Four: a row of chips that scrolls alone.
+    // Four: a row of chips that scrolls alone. Its read on the way back
+    // answered first: the app coming back while it is on its way asks
+    // nothing new.
+    await settled(page);
     await stubReport(page, ["Центр", "Ринок", "Вокзал", "Поділ"]);
-    await page.getByRole("button", { name: "Оновити", exact: true }).click();
+    // Read again as the app comes back (no «Оновити» by the title, audit
+    // 2026-11-13).
+    await comeBack(page);
     await expect(table(page).locator("thead th")).toHaveCount(5);
     await toScreen(page, "Моделі");
     await expect(stores(page).locator(".chip")).toHaveText([
@@ -1495,13 +1510,14 @@ test("at 360 × 400, the report scrolled to its foot, «Моделі» read befo
   ).toBeFocused();
 });
 
-/** Every read of the report answered — «Оновити» free again: none comes
+/** Every read of the report answered — it is no longer busy: none comes
  * after the clock moves. */
 async function settled(page: Page): Promise<void> {
   await expect(table(page)).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Оновити", exact: true }),
-  ).toBeEnabled();
+  await expect(page.locator("section.report")).not.toHaveAttribute(
+    "aria-busy",
+    "true",
+  );
 }
 
 test("how old the report is is said only while today is in it, and only once older than five minutes", async ({
@@ -1626,15 +1642,19 @@ test("on a Monday «Тиждень» is today alone and stays «Тиждень»
   await expect(
     page.getByRole("button", { name: "Спробувати ще раз" }),
   ).toHaveCount(0);
+  // Its own read as it opened answered first: the app coming back while
+  // it is on its way asks nothing new.
+  await settled(page);
 
-  // «Оновити» failed: what was read stands, and it is said.
+  // Read again as the app comes back and failed: what was read stands, and
+  // it is said (no «Оновити» by the title, audit 2026-11-13).
   await page.route(/\/api\/v1\/reports\/sales$/, async (route: Route) => {
     await route.fulfill({
       status: 500,
       json: { detail: "Internal Server Error" },
     });
   });
-  await page.getByRole("button", { name: "Оновити", exact: true }).click();
+  await comeBack(page);
   await expect(
     page.getByRole("button", { name: "Спробувати ще раз" }),
   ).toBeVisible();

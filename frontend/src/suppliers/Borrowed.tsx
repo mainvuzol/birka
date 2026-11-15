@@ -247,21 +247,6 @@ export function Borrowed({
       focusable
       title="Позичене й під реалізацію"
       back={back && <BackToMore back={back} />}
-      wraps
-      aside={
-        done === null && (
-          <button
-            type="button"
-            className="quiet"
-            disabled={lots.isFetching}
-            onClick={() => {
-              void lots.refetch();
-            }}
-          >
-            Оновити
-          </button>
-        )
-      }
     />
   );
 

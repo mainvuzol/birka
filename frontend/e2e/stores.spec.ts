@@ -1204,11 +1204,18 @@ test("«Магазини» are the door's tags, a store's own screen two taps fr
     await expect(
       market.getByRole("button", { name: "Закрити в архів" }),
     ).toHaveClass(/quiet/);
-    // Telegram's «Назад»: the list, its heading taking the cursor; then «Ще».
+    // Telegram's «Назад»: the list, its heading taking the cursor, read
+    // again (no «Оновити» by the title, audit 2026-11-13; review); then «Ще».
+    const again = page.waitForRequest(
+      (request) =>
+        request.method() === "GET" &&
+        new URL(request.url()).pathname === "/api/v1/stores",
+    );
     await pressBack(page);
     await expect(
       page.getByRole("heading", { name: "Магазини", exact: true }),
     ).toBeFocused();
+    await again;
     await pressBack(page);
     await expect(
       page.getByRole("heading", { name: "Ще", exact: true }),

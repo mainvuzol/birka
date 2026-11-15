@@ -146,6 +146,9 @@ export function Suppliers({
   }, [screen]);
   const toList = (): void => {
     setView({ screen: "list" });
+    // Back to the returns: read again, as on opening — «Оновити» is gone from
+    // the title (audit 2026-11-13; review).
+    void returns.refetch();
   };
 
   if (view.screen === "new")
@@ -209,16 +212,6 @@ export function Suppliers({
               onClick={make}
             >
               <Icon name="plus" />
-            </button>
-            <button
-              type="button"
-              className="quiet"
-              disabled={returns.isFetching}
-              onClick={() => {
-                void returns.refetch();
-              }}
-            >
-              Оновити
             </button>
           </span>
         }

@@ -378,7 +378,7 @@ export function Model({
                     ref={more}
                     type="button"
                     className="debt-more"
-                    aria-label="Ще дії з моделлю"
+                    aria-label="Дії з моделлю"
                     aria-haspopup="dialog"
                     disabled={blocked}
                     onClick={() => {

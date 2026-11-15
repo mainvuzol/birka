@@ -261,6 +261,9 @@ export function Stores({
         back={() => {
           setSaid(null);
           setOpenId(null);
+          // Back to the stores: read again, as on opening — «Оновити» is gone
+          // from the title (audit 2026-11-13; review).
+          void stores.refetch();
         }}
         change={(state, reason) => change(open, state, reason)}
       />
@@ -273,17 +276,6 @@ export function Stores({
         focusable
         title="Магазини"
         back={back && <BackToMore back={back} />}
-        aside={
-          <button
-            className="quiet"
-            disabled={stores.isFetching}
-            onClick={() => {
-              void stores.refetch();
-            }}
-          >
-            Оновити
-          </button>
-        }
       />
       <section className="stores">
         {notices}

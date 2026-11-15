@@ -180,21 +180,7 @@ export function Stock({
 
   return (
     <>
-      <ScreenHeader
-        title="Залишки"
-        back={back && <BackToMore back={back} />}
-        aside={
-          <button
-            className="quiet"
-            disabled={refreshing || locations.isFetching || stock.isFetching}
-            onClick={() => {
-              void refresh();
-            }}
-          >
-            Оновити
-          </button>
-        }
-      />
+      <ScreenHeader title="Залишки" back={back && <BackToMore back={back} />} />
       <section className="stock-screen">
         {selectionLost && (
           <p role="status">

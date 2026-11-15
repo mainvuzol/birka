@@ -2674,8 +2674,9 @@ test("a send refused as the same command in another form settles the draft: what
     await page
       .getByRole("button", { name: "Назад до «Початкові залишки»" })
       .click();
+    // «Назад» read the lists again: the one a lost send made among them
+    // (no «Оновити» by the title, audit 2026-11-13; review).
     lost = null;
-    await page.getByRole("button", { name: "Оновити" }).click();
     await page
       .getByRole("article", { name: `Список Зошит без відповіді ${tag}` })
       .getByRole("button", { name: "Відкрити" })

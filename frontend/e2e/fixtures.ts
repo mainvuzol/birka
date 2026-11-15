@@ -374,6 +374,19 @@ export async function more(page: Page): Promise<void> {
   await expect(screen).toBeVisible();
 }
 
+/**
+ * The app comes back to the screen — Telegram opened again, the phone
+ * unlocked: every read that may be old is asked again. It is how a list is
+ * read again, as no screen has «Оновити» by its title (audit 2026-11-13;
+ * chosen in chat 2026-11-15).
+ */
+export async function comeBack(page: Page): Promise<void> {
+  // As a browser fires it: on the document, bubbling to the window.
+  await page.evaluate(() => {
+    document.dispatchEvent(new Event("visibilitychange", { bubbles: true }));
+  });
+}
+
 /** «Змінити магазин», on the workspace's line of any screen of a store
  * («Усе на бірці» task list, P0-4). */
 export async function changeStore(page: Page): Promise<void> {

@@ -453,7 +453,7 @@ for (const [name, theme] of [
     await expect(page.locator("html")).toHaveJSProperty("scrollWidth", 360);
   });
 
-test("while the state is on its way the screen holds a tag's and three rows' shape, read as loading, and «Оновити» waits (stage 2, admin task list, P0-5)", async ({
+test("while the state is on its way the screen holds a tag's and three rows' shape, read as loading, no «Оновити» by its title; opened again, it asks again (stage 2, admin task list, P0-5; audit 2026-11-13)", async ({
   page,
 }) => {
   let release = (): void => undefined;
@@ -461,7 +461,9 @@ test("while the state is on its way the screen holds a tag's and three rows' sha
     release = resolve;
   });
   const good = night(5);
+  let asked = 0;
   await page.route("**/api/v1/backups", async (route) => {
+    asked += 1;
     await held;
     await route.fulfill({
       json: {
@@ -485,12 +487,23 @@ test("while the state is on its way the screen holds a tag's and three rows' sha
   await expect(
     page.getByRole("status").filter({ hasText: "Завантажуємо стан копій…" }),
   ).toBeAttached();
-  await expect(page.getByRole("button", { name: "Оновити" })).toBeDisabled();
   await expect(page.locator(".backups-verdict")).toHaveCount(0);
   release();
   await expect(
     page.locator('[data-state="OK"]').getByRole("heading"),
   ).toHaveText("Копії в порядку");
   await expect(wait).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Оновити" })).toBeEnabled();
+  // Nothing by the title: the screen asks each time it opens, though «Ще»
+  // read the copies a moment ago (audit 2026-11-13; chosen in chat
+  // 2026-11-15).
+  await expect(
+    page.getByRole("button", { name: "Оновити", exact: true }),
+  ).toHaveCount(0);
+  const before = asked;
+  await page.getByRole("button", { name: "Назад до «Ще»" }).click();
+  await tab(page).click();
+  await expect(
+    page.locator('[data-state="OK"]').getByRole("heading"),
+  ).toHaveText("Копії в порядку");
+  await expect.poll(() => asked).toBeGreaterThan(before);
 });

@@ -906,9 +906,13 @@ test("lost product rejection can be explicitly cancelled without leaving blocked
   await expect(
     page.getByText("Причина відхилення:", { exact: false }),
   ).toBeVisible();
+  // Back to the queue, read again as it comes (no «Оновити» by the title, audit
+  // 2026-11-13; review).
+  const queue = page.waitForRequest("**/api/v1/catalog/match-decisions?**");
   await page
     .getByRole("button", { name: "Назад до «Перевірка каталогу»" })
     .click();
+  await queue;
   await expect(
     page.getByRole("button", { name: "Нова пропозиція", exact: true }),
   ).toBeEnabled();
@@ -1261,7 +1265,7 @@ test("«Інший колір нашої моделі»: every model at once, as
   await expect(sheet.getByText(/Нічого не знайшли/)).toHaveCount(0);
 });
 
-test("at 360 px a proposal is its own screen: its words large, the models offered with «Це вона», none chosen, «Підтвердити: …» docked once one is, «Створити нову» and «Відхилити» — in sight, nothing past the width, in both themes (stage 2, goods task list, P1-1)", async ({
+test("at 360 px a proposal is its own screen: its words large, the models offered with «Це вона», none chosen, «Підтвердити: …» docked once one is, «Створити нову» and «Відхилити» — in sight, nothing past the width, in both themes; refused as changed meanwhile, it is read again (stage 2, goods task list, P1-1; audit 2026-11-13)", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 360, height: 640 });
@@ -1341,6 +1345,28 @@ test("at 360 px a proposal is its own screen: its words large, the models offere
     window.scrollTo(0, 0);
   });
   await expect(confirmAs(page)).toBeInViewport({ ratio: 1 });
+  // Refused as changed meanwhile: said, and the proposal and the queue are
+  // read again under it (no «Оновити» by the title, audit 2026-11-13; review).
+  const reads: string[] = [];
+  page.on("request", (request) => {
+    const path = new URL(request.url()).pathname;
+    if (
+      request.method() === "GET" &&
+      path.startsWith("/api/v1/catalog/match-decisions")
+    )
+      reads.push(path);
+  });
+  await refuseOnce(page, "**/api/v1/catalog/match-decisions/*/confirm", 409);
+  await confirmAs(page).click();
+  await expect(page.getByRole("alert")).toContainText(
+    "Каталог або рішення змінилися.",
+  );
+  await expect
+    .poll(() => reads.some((path) => /match-decisions\/[^/]+$/.test(path)))
+    .toBe(true);
+  await expect
+    .poll(() => reads.includes("/api/v1/catalog/match-decisions"))
+    .toBe(true);
 });
 
 test("a new model's sizes read slowly: a row of four cells in grey, 60 × 60 and the cell's corner, «Завантажуємо розміри…» said to a reader alone; come, the cells where they stood (audit after stage 2, frame P1-4)", async ({

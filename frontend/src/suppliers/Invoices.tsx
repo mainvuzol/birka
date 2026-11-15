@@ -27,7 +27,7 @@ import { buzz, useAskBeforeClosing, useMainButton } from "@/shared/telegram";
 import { Empty } from "@/shared/Empty";
 import { Placeholder } from "@/shared/Placeholder";
 import { ageOf } from "@/today/reads";
-import { Stamp, staleOf, useNow } from "@/today/age";
+import { Stamp, Unreads, staleOf, useNow } from "@/today/age";
 import { shortDay, shortWhen } from "@/credits/format";
 import { submitInvoiceCommand, useInvoiceCommand } from "./invoiceCommands";
 import { SupplierFilter, SupplierPicker } from "./Picker";
@@ -541,8 +541,8 @@ function InvoiceList({
         back={back}
         wraps
         aside={
-          <span className="invoice-head-ways">
-            {makes && (
+          makes && (
+            <span className="invoice-head-ways">
               <button
                 type="button"
                 className="debt-more"
@@ -552,19 +552,8 @@ function InvoiceList({
               >
                 <Icon name="plus" />
               </button>
-            )}
-            <button
-              type="button"
-              className="quiet"
-              disabled={invoices.isFetching}
-              onClick={() => {
-                void invoices.refetch();
-                if (!elsewhere) void summary.refetch();
-              }}
-            >
-              Оновити
-            </button>
-          </span>
+            </span>
+          )
         }
       />
       <section className="invoices">
@@ -639,6 +628,10 @@ function InvoiceList({
             {staleOf(age, now) && <Stamp age={age} now={now} />}
           </div>
         )}
+        {/* Never read: «не вдалося прочитати» in its place, and the one plate
+            whose «Спробувати ще раз» asks it again, as «Сьогодні»'s tags —
+            «Оновити» is gone from the title (audit 2026-11-13; review). */}
+        {!elsewhere && <Unreads reads={[summary]} />}
         {invoices.isPending ? (
           // Three tags' places, where the first one comes (money task list
           // after stage 2, P1-3).
