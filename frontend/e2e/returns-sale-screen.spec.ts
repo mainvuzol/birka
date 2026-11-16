@@ -71,9 +71,14 @@ interface Line {
   back_to_sold_from: boolean;
 }
 
+/** Each sale line's name, as the server answers a return with it. */
+const names = new Map<string, string>();
+
 function line(name: string, quantity = 2, refunded = 0): Line {
+  const id = randomUUID();
+  names.set(id, name);
   return {
-    id: randomUUID(),
+    id,
     display_name: name,
     size: "M",
     quantity,
@@ -197,7 +202,8 @@ function refundOf(
       condition: each.condition,
       destination_location_id:
         each.condition === "INTACT" ? fixture.till_location_id : null,
-      display_name: "Лоран шоколад · M",
+      // The sale line's own name, its size not in it: the form says it.
+      display_name: names.get(each.sale_item_id) ?? "Лоран шоколад",
     })),
     credit: null,
     payment_method: way,
@@ -552,6 +558,26 @@ test("a return in four taps from the till: «Повернути» — its field 
   await expect(
     page.getByRole("heading", { name: "Повернення записано" }),
   ).toBeVisible();
+  // What came back, first under the perforation, in the dock's words; where
+  // it went, under it (spec §6.30; audit 2026-11-15, sale P2-2).
+  const returned = page.locator(".stub .return-lines li");
+  await expect(returned).toHaveText(["Лоран шоколад · M × 1"]);
+  const went = page.getByText("Цілі: 1 шт. — на склад, з якого продали.", {
+    exact: true,
+  });
+  const [named, where, tear] = await Promise.all([
+    returned.first().boundingBox(),
+    went.boundingBox(),
+    page.locator(".stub .perforation").boundingBox(),
+  ]);
+  if (!named || !where || !tear) throw new Error("not laid out");
+  expect(named.y).toBeGreaterThanOrEqual(tear.y + tear.height);
+  expect(where.y).toBeGreaterThanOrEqual(named.y + named.height);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth > innerWidth,
+    ),
+  ).toBe(false);
   expect(await taps()).toBe(4);
   expect(sent).toEqual([
     expect.objectContaining({
@@ -559,6 +585,65 @@ test("a return in four taps from the till: «Повернути» — its field 
       lines: [expect.objectContaining({ quantity: 1, condition: "INTACT" })],
     }),
   ]);
+});
+
+test("a return's stub names what came back, a line of the sale's each, its intact and damaged together; past three, «+ ще N», and the rest on a tap (spec §6.30; audit 2026-11-15, sale P2-2)", async ({
+  page,
+}) => {
+  await oneSale(page, [
+    line("Лоран шоколад"),
+    line("Альпака сіра", 1),
+    line("Тоскана віскі", 1),
+    line("Віола беж", 1),
+  ]);
+  await opened(page);
+  await returnUnits(page, { intact: 1, damaged: 1, line: "Лоран шоколад · M" });
+  for (const name of ["Альпака сіра", "Тоскана віскі", "Віола беж"])
+    await returnUnits(page, { intact: 1, line: `${name} · M` });
+  await panelOf(page)
+    .getByRole("button", { name: /^Повернути покупцю / })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Повернення записано" }),
+  ).toBeFocused();
+  const lines = page.locator(".stub .return-lines");
+  await expect(lines).toHaveAccessibleName("Що повернули");
+  // The stub's lines, no bullets, at its edge.
+  await expect(lines).toHaveCSS("list-style-type", "none");
+  await expect(lines).toHaveCSS("padding-left", "0px");
+  await expect(lines.locator("li")).toHaveText([
+    "Лоран шоколад · M × 2",
+    "Альпака сіра · M × 1",
+    "Тоскана віскі · M × 1",
+    "+ ще 1",
+  ]);
+  await expect(lines.locator("li").first()).toHaveCSS(
+    "color",
+    await lines.evaluate(() => {
+      const probe = document.createElement("i");
+      probe.style.color = "var(--pencil)";
+      document.body.append(probe);
+      const colour = getComputedStyle(probe).color;
+      probe.remove();
+      return colour;
+    }),
+  );
+  await lines.getByRole("button", { name: "+ ще 1" }).click();
+  await expect(lines.locator("li")).toHaveText([
+    "Лоран шоколад · M × 2",
+    "Альпака сіра · M × 1",
+    "Тоскана віскі · M × 1",
+    "Віола беж · M × 1",
+  ]);
+  await expect(lines).toBeFocused();
+  await expect(lines.getByRole("button")).toHaveCount(0);
+  // Where they went, as before, under them.
+  await expect(
+    page.getByText("Цілі: 4 шт. — на склад, з якого продали.", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText(/^Пошкоджені: 1 шт\. — у «Брак»\./),
+  ).toBeVisible();
 });
 
 test("before a tap: nine things to see, nothing to type and nothing to press; a unit counted brings the panel, thirteen", async ({

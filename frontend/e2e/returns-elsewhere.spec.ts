@@ -290,6 +290,11 @@ test("goods bought at another store come back here, and this store hands the mon
   await expect(
     page.getByText(/^Пошкоджені: 1 шт\. — у «Брак»\./),
   ).toBeVisible();
+  // What came back named over them, as a sale of this store's (audit
+  // 2026-11-15, sale P2-2).
+  await expect(stub.locator(".return-lines li")).toHaveText([
+    `${model} графіт · M × 2`,
+  ]);
   expect(sent.bodies).toHaveLength(1);
   expect((sent.bodies[0] as { store_id: string }).store_id).toBe(
     fixture.store_id,
@@ -564,6 +569,9 @@ test("a kept return of goods from the other store's own warehouse, checked by th
     ),
   ).toBeVisible();
   await expect(confirmed.getByText(/з якого продали/)).toHaveCount(0);
+  // Its notice compact: what came back is not listed there (audit
+  // 2026-11-15, sale P2-2).
+  await expect(confirmed.locator(".return-lines")).toHaveCount(0);
   await expect(
     confirmed.getByText(
       "Товар куплено в іншому магазині мережі — гроші віддаєте ви.",

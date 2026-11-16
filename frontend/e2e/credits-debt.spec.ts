@@ -1041,6 +1041,11 @@ test("a kept write-off confirmed while the phone keeps an invoice operation it c
   await expect(
     page.getByRole("heading", { name: "Списання записано один раз" }),
   ).toBeVisible();
+  // Nothing left: nothing in the debt's colour (audit 2026-11-15, sale P2-4).
+  await expect(page.locator(".paid-result.kept")).toContainText(
+    /залишок боргу 0,00\sгрн\./,
+  );
+  await expect(page.locator(".paid-result.kept .owed-left")).toHaveCount(0);
   // The write-off settled, the invoice is not: no payment begins.
   await page.getByRole("button", { name: /^Відкрити борг: Оксана/ }).click();
   await expect(
@@ -1699,11 +1704,170 @@ test("written off on her card, «Внесок» waits while the card is read aga
   await page.getByLabel("Чому списуємо").fill("виїхала");
   written = true;
   await sheet.getByRole("button", { name: /^Так, списати / }).click();
-  await expect(page.getByRole("status")).toContainText("Борг списано");
+  // Its own result's screen first (audit 2026-11-15, sale P2-3); back on
+  // her card by her name, «Внесок» waits for the card read again.
+  await expect(
+    page.locator(".paid-result").getByRole("heading", { name: "Борг списано" }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Оксана Петренко", exact: true })
+    .click();
+  // Her card's title takes the focus, as a debt's does (review).
+  await expect(
+    page.getByRole("heading", { name: "Оксана Петренко", level: 1 }),
+  ).toBeFocused();
   await expect(pay).toBeDisabled();
   release();
   await expect(pay).toHaveCount(0);
   await expect(page.locator(".customer-debt .sticker")).toHaveText("Списано");
+});
+
+test("inside Telegram a write-off on her card is its own result's screen: Telegram's «Внесок» put away while it stands, though the card under it still owes until it is read again (audit 2026-11-15, sale P2-3; review)", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const host = window as unknown as {
+      TelegramWebviewProxy: {
+        postEvent: (event: string, data: string) => void;
+      };
+      mains: unknown[];
+    };
+    host.mains = [];
+    host.TelegramWebviewProxy = {
+      postEvent: (event, data) => {
+        if (event === "web_app_setup_main_button")
+          host.mains.push(JSON.parse(data));
+      },
+    };
+  });
+  const mains = (): Promise<{ is_visible: boolean; text?: string }[]> =>
+    page.evaluate(
+      () =>
+        (
+          window as unknown as {
+            mains: { is_visible: boolean; text?: string }[];
+          }
+        ).mains,
+    );
+  const one = debt();
+  await serve(page, one);
+  const done = {
+    ...one,
+    status: "WRITTEN_OFF",
+    owed: "0.00",
+    written_off: one.owed,
+    closed_at: `${String(thisYear)}-10-16T09:00:00Z`,
+  };
+  await page.route(`**/api/v1/credits/${one.id}/write-off`, async (route) => {
+    await route.fulfill({ json: done });
+  });
+  // Once written off, the card's read waits: under the result, it owes.
+  let written = false;
+  let release: () => void = () => undefined;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/api/v1/credits/customers?**", async (route) => {
+    if (!written) {
+      await route.fallback();
+      return;
+    }
+    await held;
+    await route.fulfill({ json: { items: [], has_more: false } });
+  });
+  await page.goto(launch(undefined, "8.0"));
+  await openStore(page, "Основний MAIN");
+  await toTill(page);
+  await section(page, "Покупці");
+  await page.getByRole("button", { name: /^Відкрити борг: Оксана/ }).click();
+  // Her card's «Внесок» is Telegram's.
+  await expect
+    .poll(async () => (await mains()).at(-1))
+    .toEqual(expect.objectContaining({ is_visible: true, text: "Внесок" }));
+  await act(page, "Списати борг");
+  const sheet = page.getByRole("dialog", { name: "Списати борг" });
+  await expect(sheet).toHaveAttribute("data-ready", "");
+  await page.getByLabel("Чому списуємо").fill("виїхала");
+  written = true;
+  await sheet.getByRole("button", { name: /^Так, списати / }).click();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+    "Борг списано",
+  );
+  await expect
+    .poll(async () => (await mains()).at(-1))
+    .toEqual({ is_visible: false });
+  // Still put away a moment later, the card's read still held.
+  await page.evaluate(
+    () =>
+      new Promise((done) => {
+        setTimeout(done, 300);
+      }),
+  );
+  expect((await mains()).at(-1)).toEqual({ is_visible: false });
+  release();
+});
+
+test("written off on her card, her last: the card read again has nothing left to show, the result stays; its main goes on to «Покупці» (audit 2026-11-15, sale P2-3)", async ({
+  page,
+}) => {
+  const one = debt();
+  await serve(page, one);
+  const done = {
+    ...one,
+    status: "WRITTEN_OFF",
+    owed: "0.00",
+    written_off: one.owed,
+    closed_at: `${String(thisYear)}-10-16T09:00:00Z`,
+  };
+  await page.route(`**/api/v1/credits/${one.id}/write-off`, async (route) => {
+    await route.fulfill({ json: done });
+  });
+  // Once written off, the card's read finds her nowhere.
+  let written = false;
+  await page.route("**/api/v1/credits/customers?**", async (route) => {
+    if (!written) {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({ json: { items: [], has_more: false } });
+  });
+  await page.goto(launch());
+  await openStore(page, "Основний MAIN");
+  await toTill(page);
+  await section(page, "Покупці");
+  await page.getByRole("button", { name: /^Відкрити борг: Оксана/ }).click();
+  await expect(deposit(page)).toBeEnabled();
+  await act(page, "Списати борг");
+  const sheet = page.getByRole("dialog", { name: "Списати борг" });
+  await expect(sheet).toHaveAttribute("data-ready", "");
+  await page.getByLabel("Чому списуємо").fill("виїхала");
+  written = true;
+  const reread = page.waitForResponse(
+    (response) =>
+      response.url().includes("/api/v1/credits/customers?") &&
+      response.request().method() === "GET",
+  );
+  await sheet.getByRole("button", { name: /^Так, списати / }).click();
+  await reread;
+  // The card has nothing left; the result stands all the same.
+  const title = page
+    .locator(".paid-result")
+    .getByRole("heading", { name: "Борг списано" });
+  await expect(title).toBeFocused();
+  await page.evaluate(
+    () =>
+      new Promise((done) => {
+        setTimeout(done, 300);
+      }),
+  );
+  await expect(title).toBeVisible();
+  await page
+    .getByRole("button", { name: "Оксана Петренко", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Покупці", level: 1 }),
+  ).toBeVisible();
+  await expect(page.getByText(/Борг списано/)).toHaveCount(0);
 });
 
 test("the owner's ⋯ open on her card when it is read again into two debts: the sheet goes with it, and Telegram's «Внесок» comes back (review, 2026-11-01)", async ({

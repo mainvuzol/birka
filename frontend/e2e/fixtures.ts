@@ -1682,21 +1682,63 @@ export async function dockOnMenu(
 /**
  * What is still owed, as a list's row says it (spec §4; audit 2026-11-13,
  * sale P2-3): the sum in the debt's colour, its minus arrow before it — one
- * such in `scope`.
+ * such in `scope`; on one line, and at 4.5:1 on the ground it stands on
+ * (audit 2026-11-15, sale P2-4, orders-cash P2-1), whatever the theme —
+ * `theme` named, its own debt colour proven to be that theme's (light
+ * #a1380e, dark #ff9d6e).
  */
-export async function expectOwed(scope: Locator, sum: string): Promise<void> {
+export async function expectOwed(
+  scope: Locator,
+  sum: string,
+  theme?: "light" | "dark",
+): Promise<void> {
   const left = scope.locator(".owed-left");
   await expect(left).toHaveText(sum);
   await expect(left.locator("svg.icon")).toHaveCount(1);
-  const [colour, owed] = await left.evaluate((node) => {
+  const [colour, owed, ratio, rows] = await left.evaluate((node) => {
     const probe = document.createElement("i");
     probe.style.color = "var(--owed)";
     node.append(probe);
     const want = getComputedStyle(probe).color;
     probe.remove();
-    return [getComputedStyle(node).color, want];
+    const channels = (value: string): number[] =>
+      (value.match(/[\d.]+/g) ?? []).map(Number);
+    // The first ground with no see-through, from the sum outwards.
+    let ground = "rgb(255, 255, 255)";
+    for (let at: Element | null = node; at; at = at.parentElement) {
+      const back = getComputedStyle(at).backgroundColor;
+      const [, , , alpha = 1] = channels(back);
+      if (alpha >= 1) {
+        ground = back;
+        break;
+      }
+    }
+    const luminance = (value: string): number => {
+      const [r, g, b] = channels(value).map((c) => {
+        const v = c / 255;
+        return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+      });
+      return 0.2126 * (r ?? 0) + 0.7152 * (g ?? 0) + 0.0722 * (b ?? 0);
+    };
+    const [a, b] = [luminance(want), luminance(ground)];
+    // Its rows: the words' boxes, one top for one line.
+    const tops = new Set(
+      [...node.getClientRects()].map((rect) => Math.round(rect.top)),
+    );
+    return [
+      getComputedStyle(node).color,
+      want,
+      (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05),
+      tops.size,
+    ] as const;
   });
   expect(colour).toBe(owed);
+  if (theme)
+    expect(owed).toBe(
+      theme === "dark" ? "rgb(255, 157, 110)" : "rgb(161, 56, 14)",
+    );
+  expect(ratio).toBeGreaterThanOrEqual(4.5);
+  expect(rows).toBe(1);
 }
 
 /**

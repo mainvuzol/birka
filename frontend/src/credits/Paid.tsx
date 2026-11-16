@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { JSX, ReactNode } from "react";
-import { money } from "@/orders/types";
+import { kopecks, money } from "@/orders/types";
 import { paperText } from "@/sales/paperMark";
 import type { PaperView } from "@/sales/paperMark";
 import { methodHow } from "@/shared/payment";
@@ -74,16 +74,39 @@ export function Paid(props: PaidProps): JSX.Element {
   return props.kept ? <PaidKept {...props} /> : <PaidScreen {...props} />;
 }
 
+/**
+ * The sentence as the eye reads it, where it is shown (spec §4, S22 №7;
+ * audit 2026-11-15, sale P2-4): what is left on the debt, where it says so,
+ * in the debt's colour with its arrow — every word as it was, and heard the
+ * same, the arrow unread. Nothing left, nothing coloured. Heard only, it
+ * stays plain: the debt's own line draws it.
+ */
+function owedIn(said: string, credit: Credit): ReactNode {
+  if ((kopecks(credit.owed) ?? 0n) <= 0n) return said;
+  const sum = money(credit.owed);
+  const at = said.search(/[Зз]алишок боргу /);
+  const start = at + "залишок боргу ".length;
+  if (at < 0 || !said.startsWith(sum, start)) return said;
+  return (
+    <>
+      {said.slice(0, start)}
+      <OwedSum value={credit.owed} />
+      {said.slice(start + sum.length)}
+    </>
+  );
+}
+
 /** The way, what to do with the money, the sum large, and the sentence. */
 function HandBack({
   kind,
   amount,
   way,
   paper,
+  credit,
   said,
   kept,
   sentence,
-}: Pick<PaidProps, "kind" | "amount" | "way" | "paper" | "said"> & {
+}: Pick<PaidProps, "kind" | "amount" | "way" | "paper" | "credit" | "said"> & {
   kept: boolean;
   sentence: string;
 }): JSX.Element {
@@ -131,7 +154,7 @@ function HandBack({
               : `Списано ${money(amount)}. `}
           </span>
         )}
-        {said}
+        {shown ? owedIn(said, credit) : said}
       </p>
     </div>
   );
@@ -239,6 +262,7 @@ function PaidScreen({
           amount={amount}
           way={way}
           paper={paper}
+          credit={credit}
           said={said}
           kept={false}
           sentence={sentence}

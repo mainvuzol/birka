@@ -137,6 +137,9 @@ export function Returns({
   const [done, setDone] = useState<{
     refund: Refund;
     sent: ReturnPart[];
+    /** The sale's lines' sizes by their id, for the stub (audit
+     * 2026-11-15, sale P2-2). */
+    sizes: Record<string, string>;
   } | null>(null);
   const searching = !away || hasWord(search);
   // The other stores, offered once there is something to look for, and
@@ -243,7 +246,13 @@ export function Returns({
   );
 
   async function settled(refund: Refund, sent: ReturnPart[]): Promise<void> {
-    setDone({ refund, sent });
+    setDone({
+      refund,
+      sent,
+      sizes: Object.fromEntries(
+        (selected?.items ?? []).map((item) => [item.id, sizeLabel(item.size)]),
+      ),
+    });
     setSelected(null);
     await Promise.all([
       cache.invalidateQueries({ queryKey: ["store-sales", store.id] }),
@@ -262,6 +271,7 @@ export function Returns({
         token={token}
         refund={done.refund}
         sent={done.sent}
+        sizes={done.sizes}
         sell={sell}
         more={() => {
           setDone(null);

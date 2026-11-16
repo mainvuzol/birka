@@ -62,7 +62,13 @@ import { Unread } from "@/shared/Unread";
 import { ModeSwitch } from "@/shared/ModeSwitch";
 import { BlankTag } from "@/shared/BlankTag";
 import type { OrdersView } from "@/orders/Orders";
-import { asShown, money, nextRefusal, stateText } from "@/orders/types";
+import {
+  asShown,
+  kopecks,
+  money,
+  nextRefusal,
+  stateText,
+} from "@/orders/types";
 import type { Me, Store, Order, StepAt, StepRefusal } from "@/orders/types";
 import { Stock } from "@/inventory/Stock";
 import { Model } from "@/inventory/Model";
@@ -84,6 +90,7 @@ import {
 import type { IconName } from "@/shared/icons";
 import type { MoreBack, MoreGroup, MoreRow } from "@/shared/More";
 import { Sticker } from "@/shared/Sticker";
+import { OwedSum } from "@/shared/OwedSum";
 import { Catalog } from "@/catalog/Catalog";
 import {
   loadCatalogCommand,
@@ -3084,7 +3091,15 @@ function Workspace({
                 ? ` ${methodHow[settled.payment_method]}`
                 : ""}
               {settledPaid !== null && ` — ${settledPaid}`}, покупець винен{" "}
-              {money(settled.credit.owed)}.
+              {/* What is left, with the debt's arrow, as everywhere a debt
+                  is left; the sentence heard as it was (audit 2026-11-15,
+                  sale P2-4). */}
+              {(kopecks(settled.credit.owed) ?? 0n) > 0n ? (
+                <OwedSum value={settled.credit.owed} />
+              ) : (
+                money(settled.credit.owed)
+              )}
+              .
               {settled.payment_method === "CARD" &&
                 settledPaid === null &&
                 ` ${chargeOnce(settled.credit.paid_now)}`}
