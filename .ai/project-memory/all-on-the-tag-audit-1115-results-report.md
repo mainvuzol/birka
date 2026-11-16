@@ -25,7 +25,11 @@ Status: built and proven; not committed; not yet seen on a real phone.
   `returns-elsewhere`, `returns-sale-screen`, `outage-mark-debts-returns`).
 - After the review's fixes: 182 of 182 (the same five, `orders-card` and
   `stores`).
-- The whole suite is left to GitHub CI, by the user's word.
+- The whole suite is left to GitHub CI, by the user's word. CI's first
+  run: 1170 of 1171. The four taps' return measured its line and «Цілі»
+  in separate calls while the screen still scrolled to its title. All three
+  boxes are now measured in one frame; 10 of 10 locally, and `returnorder`
+  and `returnlines` still caught.
 - Mutants: 34 of 35 caught; the one alive is equivalent (see «Mutants»).
 - One independent review; its findings are fixed or left with a reason.
 - Journeys: 1171 (1167 before).

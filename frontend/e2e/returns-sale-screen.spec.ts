@@ -565,14 +565,30 @@ test("a return in four taps from the till: «Повернути» — its field 
   const went = page.getByText("Цілі: 1 шт. — на склад, з якого продали.", {
     exact: true,
   });
-  const [named, where, tear] = await Promise.all([
-    returned.first().boundingBox(),
-    went.boundingBox(),
-    page.locator(".stub .perforation").boundingBox(),
-  ]);
-  if (!named || !where || !tear) throw new Error("not laid out");
-  expect(named.y).toBeGreaterThanOrEqual(tear.y + tear.height);
-  expect(where.y).toBeGreaterThanOrEqual(named.y + named.height);
+  await expect(went).toBeVisible();
+  // Measured in one frame: the screen may still be scrolling to its title.
+  const { named, where, tear } = await page
+    .locator(".stub", { has: page.locator(".return-lines") })
+    .evaluate((stub) => {
+      const edges = (
+        node: Element | null | undefined,
+      ): { top: number; bottom: number } => {
+        if (!node) throw new Error("not laid out");
+        const { top, bottom } = node.getBoundingClientRect();
+        return { top, bottom };
+      };
+      return {
+        named: edges(stub.querySelector(".return-lines li")),
+        where: edges(
+          [...stub.querySelectorAll(".return-goods p")].find((line) =>
+            line.textContent.startsWith("Цілі:"),
+          ),
+        ),
+        tear: edges(stub.querySelector(".perforation")),
+      };
+    });
+  expect(named.top).toBeGreaterThanOrEqual(tear.bottom);
+  expect(where.top).toBeGreaterThanOrEqual(named.bottom);
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth > innerWidth,
