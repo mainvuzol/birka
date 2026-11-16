@@ -267,6 +267,39 @@ test("lost committed response survives reopening and reuses the same command", a
   await reopened.getByRole("button", { name: "Так, скасувати" }).click();
   await expect(reopened.getByText("Скасовано", { exact: true })).toBeVisible();
 });
+test("an order's step the phone could not keep keeps its plate: nothing sent, nothing says it is kept, the draft still the seller's (2026-11-15)", async ({
+  page,
+}) => {
+  await enter(page);
+  await draft(page);
+  const sent: string[] = [];
+  await page.route("**/api/v1/orders", async (route) => {
+    if (route.request().method() === "POST")
+      sent.push(route.request().postData() ?? "");
+    await route.continue();
+  });
+  // The phone's memory refuses the step's attempt.
+  await page.evaluate(() => {
+    const set = Reflect.get(Storage.prototype, "setItem");
+    Storage.prototype.setItem = function (key: string, value: string) {
+      if (key.startsWith("birka:pending:"))
+        throw new DOMException("full", "QuotaExceededError");
+      set.call(this, key, value);
+    };
+  });
+  await page.getByRole("button", { name: "Замовити та зарезервувати" }).click();
+  await expect(page.getByRole("alert")).toHaveText(
+    "Не вдалося виконати операцію. Спробуйте ще раз.",
+  );
+  expect(sent).toHaveLength(0);
+  await expect(page.getByText(/ще не підтверджено/)).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Перевірити результат замовлення" }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Замовити та зарезервувати" }),
+  ).toBeEnabled();
+});
 test("a kept order its check cannot settle opens on «Замовлення», not on the till", async ({
   page,
   context,

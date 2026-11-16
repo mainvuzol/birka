@@ -142,9 +142,12 @@ export async function submitPending(
       ...sinceOf(existing, current),
       misses: useCommand.getState().misses,
     };
-    useCommand.setState({ pending: current });
     localStorage.setItem(key, JSON.stringify(current));
     written = true;
+    // Kept, and so shown as kept, only once it is on disk: an attempt the
+    // phone cannot write down (its memory full) is never sent, and leaves
+    // no stub, closing question or resend behind (2026-11-15).
+    useCommand.setState({ pending: current });
     if (!current.acknowledged) {
       const response = await api<Order>(current.path, token, current.body);
       current = {

@@ -2329,6 +2329,50 @@ test.describe("9. what to do with money after the outage", () => {
     });
   }
 
+  // As the sale's (group 12): a journal's attempt the phone could not write
+  // down is never sent, and nothing claims it is kept (2026-11-15).
+  test("«Покупці»: a payment the phone could not keep keeps its plate: nothing sent, no stub says it is kept, nothing tries it again as the app comes back", async ({
+    page,
+  }) => {
+    await serve(page);
+    const payments = await debts(page, credit.owed);
+    await page.goto(launch());
+    await openStore(page, /Подільський/);
+    await page.evaluate(() => {
+      const phone = window as unknown as { tried: number };
+      phone.tried = 0;
+      const set = Reflect.get(Storage.prototype, "setItem");
+      Storage.prototype.setItem = function (key: string, value: string) {
+        if (key.startsWith("birka:credit-pending:")) {
+          phone.tried += 1;
+          throw new DOMException("full", "QuotaExceededError");
+        }
+        set.call(this, key, value);
+      };
+    });
+    const tried = (): Promise<number> =>
+      page.evaluate(() => (window as unknown as { tried: number }).tried);
+    await payOnCard(page, "500");
+    await page
+      .getByRole("group", { name: "Внесок", exact: true })
+      .getByRole("button", { name: "Готівка", exact: true })
+      .click();
+    await expect(page.getByRole("alert")).toHaveText(
+      "Не вдалося виконати операцію. Спробуйте ще раз.",
+    );
+    expect(payments).toHaveLength(0);
+    await expect(page.locator(".stub")).toHaveCount(0);
+    await expect(page.getByText(/Внесок ще не підтверджено/)).toHaveCount(0);
+    expect(
+      await page.evaluate((key) => localStorage.getItem(key), creditKey),
+    ).toBeNull();
+    await comeBack(page);
+    await page.waitForTimeout(1500);
+    expect(await tried()).toBe(1);
+    expect(payments).toHaveLength(0);
+    await expect(page.locator(".stub")).toHaveCount(0);
+  });
+
   for (const { status, meanwhile } of [
     { status: "CANCELLED", meanwhile: "cancelled the order" },
     { status: "RETURNED", meanwhile: "took the order back" },
@@ -6183,26 +6227,59 @@ test.describe("12. a kept operation sent with no answer says the paper's sentenc
     ).toBeVisible();
   });
 
-  test("a sale the phone could not keep keeps its plate: nothing sent, the refusal said where it was pressed", async ({
+  test("a sale the phone could not keep keeps its plate: nothing sent, the refusal said where it was pressed; no stub says it is kept, nothing tries it again, and the basket sells once the memory is freed (2026-11-15)", async ({
     page,
   }) => {
     const server = await serve(page);
     await openTill(page);
     await basket(page);
-    // The phone's memory refuses the sale's attempt.
+    // The phone's memory refuses the sale's attempt until it is freed; each
+    // try to write it down is counted.
     await page.evaluate(() => {
+      const phone = window as unknown as { full: boolean; tried: number };
+      phone.full = true;
+      phone.tried = 0;
       const set = Reflect.get(Storage.prototype, "setItem");
       Storage.prototype.setItem = function (key: string, value: string) {
-        if (key.startsWith("birka:sale-pending:"))
+        if (key.startsWith("birka:sale-pending:") && phone.full) {
+          phone.tried += 1;
           throw new DOMException("full", "QuotaExceededError");
+        }
         set.call(this, key, value);
       };
     });
+    const tried = (): Promise<number> =>
+      page.evaluate(() => (window as unknown as { tried: number }).tried);
     await pay(page, "Готівка").click();
     await expect(page.getByRole("alert")).toHaveText(
       "Не вдалося виконати операцію. Спробуйте ще раз.",
     );
     expect(server.sales).toHaveLength(0);
+    // Nothing is kept, and nothing says it is: no stub telling the seller
+    // not to type it from paper (2026-11-15).
+    await expect(page.locator(".stub")).toHaveCount(0);
+    await expect(page.getByText(/Продаж ще не підтверджено/)).toHaveCount(0);
+    expect(
+      await page.evaluate((key) => localStorage.getItem(key), saleKey),
+    ).toBeNull();
+    // Nothing is tried again as the app comes back and the till reads anew.
+    const reads = page.waitForResponse((response) =>
+      response.url().includes("/api/v1/catalog/stock-options"),
+    );
+    await comeBack(page);
+    await reads;
+    await page.waitForTimeout(1500);
+    expect(await tried()).toBe(1);
+    expect(server.sales).toHaveLength(0);
+    await expect(page.locator(".stub")).toHaveCount(0);
+    // The basket is still the seller's: freed, it is sold once, as the
+    // plate says.
+    await page.evaluate(() => {
+      (window as unknown as { full: boolean }).full = false;
+    });
+    await pay(page, "Готівка").click();
+    await expect.poll(() => server.sales.length).toBe(1);
+    expect(await tried()).toBe(1);
   });
 });
 

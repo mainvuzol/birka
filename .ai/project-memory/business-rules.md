@@ -10169,7 +10169,9 @@ phone. One word on a screen changes: the move's sum is «Сума, грн».
     phone could not write (its memory full) is never sent, says «Не
     вдалося виконати операцію. Спробуйте ще раз.» — and its stub still
     stands, held in memory alone, saying not to type it from paper. Left
-    for its own task: it is the sale's journal.
+    for its own task: it is the sale's journal. Settled 2026-11-15
+    (below): not kept, no stub — the shared journals and an order's step
+    alike.
 - **«Покупці»'s rows dated** (sale P1-1; spec S19 pp. 6–12): after the
   phone and the goods (or «N борги») — owing: «останній внесок 19.10» by
   the latest payment among the row's debts, or «з 18.10» by the earliest
@@ -10241,3 +10243,33 @@ phone. One word on a screen changes: the move's sum is «Сума, грн».
     each send.
   - Left for the owner (В15-Г1): the refusal's words, «… Оновіть і
     перевірте кількість.», stay until answered.
+
+## Chosen in chat — 2026-11-15 (an attempt the phone could not keep is not kept: no stub, nothing tried again; found while proving audit 2026-11-15, batch 1, frame P1-2)
+
+The follow-up left under frame P1-2 (above), picked in chat. No request
+body, right, word or rule of what is recorded changes; nothing is counted
+on the phone.
+
+- **An attempt the phone could not keep is not kept** (frame P1-2, above:
+  it keeps its plate). A journal's attempt is shown as kept — its stub,
+  Telegram's question before closing for it, its own check as the app
+  comes back or the server is back, the other operations held while it
+  waits — only once the phone has written it down. One the phone cannot
+  write (its memory full) is never sent, as before, and leaves nothing of
+  itself behind: the plate «Не вдалося виконати операцію. Спробуйте ще
+  раз.» where it was pressed, and the basket, the draft or the typed sum
+  still the person's, to send again. The sale's journal, an order's step's
+  and every shared journal's — a delivery's, a return's (a buyer's and to
+  a supplier), an invoice's, a debt's payment, a stock correction, a
+  stocktake's count, a cash move, a model's correction, a store's state —
+  alike. The catalogue's decisions were so already.
+  - Decided here: an attempt already on the phone, resent, whose rewrite
+    the phone refuses, keeps its stub: what stands on the phone is that
+    attempt as written before, and its check resends it.
+  - Decided here: an attempt that was written down is shown exactly as
+    before — its stub, its error, its count, its check.
+  - Not changed: Telegram's question before closing is still asked, by its
+    own rule (§4.4, rule 2), for a basket with goods or a sum typed. An
+    attempt read from the phone as a store opens, whose rewrite the phone
+    refuses, is said as one the phone cannot read, as before; it stays on
+    the phone.

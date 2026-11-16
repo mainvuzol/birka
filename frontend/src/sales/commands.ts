@@ -340,12 +340,15 @@ export async function submitSale(
       ...sinceOf(existing, current),
       misses: useSaleCommand.getState().misses,
     };
+    localStorage.setItem(storageKey, JSON.stringify(current));
+    written = true;
+    // Kept, and so shown as kept, only once it is on disk: an attempt the
+    // phone cannot write down (its memory full) is never sent, and leaves
+    // no stub, closing question or resend behind (2026-11-15).
     useSaleCommand.setState({
       pending: current,
       firstSend: !previouslyAmbiguous,
     });
-    localStorage.setItem(storageKey, JSON.stringify(current));
-    written = true;
 
     if (current.emptyShelf) {
       let shelf: EmptyShelf;
