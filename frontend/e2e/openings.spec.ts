@@ -3,6 +3,7 @@ import {
   expect,
   addModel,
   expectFold,
+  expectSheetCancel,
   holdReads,
   listWay,
   rejectList,
@@ -632,6 +633,9 @@ test("inside Telegram a line's answer is its MainButton, naming what is recorded
     name: "Затвердити «Зошит у Телеграмі»?",
   });
   await expect(sheet).toHaveAttribute("data-ready", "");
+  // In Telegram the foot holds «Скасувати» alone: a text button, never the
+  // sheet's most seen (audit 2026-11-15, frame P2-4).
+  await expectSheetCancel(sheet.getByRole("button", { name: "Скасувати" }));
   expect(sent).toEqual(["lines/2", "lines/1", "lines/3"]);
   await expect.poll(main).toMatchObject({
     is_visible: true,

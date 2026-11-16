@@ -222,6 +222,17 @@ test("two stores are chosen each time, nothing chosen beforehand, and the day co
       // The store open now read after it (P1-5).
       .getByRole("button", { name: "Змінити магазин Основний" }),
   ).toBeVisible();
+  // «Ще» itself names no store: no line under its title, and one «Змінити
+  // магазин», its row (spec S07; audit 2026-11-15, frame P2-1).
+  await expect(page.locator(".store-line:visible")).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: /^Змінити магазин/ }),
+  ).toHaveCount(1);
+  await page
+    .getByRole("navigation", { name: "Розділи" })
+    .getByRole("button", { name: "Сьогодні" })
+    .click();
+  await expect(change).toBeVisible();
   await change.click();
   await expect(
     page.getByRole("heading", { name: "Де ви сьогодні?" }),
@@ -281,6 +292,12 @@ test("«Ще» only when it holds something: nothing under it and one store, no 
   await expect(
     page.getByRole("navigation", { name: "Ще" }).getByRole("button"),
   ).toHaveText([/^Змінити магазин/]);
+  // And once on the screen: no line to offer it again (audit 2026-11-15,
+  // frame P2-1).
+  await expect(page.locator(".store-line:visible")).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: /^Змінити магазин/ }),
+  ).toHaveCount(1);
 });
 
 test("whoever neither sells nor reads the report opens on the orders, as before", async ({

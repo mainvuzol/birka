@@ -1451,6 +1451,52 @@ export async function expectSumRole(
   );
 }
 
+/** A confirming sheet's «not now» — «Скасувати», «Не скасовувати» — as
+ * every one is drawn (spec S27 №4; audit 2026-11-15, frame P2-4): a text
+ * button, no edge and nothing under it, 15/600 in the link's colour, its
+ * target 44 high at least. */
+export async function expectSheetCancel(button: Locator): Promise<void> {
+  await expect(button).toBeVisible();
+  await expect(button).toBeEnabled();
+  expect(
+    await button.evaluate((node) => {
+      const probe = document.createElement("span");
+      document.body.append(probe);
+      // The link's colour, whatever the theme; in the light one it is the
+      // ink's too, so the dark one is read as well — set and put back here,
+      // with nothing drawn between.
+      const linked = (): boolean => {
+        probe.style.color = "var(--link)";
+        return getComputedStyle(node).color === getComputedStyle(probe).color;
+      };
+      const root = document.documentElement;
+      const was = root.dataset.theme;
+      const here = linked();
+      root.dataset.theme = "dark";
+      const dark = linked();
+      if (was === undefined) delete root.dataset.theme;
+      else root.dataset.theme = was;
+      probe.remove();
+      const style = getComputedStyle(node);
+      return {
+        edge: style.borderTopWidth,
+        fill: style.backgroundColor,
+        size: style.fontSize,
+        weight: style.fontWeight,
+        link: here && dark,
+        tall: node.getBoundingClientRect().height >= 44,
+      };
+    }),
+  ).toEqual({
+    edge: "0px",
+    fill: "rgba(0, 0, 0, 0)",
+    size: "15px",
+    weight: "600",
+    link: true,
+    tall: true,
+  });
+}
+
 /** The shared empty place (spec §6.28; audit after stage 2, frame P2-1):
  * the blank tag 64 square in the edge, its one line 17/600 in ink — one
  * markup wherever nothing is yet. */

@@ -419,7 +419,11 @@ h2,
   font-weight: 500;
   line-height: 19px;
 }
+/* One face for the role, whatever carries it — an `h2`, whose rule would
+   bring the condensed face, an `h3`, a `p`, a `span` (spec §5.5, «text, 13
+   / 16, 700, +0.06em»; audit 2026-11-15, frame P2-6). */
 .t-label {
+  font-family: var(--font-text);
   font-size: 13px;
   font-weight: 700;
   line-height: 16px;
@@ -1512,6 +1516,32 @@ html {
 .sheet-done {
   width: 100%;
   min-height: 52px;
+}
+/* A confirming sheet's «not now» — «Скасувати», «Не скасовувати» — a text
+   button, `button-s` in the link's colour, under the main: never a second
+   button of its size and edge beside a choice over money (spec S27 №4;
+   audit 2026-11-15, frame P2-4). Telegram's «Назад», the backdrop and the
+   handle close the sheet too. Its line the foot's whole width, its target
+   44 high. */
+/* Where the foot is a row of `.actions`, its main the foot's width too,
+   whatever the screen's width, so «not now» stands under it. */
+.confirm-foot > button {
+  flex-basis: 100%;
+  width: 100%;
+}
+.sheet-cancel,
+.actions .sheet-cancel {
+  flex-basis: 100%;
+  width: 100%;
+  min-height: var(--touch);
+  margin: 0;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--r-l);
+  background: transparent;
+  color: var(--link);
+  font-size: 15px;
+  font-weight: 600;
 }
 /* The shelf's question (P0-5): its answers one under another, the sheet's
    whole width. */
@@ -3693,9 +3723,6 @@ section.cash-count {
   display: grid;
   gap: 8px;
 }
-.count-foot .quiet {
-  min-height: var(--touch);
-}
 /* One under another, as in the notebook: a column of three figures. */
 .cash-figure + .cash-figure {
   margin-top: 10px;
@@ -4864,12 +4891,9 @@ span.cash-difference > .difference-sign {
    `.sale-row`, 64 px, a chevron — this phone's switch with its track. */
 /* A group's label in capitals, «ЛЮДИ», «ТОВАР» (spec S07): by style, so a
    reader says the word. */
+/* A group's label: the `label` role's (`t-label`), on the paper. */
 .more-group h3 {
   margin: 18px 0 8px;
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
   color: var(--text-2);
 }
 .more-screen > nav:first-child {
@@ -4985,13 +5009,17 @@ span.cash-difference > .difference-sign {
 .more-switch {
   text-align: left;
 }
+/* Off, the track is the controls' edge, its knob the card on it: at 3:1
+   against the card and the paper alike, in both themes, as a field's edge
+   (spec §5.10; audit 2026-11-15, frame P2-2) — never the hairline, which a
+   dark phone loses. */
 .switch-track {
   flex: none;
   width: 44px;
   height: 26px;
   padding: 3px;
   border-radius: var(--r-round);
-  background: var(--hairline);
+  background: var(--edge);
   transition: background-color 120ms ease-out;
 }
 .switch-knob {
@@ -5055,11 +5083,14 @@ span.cash-difference > .difference-sign {
   cursor: not-allowed;
 }
 /* Taking no tap, its words still read, in pencil, nothing faded over them;
-   the switch itself dimmed (audit 2026-11-13, sale P2-6; review). */
+   the switch itself dimmed (audit 2026-11-13, sale P2-6; review) — the
+   till's and «Ще»'s alike, whichever way each is held (audit 2026-11-15,
+   frame P2-2). */
 .switch-row input:disabled ~ .switch-label {
   color: var(--pencil);
 }
-.switch-row input:disabled ~ .switch-track {
+.switch-row input:disabled ~ .switch-track,
+.more-switch:disabled .switch-track {
   opacity: 0.45;
 }
 @media (prefers-reduced-motion: reduce) {
@@ -5729,9 +5760,12 @@ nav.tab-bar {
   gap: 0 8px;
   margin: 4px 0 0;
 }
+/* «продано · 6 шт.» — `body`, 16/23, in pencil (spec S04 №5; audit
+   2026-11-15, frame P2-3): 15 is a button's. */
 .day-total-words {
-  font-size: 15px;
-  line-height: 20px;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 23px;
   color: var(--pencil);
 }
 .day-money {
@@ -6192,8 +6226,7 @@ button.day-folded {
 .found-group .notice.read-failure {
   margin: 8px 0 0;
 }
-.found-more,
-.found-none {
+.found-more {
   margin: 8px 0 0;
   font-size: 14px;
 }

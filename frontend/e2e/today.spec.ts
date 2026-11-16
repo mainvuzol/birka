@@ -846,6 +846,14 @@ test("at 390 × 741, light and dark, the day-tag of «Центр + Ринок» 
     expect(await tag.evaluate((node) => getComputedStyle(node).padding)).toBe(
       "28px 16px 16px",
     );
+    // «продано · N шт.» — `body`, 16/23 at 400 (spec S04 №5; audit
+    // 2026-11-15, frame P2-3).
+    expect(
+      await tag.locator(".day-total-words").evaluate((node) => {
+        const style = getComputedStyle(node);
+        return [style.fontSize, style.fontWeight, style.lineHeight];
+      }),
+    ).toEqual(["16px", "400", "23px"]);
     // Nothing of its own between its rows: the money's line on the words',
     // the parcels' 44 reaching 12 into the padding.
     expect(
@@ -953,7 +961,9 @@ test("under 700 px the day-tag is one line naming both stores with their sums, b
   expect(
     await line.evaluate((node) => node.scrollWidth <= node.clientWidth),
   ).toBe(true);
-  await expect(line).toHaveAttribute("aria-expanded", "false");
+  // Gone once pressed, the whole tag in its place: no «expanded» to say,
+  // as «+ ще N» (audit 2026-11-15, frame P2-3).
+  await expect(line).not.toHaveAttribute("aria-expanded");
   await expect(dayTag(page)).toHaveCount(0);
   await line.click();
   await expect(dayTag(page).locator(".day-total")).toContainText(

@@ -83,6 +83,10 @@ export const ScreenHeader = forwardRef<
      * drawn anew is still: an order's card read again, moved on, stays
      * where it was read to (frame P1-3; review). */
     screen?: string;
+    /** No line under the title: «Ще», which names no store and holds
+     * «Змінити магазин» as a row of its own (spec S07; audit 2026-11-15,
+     * frame P2-1). */
+    bare?: boolean;
   }
 >(function ScreenHeader(
   {
@@ -99,10 +103,12 @@ export const ScreenHeader = forwardRef<
     after,
     context,
     screen,
+    bare = false,
   },
   ref,
 ) {
-  const line = useContext(WorkspaceLineContext);
+  const workspace = useContext(WorkspaceLineContext);
+  const line = bare ? null : workspace;
   // A title drawn of parts — a mark beside it, a button in it — says no
   // screen of its own: its header's coming does.
   const opened = screen ?? (typeof title === "string" ? title : undefined);

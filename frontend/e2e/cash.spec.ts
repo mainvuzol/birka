@@ -501,16 +501,16 @@ test.describe("«Оля»'s day at «Каса»", () => {
     await expect(
       page.getByRole("button", { name: "Каса", exact: true }),
     ).toBeEnabled();
-    // «Ще» opens, never held; its rows and «Змінити магазин» are
-    // (navigation task list, P0-4).
+    // «Ще» opens, never held; its rows, «Змінити магазин» among them, are
+    // (navigation task list, P0-4) — no line of its own to offer it again
+    // (audit 2026-11-15, frame P2-1).
     const rows = page
       .getByRole("navigation", { name: "Ще" })
       .getByRole("button");
     await expect(rows).not.toHaveCount(0);
     for (const row of await rows.all()) await expect(row).toBeDisabled();
-    await expect(
-      page.locator(".store-line").getByRole("button", { name: "Змінити магазин" }),
-    ).toBeDisabled();
+    await expect(rows.filter({ hasText: /^Змінити магазин/ })).toBeDisabled();
+    await expect(page.locator(".store-line:visible")).toHaveCount(0);
 
     // Read from the server: reopening the app does not lose it.
     await openAs(page, olya, "Оля");

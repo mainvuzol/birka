@@ -8,6 +8,7 @@ import {
   expectHeldRow,
   expectListBlock,
   expectResultHeading,
+  expectSheetCancel,
   expectSumRole,
   grn,
   menu,
@@ -1202,6 +1203,10 @@ test("a payment or an invoice recorded by mistake is cancelled, saying why", asy
     "Накладну записано помилково? Вона лишиться в історії як скасована.",
   );
   await cancelling.getByLabel("Чому скасовуємо").fill("не та сума");
+  // Its «not now», «Не скасовувати», a text button (frame P2-4).
+  await expectSheetCancel(
+    cancelling.getByRole("button", { name: "Не скасовувати" }),
+  );
   await cancelling
     .getByRole("button", { name: "Так, скасувати накладну" })
     .click();
@@ -1250,6 +1255,7 @@ test("what is left is written off by the owner, never by a manager", async ({
     off.getByRole("button", { name: "Так, списати 1 500,00 грн" }),
   ).toBeDisabled();
   await off.getByLabel("Чому списуємо").fill("постачальник пробачив");
+  await expectSheetCancel(off.getByRole("button", { name: "Скасувати" }));
   await off.getByRole("button", { name: "Так, списати 1 500,00 грн" }).click();
   await expect(off).toHaveCount(0);
   await expect(page.locator(".invoice-done")).toHaveText(

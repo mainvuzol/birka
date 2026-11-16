@@ -1145,7 +1145,7 @@ export function DebtActions({
           foot={
             <>
               <SendingLine busy={writingOff} />
-              <div className="actions">
+              <div className="actions confirm-foot">
                 <button
                   type="button"
                   className={writingOff ? "primary pressed" : "primary"}
@@ -1159,7 +1159,7 @@ export function DebtActions({
                 </button>
                 <button
                   type="button"
-                  className="quiet"
+                  className="sheet-cancel"
                   disabled={writingOff}
                   onClick={close}
                 >
@@ -1196,7 +1196,7 @@ export function DebtActions({
           close={close}
           fallback={opener}
           foot={
-            <div className="actions">
+            <div className="actions confirm-foot">
               <button
                 type="button"
                 className="primary"
@@ -1210,7 +1210,7 @@ export function DebtActions({
               </button>
               <button
                 type="button"
-                className="quiet"
+                className="sheet-cancel"
                 disabled={erasing}
                 onClick={close}
               >

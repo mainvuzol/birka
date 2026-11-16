@@ -299,6 +299,9 @@ test("«Ще» says what waits under each row, its count the row's one colour, a
   expect(await paper.locator("svg.icon").innerHTML()).not.toBe(mark);
   // Inside «Товар і каталог», the lists' own row says it too.
   await row(page, "Товар і каталог").click();
+  // A list pushed from «Ще» keeps the line «Ще» itself has none of (§6.2;
+  // audit 2026-11-15, frame P2-1).
+  await expect(page.locator(".store-line:visible")).toHaveCount(1);
   await expect(row(page, "Початкові залишки")).toHaveAccessibleName(
     "Початкові залишки 2 на затвердження",
   );

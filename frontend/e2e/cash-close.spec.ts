@@ -3,6 +3,7 @@ import {
   confirmClose,
   dockOnMenu,
   expectCaption,
+  expectSheetCancel,
   expectLinkChevron,
   test,
   expect,
@@ -423,6 +424,8 @@ test("the count: the card reads the drawer again, a task's screen with the app's
   await expect(
     sheet.getByRole("button", { name: "Так, закрити" }),
   ).toBeFocused();
+  // Its «not now» a text button under the main (frame P2-4).
+  await expectSheetCancel(sheet.getByRole("button", { name: "Скасувати" }));
   await sheet.getByRole("button", { name: "Скасувати" }).click();
   await expect(sheet).toHaveCount(0);
   await expect(field(page)).toHaveValue("2\u00a0000");

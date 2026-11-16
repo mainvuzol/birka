@@ -265,7 +265,7 @@ function Confirm({
           )}
           <button
             type="button"
-            className="quiet"
+            className="sheet-cancel"
             disabled={sending}
             onClick={cancel}
           >
