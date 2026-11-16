@@ -25,11 +25,17 @@ Status: built and proven; not committed; not yet seen on a real phone.
   `returns-elsewhere`, `returns-sale-screen`, `outage-mark-debts-returns`).
 - After the review's fixes: 182 of 182 (the same five, `orders-card` and
   `stores`).
-- The whole suite is left to GitHub CI, by the user's word. CI's first
-  run: 1170 of 1171. The four taps' return measured its line and «Цілі»
-  in separate calls while the screen still scrolled to its title. All three
-  boxes are now measured in one frame; 10 of 10 locally, and `returnorder`
-  and `returnlines` still caught.
+- The whole suite is left to GitHub CI, by the user's word.
+  - CI's first run: 1170 of 1171. The four taps' return measured its line
+    and «Цілі» in separate calls while the screen still scrolled to its
+    title. All three boxes were then measured in one frame.
+  - The second run: 1170 of 1171, the same 3 px. The cause was the stub's
+    own tear (`stub-tear`, 220 ms): it turns the stub 1.5°, and a turned
+    line's box grows over its neighbours'. Reproduced locally by holding the
+    stub turned: the old check failed at «Цілі» (301.5 against 305.3).
+  - The journey now waits for the stub's tear to end, then measures in one
+    frame. It passes with the stub held turned, and 10 of 10 as it is.
+    `returnorder` and `returnlines` are still caught.
 - Mutants: 34 of 35 caught; the one alive is equivalent (see «Mutants»).
 - One independent review; its findings are fixed or left with a reason.
 - Journeys: 1171 (1167 before).

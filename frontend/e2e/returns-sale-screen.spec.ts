@@ -566,10 +566,13 @@ test("a return in four taps from the till: «Повернути» — its field 
     exact: true,
   });
   await expect(went).toBeVisible();
-  // Measured in one frame: the screen may still be scrolling to its title.
+  // Measured once the stub has torn off (its tear turns it 1.5°, and a
+  // turned line's box grows over its neighbours'), in one frame: the screen
+  // may still be scrolling to its title.
   const { named, where, tear } = await page
     .locator(".stub", { has: page.locator(".return-lines") })
-    .evaluate((stub) => {
+    .evaluate(async (stub) => {
+      await Promise.all(stub.getAnimations().map((motion) => motion.finished));
       const edges = (
         node: Element | null | undefined,
       ): { top: number; bottom: number } => {
