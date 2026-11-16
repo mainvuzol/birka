@@ -10,6 +10,7 @@ import { Unread } from "@/shared/Unread";
 import { shippingText, statusLabels } from "@/orders/types";
 import type { Order, StockOption, Store } from "@/orders/types";
 import { api } from "@/shared/api";
+import { Empty } from "@/shared/Empty";
 import { Icon } from "@/shared/Icon";
 import { SearchField } from "@/shared/SearchField";
 import { hideKeyboard } from "@/shared/telegram";
@@ -368,9 +369,14 @@ export function Found({
   return (
     <div className="today-found">
       {found.none ? (
-        <p className="hint found-none">
-          Нічого не знайшли за «{visible(query)}»
-        </p>
+        // The whole answer, «Сьогодні» hidden under it: the shared empty
+        // place, as the till's, the returns' and the orders' searches
+        // (spec §6.28; audit 2026-11-15, frame P2-3). The words as they
+        // were, nothing under them.
+        <Empty
+          className="found-none"
+          title={`Нічого не знайшли за «${visible(query)}»`}
+        />
       ) : (
         found.groups.map((group) => (
           <Group

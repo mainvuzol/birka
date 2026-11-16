@@ -1,6 +1,7 @@
 import {
   test,
   expect,
+  expectEmpty,
   expectHeldRow,
   expectListBlock,
   holdReads,
@@ -581,7 +582,7 @@ test("five rows a group at most, and «Знайдено більше — уто�
   await expect(group(page, "Товар").locator(".found-more")).toBeVisible();
 });
 
-test("nothing found: «Нічого не знайшли за «…»»; a group that fails says why in its place, the others standing, and «Спробувати ще раз» reads it again", async ({
+test("nothing found: «Нічого не знайшли за «…»», the shared empty place, nothing under its line (audit 2026-11-15, frame P2-3); a group that fails says why in its place, the others standing, and «Спробувати ще раз» reads it again", async ({
   page,
 }) => {
   await shelves(page);
@@ -604,9 +605,12 @@ test("nothing found: «Нічого не знайшли за «…»»; a group 
   await field(page).fill("зебра");
   await expect(page.locator(".found-said")).toHaveText("Шукаємо…");
   release();
-  await expect(page.locator(".today-found .found-none")).toHaveText(
-    "Нічого не знайшли за «зебра»",
-  );
+  // The whole answer, «Сьогодні» hidden under it: the blank tag at 64, its
+  // one line, as the till's search (audit 2026-11-15, frame P2-3).
+  const none = page.locator(".today-found > .found-none");
+  await expectEmpty(none, "Нічого не знайшли за «зебра»");
+  await expect(none.locator(".t-meta")).toHaveCount(0);
+  await expect(none.getByRole("button")).toHaveCount(0);
   // Said in the line that stood all along.
   await expect(page.locator(".found-said")).toHaveText(
     "Нічого не знайшли за «зебра»",
@@ -1047,9 +1051,9 @@ for (const scheme of ["light", "dark"] as const)
       await contrast(row.locator(".cash-row-title")),
     ).toBeGreaterThanOrEqual(4.5);
     await search(page, "зебра");
-    expect(await contrast(page.locator(".found-none"))).toBeGreaterThanOrEqual(
-      4.5,
-    );
+    expect(
+      await contrast(page.locator(".found-none > .t-row")),
+    ).toBeGreaterThanOrEqual(4.5);
   });
 
 /** The WCAG contrast of an element's text against what it is drawn on. */

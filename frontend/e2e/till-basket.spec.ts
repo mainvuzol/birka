@@ -15,7 +15,7 @@ import {
   sellsFrom,
   shortage,
 } from "./fixtures";
-import type { Page } from "@playwright/test";
+import type { Page, Request } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 
@@ -26,6 +26,31 @@ import { readFileSync } from "node:fs";
  * after «Новий продаж», another store, a kept sale settled, or the paper
  * unticked under a basket built from it.
  */
+
+/** The store's warehouses asked and not yet answered: each read goes
+ * through `sellsFrom`'s `route.fetch`, and one still fetched as the context
+ * is torn down holds the teardown for ever (CI flake 2026-11-16, as
+ * today.spec's `unanswered`). A journey ends once each is answered. */
+const reading = new Set<Request>();
+
+test.beforeEach(({ page }) => {
+  reading.clear();
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname === "/api/v1/stock-locations")
+      reading.add(request);
+  });
+  const settled = (request: Request): void => {
+    reading.delete(request);
+  };
+  page.on("requestfinished", settled);
+  page.on("requestfailed", settled);
+});
+
+test.afterEach(async () => {
+  await expect
+    .poll(() => [...reading].map((request) => request.url()))
+    .toEqual([]);
+});
 
 interface Fixture {
   telegram_user_id: string;

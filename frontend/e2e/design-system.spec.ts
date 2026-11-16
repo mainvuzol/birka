@@ -1254,3 +1254,194 @@ test("every place read is its shape in grey, the real element's size and corner:
   expect(drawn.chip.slice(1)).toEqual([44, "8px"]);
   expect(drawn.chip.slice(1)).toEqual(drawn.realChip.slice(1));
 });
+
+/** What the elements found are drawn in, and whether it is the text's
+ * face: the `label` role's measure (spec §5.5). */
+async function labelsDrawn(page: Page): Promise<string[][]> {
+  return page
+    .locator(".t-label:visible, .more-group h3:visible")
+    .evaluateAll((all) => {
+      const probe = document.createElement("span");
+      probe.style.fontFamily = "var(--font-text)";
+      document.body.append(probe);
+      const text = getComputedStyle(probe).fontFamily;
+      probe.remove();
+      return all.map((node) => {
+        const style = getComputedStyle(node);
+        return [
+          node.tagName,
+          String(style.fontFamily === text),
+          style.fontSize,
+          style.fontWeight,
+          style.letterSpacing,
+          style.textTransform,
+        ];
+      });
+    });
+}
+
+test("the `label` role is one, whatever carries it — an h2, an h3, a p, a span: the text's face, 13/700, 0.06em, in capitals, on «Сьогодні», «Гроші» and «Ще» (spec §5.5; audit 2026-11-15, frame P2-6)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 844 });
+  await page.goto(
+    `/#${new URLSearchParams({ tgWebAppData: initData(fixture.network_owner_telegram_user_id) }).toString()}`,
+  );
+  await openStore(page, "Центр CENTRE");
+  const carriers = new Set<string>();
+  // Each screen, and what says its reads are drawn: the day's figures with
+  // its stores' columns, the money's places, «Ще»'s groups.
+  const screens: [string, () => Promise<void>, string][] = [
+    ["Сьогодні", () => Promise.resolve(), ".day-tag .day-total"],
+    [
+      "Гроші",
+      () =>
+        menu(page).getByRole("button", { name: "Гроші", exact: true }).click(),
+      ".money-lines",
+    ],
+    ["Ще", () => more(page), ".more-group h3"],
+  ];
+  for (const [title, go, read] of screens) {
+    await go();
+    await expect(
+      page.getByRole("heading", { name: title, exact: true, level: 1 }),
+    ).toBeVisible();
+    await expect(page.locator(read).first()).toBeVisible();
+    await page.screenshot({
+      path: `test-results/label-role-${title === "Ще" ? "more" : title === "Гроші" ? "money" : "today"}-360.png`,
+      fullPage: true,
+    });
+    for (const [tag = "", ...drawn] of await labelsDrawn(page)) {
+      carriers.add(tag);
+      expect(drawn, `${title}: ${tag}`).toEqual([
+        "true",
+        "13px",
+        "700",
+        "0.78px",
+        "uppercase",
+      ]);
+    }
+  }
+  // A heading's rule brings the condensed face no more: the h2s and h3s
+  // were the ones apart.
+  expect([...carriers]).toEqual(expect.arrayContaining(["H2", "H3"]));
+});
+
+/** An element's fill and what it stands on, as `#rrggbb`: the first fill
+ * met going up from its parent. */
+async function fillAndGround(
+  node: import("@playwright/test").Locator,
+): Promise<[string, string]> {
+  return node.evaluate((element) => {
+    const hex = (colour: string): string => {
+      const [r = 0, g = 0, b = 0] = (colour.match(/\d+(\.\d+)?/g) ?? []).map(
+        Number,
+      );
+      return `#${[r, g, b]
+        .map((v) => Math.round(v).toString(16).padStart(2, "0"))
+        .join("")}`;
+    };
+    let at: Element | null = element.parentElement;
+    let ground = "";
+    while (at) {
+      const fill = getComputedStyle(at).backgroundColor;
+      if (fill !== "rgba(0, 0, 0, 0)") {
+        ground = fill;
+        break;
+      }
+      at = at.parentElement;
+    }
+    if (ground === "") ground = getComputedStyle(document.body).backgroundColor;
+    return [hex(getComputedStyle(element).backgroundColor), hex(ground)];
+  });
+}
+
+for (const scheme of ["light", "dark"] as const)
+  test(`in the ${scheme} theme a switch off is the controls' edge, at 3:1 to the till's paper and to «Ще»'s card, its knob the card; on, the primary; taking no tap, its words in pencil and the switch dimmed, the till's and «Ще»'s alike (spec §5.10; audit 2026-11-15, frame P2-2)`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ colorScheme: scheme });
+    await page.setViewportSize({ width: 360, height: 844 });
+    await page.goto(
+      `/#${new URLSearchParams({ tgWebAppData: initData(fixture.network_owner_telegram_user_id) }).toString()}`,
+    );
+    await openStore(page, "Центр CENTRE");
+    const edge = await token(page, "--edge");
+    const card = await token(page, "--card");
+    const primary = await token(page, "--primary");
+    const pencil = await token(page, "--pencil");
+    // «Ще» › «Цей телефон»: on the group's white block.
+    await more(page);
+    const row = page
+      .getByRole("navigation", { name: "Ще" })
+      .getByRole("switch", { name: /^Вношу продаж з паперу/ });
+    await expect(row).toHaveAttribute("aria-checked", "false");
+    // Read as they settle: a row drawn again between two reads is read
+    // again, never a detached node's empty colour (CI 2026-11-16).
+    const track = row.locator(".switch-track");
+    const knob = track.locator(".switch-knob");
+    await expect(track).toHaveCSS("background-color", edge);
+    await expect(knob).toHaveCSS("background-color", card);
+    await expect
+      .poll(async () => ratio(...(await fillAndGround(track))), {
+        message: "«Ще»: the track on the card",
+      })
+      .toBeGreaterThanOrEqual(3);
+    // The knob on its track.
+    await expect
+      .poll(
+        async () => {
+          const [onTrack] = await fillAndGround(knob);
+          const [onCard] = await fillAndGround(track);
+          return ratio(onTrack, onCard);
+        },
+        { message: "«Ще»: the knob on the track" },
+      )
+      .toBeGreaterThanOrEqual(3);
+    // On: the primary, as before — once its 120 ms have passed.
+    await row.click();
+    await expect(row).toHaveAttribute("aria-checked", "true");
+    await expect(track).toHaveCSS("background-color", primary);
+    await page.screenshot({
+      path: `test-results/switch-on-more-${scheme}.png`,
+    });
+    await row.click();
+    await expect(row).toHaveAttribute("aria-checked", "false");
+    await expect(track).toHaveCSS("background-color", edge);
+    await page.screenshot({
+      path: `test-results/switch-off-more-${scheme}.png`,
+    });
+    // Held — by hand here: a kept operation holds «Ще»'s rows — its words
+    // in pencil, the switch at 45 %, as the till's.
+    await row.evaluate((node) => {
+      (node as HTMLButtonElement).disabled = true;
+    });
+    expect(
+      await row.evaluate((node) => [
+        getComputedStyle(node).opacity,
+        getComputedStyle(node).color,
+        getComputedStyle(node.querySelector(".switch-track") ?? node).opacity,
+      ]),
+    ).toEqual(["1", pencil, "0.45"]);
+    await row.evaluate((node) => {
+      (node as HTMLButtonElement).disabled = false;
+    });
+    // At the till, under the search, on the paper.
+    await menu(page)
+      .getByRole("button", { name: "Продаж", exact: true })
+      .click();
+    const till = page.locator("label.switch-row", {
+      hasText: "Вношу продаж з паперу",
+    });
+    await expect(till).toBeVisible();
+    const tillTrack = till.locator(".switch-track");
+    await expect(tillTrack).toHaveCSS("background-color", edge);
+    await expect
+      .poll(async () => ratio(...(await fillAndGround(tillTrack))), {
+        message: "the till: the track on the paper",
+      })
+      .toBeGreaterThanOrEqual(3);
+    await page.screenshot({
+      path: `test-results/switch-off-till-${scheme}.png`,
+    });
+  });

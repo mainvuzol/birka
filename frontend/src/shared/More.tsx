@@ -60,9 +60,14 @@ export function More({
   const shown = groups.filter((group) => group.rows.length > 0);
   return (
     <>
+      {/* «Ще» itself names no store: «Змінити магазин» is its row under
+          «Цей телефон», never a second one on the line (spec S07; audit
+          2026-11-15, frame P2-1). A group's own list, opened from it, keeps
+          the line, as every screen pushed (§6.2). */}
       <ScreenHeader
         title={title}
         back={back && <BackToMore back={back} />}
+        bare={back === undefined}
       />
       <section className="more-screen">
         {/* Not a row of buttons, as other navs are: a list of rows. */}
@@ -70,7 +75,9 @@ export function More({
           <nav aria-label={title} className="more-list">
             {shown.map((group) => (
               <div className="more-group" key={group.title}>
-                {group.title !== "" && <h3>{group.title}</h3>}
+                {group.title !== "" && (
+                  <h3 className="t-label">{group.title}</h3>
+                )}
                 {/* The group's rows on a white block, its label on the
                     paper (spec S07, §6.8; audit after stage 2, frame
                     P0-1). */}

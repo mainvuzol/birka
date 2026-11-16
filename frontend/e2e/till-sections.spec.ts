@@ -1074,11 +1074,26 @@ test("every screen of a store is headed by its own title, the store and who work
   await page.goto(launch(lida, "Ліда"));
   await openStore(page, "Центр CENTRE");
   const title = page.getByRole("heading", { level: 1 });
-  const headed = async (name: string, size: string): Promise<void> => {
+  const headed = async (
+    name: string,
+    size: string,
+    lined = true,
+  ): Promise<void> => {
     // The page's one heading is the screen's own title.
     await expect(title).toHaveCount(1);
     await expect(title).toHaveText(name);
     await expect(title).toHaveCSS("font-size", size);
+    if (!lined) {
+      // «Ще» names no store: its card right under its title (spec S07;
+      // audit 2026-11-15, frame P2-1).
+      await expect(page.locator(".store-line:visible")).toHaveCount(0);
+      const head = await title.boundingBox();
+      const card = await page.locator("main > section").first().boundingBox();
+      expect(card?.y ?? 0).toBeGreaterThanOrEqual(
+        (head?.y ?? 0) + (head?.height ?? 0) - 1,
+      );
+      return;
+    }
     await expect(storeLine(page)).toHaveText("Центр · Ліда");
     // The line under the title, the screen's card under both.
     const head = await title.boundingBox();
@@ -1095,7 +1110,7 @@ test("every screen of a store is headed by its own title, the store and who work
   await tabs(page).filter({ hasText: "Каса" }).click();
   await headed("Каса", "34px");
   await more(page);
-  await headed("Ще", "34px");
+  await headed("Ще", "34px", false);
   await moreRow(page, "Прийшов товар").click();
   await headed("Прийшов товар", "28px");
   // Its «←» over it.

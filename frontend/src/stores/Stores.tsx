@@ -565,7 +565,7 @@ function StateSheet({
       foot={
         <>
           <SendingLine busy={busy} />
-          <div className="actions">
+          <div className="actions confirm-foot">
             <button
               type="button"
               className={busy ? "primary pressed" : "primary"}
@@ -579,7 +579,7 @@ function StateSheet({
             </button>
             <button
               type="button"
-              className="quiet"
+              className="sheet-cancel"
               disabled={busy}
               onClick={close}
             >

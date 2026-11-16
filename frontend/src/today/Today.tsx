@@ -776,7 +776,9 @@ export function Today({
             <button
               type="button"
               className="tag-hero tag-outline day-folded"
-              aria-expanded="false"
+              // Gone once pressed, the whole tag in its place: nothing
+              // «expanded» to say, as «+ ще N» (audit 2026-11-15, frame
+              // P2-3).
               onClick={() => {
                 setOpened(true);
               }}

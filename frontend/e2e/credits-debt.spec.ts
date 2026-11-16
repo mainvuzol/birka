@@ -4,6 +4,7 @@ import {
   dockOnMenu,
   expectOwed,
   expectStub,
+  expectSheetCancel,
   openStore,
   toTill,
   listRow,
@@ -1380,6 +1381,8 @@ for (const [name, theme, scheme] of [
       sheet.getByRole("button", { name: "Скасувати" }),
     ])
       expect(await contrast(part)).toBeGreaterThanOrEqual(4.5);
+    // Its «not now» a text button under the main (frame P2-4).
+    await expectSheetCancel(sheet.getByRole("button", { name: "Скасувати" }));
     await page.screenshot({
       path: `test-results/credits-write-off-${name}.png`,
     });

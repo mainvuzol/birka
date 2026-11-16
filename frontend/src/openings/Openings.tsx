@@ -2392,7 +2392,7 @@ function ApproveSheet({
           )}
           <button
             type="button"
-            className="quiet"
+            className="sheet-cancel"
             disabled={busy}
             onClick={close}
           >

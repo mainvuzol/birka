@@ -10273,3 +10273,53 @@ on the phone.
     attempt read from the phone as a store opens, whose rewrite the phone
     refuses, is said as one the phone cannot read, as before; it stays on
     the phone.
+
+## Chosen in chat — 2026-11-16 (audit 2026-11-15, batch 2: «Ще» with no line of its own; a switch off seen at 3:1, held alike; «Сьогодні»'s empty search, its folded tag and its day's words; a confirming sheet's «not now» a text button; one face for the `label` role; frame P2-1, P2-2, P2-3, P2-4, P2-6)
+
+The frame's quick wins, in the order its task list gives them («merged, go
+next» after #215). Nothing recorded, sent or counted changes; no word on a
+screen changes.
+
+- **«Ще» names no store** (frame P2-1; spec S07): «Ще» itself draws no
+  line under its title, so «Змінити магазин» is there once — its row under
+  «Цей телефон», the store open now as its value; with one store, no row,
+  as before. A group's own list opened from it («Товар і каталог», «← Ще»)
+  keeps the line, as every pushed screen (§6.2). `ScreenHeader` takes
+  `bare`; `More` passes it when it has no «←».
+- **A switch off is seen** (frame P2-2; spec §5.10): off, its track is the
+  controls' `edge` and its knob the card on it — at 3:1 or more to the
+  till's paper and to «Ще»'s card, in both themes, as a field's edge; on,
+  the primary, as before. Held, its words in pencil and the switch at 45 %,
+  the till's (`fieldset disabled`) and «Ще»'s (`button:disabled`) alike —
+  «Ще»'s track had been left at full strength.
+  - Decided here: of the task list's two looks, the filled one (`edge`
+    track, `card` knob): the knob stands on the track at 3.7:1 (light) and
+    3.9:1 (dark), and the switch keeps its size and its knob's place.
+- **«Сьогодні»** (frame P2-3):
+  - Nothing found is the shared empty place (§6.28): the blank tag at 64,
+    «Нічого не знайшли за «…»» as its one line, nothing under it — the
+    words as they were; «Сьогодні» hidden under it, as before.
+  - The folded day-tag says nothing of «expanded»: once pressed it is gone,
+    the whole tag in its place, the cursor on its heading — as «+ ще N»
+    (batch 10's rule). The fold itself is В-К1 (б), unchanged.
+  - «продано · N шт.» is `body`, 16/23 at 400, in pencil (S04 №5); 15 is a
+    button's.
+- **A confirming sheet's «not now» is a text button** (frame P2-4; spec
+  S27 №4): «Скасувати» — «Не скасовувати» where the act is itself a cancel
+  — is `button-s` in the link's colour, no edge and nothing under it, its
+  line the foot's width and 44 high, under the main — where the foot is a
+  row of buttons, its main the foot's width too, on any screen (review);
+  Telegram's «Назад»,
+  the backdrop and the handle close the sheet, as before. The eight sheets:
+  closing the drawer (S27), a store's state, a stocktake's start and its
+  finish, an opening list's approval, a debt's write-off and a customer's
+  erasure, and the suppliers' sheet that asks why (`Reasoned`): an
+  invoice's write-off and cancel, a payment's or a set-off's cancel, a
+  supplier return's cancel. A form's «Скасувати» (a new supplier) is not a
+  confirming sheet's and stays. «Не списувати» waits on В13-Г2.
+- **One face for the `label` role** (frame P2-6; spec §5.5): `.t-label`
+  sets the text's face, 13/16, 700, 0.06em, in capitals, whatever carries
+  it — an `h2` no longer brings the condensed face of the headings' rule.
+  «Ще»'s group labels are the role's (0.06em, no longer 0.04em), in pencil
+  on the paper as before. This closes the reading left by audit
+  2026-11-13, batch 7 (the `h2` captions): the role is the spec's, no question for the owner.

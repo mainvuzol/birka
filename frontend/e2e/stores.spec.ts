@@ -3,6 +3,7 @@ import {
   expect,
   countTaps,
   expectStub,
+  expectSheetCancel,
   menu,
   more,
   openStore,
@@ -835,6 +836,8 @@ test("only an empty store is archived: Telegram's «Назад» closes the ques
     type: "notification",
     notification_type: "warning",
   });
+  // Its «not now» a text button under the main (frame P2-4).
+  await expectSheetCancel(sheet.getByRole("button", { name: "Скасувати" }));
   await sheet.getByRole("button", { name: "Скасувати" }).click();
   await expect(sheet).toHaveCount(0);
   // Still trading: no sticker.

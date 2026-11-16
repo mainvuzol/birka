@@ -5,6 +5,7 @@ import {
   basketSheet,
   expectOwed,
   expectStub,
+  expectSheetCancel,
   fillLine,
   fromPaper,
   grn,
@@ -1848,8 +1849,9 @@ test("the network's owner erases a closed debt's customer who asks, and every su
   await customerRow(page, name).click();
   await page.getByRole("button", { name: /, сплачено$/ }).click();
   await expect(page.locator(".debt-closed .sticker")).toHaveText("Сплачено");
-  // «Скасувати» changes nothing.
+  // «Скасувати» changes nothing; a text button under the main (frame P2-4).
   let sheet = await eraseSheet(page);
+  await expectSheetCancel(sheet.getByRole("button", { name: "Скасувати" }));
   await sheet.getByRole("button", { name: "Скасувати" }).click();
   await expect(sheet).toHaveCount(0);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(name);

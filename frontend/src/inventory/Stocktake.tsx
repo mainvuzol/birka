@@ -599,7 +599,7 @@ function StartSheet({
           )}
           <button
             type="button"
-            className="quiet"
+            className="sheet-cancel"
             disabled={starting}
             onClick={close}
           >
@@ -1912,7 +1912,7 @@ function FinishSheet({
           )}
           <button
             type="button"
-            className="quiet"
+            className="sheet-cancel"
             disabled={finishing}
             onClick={close}
           >

@@ -3,6 +3,7 @@ import {
   expect,
   gridCell,
   countTaps,
+  expectSheetCancel,
   leaveNewModel,
   menu,
   more,
@@ -95,6 +96,8 @@ async function startSheet(page: Page): Promise<Locator> {
   });
   await expect(sheet).toHaveAttribute("data-ready", "");
   await expect(sheet.getByText("Склад продає далі.")).toBeVisible();
+  // Its «not now» a text button under the main (frame P2-4).
+  await expectSheetCancel(sheet.getByRole("button", { name: "Скасувати" }));
   return sheet;
 }
 
@@ -559,6 +562,10 @@ test("a warehouse is counted cell by cell, each difference applied at once, and 
   // Its «not now» is every confirming sheet's «Скасувати», never «Ще ні»:
   // the sheet closes, nothing finished (audit 2026-11-13, frame P2-6).
   await expect(end.getByRole("button", { name: "Ще ні" })).toHaveCount(0);
+  // A text button under the main (audit 2026-11-15, frame P2-4).
+  await expectSheetCancel(
+    end.getByRole("button", { name: "Скасувати", exact: true }),
+  );
   await end.getByRole("button", { name: "Скасувати", exact: true }).click();
   await expect(end).toHaveCount(0);
   await page.getByRole("button", { name: "Завершити", exact: true }).click();

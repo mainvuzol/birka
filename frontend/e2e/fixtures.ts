@@ -189,11 +189,21 @@ export async function openStore(
   // бірці» task list, P0-4) — on «Сьогодні», the day of every store, the
   // day heads it (P0-6).
   const label = (await choice.innerText()).split("\n")[0]?.trim() ?? "";
+  const named = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   await choice.click();
+  // «Ще» itself names no store under its title (audit 2026-11-15, frame
+  // P2-1): whoever has no other section opens on it, the store its row
+  // «Змінити магазин»'s value.
+  const row = page
+    .getByRole("navigation", { name: "Ще" })
+    .getByRole("button", { name: new RegExp(`^Змінити магазин ${named}`) });
+  await expect(storeLine(page).or(row).first()).toBeVisible();
+  if (await row.isVisible()) {
+    await expect(storeLine(page)).toHaveCount(0);
+    return;
+  }
   await expect(storeLine(page)).toHaveText(
-    new RegExp(
-      `^(${label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}|${weekday}, \\d+ \\S+) · `,
-    ),
+    new RegExp(`^(${named}|${weekday}, \\d+ \\S+) · `),
   );
 }
 
@@ -388,7 +398,8 @@ export async function comeBack(page: Page): Promise<void> {
 }
 
 /** «Змінити магазин», on the workspace's line of any screen of a store
- * («Усе на бірці» task list, P0-4). */
+ * («Усе на бірці» task list, P0-4) but «Ще» itself, where it is a row
+ * (audit 2026-11-15, frame P2-1). */
 export async function changeStore(page: Page): Promise<void> {
   await page
     .locator(".store-line")
@@ -1449,6 +1460,52 @@ export async function expectSumRole(
           figures: drawn.figures,
         },
   );
+}
+
+/** A confirming sheet's «not now» — «Скасувати», «Не скасовувати» — as
+ * every one is drawn (spec S27 №4; audit 2026-11-15, frame P2-4): a text
+ * button, no edge and nothing under it, 15/600 in the link's colour, its
+ * target 44 high at least. */
+export async function expectSheetCancel(button: Locator): Promise<void> {
+  await expect(button).toBeVisible();
+  await expect(button).toBeEnabled();
+  expect(
+    await button.evaluate((node) => {
+      const probe = document.createElement("span");
+      document.body.append(probe);
+      // The link's colour, whatever the theme; in the light one it is the
+      // ink's too, so the dark one is read as well — set and put back here,
+      // with nothing drawn between.
+      const linked = (): boolean => {
+        probe.style.color = "var(--link)";
+        return getComputedStyle(node).color === getComputedStyle(probe).color;
+      };
+      const root = document.documentElement;
+      const was = root.dataset.theme;
+      const here = linked();
+      root.dataset.theme = "dark";
+      const dark = linked();
+      if (was === undefined) delete root.dataset.theme;
+      else root.dataset.theme = was;
+      probe.remove();
+      const style = getComputedStyle(node);
+      return {
+        edge: style.borderTopWidth,
+        fill: style.backgroundColor,
+        size: style.fontSize,
+        weight: style.fontWeight,
+        link: here && dark,
+        tall: node.getBoundingClientRect().height >= 44,
+      };
+    }),
+  ).toEqual({
+    edge: "0px",
+    fill: "rgba(0, 0, 0, 0)",
+    size: "15px",
+    weight: "600",
+    link: true,
+    tall: true,
+  });
 }
 
 /** The shared empty place (spec §6.28; audit after stage 2, frame P2-1):
