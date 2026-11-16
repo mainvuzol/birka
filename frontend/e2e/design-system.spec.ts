@@ -1370,30 +1370,34 @@ for (const scheme of ["light", "dark"] as const)
     const card = await token(page, "--card");
     const primary = await token(page, "--primary");
     const pencil = await token(page, "--pencil");
-    const colourOf = (
-      node: import("@playwright/test").Locator,
-    ): Promise<string> =>
-      node.evaluate((element) => getComputedStyle(element).backgroundColor);
     // «Ще» › «Цей телефон»: on the group's white block.
     await more(page);
     const row = page
       .getByRole("navigation", { name: "Ще" })
       .getByRole("switch", { name: /^Вношу продаж з паперу/ });
     await expect(row).toHaveAttribute("aria-checked", "false");
+    // Read as they settle: a row drawn again between two reads is read
+    // again, never a detached node's empty colour (CI 2026-11-16).
     const track = row.locator(".switch-track");
-    expect(await colourOf(track)).toBe(edge);
-    expect(await colourOf(track.locator(".switch-knob"))).toBe(card);
-    const [onCard, block] = await fillAndGround(track);
-    expect(
-      ratio(onCard, block),
-      "«Ще»: the track on the card",
-    ).toBeGreaterThanOrEqual(3);
+    const knob = track.locator(".switch-knob");
+    await expect(track).toHaveCSS("background-color", edge);
+    await expect(knob).toHaveCSS("background-color", card);
+    await expect
+      .poll(async () => ratio(...(await fillAndGround(track))), {
+        message: "«Ще»: the track on the card",
+      })
+      .toBeGreaterThanOrEqual(3);
     // The knob on its track.
-    const [knob] = await fillAndGround(track.locator(".switch-knob"));
-    expect(
-      ratio(knob, onCard),
-      "«Ще»: the knob on the track",
-    ).toBeGreaterThanOrEqual(3);
+    await expect
+      .poll(
+        async () => {
+          const [onTrack] = await fillAndGround(knob);
+          const [onCard] = await fillAndGround(track);
+          return ratio(onTrack, onCard);
+        },
+        { message: "«Ще»: the knob on the track" },
+      )
+      .toBeGreaterThanOrEqual(3);
     // On: the primary, as before — once its 120 ms have passed.
     await row.click();
     await expect(row).toHaveAttribute("aria-checked", "true");
@@ -1431,12 +1435,12 @@ for (const scheme of ["light", "dark"] as const)
     });
     await expect(till).toBeVisible();
     const tillTrack = till.locator(".switch-track");
-    expect(await colourOf(tillTrack)).toBe(edge);
-    const [onPaper, paper] = await fillAndGround(tillTrack);
-    expect(
-      ratio(onPaper, paper),
-      "the till: the track on the paper",
-    ).toBeGreaterThanOrEqual(3);
+    await expect(tillTrack).toHaveCSS("background-color", edge);
+    await expect
+      .poll(async () => ratio(...(await fillAndGround(tillTrack))), {
+        message: "the till: the track on the paper",
+      })
+      .toBeGreaterThanOrEqual(3);
     await page.screenshot({
       path: `test-results/switch-off-till-${scheme}.png`,
     });
