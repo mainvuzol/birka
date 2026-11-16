@@ -44,12 +44,14 @@ export function Progress({ invoice }: { invoice: Invoice }): JSX.Element {
 }
 
 /** What is owed on an invoice still open, large and in ink — never the
- * debts' red (stage 2, money task list, P0-2) — and how much is paid. */
+ * debts' red (stage 2, money task list, P0-2) — and how much is paid.
+ * `money-xl` 56, as a customer's debt; on a short phone's payment, one
+ * line with «Винні» (`styles.css`; audit 2026-11-15, money P2-2). */
 export function InvoiceOwed({ invoice }: { invoice: Invoice }): JSX.Element {
   return (
     <div className="invoice-owed" role="group" aria-label="Скільки винні">
       <p className="owed-what">Винні</p>
-      <p className="invoice-owed-sum t-money-l t-money-xl">
+      <p className="invoice-owed-sum t-money-xl">
         <Sum value={money(invoice.owed)} />
       </p>
       <Progress invoice={invoice} />

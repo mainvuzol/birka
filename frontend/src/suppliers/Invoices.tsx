@@ -542,17 +542,17 @@ function InvoiceList({
         wraps
         aside={
           makes && (
-            <span className="invoice-head-ways">
-              <button
-                type="button"
-                className="debt-more"
-                aria-label="Записати накладну"
-                disabled={held}
-                onClick={make}
-              >
-                <Icon name="plus" />
-              </button>
-            </span>
+            // Said in words, its «+» before them, as «Нове замовлення»
+            // (audit 2026-11-15, money P2-4).
+            <button
+              type="button"
+              className="head-add"
+              disabled={held}
+              onClick={make}
+            >
+              <Icon name="plus" size={20} />
+              Записати накладну
+            </button>
           )
         }
       />
@@ -1113,7 +1113,10 @@ function InvoiceDetail({
         {invoice.entries.length === 0 ? (
           <p>Оплат і заліків ще не було.</p>
         ) : (
-          <ul className="timeline" aria-label="Історія накладної">
+          <ul
+            className="timeline invoice-history"
+            aria-label="Історія накладної"
+          >
             {invoice.entries.map((entry) => (
               <EntryRow
                 key={entry.id}
@@ -1206,7 +1209,7 @@ function InvoicePlaceholder(): JSX.Element {
               <span>Винні</span>
             </span>
           </p>
-          <p className="invoice-owed-sum t-money-l t-money-xl">
+          <p className="invoice-owed-sum t-money-xl">
             <span className="skeleton-line">
               <span>0 000,00 грн</span>
             </span>
@@ -1269,7 +1272,10 @@ function EntryRow({
       />
       <span className="timeline-main">
         <span className="timeline-what">
-          {entryLabels[entry.kind]} {money(entry.amount)}
+          {entryLabels[entry.kind]}
+          {/* Heard in its place, as before; seen on the right, the sums
+              under one another (audit 2026-11-15, money P2-1). */}
+          <span className="visually-hidden"> {money(entry.amount)}</span>
         </span>
         <span className="timeline-meta">
           {[
@@ -1289,6 +1295,9 @@ function EntryRow({
             </span>
           </>
         )}
+      </span>
+      <span className="timeline-sum" aria-hidden="true">
+        {money(entry.amount)}
       </span>
       {cancel ? (
         <Icon

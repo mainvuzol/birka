@@ -484,7 +484,16 @@ async def main() -> None:
     print(f"seeded {len(world.keys)} stock keys", flush=True)
 
     rows: list[dict[str, object]] = []
-    async with httpx.AsyncClient(base_url=api, timeout=60.0) as client:
+    # A connection left idle is let go after 1 s, never reused near the 5 s
+    # at which uvicorn closes it (`--timeout-keep-alive`, 5 by default, as is
+    # httpx's own expiry): a six-seller case's spare connections sat ~5 s
+    # through a one-seller case, and the next warm-up wrote into one the
+    # server was closing (`httpx.ReadError`, nothing breached; CI on PR #218,
+    # 2026-11-16). Within a case requests follow each other far sooner, so
+    # what is measured still rides warm connections. The pool's sizes are
+    # httpx's own defaults, stated so that only the expiry changes.
+    limits = httpx.Limits(max_connections=100, max_keepalive_connections=20, keepalive_expiry=1.0)
+    async with httpx.AsyncClient(base_url=api, timeout=60.0, limits=limits) as client:
         token = await token_for(client, world, bot_token)
         headers = {"Authorization": f"Bearer {token}"}
         for name, builder, count, concurrency in cases(world, headers):
