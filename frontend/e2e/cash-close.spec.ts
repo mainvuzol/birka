@@ -12,6 +12,7 @@ import {
   openStore,
   section,
   expectOneSticker,
+  expectHeldLook,
 } from "./fixtures";
 import type { Locator, Page, Request } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
@@ -392,7 +393,10 @@ test("the count: the card reads the drawer again, a task's screen with the app's
   expect(await page.evaluate(() => window.scrollY)).toBe(0);
   for (const key of await page.locator(".keypad-key").all())
     expect((await key.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
-  await expect(close).toBeDisabled();
+  // Not yet to be pressed: the main as Telegram greys its MainButton, its
+  // words in pencil on the hairline, never faded (spec §6.4, S26 №9; audit
+  // 2026-11-15, frame P2-7).
+  await expectHeldLook(close, "main");
   // A key that would make it not money does nothing: never «Вкажіть суму
   // з точністю до копійок.» here.
   await field(page).fill("2000,555");

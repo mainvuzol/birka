@@ -647,8 +647,11 @@ function RenameSheet({
                   setRefusal(null);
                 }}
               />
+              {/* The way out as quiet as «Нова модель»'s (audit 2026-11-15,
+                  goods P2-1). */}
               <button
                 type="button"
+                className="quiet"
                 onClick={() => {
                   void submit(true);
                 }}
@@ -658,10 +661,14 @@ function RenameSheet({
             </>
           )}
           {sameAs && (
+            // Led by its line, as «Схожа назва вже є» (audit 2026-11-15,
+            // goods P2-1).
             <section className="notice" role="alert">
               {card.may_merge ? (
                 <>
-                  <p>Така назва вже є в іншої моделі. Об’єднати їх?</p>
+                  <p className="notice-lead">
+                    Така назва вже є в іншої моделі. Об’єднати їх?
+                  </p>
                   <button
                     type="button"
                     onClick={() => {
@@ -674,7 +681,7 @@ function RenameSheet({
               ) : (
                 // Nothing said of who may join them (stage 2, goods task
                 // list, P1-5).
-                <p>Така назва вже є в іншої моделі.</p>
+                <p className="notice-lead">Така назва вже є в іншої моделі.</p>
               )}
             </section>
           )}

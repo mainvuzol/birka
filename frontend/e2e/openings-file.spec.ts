@@ -7,6 +7,7 @@ import {
   rejectList,
   removePart,
   section,
+  expectWarningPlate,
 } from "./fixtures";
 import type { Locator, Page, Request, Route } from "@playwright/test";
 import { createHmac, randomBytes, randomUUID } from "node:crypto";
@@ -461,6 +462,13 @@ test("a file fills a new list: lines show their photo and reading, a split the l
   // What is in it, and where it goes, before anything is sent.
   await expect(form.getByLabel("Що у файлі")).toHaveText(
     "Файл «зошит-1.json»: рядків 5, фото 1, ціни закупівельні. Піде до списку складу «Склад для файлу».",
+  );
+  // It warns of nothing: a line under the field, on nothing (audit
+  // 2026-11-15, goods P2-1).
+  await expect(form.getByLabel("Що у файлі")).toHaveClass("t-meta");
+  await expect(form.getByLabel("Що у файлі")).toHaveCSS(
+    "background-color",
+    "rgba(0, 0, 0, 0)",
   );
   // What the file filled is seen before it is saved: «Ще про список»
   // opened by itself (P2-4).
@@ -1567,9 +1575,17 @@ test("the shared warehouse's list is seen and filled from the other store, and n
   await page.getByRole("button", { name: "Новий список" }).click();
   const another = page.getByRole("form", { name: "Новий список" });
   await chip(page, "Спільний новий склад");
-  await expect(another).toContainText(
-    `На складі «Спільний новий склад» уже чекає список «${name}» (веде магазин «Основний»). Другий список для нього не створюють — додайте файл до наявного.`,
+  // A warning's plate said after an answer, led by its line (audit
+  // 2026-11-15, goods P2-1; frame P2-8).
+  const waits = another.locator(".warning-plate");
+  await expect(waits).toHaveAttribute("role", "status");
+  await expect(waits.locator(".notice-lead")).toHaveText(
+    `На складі «Спільний новий склад» уже чекає список «${name}» (веде магазин «Основний»).`,
   );
+  await expect(waits).toContainText(
+    "Другий список для нього не створюють — додайте файл до наявного.",
+  );
+  await expectWarningPlate(waits);
   await expect(
     another.getByRole("button", { name: "Зберегти список" }),
   ).toHaveCount(0);
@@ -1652,9 +1668,14 @@ test("a shared list whose own store stopped trading is only rejected, from the o
     await page.getByRole("button", { name: "Новий список" }).click();
     const form = page.getByRole("form", { name: "Новий список" });
     await chip(page, "Склад півночі й півдня");
-    await expect(form).toContainText(
-      `На складі «Склад півночі й півдня» чекає список «${name}» магазину «Північний», який не працює. Відкрийте й відхиліть його — тоді можна почати новий список і додати до нього файли.`,
+    const waits = form.locator(".warning-plate");
+    await expect(waits.locator(".notice-lead")).toHaveText(
+      `На складі «Склад півночі й півдня» чекає список «${name}» магазину «Північний», який не працює.`,
     );
+    await expect(waits).toContainText(
+      "Відкрийте й відхиліть його — тоді можна почати новий список і додати до нього файли.",
+    );
+    await expectWarningPlate(waits);
     await expect(
       form.getByRole("button", { name: "Зберегти список" }),
     ).toHaveCount(0);
@@ -1665,6 +1686,14 @@ test("a shared list whose own store stopped trading is only rejected, from the o
         "Магазин «Північний», що почав цей список, не працює: список можна лише відхилити, а файли додати до нового списку.",
       ),
     ).toBeVisible();
+    // The store's state, not a warning: «Накладні»'s grey plate and its «і»
+    // (audit 2026-11-15, goods P2-1).
+    const state = page.locator(".banner-blocked", {
+      hasText: "Магазин «Північний», що почав цей список, не працює",
+    });
+    await expect(state).toHaveAttribute("role", "status");
+    await expect(state.locator(".banner-glyph .icon")).toHaveCount(1);
+    await expect(state).not.toHaveClass(/\bwarning-plate\b/);
     // Nothing else is done to it: no approval, no file, no answer.
     await showLines(page, "Усі");
     await expect(card(page, 1)).toBeVisible();
@@ -2397,9 +2426,13 @@ test("an answer too slow to wait for, its list made meanwhile: another file pick
 
     // The warehouse read again: the list made is named, and opened.
     const made = form.getByRole("status");
-    await expect(made).toContainText(
-      "Список «Пізній зошит» уже збережено, хоч відповідь сервера й не дійшла вчасно. Відкрийте його — інші файли чи рядки додайте вже до нього.",
+    await expect(made.locator(".notice-lead")).toHaveText(
+      "Список «Пізній зошит» уже збережено, хоч відповідь сервера й не дійшла вчасно.",
     );
+    await expect(made).toContainText(
+      "Відкрийте його — інші файли чи рядки додайте вже до нього.",
+    );
+    await expectWarningPlate(made);
     await expect(
       form.getByRole("button", { name: "Зберегти список" }),
     ).toHaveCount(0);

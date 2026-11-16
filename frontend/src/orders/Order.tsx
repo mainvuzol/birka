@@ -608,8 +608,12 @@ function Card({
           // Saved anyway: several orders may go in one parcel (owner decision,
           // 2026-10-01). Each other order its row, opened by a tap (orders
           // task list, P1-3), never its eight characters (В1).
+          // A warning standing on the card, never said: led by its line in the
+          // warning's colour, its triangle on it, as the sheet's (audit
+          // 2026-11-15, orders-cash P2-2).
           <div className="notice same-waybill">
-            <p>
+            <p className="notice-lead">
+              <Icon name="warning" size={16} />
               {order.same_waybill.length === 1
                 ? "Ця ТТН є також у замовленні — перевірте, чи це один пакунок."
                 : "Ця ТТН є також у замовленнях — перевірте, чи це один пакунок."}

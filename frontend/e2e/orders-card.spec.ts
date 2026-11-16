@@ -10,6 +10,7 @@ import {
   expectStub,
   openStore,
   section,
+  tokenColour,
 } from "./fixtures";
 import type { Locator, Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
@@ -2104,6 +2105,20 @@ test("the same waybill's other orders: each its row — its goods as its card's 
       { exact: true },
     ),
   ).toBeVisible();
+  // A warning standing on the card, never said: led by its line in the
+  // warning's colour, its triangle 16 on it, as the sheet's (audit
+  // 2026-11-15, orders-cash P2-2).
+  const plate = page.locator(".same-waybill");
+  await expect(plate).not.toHaveAttribute("role");
+  const lead = plate.locator(".notice-lead");
+  await expect(lead).toHaveCSS("color", await tokenColour(page, "--warn"));
+  await expect(lead).toHaveCSS("font-weight", "600");
+  await expect(lead.locator("svg")).toHaveCount(1);
+  await expect(lead.locator("svg")).toHaveCSS(
+    "color",
+    await tokenColour(page, "--warning"),
+  );
+  await expect(lead.locator("svg")).toHaveCSS("width", "16px");
   const rows = page
     .getByRole("list", { name: "Замовлення з цією ТТН" })
     .getByRole("button");

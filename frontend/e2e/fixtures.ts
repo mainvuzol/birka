@@ -1209,6 +1209,28 @@ export async function expectPlate(
 }
 
 /**
+ * A warning's plate by its class, whatever its role — said at once, after
+ * an answer, or standing from the screen's opening (direction §4; spec
+ * §6.23; audit 2026-11-15, frame P2-8): as a warning said at once, its
+ * edge of 1 in the warning's line, its corner 4, 42 at the left for its
+ * triangle.
+ */
+export async function expectWarningPlate(
+  plate: Locator,
+  theme: "light" | "dark" = "light",
+): Promise<void> {
+  await expectPlate(plate, "unread", theme);
+  await expect(plate).toHaveCSS("border-top-width", "1px");
+  await expect(plate).toHaveCSS("border-top-style", "solid");
+  await expect(plate).toHaveCSS(
+    "border-top-color",
+    await tokenColour(plate.page(), "--warn-line"),
+  );
+  await expect(plate).toHaveCSS("border-top-left-radius", "4px");
+  await expect(plate).toHaveCSS("padding-left", "42px");
+}
+
+/**
  * A row taking no tap (audit 2026-11-13, frame P2-4): nothing faded over
  * it, its title in pencil — whatever the title's class.
  */
@@ -1460,6 +1482,60 @@ export async function expectSumRole(
           figures: drawn.figures,
         },
   );
+}
+
+/** A token's colour as the page computes it: `rgb(…)`. */
+export function tokenColour(page: Page, name: string): Promise<string> {
+  return page.evaluate((token) => {
+    const probe = document.createElement("span");
+    probe.style.color = `var(${token})`;
+    document.body.append(probe);
+    const colour = getComputedStyle(probe).color;
+    probe.remove();
+    return colour;
+  }, name);
+}
+
+/**
+ * A button taking no tap, drawn so and never faded (spec §6.4, §6.5, S12
+ * №7; audit 2026-11-15, frame P2-7, sale P2-5). A way stepped back — the
+ * secondary, a quiet one, a chip, a segment, the till held — on the fold,
+ * its words in pencil, its edge dashed; one chosen keeps its fill and its
+ * words, its edge dashed; the main as Telegram greys its MainButton, its
+ * words in pencil on the hairline; a text button in pencil on nothing. Read
+ * as it settles.
+ */
+export async function expectHeldLook(
+  button: Locator,
+  look: "stepped" | "chosen" | "main" | "text",
+): Promise<void> {
+  const page = button.page();
+  await expect(button).toBeDisabled();
+  await expect(button).toHaveCSS("opacity", "1");
+  if (look !== "chosen")
+    await expect(button).toHaveCSS(
+      "color",
+      await tokenColour(page, "--pencil"),
+    );
+  if (look === "stepped" || look === "chosen") {
+    await expect(button).toHaveCSS("border-top-style", "dashed");
+    await expect(button).toHaveCSS(
+      "border-top-color",
+      await tokenColour(page, "--edge"),
+    );
+  }
+  if (look === "stepped")
+    await expect(button).toHaveCSS(
+      "background-color",
+      await tokenColour(page, "--fold"),
+    );
+  else if (look === "main")
+    await expect(button).toHaveCSS(
+      "background-color",
+      await tokenColour(page, "--hairline"),
+    );
+  else if (look === "text")
+    await expect(button).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
 }
 
 /** A confirming sheet's «not now» — «Скасувати», «Не скасовувати» — as

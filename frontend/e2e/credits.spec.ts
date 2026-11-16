@@ -3,6 +3,7 @@ import {
   expect,
   basketDone,
   basketSheet,
+  expectHeldLook,
   expectOwed,
   expectStub,
   expectSheetCancel,
@@ -415,14 +416,16 @@ test("a sale paid in parts leaves the rest owed, and «Покупці» takes it
   // «Прийняти внесок» is the way the customer pays (ADR-0012 G23).
   const ways = paying(page).locator(".pay-ways").getByRole("button");
   await expect(ways).toHaveText(["Готівка", "Картка", "Переказ"]);
-  // Each the primary, as the till's (spec §6.15, S21; audit after stage
-  // 2, frame P1-1).
+  // Nothing to press without a sum (credits task list, P0-4): each
+  // greyed as the main is, never faded (S21 №10; audit 2026-11-15, frame
+  // P2-7).
+  for (const way of await ways.all()) await expectHeldLook(way, "main");
+  await keyIn(page, "500");
+  // Then each the primary, as the till's (spec §6.15, S21; audit after
+  // stage 2, frame P1-1).
   const primary = await primaryColour(page);
   for (const way of await ways.all())
     await expect(way).toHaveCSS("background-color", primary);
-  // Nothing to press without a sum (credits task list, P0-4).
-  for (const way of await ways.all()) await expect(way).toBeDisabled();
-  await keyIn(page, "500");
   await paying(page).getByRole("button", { name: "Готівка" }).click();
   // The result in place of the form (P0-5): what was done, the way, the sum
   // large, what is owed after — heard as one sentence.

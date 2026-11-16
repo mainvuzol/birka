@@ -44,6 +44,7 @@ import {
 } from "@/shared/telegram";
 import { Sum } from "@/shared/Sum";
 import { Eyelet } from "@/shared/Eyelet";
+import { Banner } from "@/shared/Banner";
 import { Icon } from "@/shared/Icon";
 import { Keypad } from "@/shared/Keypad";
 import { SendingLine } from "@/shared/Sending";
@@ -591,17 +592,30 @@ export function Debt({
           // person's place, the debt's store named in it.
           context={`${customerName} · «${visible(credit.store_name)}» · з ${shortDay(credit.opened_at)}`}
         />
-        <section className="credits debt-detail debt-till">
+        <section
+          className={
+            // Held whenever its keypad is — a kept operation of another
+            // journal's, or its own payment kept and sent, waiting or lost
+            // (audit 2026-11-15, sale P2-5).
+            blocked || working
+              ? "credits debt-detail debt-till till-held"
+              : "credits debt-detail debt-till"
+          }
+        >
           {/* From paper: its banner at the top, as the till's (stage 2,
               orders task list, P0-4). */}
           {takes && <PaperBanner mark={paperMark} what="payment" />}
           {goods}
           {elsewhere && (
-            <p className="notice">
-              Продано в «{visible(credit.store_name)}» (
-              {credit.store_state === "ARCHIVED" ? "закрито" : "заблоковано"}
-              ). Внесок приймаєте ви, борг — за «{visible(credit.store_name)}».
-            </p>
+            // The store's state, as «Накладні» say it: the grey plate and its
+            // «і» (audit 2026-11-15, goods' observation; frame P2-8).
+            <Banner kind="blocked" as="div">
+              <p>
+                Продано в «{visible(credit.store_name)}» (
+                {credit.store_state === "ARCHIVED" ? "закрито" : "заблоковано"}
+                ). Внесок приймаєте ви, борг — за «{visible(credit.store_name)}».
+              </p>
+            </Banner>
           )}
           {credit.status === "OPEN" ? (
             <div className="owed-card" role="group" aria-label="Скільки винні">
@@ -820,11 +834,13 @@ export function Debt({
         </p>
         {goods}
         {elsewhere && (
-          <p className="notice">
-            Продано в «{visible(credit.store_name)}» (
-            {credit.store_state === "ARCHIVED" ? "закрито" : "заблоковано"}).
-            Внесок приймаєте ви, борг — за «{visible(credit.store_name)}».
-          </p>
+          <Banner kind="blocked" as="div">
+            <p>
+              Продано в «{visible(credit.store_name)}» (
+              {credit.store_state === "ARCHIVED" ? "закрито" : "заблоковано"}).
+              Внесок приймаєте ви, борг — за «{visible(credit.store_name)}».
+            </p>
+          </Banner>
         )}
         {credit.status === "OPEN" ? (
           // What they owe, first and large (P0-3): «скільки я ще винна?».

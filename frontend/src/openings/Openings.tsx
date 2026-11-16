@@ -52,6 +52,7 @@ import { Empty } from "@/shared/Empty";
 import { Placeholder } from "@/shared/Placeholder";
 import { enterGoes } from "@/shared/enter";
 import { Eyelet } from "@/shared/Eyelet";
+import { Banner } from "@/shared/Banner";
 import { Icon } from "@/shared/Icon";
 import { ModeSwitch } from "@/shared/ModeSwitch";
 import { CARRIED_TAP, usePanelRoom } from "@/shared/panel";
@@ -924,10 +925,13 @@ function NewList({
               }}
             />
           ) : mine ? (
-            <div className="notice" role="status">
-              <p>
-                {`Список «${listName(mine)}» уже збережено, хоч відповідь сервера й не дійшла вчасно. Відкрийте його — інші файли чи рядки додайте вже до нього.`}
+            // A warning's plate said after an answer, led by its line (audit
+            // 2026-11-15, goods P2-1; frame P2-8).
+            <div className="notice warning-plate" role="status">
+              <p className="notice-lead">
+                {`Список «${listName(mine)}» уже збережено, хоч відповідь сервера й не дійшла вчасно.`}
               </p>
+              <p>Відкрийте його — інші файли чи рядки додайте вже до нього.</p>
               <button
                 type="button"
                 onClick={() => {
@@ -941,11 +945,16 @@ function NewList({
             </div>
           ) : (
             other && (
-              <div className="notice" role="status">
+              <div className="notice warning-plate" role="status">
+                <p className="notice-lead">
+                  {other.store_state === "ACTIVE"
+                    ? `На складі «${warehouse ?? "—"}» уже чекає список «${listName(other)}» (веде магазин «${visible(other.store_name ?? "—")}»).`
+                    : `На складі «${warehouse ?? "—"}» чекає список «${listName(other)}» магазину «${visible(other.store_name ?? "—")}», який не працює.`}
+                </p>
                 <p>
                   {other.store_state === "ACTIVE"
-                    ? `На складі «${warehouse ?? "—"}» уже чекає список «${listName(other)}» (веде магазин «${visible(other.store_name ?? "—")}»). Другий список для нього не створюють — додайте файл до наявного.`
-                    : `На складі «${warehouse ?? "—"}» чекає список «${listName(other)}» магазину «${visible(other.store_name ?? "—")}», який не працює. Відкрийте й відхиліть його — тоді можна почати новий список і додати до нього файли.`}
+                    ? "Другий список для нього не створюють — додайте файл до наявного."
+                    : "Відкрийте й відхиліть його — тоді можна почати новий список і додати до нього файли."}
                 </p>
                 <button
                   type="button"
@@ -1641,9 +1650,13 @@ function ListView({
         {/* What may be done here, and the only thing: the plate stays
             (P0-1). */}
         {list.status === "IN_REVIEW" && !trading && (
-          <p className="notice" role="status">
-            {`Магазин «${visible(list.store_name ?? "—")}», що почав цей список, не працює: список можна лише відхилити, а файли додати до нового списку.`}
-          </p>
+          // The store's state, not a warning: «Накладні»'s grey plate and
+          // its «і» (audit 2026-11-15, goods P2-1).
+          <Banner kind="blocked" as="div" role="status">
+            <p>
+              {`Магазин «${visible(list.store_name ?? "—")}», що почав цей список, не працює: список можна лише відхилити, а файли додати до нового списку.`}
+            </p>
+          </Banner>
         )}
         {/* The lines say what was read of them by their files. */}
         {parts.error && (
