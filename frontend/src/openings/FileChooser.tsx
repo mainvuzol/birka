@@ -62,7 +62,9 @@ export function FileChooser({
       {read &&
         !reading &&
         (read.ok ? (
-          <p className="notice" aria-label="Що у файлі">
+          // What the file holds warns of nothing: a line under the field
+          // (audit 2026-11-15, goods P2-1).
+          <p className="t-meta" aria-label="Що у файлі">
             {`Файл «${visible(read.name)}»: рядків ${String(read.summary.lines)}, фото ${String(read.summary.photos)}${read.summary.price_kind ? `, ${priceKinds[read.summary.price_kind]}` : ""}. `}
             {warehouse === null
               ? "Оберіть склад, до списку якого піде файл."

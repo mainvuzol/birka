@@ -10323,3 +10323,95 @@ screen changes.
   «Ще»'s group labels are the role's (0.06em, no longer 0.04em), in pencil
   on the paper as before. This closes the reading left by audit
   2026-11-13, batch 7 (the `h2` captions): the role is the spec's, no question for the owner.
+
+## Chosen in chat — 2026-11-16 (audit 2026-11-15, batch 3: one look for a button taking no tap; one form for a warning's plate; the held till drawn, not faded; the catalogue's and the openings' plates; the order card's same-waybill plate led by a line and a triangle; «Покупці»'s two plates a store's state; frame P2-7, P2-8, sale P2-5, goods P2-1, orders-cash P2-2)
+
+The forms' batch: the frame's two shared rules and the sections' tasks that
+wait on them («merged, go next» after #216). Nothing recorded, sent or
+counted changes; no word on a screen changes, but where a plate is split
+at its first sentence.
+
+- **A button taking no tap is drawn so, never faded** (frame P2-7; spec
+  §6.4, §6.5): it keeps its place and its size, its words in pencil at
+  4.5:1 or more, in both themes.
+  - The secondary, a quiet one, a chip and a segment: on the fold with a
+    dashed edge in the controls' `edge`.
+  - The main (`.primary`, a sheet's «Готово»): the hairline, no edge, as
+    Telegram greys its MainButton (§6.4).
+  - A text button («Спробувати ще раз», a sheet's «Скасувати», «Змінити
+    магазин» on the line, a glyph, the «←» line over a title, a tag's model
+    name): its words in pencil, nothing round them.
+  - Unchanged: a press on its way (`.pressed`) keeps the primary; a way
+    stepped back as it is sent keeps its look; a row taking no tap keeps
+    batch 10's look (its words in pencil, nothing faded).
+  - Decided here:
+    - The rules stand last in the stylesheet, so a kind's own rule of the
+      same weight gives way to them; the main's and the chosen's rules
+      outweigh a kind's own.
+    - A size's cell, a catalogue's or a supplier's row, a tag, a card and
+      the other tiles that are not buttons in the spec's sense keep the
+      fade at 45 % (spec §6.5 draws no held look for them).
+    - One chosen (a chip, a way, a model in «Схожі», a rename's fork)
+      keeps its fill and its words, its edge dashed: pencil on its fill
+      reads at 2:1 or less, and the choice must still read.
+    - A segment held: its edge takes 1 of its padding, so nothing moves;
+      the open one keeps its card, its words in pencil, its ring gone —
+      «Повернути»'s way switch alike. The open tab keeps its pill, its
+      words in pencil, as the open segment its card: where one is.
+    - «Пошкоджені»'s stepper, filled in the damaged colour, is held as a
+      secondary (review): its fill would read as a press still to be made.
+    - The till's ways and «Внесок»'s not yet to be pressed (no sum, more
+      than is owed, the paper's mark not ready) are the main's look (S21
+      №10), each being a primary.
+- **One form for a warning's plate** (frame P2-8; direction §4; spec
+  §6.23): by its class, whatever its role — said at once (`alert`), said
+  after an answer (`status`), or standing from the screen's opening (no
+  role) — the edge of 1 in the warning's line, the corner 4, 12 round it
+  and 42 at the left for the triangle of 20 beside its first line; its lead
+  line (`.notice-lead`) in the warning's colour, 600. A refusal's plate and
+  the grey plate of a store's state are not warnings and stay theirs.
+- **The held till is drawn, not faded** (sale P2-5; spec S12 №7): while a
+  kept operation waits — another journal's, or the till's own sale or
+  payment not yet answered — the till and «Внесок» (S21) are held as
+  drawn: the segment, a size's cell and the ways on the fold with a dashed
+  edge, their words in pencil; the search's words and its placeholder in
+  pencil; nothing hidden, nothing moved. A cell with no room in the basket
+  keeps its fade (2026-10-30). Behaviour and focus are as before: what
+  takes no tap is still `disabled`.
+  - Decided here: the held look stands whenever the till takes no tap —
+    another journal's kept operation, or its own sale or payment from the
+    moment it is kept and sent until it is answered, its answer lost or not
+    (the journal keeps an attempt before it sends it; review) — so the
+    person sees one till waiting and nothing fades between the send and a
+    lost answer. Its pressed way keeps its ring, the others step back
+    (P0-2, 2026-10-29).
+  - Decided here: a size's cell in the basket, held, is drawn as the other
+    cells — the fold, a dashed edge, its words in pencil; the count on it
+    still says how many, and the basket names them.
+  - «Повернути»'s form needs no class of its own: its steppers, its ways'
+    switch and its main are drawn by the shared rules above.
+- **The catalogue's and the openings' plates** (goods P2-1):
+  - «Список кандидатів обмежено.» — in «Нова модель»'s «Схожі» and on the
+    proposal's screen while it waits — is a warning's plate standing from
+    the screen's opening, led by its line; settled, it is not said, as
+    before.
+  - «Моделі»: «Така назва вже є в іншої моделі.» (and «… Об’єднати їх?»)
+    is the plate's lead line; «Це інша назва — зберегти як є» is quiet, as
+    «Нова модель»'s.
+  - «Початкові залишки»: a list saved though its answer was late, and a
+    list already waiting on the warehouse, are warnings' plates said after
+    an answer (`status`), led by their first sentence. The list whose store
+    stopped trading is the grey plate of a store's state, keeping its role
+    `status`. What the file holds is a line of `meta`, no longer a plate.
+  - Decided here: a plate of two sentences is split at the first — the
+    lead says what is, the rest what to do; the words are as before.
+- **The order card's same-waybill plate** (orders-cash P2-2): led by its
+  line in the warning's colour, 600, the triangle of 16 on it, as the send
+  sheet's; no role, as before; the other orders' rows under it. The send
+  sheet's line («Ця ТТН є також…» said after the answer) is the model and
+  keeps its own form.
+- **«Покупці»'s two plates** (the goods task list's observation): «Продано
+  в «…» (закрито/заблоковано). Внесок приймаєте ви, борг — за «…».» — on
+  the debt and at «Внесок» — is the grey plate of a store's state and its
+  «і», as «Накладні» say it, never a warning's. Decided here: it is a
+  store's state, not a warning.

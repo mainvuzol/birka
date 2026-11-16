@@ -1047,7 +1047,13 @@ export function Sale({
   return (
     <>
       <ScreenHeader title="Продаж" />
-      <section>
+      {/* Held whenever its fieldset is — a kept operation of another
+          journal's, or its own sale kept and sent, waiting or lost: drawn
+          so, nothing faded (S12 №7; audit 2026-11-15, sale P2-5). A press on
+          its way keeps its own look. */}
+      <section
+        className={blocked || working ? "till-held" : undefined}
+      >
         {mode}
         {back && (
           <Banner kind="back" label="Сервер знову відповідає">

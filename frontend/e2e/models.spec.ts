@@ -1091,9 +1091,14 @@ test("only a person with the right in every store is offered a merge", async ({
   expect(ambiguous.details.candidate_family_ids).toContain(
     renames[3]?.product_family_id,
   );
-  await expect(
-    sheet.getByText("Така назва вже є в іншої моделі.", { exact: true }),
-  ).toBeVisible();
+  // Led by its line in the warning's colour, as «Схожа назва вже є» (audit
+  // 2026-11-15, goods P2-1).
+  const taken = sheet.getByText("Така назва вже є в іншої моделі.", {
+    exact: true,
+  });
+  await expect(taken).toBeVisible();
+  await expect(taken).toHaveClass(/\bnotice-lead\b/);
+  await expect(taken).toHaveCSS("font-weight", "600");
   await expect(page.getByText(/право/)).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "Об’єднати з тією моделлю" }),
@@ -1158,9 +1163,12 @@ test("a rename keeps a similar word once the person says it is another", async (
   );
   await sheet.getByLabel("Колір", { exact: true }).press("Enter");
   await expect(sheet.getByText("Схожа назва вже є")).toBeVisible();
-  await sheet
-    .getByRole("button", { name: "Це інша назва — зберегти як є" })
-    .click();
+  // The way out as quiet as «Нова модель»'s (audit 2026-11-15, goods P2-1).
+  const asTyped = sheet.getByRole("button", {
+    name: "Це інша назва — зберегти як є",
+  });
+  await expect(asTyped).toHaveClass(/\bquiet\b/);
+  await asTyped.click();
   await expect(
     page.getByText(
       `Назву змінено: «${name} графіт» → «${name} ${colour.typo}».`,

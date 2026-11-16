@@ -3,6 +3,7 @@ import {
   expect,
   addModel,
   expectFold,
+  expectWarningPlate,
   leaveNewModel,
   more,
   newModelSheet,
@@ -225,6 +226,62 @@ test("reject proposal and retrieve its preserved reason from history", async ({
   await expect(
     page.getByText("Причина відхилення: Це інша модель", { exact: true }),
   ).toBeVisible();
+});
+
+test("a proposal whose candidates' list was cut says so on a warning's plate, in the sheet and on its screen while it waits; settled, it says nothing (audit 2026-11-15, goods P2-1; frame P2-8)", async ({
+  page,
+}) => {
+  const raw = `Обрізаний список ${randomUUID().slice(0, 8)}`;
+  // The server cut the list: every answer that carries the proposal says so.
+  await page.route("**/api/v1/catalog/match-decisions**", async (route) => {
+    const response = await route.fetch();
+    const body = (await response.json().catch(() => null)) as {
+      preview?: { truncated: boolean };
+    } | null;
+    if (!body?.preview) {
+      await route.fulfill({ response });
+      return;
+    }
+    body.preview.truncated = true;
+    await route.fulfill({ response, json: body });
+  });
+  await enter(page);
+  const sheet = await create(page, raw);
+  const plate = (where: Locator): Locator =>
+    where.locator(".notice.warning-plate", {
+      hasText: "Список кандидатів обмежено.",
+    });
+  // Standing from the sheet's step: no role, read in its place; its lead
+  // first, in the warning's words.
+  await expect(plate(sheet)).not.toHaveAttribute("role");
+  await expect(plate(sheet).locator(".notice-lead")).toHaveText(
+    "Список кандидатів обмежено.",
+  );
+  await expect(plate(sheet).locator("p").nth(1)).toHaveText(
+    "Не обирайте товар лише через схожість назви.",
+  );
+  await expectWarningPlate(plate(sheet));
+  await leave(page);
+  const screen = page.locator(".catalog-proposal-screen");
+  await expect(plate(screen)).toHaveCount(1);
+  await expect(plate(screen)).not.toHaveAttribute("role");
+  await expect(plate(screen).locator(".notice-lead")).toHaveCSS(
+    "font-weight",
+    "600",
+  );
+  await expectWarningPlate(plate(screen));
+  // Settled, the list's cut is no longer a choice to warn about.
+  await page.getByRole("button", { name: "Відхилити", exact: true }).click();
+  const reject = page.getByRole("dialog", { name: "Відхилити пропозицію" });
+  await expect(reject).toHaveAttribute("data-ready", "");
+  await reject.getByLabel("Причина відхилення").fill("Інша модель");
+  await reject.getByRole("button", { name: "Відхилити", exact: true }).click();
+  await expect(reject).toHaveCount(0);
+  await expect(
+    page.getByText("Причина відхилення: Інша модель", { exact: true }),
+  ).toBeVisible();
+  await expect(plate(page)).toHaveCount(0);
+  await page.unrouteAll({ behavior: "wait" });
 });
 
 test("lost proposal response survives reopening with the same UUID", async ({

@@ -445,10 +445,11 @@ export function NewModel({
                 : "Схожих моделей у каталозі немає. Пропозиція чекає в «Перевірці каталогу»."}
             </p>
             {decision.preview.truncated && (
-              <p className="notice">
-                Список кандидатів обмежено. Не обирайте товар лише через
-                схожість назви.
-              </p>
+              // A warning's plate, standing (audit 2026-11-15, goods P2-1).
+              <div className="notice warning-plate">
+                <p className="notice-lead">Список кандидатів обмежено.</p>
+                <p>Не обирайте товар лише через схожість назви.</p>
+              </div>
             )}
             <ul className="new-model-candidates">
               {candidates.map((c) => (

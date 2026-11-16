@@ -23,6 +23,8 @@ import {
   tillWays,
   shortage,
   expectOneSticker,
+  expectHeldLook,
+  tokenColour,
 } from "./fixtures";
 import type { Locator, Page, Request, Route } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
@@ -5706,6 +5708,92 @@ test.describe("11. the stub «Корінець»: every press says what became o
     });
     expect(turning).toEqual(["eyelet-spin"]);
   });
+
+  for (const scheme of ["light", "dark"] as const)
+    test(`in the ${scheme} theme the till a kept sale holds waits as drawn, never faded: its segment, the size's cells, the ways and the search in pencil, dashed, nothing moved; a cell with no room keeps its fade (spec S12 №7; audit 2026-11-15, sale P2-5)`, async ({
+      page,
+    }) => {
+      await page.emulateMedia({ colorScheme: scheme });
+      await page.setViewportSize({ width: 360, height: 640 });
+      const server = await serve(page);
+      await openTill(page);
+      const segment = tillWays(page).getByRole("button");
+      const cell = page
+        .locator(`.size-cell[data-stock="${ids.variant}:${ids.size}"]`)
+        .first();
+      const ways = page
+        .getByRole("group", { name: "Продати — як платить покупець" })
+        .getByRole("button");
+      const search = page.getByRole("searchbox", { name: "Знайти модель" });
+      await basket(page);
+      const boxes = async () => ({
+        segment: await segment.first().boundingBox(),
+        cell: await cell.boundingBox(),
+        way: await ways.first().boundingBox(),
+        search: await search.boundingBox(),
+      });
+      const before = await boxes();
+      await soldWithNoAnswer(page, server);
+      // The open way keeps its card; the others, the cell and the ways
+      // to pay as a way stepped back.
+      await expectHeldLook(
+        tillWays(page).locator("button[aria-current='page']"),
+        "chosen",
+      );
+      for (const way of await tillWays(page)
+        .locator("button:not([aria-current='page'])")
+        .all())
+        await expectHeldLook(way, "stepped");
+      await expectHeldLook(cell, "stepped");
+      // Its count too, whatever colour the basket's cell had.
+      await expect(cell.locator(".size-free")).toHaveCSS(
+        "color",
+        await tokenColour(page, "--pencil"),
+      );
+      for (const way of await ways.all()) await expectHeldLook(way, "stepped");
+      await expect(search).toBeDisabled();
+      const pencil = await tokenColour(page, "--pencil");
+      await expect(search).toHaveCSS("color", pencil);
+      expect(
+        await search.evaluate(
+          (node) => getComputedStyle(node, "::placeholder").color,
+        ),
+      ).toBe(pencil);
+      // Nothing moved (±1 px).
+      const after = await boxes();
+      for (const part of ["segment", "cell", "way", "search"] as const) {
+        const was = before[part];
+        const now = after[part];
+        if (!was || !now) throw new Error(`${part} not laid out`);
+        expect(Math.abs(now.x - was.x), part).toBeLessThanOrEqual(1);
+        expect(Math.abs(now.width - was.width), part).toBeLessThanOrEqual(1);
+        expect(Math.abs(now.height - was.height), part).toBeLessThanOrEqual(1);
+      }
+      // A tap on the cell adds nothing: two frames later, its words and the
+      // basket's are as they were.
+      const said = await cell.getAttribute("aria-label");
+      const tray = await page.locator(".tray-basket").innerText();
+      await cell.click({ force: true });
+      await page.evaluate(
+        () =>
+          new Promise((done) =>
+            requestAnimationFrame(() => requestAnimationFrame(done)),
+          ),
+      );
+      expect(await cell.getAttribute("aria-label")).toBe(said);
+      expect(await page.locator(".tray-basket").innerText()).toBe(tray);
+      await page.screenshot({ path: `test-results/till-held-${scheme}.png` });
+      // A cell with no room keeps its fade (2026-10-30), on the held till
+      // too.
+      expect(
+        await cell.evaluate((node) => {
+          node.classList.add("no-room");
+          const faded = getComputedStyle(node).opacity;
+          node.classList.remove("no-room");
+          return faded;
+        }),
+      ).toBe("0.45");
+    });
 });
 
 test.describe("12. every journal's kept operation is the sale's stub (stage 2, orders task list, P0-1)", () => {

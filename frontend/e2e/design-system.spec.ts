@@ -8,6 +8,8 @@ import {
   openModel,
   section,
   tillWays,
+  expectHeldLook,
+  expectWarningPlate,
 } from "./fixtures";
 import type { Page } from "@playwright/test";
 import { createHmac } from "node:crypto";
@@ -1444,4 +1446,237 @@ for (const scheme of ["light", "dark"] as const)
     await page.screenshot({
       path: `test-results/switch-off-till-${scheme}.png`,
     });
+  });
+
+/** Its words' colour and the fill under them — its own, or the nearest
+ * one under it — as `#rrggbb`. */
+async function wordsAndGround(
+  node: import("@playwright/test").Locator,
+): Promise<[string, string]> {
+  return node.evaluate((element) => {
+    const hex = (colour: string): string => {
+      const [r = 0, g = 0, b = 0] = (colour.match(/\d+(\.\d+)?/g) ?? []).map(
+        Number,
+      );
+      return `#${[r, g, b]
+        .map((v) => Math.round(v).toString(16).padStart(2, "0"))
+        .join("")}`;
+    };
+    let at: Element | null = element;
+    let ground = "";
+    while (at) {
+      const fill = getComputedStyle(at).backgroundColor;
+      if (fill !== "rgba(0, 0, 0, 0)") {
+        ground = fill;
+        break;
+      }
+      at = at.parentElement;
+    }
+    return [hex(getComputedStyle(element).color), hex(ground)];
+  });
+}
+
+/** One of each kind of button, under the app's own styles, on «Сьогодні»'s
+ * paper: as each is drawn wherever it stands. */
+const kinds = `
+  <button type="button" data-kind="secondary">Звичайна</button>
+  <button type="button" class="quiet" data-kind="quiet">Тиха</button>
+  <div class="chips">
+    <button type="button" class="chip" data-kind="chip">Чип</button>
+    <button type="button" class="chip" aria-pressed="true" data-kind="chosen">Обраний</button>
+  </div>
+  <div class="new-model-candidates">
+    <button type="button" aria-pressed="true" data-kind="candidate">Лоран шоколад 70 см</button>
+  </div>
+  <div class="fix-ways">
+    <button type="button" aria-pressed="true" data-kind="fixway">Картка</button>
+  </div>
+  <div class="mode-switch" role="group" aria-label="Перемикач">
+    <button type="button" aria-current="page" data-kind="segment-open">Одна</button>
+    <button type="button" data-kind="segment">Друга</button>
+  </div>
+  <button type="button" class="primary" data-kind="main">Головна</button>
+  <button type="button" class="sheet-done main-mimic" data-kind="mimic">Готово</button>
+  <button type="button" class="text-button" data-kind="text">Спробувати ще раз</button>
+  <button type="button" class="sheet-cancel" data-kind="cancel">Скасувати</button>
+  <div class="store-line">
+    <p class="t-meta">Центр · Оля</p>
+    <button type="button" class="quiet" data-kind="line">Змінити магазин</button>
+  </div>
+  <div class="screen-header">
+    <button type="button" class="quiet back" data-kind="back">← Ще</button>
+  </div>
+  <button type="button" class="model-open" data-kind="model">Лоран шоколад</button>
+  <div class="return-step damaged">
+    <div class="stepper">
+      <button type="button" data-kind="damaged">−</button>
+    </div>
+  </div>
+  <fieldset class="way-switch" data-kind="ways">
+    <legend class="visually-hidden">Як повертаємо гроші</legend>
+    <label><input type="radio" name="probe-way" checked /><span>Готівкою</span></label>
+    <label><input type="radio" name="probe-way" /><span>Карткою</span></label>
+  </fieldset>
+  <button type="button" class="sale-row" data-kind="row"><span class="sale-main">Ряд</span></button>
+  <button type="button" class="size-cell" data-kind="cell"><span class="size-letter">M</span></button>
+  <button type="button" class="primary pressed" data-kind="pressed">Надсилаємо</button>
+`;
+
+for (const scheme of ["light", "dark"] as const)
+  test(`in the ${scheme} theme a button taking no tap is drawn so, never faded, nothing moved: the secondary, a quiet one, a chip and a segment on the fold with a dashed edge, one chosen keeping its fill; the main on the hairline; a text button on nothing — each in pencil at 4.5:1; a row, a size's cell and a press on its way as before (spec §6.4, §6.5, S12 №7; audit 2026-11-15, frame P2-7)`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ colorScheme: scheme });
+    await page.setViewportSize({ width: 360, height: 844 });
+    await page.goto(
+      `/#${new URLSearchParams({ tgWebAppData: initData(fixture.network_owner_telegram_user_id) }).toString()}`,
+    );
+    await openStore(page, "Центр CENTRE");
+    await page.evaluate((html) => {
+      // Over the screen, so nothing read under it moves it.
+      const probe = document.createElement("section");
+      probe.id = "held-probe";
+      probe.style.cssText =
+        "position:fixed;inset:0;z-index:1000;overflow:auto;padding:16px;background:var(--paper)";
+      probe.innerHTML = html;
+      document.body.append(probe);
+    }, kinds);
+    const probe = page.locator("#held-probe");
+    const looks = {
+      secondary: "stepped",
+      quiet: "stepped",
+      chip: "stepped",
+      chosen: "chosen",
+      candidate: "chosen",
+      fixway: "chosen",
+      "segment-open": "chosen",
+      segment: "stepped",
+      main: "main",
+      mimic: "main",
+      text: "text",
+      cancel: "text",
+      line: "text",
+      back: "text",
+      model: "text",
+      damaged: "stepped",
+    } as const;
+    const fills: Record<string, string> = {};
+    for (const kind of Object.keys(looks))
+      fills[kind] = await probe
+        .locator(`[data-kind="${kind}"]`)
+        .evaluate((node) => getComputedStyle(node).backgroundColor);
+    for (const [kind, look] of Object.entries(looks)) {
+      const button = probe.locator(`[data-kind="${kind}"]`);
+      const was = await button.boundingBox();
+      await button.evaluate((node) => {
+        (node as HTMLButtonElement).disabled = true;
+      });
+      await expectHeldLook(button, look);
+      const now = await button.boundingBox();
+      if (!was || !now) throw new Error(`${kind} not laid out`);
+      for (const side of ["x", "y", "width", "height"] as const)
+        expect(
+          Math.abs(now[side] - was[side]),
+          `${kind}: ${side}`,
+        ).toBeLessThanOrEqual(1);
+      expect(
+        ratio(...(await wordsAndGround(button))),
+        `${kind}: its words`,
+      ).toBeGreaterThanOrEqual(4.5);
+      // One chosen keeps its fill.
+      if (look === "chosen")
+        await expect(button).toHaveCSS("background-color", fills[kind] ?? "");
+    }
+    // «Повернути»'s way switch held by its fieldset: the chosen keeps its
+    // card, its ring gone, its words in pencil; each edge dashed, nothing
+    // moved (review).
+    const switcher = probe.locator('[data-kind="ways"]');
+    const chosenWay = switcher.locator("input:checked + span");
+    const otherWay = switcher.locator("input:not(:checked) + span");
+    const card = await chosenWay.evaluate(
+      (node) => getComputedStyle(node).backgroundColor,
+    );
+    const wayWas = await chosenWay.boundingBox();
+    await switcher.evaluate((node) => {
+      (node as HTMLFieldSetElement).disabled = true;
+    });
+    for (const span of [chosenWay, otherWay]) {
+      await expect(span).toHaveCSS("border-top-style", "dashed");
+      await expect(span).toHaveCSS("box-shadow", "none");
+      await expect(span).toHaveCSS("opacity", "1");
+      await expect(span).toHaveCSS("color", await token(page, "--pencil"));
+      expect(ratio(...(await wordsAndGround(span)))).toBeGreaterThanOrEqual(
+        4.5,
+      );
+    }
+    await expect(chosenWay).toHaveCSS("background-color", card);
+    const wayNow = await chosenWay.boundingBox();
+    if (!wayWas || !wayNow) throw new Error("the way switch not laid out");
+    for (const side of ["x", "y", "width", "height"] as const)
+      expect(Math.abs(wayNow[side] - wayWas[side])).toBeLessThanOrEqual(1);
+    // As before: a row's words in pencil, nothing faded; a size's cell
+    // faded; a press on its way the primary still.
+    const row = probe.locator('[data-kind="row"]');
+    await row.evaluate((node) => {
+      (node as HTMLButtonElement).disabled = true;
+    });
+    await expect(row).toHaveCSS("opacity", "1");
+    await expect(row).toHaveCSS("color", await token(page, "--pencil"));
+    await expect(row).toHaveCSS("border-bottom-style", "solid");
+    const cell = probe.locator('[data-kind="cell"]');
+    await cell.evaluate((node) => {
+      (node as HTMLButtonElement).disabled = true;
+    });
+    await expect(cell).toHaveCSS("opacity", "0.45");
+    const pressed = probe.locator('[data-kind="pressed"]');
+    await pressed.evaluate((node) => {
+      (node as HTMLButtonElement).disabled = true;
+    });
+    await expect(pressed).toHaveCSS("opacity", "1");
+    await expect(pressed).toHaveCSS(
+      "background-color",
+      await token(page, "--primary"),
+    );
+    await probe.scrollIntoViewIfNeeded();
+    await probe.screenshot({ path: `test-results/held-kinds-${scheme}.png` });
+  });
+
+for (const scheme of ["light", "dark"] as const)
+  test(`in the ${scheme} theme a warning's plate is drawn by its class, whatever its role — standing, or said after an answer: its edge, its corner 4, its triangle beside its lead line, words at 4.5:1 (direction §4; spec §6.23; audit 2026-11-15, frame P2-8)`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ colorScheme: scheme });
+    await page.setViewportSize({ width: 360, height: 844 });
+    await page.goto(
+      `/#${new URLSearchParams({ tgWebAppData: initData(fixture.network_owner_telegram_user_id) }).toString()}`,
+    );
+    await openStore(page, "Центр CENTRE");
+    await page.evaluate(() => {
+      const probe = document.createElement("section");
+      probe.id = "plate-probe";
+      probe.style.cssText =
+        "position:fixed;inset:0;z-index:1000;overflow:auto;padding:16px;background:var(--paper)";
+      probe.innerHTML = `
+        <div class="notice warning-plate" data-role="none">
+          <p class="notice-lead">Список кандидатів обмежено.</p>
+          <p>Не обирайте товар лише через схожість назви.</p>
+        </div>
+        <div class="notice warning-plate" role="status" data-role="status">
+          <p class="notice-lead">Список уже збережено.</p>
+          <p>Відкрийте його.</p>
+        </div>`;
+      document.body.append(probe);
+    });
+    for (const role of ["none", "status"]) {
+      const plate = page.locator(`#plate-probe [data-role="${role}"]`);
+      await expectWarningPlate(plate, scheme);
+      // Its lead line in the warning's colour, 600.
+      const lead = plate.locator(".notice-lead");
+      await expect(lead).toHaveCSS("color", await token(page, "--warn"));
+      await expect(lead).toHaveCSS("font-weight", "600");
+    }
+    await page.locator("#plate-probe").scrollIntoViewIfNeeded();
+    await page
+      .locator("#plate-probe")
+      .screenshot({ path: `test-results/warning-plates-${scheme}.png` });
   });

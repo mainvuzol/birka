@@ -671,6 +671,11 @@ test("a debt of a blocked store is found by the whole phone and paid at a store 
         { exact: true },
       ),
     ).toBeVisible();
+    // The store's state, the grey plate and its «і» (audit 2026-11-15,
+    // frame P2-8).
+    await expect(
+      page.locator(".banner-blocked", { hasText: "Продано в «Ринок»" }),
+    ).toBeVisible();
     await keyIn(page, "500");
     // Paid by card at «Центр»: its terminal takes it (ADR-0012 §B7 G).
     await page

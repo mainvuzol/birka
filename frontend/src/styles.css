@@ -562,8 +562,9 @@ button {
 .size-cell {
   font-size: 16px;
 }
+/* A button taking no tap is drawn so, never faded: the rules at the end of
+   this file (audit 2026-11-15, frame P2-7). */
 button:disabled {
-  opacity: 0.45;
   cursor: not-allowed;
 }
 a:focus-visible,
@@ -3023,9 +3024,6 @@ section.credits.customer-card {
   outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
-.way-switch:disabled span {
-  opacity: 0.45;
-}
 .way-switch:disabled label,
 .way-switch:disabled input {
   cursor: not-allowed;
@@ -4000,26 +3998,40 @@ span.cash-difference > .difference-sign {
   height: 54px;
   border-radius: var(--r-l);
 }
-/* A warning said at once — a server that does not answer, what could not
-   be read, a name already taken: a warning's plate and its triangle, as
-   the direction draws it, never a refusal's (cash task list, P2-3; orders
-   task list, P2-3; stage 2, orders task list, P0-2). */
-.notice[role="alert"] {
+/* A warning's plate and its triangle, as the direction draws it, never a
+   refusal's (cash task list, P2-3; orders task list, P2-3; stage 2, orders
+   task list, P0-2): its edge, its corner 4, 12 round it and 42 at the left
+   for the triangle of 20. A warning said at once — a server that does not
+   answer, what could not be read, a name already taken — and, by its own
+   class whatever its role, one said after an answer or standing from the
+   screen's opening (audit 2026-11-15, frame P2-8). */
+:is(.notice[role="alert"], .warning-plate) {
+  position: relative;
   padding: 12px 12px 12px 42px;
   border: 1px solid var(--warn-line);
   border-radius: var(--r-s);
   background: var(--warn-bg);
   color: var(--text);
 }
-.notice[role="alert"]::before {
+:is(.notice[role="alert"], .warning-plate)::before {
+  content: "";
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  width: 20px;
+  height: 20px;
   background: var(--warning);
-  -webkit-mask-image: var(--glyph-warning);
-  mask-image: var(--glyph-warning);
+  -webkit-mask: var(--glyph-warning) center / 20px 20px no-repeat;
+  mask: var(--glyph-warning) center / 20px 20px no-repeat;
 }
 .notice[role="alert"] p:first-child,
 .notice[role="alert"] > h3:first-child,
-.notice[role="alert"] > h4:first-child {
+.notice[role="alert"] > h4:first-child,
+.warning-plate > :first-child {
   margin-top: 0;
+}
+.warning-plate > :last-child {
+  margin-bottom: 0;
 }
 /* A plate led by its first line, never a heading: in the warning's colour,
    600 — «Схожа назва вже є», «Поки що не можна об’єднати» (audit 2026-11-13,
@@ -4315,6 +4327,20 @@ span.cash-difference > .difference-sign {
 }
 .same-waybill p {
   margin: 0;
+}
+/* Its first line the warning's, its triangle 16 on it, as the sheet's; the
+   other orders' rows under it the plate's width (audit 2026-11-15,
+   orders-cash P2-2). */
+.same-waybill .notice-lead {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.same-waybill .notice-lead .icon {
+  flex: none;
+  margin-top: 2px;
+  color: var(--warning);
 }
 .same-waybill li:last-child .sale-row {
   border-bottom: 0;
@@ -8090,4 +8116,135 @@ nav.report-ways {
 }
 .report-how {
   margin: 0;
+}
+
+/* A button taking no tap (spec §6.4, §6.5, S12 №7; audit 2026-11-15, frame
+   P2-7): drawn so, never faded — last in this file, so a kind's own look
+   gives way to it. The secondary, a quiet one, a chip, a sheet's way, a
+   tag's verb, a key: the fold, its words in pencil, its edge dashed — the
+   edge was there, nothing moves. A press on its way keeps its look; a row,
+   a size's cell, a tag or a card keeps its own rule, or the fade it had. */
+button:disabled:where(
+    :not(
+        .pressed,
+        .size-cell,
+        .sale-row,
+        .catalog-row,
+        .catalog-proposal,
+        .supplier-row,
+        .pick-value,
+        .set-off-return,
+        .timeline-row,
+        .money-line-open,
+        .money-place-open,
+        .cash-card,
+        .tag-row,
+        .tag-hero
+      )
+  ) {
+  border-style: dashed;
+  border-color: var(--edge);
+  background: var(--fold);
+  color: var(--pencil);
+}
+button:disabled:where(
+    .size-cell,
+    .catalog-row,
+    .catalog-proposal,
+    .supplier-row,
+    .pick-value,
+    .set-off-return,
+    .timeline-row,
+    .money-place-open,
+    .cash-card,
+    .tag-row,
+    .tag-hero
+  ) {
+  opacity: 0.45;
+}
+/* The main, as Telegram greys its MainButton (§6.4): the hairline, its
+   words in pencil, no edge. */
+:is(.primary, .main-mimic):disabled:not(.pressed) {
+  border-style: solid;
+  border-color: transparent;
+  background: var(--hairline);
+  color: var(--pencil);
+}
+/* A text button — «Спробувати ще раз», «Змінити магазин» on the line, a
+   sheet's «Скасувати», a glyph, the «←» line over a title, a tag's model
+   name — its words in pencil, nothing round them. */
+:is(
+    .text-button,
+    .sheet-cancel,
+    .orders-add,
+    .search-clear,
+    .debt-more,
+    .tab,
+    .store-line button,
+    .screen-header .back,
+    .model-open
+  ):disabled {
+  border-color: transparent;
+  background: transparent;
+  color: var(--pencil);
+}
+/* One chosen keeps its fill and its words, so the choice still reads —
+   pencil on its fill would not, at 2:1 — its edge dashed (decided here):
+   a chip's own rule names no edge, so the shared one dashes it; these
+   name theirs. A segment's edge takes 1 of its padding, its size kept;
+   the open one's words in pencil on its card. */
+:is(
+    .fix-ways button[aria-pressed="true"],
+    .new-model-candidates button[aria-pressed="true"],
+    .rename-fork > button[aria-pressed="true"]
+  ):disabled {
+  border-style: dashed;
+  border-color: var(--edge);
+}
+.mode-switch button:disabled,
+.way-switch:disabled span {
+  padding: 3px;
+  border: 1px dashed var(--edge);
+  box-shadow: none;
+  color: var(--pencil);
+  opacity: 1;
+}
+.way-switch:disabled input:checked + span {
+  box-shadow: none;
+  color: var(--pencil);
+}
+/* «Пошкоджені»'s stepper, filled in the damaged colour, held as a
+   secondary — its fill would read as a press still to be made (review). */
+.return-step.damaged .stepper button:disabled {
+  border-style: dashed;
+  border-color: var(--edge);
+  background: var(--fold);
+  color: var(--pencil);
+}
+/* The till's ways and «Внесок»'s, each a primary, not yet to be pressed —
+   no sum, more than is owed, the paper's mark not ready: as the main (S21
+   №10). One pressed, or stepped back as it is sent, keeps its look. */
+:is(.till-tray, .till-dock) .pay-ways button:disabled:not(.pressed, .stepped-back) {
+  border-color: transparent;
+  background: var(--hairline);
+  color: var(--pencil);
+  opacity: 1;
+}
+/* The till and «Внесок» held whenever they take no tap — a kept operation,
+   another's or their own sent and waiting (S12 №7; audit 2026-11-15, sale
+   P2-5): nothing faded, nothing
+   moved — a size's cell and a way as a way stepped back, the search's words
+   in pencil. A cell with no room in the basket keeps its fade (2026-10-30).
+   «Повернути»'s form needs no class: the rules above draw it. */
+.till-held .size-cell:disabled:not(.no-room),
+.till-held :is(.till-tray, .till-dock) .pay-ways button:disabled:not(.pressed) {
+  border: 1px dashed var(--edge);
+  background: var(--fold);
+  color: var(--pencil);
+  opacity: 1;
+}
+.till-held .size-cell:disabled:not(.no-room) .size-free,
+.till-held input:disabled,
+.till-held input:disabled::placeholder {
+  color: var(--pencil);
 }

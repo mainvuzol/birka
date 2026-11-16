@@ -2,6 +2,7 @@ import {
   test,
   expect,
   dockOnMenu,
+  expectHeldLook,
   expectOwed,
   expectStub,
   expectSheetCancel,
@@ -1220,6 +1221,11 @@ test("another store's debt says once where it was sold and who takes the payment
       { exact: true },
     ),
   ).toBeVisible();
+  // The store's state, as «Накладні» say it: the grey plate and its «і»,
+  // never a warning's (audit 2026-11-15, frame P2-8).
+  const state = page.locator(".banner-blocked", { hasText: "Продано в «Ринок»" });
+  await expect(state).toBeVisible();
+  await expect(state.locator(".banner-glyph .icon")).toHaveCount(1);
   await expect(page.getByText(/Ринок/)).toHaveCount(1);
 });
 
@@ -2307,8 +2313,10 @@ test.describe("«Продаж» › «Внесок»: a payment on a debt from t
       }),
     );
     await expect(sum).toHaveAttribute("aria-invalid", "true");
+    // Nothing to press: each greyed as the main is, never faded (S21 №10;
+    // audit 2026-11-15, frame P2-7).
     for (const way of ["Готівка", "Картка", "Переказ"])
-      await expect(panel(page).getByRole("button", { name: way })).toBeDisabled();
+      await expectHeldLook(panel(page).getByRole("button", { name: way }), "main");
     // One figure off: under the debt, the ways back, the line gone.
     await key(page, "Стерти").click();
     await expect(sum).toHaveValue("250");
@@ -2638,6 +2646,12 @@ test.describe("«Продаж» › «Внесок»: a payment on a debt from t
     await expect(
       kept.getByRole("heading", { name: "Внесок ще не підтверджено" }),
     ).toBeVisible();
+    // S21 held while its own payment waits, drawn so, never faded: each way
+    // on the fold with a dashed edge, nothing moved (S12 №7; audit
+    // 2026-11-15, sale P2-5).
+    await expect(page.locator(".debt-till")).toHaveClass(/\btill-held\b/);
+    for (const way of ["Готівка", "Картка", "Переказ"])
+      await expectHeldLook(panel(page).getByRole("button", { name: way }), "stepped");
 
     await page.goto("about:blank");
     await page.goto(launch());

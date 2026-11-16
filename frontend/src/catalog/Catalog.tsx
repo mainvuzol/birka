@@ -595,10 +595,12 @@ function Detail({
         <p>Причина відхилення: {visible(decision.rejection.reason)}</p>
       )}
       {decision.preview.truncated && open && (
-        <p className="notice">
-          Список кандидатів обмежено. Не обирайте товар лише через схожість
-          назви.
-        </p>
+        // A warning's plate, standing from the screen's opening: no role,
+        // read in its place (audit 2026-11-15, goods P2-1; frame P2-8).
+        <div className="notice warning-plate">
+          <p className="notice-lead">Список кандидатів обмежено.</p>
+          <p>Не обирайте товар лише через схожість назви.</p>
+        </div>
       )}
       {decision.creation?.redirected_from && (
         <p role="status">
