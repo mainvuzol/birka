@@ -197,9 +197,10 @@ function NumberDebt({
       ) : null}
       {closed && owesAway && (
         // One line, the sum first: a long name is cut, never the sum, and
-        // nothing below moves (review, 2026-10-20).
+        // nothing below moves (review, 2026-10-20). The sum with the debt's
+        // arrow, as everywhere a debt is left (audit 2026-11-15, sale P2-4).
         <span className="owing away">
-          Винні {money(closed.owed)}{" "}
+          Винні <OwedSum value={closed.owed} />{" "}
           {awayStores.length === 1
             ? `магазину «${awayStores[0] ?? ""}»`
             : "магазинам, що не працюють"}

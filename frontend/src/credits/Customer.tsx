@@ -20,6 +20,7 @@ import { ScreenHeader } from "@/shared/ScreenHeader";
 import { Unread } from "@/shared/Unread";
 import { Sticker } from "@/shared/Sticker";
 import { useCreditCommand } from "./commands";
+import { Paid } from "./Paid";
 import {
   DebtActions,
   closedShare,
@@ -157,9 +158,22 @@ export function Customer({
   const [problem, setProblem] = useState<string | null>(null);
   const leaving = useRef<string | null>(null);
   leaving.current = said;
+  // A debt written off here: its own result's screen, as from the debt's
+  // detail — never a line over the blocks (spec §3, S22; audit 2026-11-15,
+  // sale P2-3). The card waits under it, read again.
+  const [writtenOff, setWrittenOff] = useState<Credit | null>(null);
+  // Back from it, the card's title takes the focus, as a debt's does when
+  // it is shown again (review).
+  const title = useRef<HTMLHeadingElement>(null);
+  const backOnCard = useRef(false);
   useEffect(() => {
-    if (gone) back(leaving.current ?? undefined);
-  }, [gone, back]);
+    if (writtenOff !== null || !backOnCard.current) return;
+    backOnCard.current = false;
+    title.current?.focus();
+  }, [writtenOff]);
+  useEffect(() => {
+    if (gone && writtenOff === null) back(leaving.current ?? undefined);
+  }, [gone, back, writtenOff]);
   const customer =
     blocks.find(({ found }) => found !== undefined)?.found ?? first;
   const name = visible(customer.customer_name ?? erasedCustomer);
@@ -192,11 +206,13 @@ export function Customer({
     else setChoosing(true);
   };
   const main = useMainButton("Внесок", press, {
-    shown: payable.length > 0 && !choosing && !acting,
+    shown: payable.length > 0 && !choosing && !acting && writtenOff === null,
     active: !blocked && !working && !rereading,
   });
   const dock = useRef<HTMLDivElement>(null);
-  usePanelRoom(dock, payable.length > 0 && !main);
+  // Not while the write-off's result stands: the dock leaves with the card
+  // (review).
+  usePanelRoom(dock, payable.length > 0 && !main && writtenOff === null);
   const reread = (): void => {
     void cache.invalidateQueries({ queryKey: ["credits", store.id] });
   };
@@ -241,7 +257,8 @@ export function Customer({
     holding: setErasing,
     written: (result: Credit) => {
       setProblem(null);
-      setSaid(`Борг списано: ${money(result.written_off)}.`);
+      setSaid(null);
+      setWrittenOff(result);
       reread();
     },
     erased: (result: Parameters<typeof erasedText>[0]) => {
@@ -256,9 +273,36 @@ export function Customer({
     },
     opened: setActing,
   };
+  if (writtenOff)
+    // Its main the customer's name, back to the card read again; «Відкрити
+    // борг» quiet under the stub (owner decision on a debt opened from the
+    // card; audit 2026-11-15, sale P2-3).
+    return (
+      <Paid
+        kind="write-off"
+        amount={writtenOff.written_off}
+        way={null}
+        paper={null}
+        credit={writtenOff}
+        said={`Борг списано: ${money(writtenOff.written_off)}.`}
+        next={{
+          back: () => {
+            backOnCard.current = true;
+            setWrittenOff(null);
+          },
+          backTo: name,
+          debt: () => {
+            setWrittenOff(null);
+            choose(writtenOff, store);
+          },
+        }}
+      />
+    );
   return (
     <>
       <ScreenHeader
+        ref={title}
+        focusable
         title={name}
         back={
           away ? (

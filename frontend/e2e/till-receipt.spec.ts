@@ -209,9 +209,11 @@ test("the receipt names each line's size, and the shelf's corrections in coats",
   await onTheTill(page);
   await tapSize(page, fixture.variant_id, fixture.size_id);
   await pay(page, "Готівка").click();
+  // The reader starts on the result's title, never a field: no keyboard
+  // opens (spec §6.30; audit 2026-11-15, sale P2-1).
   await expect(
     page.getByRole("heading", { name: "Продаж записано" }),
-  ).toBeVisible();
+  ).toBeFocused();
   const line = page.locator(".line");
   await expect(line.locator("strong")).toHaveText("Лоран шоколад · M");
   await expect(line.locator("span")).toHaveText("1 × 1 850,00 грн");

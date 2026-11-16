@@ -5388,6 +5388,16 @@ span.cash-difference > .difference-sign {
 .stub-line strong {
   color: var(--ink);
 }
+/* What came back, first under a return's perforation (audit 2026-11-15,
+   sale P2-2): the stub's lines, no bullets; the rest on a tap. */
+.return-lines {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.return-lines:focus {
+  outline: none;
+}
 /* «Пошкоджені» keeps the colour of «Брак» on the stub (returns P2-4). */
 .stub-line.damaged-line {
   color: var(--damaged);

@@ -3,6 +3,7 @@ import {
   expect,
   fromPaper,
   expectFold,
+  expectOwed,
   expectSeries,
   menu,
   namedFromPaper,
@@ -331,6 +332,18 @@ test("a card payment typed from paper never says to charge the card, and the deb
       "Внесок 300,00 грн з паперу записано: карткою — оплату провели під час збою, на терміналі не проводьте ще раз. Залишок боргу 1 700,00 грн.",
     ),
   ).toBeVisible();
+  // What is left, in the sentence the eye reads from paper: the debt's
+  // colour and its arrow, once, in both themes; heard as it was (audit
+  // 2026-11-15, sale P2-4).
+  await expectOwed(page.locator(".paid-result"), "1 700,00 грн", "light");
+  await expect(
+    page.getByRole("heading", { name: "Внесок записано" }),
+  ).toHaveAccessibleDescription(
+    /^Внесок 300,00\sгрн з паперу записано: .+ Залишок боргу 1\s700,00\sгрн\.$/,
+  );
+  await page.emulateMedia({ colorScheme: "dark" });
+  await expectOwed(page.locator(".paid-result"), "1 700,00 грн", "dark");
+  await page.emulateMedia({ colorScheme: "light" });
   // From paper, the money was taken already: the mark, never «Проведіть»
   // (credits task list, P0-5).
   const paid = page.locator(".paid-result");

@@ -7,6 +7,7 @@ import {
   expectFold,
   expectGlyphBeside,
   expectLinkChevron,
+  expectOwed,
   expectStub,
   openStore,
   section,
@@ -1652,9 +1653,24 @@ test("«Клієнт забрав» in parts: terms not taken said over the ways
     /^Сплачено зараз 500,00\sгрн$/,
   );
   await expect(page.locator(".order-total")).toHaveCount(0);
-  await expect(page.locator(".order-collected .paid-owed")).toHaveText(
-    /^Покупець винен 2\s500,00\sгрн\. Наступні внески — у «Продажі» › «Внесок»\.$/,
+  // What is owed as the till's receipt shows it (audit 2026-11-15,
+  // orders-cash P2-1): «Покупець винен» with the sum in the debt's colour
+  // and its arrow, on one line at 360; where the next payments go, a line
+  // of its own — heard as one sentence, as before.
+  const owes = page.locator(".order-collected .stub-line");
+  await expect(owes).toHaveText([
+    /^Покупець винен 2\s500,00\sгрн$/,
+    "Наступні внески — у «Продажі» › «Внесок».",
+  ]);
+  await expectOwed(owes.first(), "2 500,00 грн", "light");
+  await expect(
+    page.getByRole("heading", { name: "Продаж записано" }),
+  ).toHaveAccessibleDescription(
+    /^Сплачено зараз 500,00\sгрн готівкою\. Покупець винен 2\s500,00\sгрн\. Наступні внески — у «Продажі» › «Внесок»\.$/,
   );
+  await page.emulateMedia({ colorScheme: "dark" });
+  await expectOwed(owes.first(), "2 500,00 грн", "dark");
+  await page.emulateMedia({ colorScheme: "light" });
   expect(server.sent).toEqual([
     {
       step: "collect",
@@ -1670,6 +1686,47 @@ test("«Клієнт забрав» in parts: terms not taken said over the ways
     },
   ]);
   await page.screenshot({ path: "test-results/order-collected-parts.png" });
+});
+
+test("a collected order in parts seen later: what is owed so far as the receipt shows it, heard as one sentence; nothing owed, nothing in the debt's colour (audit 2026-11-15, orders-cash P2-1)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  const collected = (owed: string): Server => ({
+    order: order({
+      status: "COLLECTED",
+      sale_id: randomUUID(),
+      total: "3000.00",
+      payment_method: "CASH",
+      credit: { credit_id: randomUUID(), paid: "500.00", owed },
+    }),
+    sent: [],
+  });
+  await open(page, collected("2500.00"));
+  await expect(
+    page.getByRole("status").filter({ hasText: /^Продаж записано/ }),
+  ).toHaveText("Продаж записано · Готівка");
+  const owes = page.locator('p[aria-hidden="true"]', {
+    hasText: /^Покупець винен/,
+  });
+  await expect(owes).toHaveText(/^Покупець винен 2\s500,00\sгрн$/);
+  await expectOwed(owes, "2 500,00 грн", "light");
+  await expect(
+    page.locator('p[aria-hidden="true"]', { hasText: "Наступні внески" }),
+  ).toHaveText("Наступні внески — у «Продажі» › «Внесок».");
+  // Heard as before, one sentence, and only once.
+  const heard = page.locator("p.visually-hidden", {
+    hasText: "Покупець винен",
+  });
+  await expect(heard).toHaveText(
+    /^Покупець винен 2\s500,00\sгрн\. Наступні внески — у «Продажі» › «Внесок»\.$/,
+  );
+  await page.emulateMedia({ colorScheme: "dark" });
+  await expectOwed(owes, "2 500,00 грн", "dark");
+  await page.emulateMedia({ colorScheme: "light" });
+  await open(page, collected("0.00"));
+  await expect(owes).toHaveText(/^Покупець винен 0,00\sгрн$/);
+  await expect(page.locator(".owed-left")).toHaveCount(0);
 });
 
 test("a collected order whose way is not given to this person offers no «Змінити спосіб оплати» (G32; review, 2026-10-24)", async ({

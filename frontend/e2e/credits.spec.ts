@@ -619,6 +619,13 @@ test("a sale paid in parts whose answer is lost is resent with the same terms", 
     page.getByText(/Оплата частинами: сплачено зараз 1\s000,00\sгрн/),
   ).toBeVisible();
   await expect(page.getByText(/покупець винен 2\s000,00\sгрн/)).toBeVisible();
+  // What is left, with the debt's arrow, on the notice's ground in both
+  // themes; the sentence's words as they were (audit 2026-11-15, sale P2-4).
+  const notice = page.locator("section.notice", { has: settled });
+  await expectOwed(notice, "2 000,00 грн", "light");
+  await page.emulateMedia({ colorScheme: "dark" });
+  await expectOwed(notice, "2 000,00 грн", "dark");
+  await page.emulateMedia({ colorScheme: "light" });
   expect(sales.bodies).toHaveLength(2);
   expect(sales.bodies[1]).toEqual(sales.bodies[0]);
   expect((sales.bodies[0] as { payment_method: unknown }).payment_method).toBe(
@@ -671,6 +678,8 @@ test("a payment whose answer is lost blocks the app until it is resent unchanged
   await expect(
     page.getByText(`${name}: залишок боргу 1 300,00 грн.`),
   ).toBeVisible();
+  // The sum left with the debt's arrow (audit 2026-11-15, sale P2-4).
+  await expectOwed(page.locator(".paid-result.kept"), "1 300,00 грн");
   await expect(
     page.getByRole("button", { name: "Продаж", exact: true }),
   ).toBeEnabled();
@@ -762,12 +771,34 @@ test("the owner writes a debt off, saying why, and a seller is not offered it", 
   await expect(confirm).toBeDisabled();
   await why.fill("виїхав за кордон");
   await confirm.click();
-  // Said on her card, read again: the debt closed, its reason in the
-  // history.
+  // Its own result's screen, as from the debt's detail (spec S22; audit
+  // 2026-11-15, sale P2-3): its title in focus, no «←»; what was written
+  // off on its stub; never a line over her card's blocks.
   await expect(
-    page.getByRole("status").filter({ hasText: "Борг списано: 2 000,00 грн." }),
-  ).toBeVisible();
+    page.getByRole("heading", { name: "Борг списано" }),
+  ).toBeFocused();
   await expect(sheet).toHaveCount(0);
+  await expect(page.locator(".screen-header .back")).toHaveCount(0);
+  await expect(page.locator(".paid-result .stub-sum")).toHaveText(
+    /^2\s000,00\sгрн$/,
+  );
+  await expect(page.locator(".customer-card")).toHaveCount(0);
+  // Its main her name, back to her card; «Відкрити борг» quiet under the
+  // stub (owner decision on a debt opened from the card).
+  await expect(page.locator(".paid-more")).toHaveText("Відкрити борг");
+  await expect(page.locator(".paid-more")).toHaveClass(/\bquiet\b/);
+  const toCard = page.getByRole("button", { name, exact: true });
+  await expect(toCard).toHaveClass(/\bprimary\b/);
+  // «Відкрити борг»: the debt itself, closed; its «←», by her name, back to
+  // her card.
+  await page.locator(".paid-more").click();
+  await expect(page.locator(".debt-closed .sticker")).toHaveText("Списано");
+  await page.getByRole("button", { name, exact: true }).click();
+  // Her card, read again: the debt closed, its reason in the history.
+  await expect(page.getByRole("heading", { name, exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("status").filter({ hasText: "Борг списано" }),
+  ).toHaveCount(0);
   await expect(page.locator(".customer-debt .sticker")).toHaveText("Списано");
   // Closed for good: `offline`'s grey (audit 2026-11-13, sale P2-5).
   await expect(page.locator(".customer-debt .sticker")).toHaveClass(
@@ -1204,6 +1235,9 @@ test("the till says a number's debt was written off, and says nothing when the d
     "Винні 1 500,00 грн магазину «Ринок»",
   ]);
   await expect(said.locator(".owing")).toHaveCount(2);
+  // What a closed store is owed, with the debt's arrow, as everywhere
+  // (audit 2026-11-15, sale P2-4).
+  await expectOwed(said.locator(".away"), "1 500,00 грн");
   expect(
     new Set(
       await page.evaluate(() => (window as unknown as { said: string[] }).said),
@@ -1303,6 +1337,15 @@ test("the till says a number's debt was written off, and says nothing when the d
     "Винні 123 456,00 грн магазину «Барабашова Центральний Великий Ринок»",
   );
   expect(await lines(said.locator(".away"))).toBe(1);
+  // The name cut, never the sum: the arrow and the sum whole, inside.
+  await expectOwed(said.locator(".away"), "123 456,00 грн");
+  const [sumRight, lineRight] = await said
+    .locator(".away")
+    .evaluate((node) => [
+      node.querySelector(".owed-left")?.getBoundingClientRect().right ?? 0,
+      node.getBoundingClientRect().right,
+    ]);
+  expect(sumRight).toBeLessThanOrEqual(lineRight);
   expect(await lines(said)).toBe(1);
   // The closed stores failing, or slow: this store's line all the same.
   answer = "owes a lot";
@@ -1645,9 +1688,13 @@ test("an order collected may be paid in parts, by the till's rules", async ({
   await expect(page.locator(".order-collected .stub-sum")).toHaveText(
     /^Сплачено зараз 500,00\sгрн$/,
   );
-  await expect(page.locator(".order-collected .paid-owed")).toHaveText(
-    /^Покупець винен 2\s500,00\sгрн\. Наступні внески — у «Продажі» › «Внесок»\.$/,
-  );
+  // As the till's receipt shows it (audit 2026-11-15, orders-cash P2-1).
+  const owes = page.locator(".order-collected .stub-line");
+  await expect(owes).toHaveText([
+    /^Покупець винен 2\s500,00\sгрн$/,
+    "Наступні внески — у «Продажі» › «Внесок».",
+  ]);
+  await expectOwed(owes.first(), "2 500,00 грн");
   expect(collected.bodies).toHaveLength(1);
   const body = collected.bodies[0] as {
     command_id: string;

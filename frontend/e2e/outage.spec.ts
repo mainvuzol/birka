@@ -23,6 +23,7 @@ import {
   tillWays,
   shortage,
   expectOneSticker,
+  expectOwed,
   expectHeldLook,
   tokenColour,
 } from "./fixtures";
@@ -2470,6 +2471,9 @@ test.describe("9. what to do with money after the outage", () => {
     await expect(confirmed).toContainText(
       "Оксана Петренко: залишок боргу 1 500,00 грн. Якщо картку ще не провели — проведіть на терміналі 500,00 грн. Якщо вже провели, поки сервер не відповідав, — не проводьте вдруге.",
     );
+    // The sum left with the debt's arrow, the one charged plain (audit
+    // 2026-11-15, sale P2-4).
+    await expectOwed(confirmed, "1 500,00 грн");
     await expect(confirmed).not.toContainText(/Проведіть на терміналі/);
     expect(payments).toHaveLength(1);
   });

@@ -10415,3 +10415,80 @@ at its first sentence.
   the debt and at «Внесок» — is the grey plate of a store's state and its
   «і», as «Накладні» say it, never a warning's. Decided here: it is a
   store's state, not a warning.
+
+## Chosen in chat — 2026-11-16 (audit 2026-11-15, batch 4: results in one look — a receipt's and «Продажу немає»'s title in focus at the results' size; a return's stub names what came back; a write-off on the card its own result's screen; the debt left with its arrow in the last four places; «Клієнт забрав» in parts as the receipt; sale P2-1, P2-2, P2-3, P2-4, orders-cash P2-1)
+
+The results' batch («merged, go next» after #217). Nothing recorded, sent or
+counted changes, and no sum is computed anew: every sum is the server's
+answer, as before. No word on a screen changes, except where a sentence is
+split into two lines (orders-cash P2-1) and where a write-off on the card
+now has its own screen in place of a line (sale P2-3).
+
+- **A receipt's and «Продажу немає»'s title** (sale P2-1; spec §6.30):
+  - The receipt's title «Продаж записано» takes the focus as the receipt
+    opens, as every other result's does: a reader starts there, and no field
+    has the focus, so no keyboard opens.
+  - «Продажу немає» is a result's title at the results' size (`t-sheet`),
+    with no recorded mark (nothing was sold) and no «←» over it, and takes
+    the focus as it opens.
+- **A return's stub names what came back** (sale P2-2; spec §6.30):
+  - First under the perforation, before where the units went: one line per
+    sale line, «{name} · {size} × {units}», as the form's dock names a
+    line — the answer's names, the sale's sizes.
+  - Decided here: a sale line's intact and damaged units are one line, their
+    sum; where they went stays said under it, as before («Цілі: …»,
+    «Пошкоджені: …»).
+  - Decided here: past three lines, «+ ще N», as S22's goods; on a tap, every
+    line, and the list takes the focus. A reader hears the list named «Що
+    повернули», as a supplier's return names its lines — no new words.
+  - Decided here: a size the answer cannot be matched to the sale by (none
+    known) leaves the name alone. The lines are in pencil, as the stub's
+    other lines. A return confirmed later, in its notice, stays compact,
+    with no lines.
+- **A write-off on the card is its own result's screen** (sale P2-3; spec §3,
+  S22): written off from a customer's card, the debt's write-off opens
+  S22's result screen, as from the debt's detail — «Борг списано» in focus,
+  no «←», what was written off on its stub — never a line over the card's
+  blocks.
+  - Its main is named after the customer and leads back to the card, read
+    again (the owner's decision on a debt opened from the card).
+    «Відкрити борг» is quiet under the stub and opens that debt. Back on
+    the card, its title takes the focus, as a debt's does (review).
+  - Decided here: while the result stands, the card under it does not leave
+    by itself, even when its read finds nothing left to show; the result's
+    main then goes on to «Покупці», saying nothing more.
+  - Telegram's «Внесок» is not offered over the result, even while the card
+    under it, not yet read again, still owes.
+  - Left as it was (review): if the card's read fails while the result
+    stands, the card comes back as it was, under the plate that says it
+    could not be read; a payment on the closed debt is refused by the
+    server.
+- **The debt left, with its arrow, in the last four places** (sale P2-4;
+  direction §4; spec S22 №7, S10 №10): the sum still owed is `OwedSum` — the
+  debt's colour with its minus arrow 16 — also:
+  1. on S22 for a payment typed from paper, inside the sentence shown (its
+     own line is not shown there, so the sum is never seen twice);
+  2. in a sale in parts confirmed later («… покупець винен {sum}.»);
+  3. in a payment and a write-off confirmed later («{name}: залишок боргу
+     {sum}.»);
+  4. in the basket, for a closed store's debt («Винні {sum} магазину «…»»).
+
+  Every word stays, and the reader hears each sentence as before (the
+  arrow is not read).
+  - Decided here: nothing left, nothing in the debt's colour — a write-off's
+    «залишок боргу 0,00 грн» and «Борг сплачено повністю.» stay plain.
+  - The debt's colour reads at 4.5:1 or more on the card and on a notice's
+    plate, in both themes.
+- **«Клієнт забрав» in parts, as the till's receipt** (orders-cash P2-1;
+  spec §6.30):
+  - What is owed is the stub's line «Покупець винен {sum}», the sum as
+    `OwedSum`.
+  - «Наступні внески — у «Продажі» › «Внесок».» is a line of its own under
+    it.
+  - An order collected in parts and opened later has the same two lines
+    under «Продаж записано · …».
+  - A reader hears it as one sentence, as before. «Разом за товар» is not
+    added: the card says «Разом» above.
+  - Decided here: an order opened later says what is owed so far (the
+    server's answer). Once nothing is left, «Покупець винен 0,00 грн» stays
+    as it was, plain, not in the debt's colour.

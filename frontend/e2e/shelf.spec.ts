@@ -213,9 +213,13 @@ test("a basket with nothing on the shelf records the shortage and sells nothing:
     })
     .click();
 
-  await expect(
-    page.getByRole("heading", { name: "Продажу немає" }),
-  ).toBeVisible();
+  // A result as the others: its title 24, the reader starting on it, no
+  // mark — nothing was sold (spec §6.30; audit 2026-11-15, sale P2-1).
+  const title = page.getByRole("heading", { name: "Продажу немає" });
+  await expect(title).toBeFocused();
+  await expect(title).toHaveClass("result-title t-sheet");
+  await expect(title).toHaveCSS("font-size", "24px");
+  await expect(title.locator(".recorded-mark")).toHaveCount(0);
   await expect(
     page.locator(".nothing-sold .result-body > p").first(),
   ).toHaveText("Нічого з кошика не було на полиці.");

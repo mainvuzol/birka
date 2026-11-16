@@ -3,9 +3,10 @@ import type { JSX } from "react";
 import { RecordedMark } from "@/shared/Eyelet";
 import { methodHow, methodLabels } from "@/shared/payment";
 import type { PaymentMethod } from "@/shared/payment";
+import { OwedSum } from "@/shared/OwedSum";
 import { Stub, WaySticker } from "@/shared/Stub";
 import { Sum } from "@/shared/Sum";
-import { money } from "./types";
+import { kopecks, money } from "./types";
 import type { Order } from "./types";
 
 /** Over the sum taken, under the way's sticker: what to do with it, as the
@@ -28,11 +29,42 @@ export function chargeOnce(amount: string): string {
   return `Якщо картку ще не провели — проведіть на терміналі ${money(amount)}. Якщо вже провели, поки сервер не відповідав, — не проводьте вдруге.`;
 }
 
-/** What is owed after it, in parts: from the server's answer. */
+/** Where the next payments are taken, as the till's receipt says it. */
+const nextPayments = "Наступні внески — у «Продажі» › «Внесок».";
+
+/** What is owed after it, in parts: from the server's answer. Heard so,
+ * in one sentence. */
 export function owedText(order: Order): string | null {
   return order.credit
-    ? `Покупець винен ${money(order.credit.owed)}. Наступні внески — у «Продажі» › «Внесок».`
+    ? `Покупець винен ${money(order.credit.owed)}. ${nextPayments}`
     : null;
+}
+
+/**
+ * What is owed, seen as the till's receipt shows it (audit 2026-11-15,
+ * orders-cash P2-1): «Покупець винен» with the sum in the debt's colour and
+ * its arrow, and where the next payments go on a line of its own — the words
+ * as they were, the sum the server's. What is owed so far: once nothing is
+ * left, nothing in the debt's colour (as S22's).
+ */
+function OwedLines({
+  owed,
+  className,
+}: {
+  owed: string;
+  className?: string;
+}): JSX.Element {
+  return (
+    <>
+      <p className={className} aria-hidden="true">
+        Покупець винен{" "}
+        {(kopecks(owed) ?? 0n) > 0n ? <OwedSum value={owed} /> : money(owed)}
+      </p>
+      <p className={className} aria-hidden="true">
+        {nextPayments}
+      </p>
+    </>
+  );
 }
 
 /** «Змінити спосіб оплати» and «Оформити повернення», as the receipt has
@@ -134,10 +166,8 @@ export function Collected({
           {way ? ` ${methodHow[way]}` : ""}.{say !== null ? ` ${say}.` : ""}
           {owed ? ` ${owed}` : ""}
         </p>
-        {owed && (
-          <p className="stub-line paid-owed" aria-hidden="true">
-            {owed}
-          </p>
+        {order.credit && (
+          <OwedLines owed={order.credit.owed} className="stub-line" />
         )}
         {/* Said in ink: what to do at the terminal, or not. */}
         {kept && way === "CARD" && <p>{chargeOnce(taken)}</p>}
@@ -165,7 +195,12 @@ export function CollectedLine({
         Продаж записано
         {order.payment_method ? ` · ${methodLabels[order.payment_method]}` : ""}
       </p>
-      {owed && <p>{owed}</p>}
+      {owed && order.credit && (
+        <>
+          <p className="visually-hidden">{owed}</p>
+          <OwedLines owed={order.credit.owed} />
+        </>
+      )}
       <SaleLinks fixWay={fixWay} returnSale={returnSale} />
     </>
   );

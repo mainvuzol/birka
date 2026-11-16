@@ -1899,6 +1899,13 @@ function Receipt({
   /** The basket's sizes by stock key, for an answer that names none. */
   sizes: Record<string, string>;
 }): JSX.Element {
+  // The tray goes with the way pressed: the reader starts here, and so does
+  // the page — on the title, never a field, so no keyboard opens (spec
+  // §6.30; audit 2026-11-15, sale P2-1).
+  const heading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    heading.current?.focus();
+  }, []);
   // An answer recorded before the way was asked names none (ADR-0012 §B12).
   const way = receipt.payment_method ?? null;
   // A sale typed from paper (ADR-0013 §5.6): its mark, and money taken
@@ -1930,6 +1937,8 @@ function Receipt({
       }
     >
       <ScreenHeader
+        ref={heading}
+        focusable
         className="result-title t-sheet"
         title={
           <>
@@ -2083,6 +2092,13 @@ function NothingSold({
   shelf: EmptyShelf;
   next: () => void;
 }): JSX.Element {
+  // A result as the others: its title at their size, the reader starting
+  // on it — no mark, since nothing was sold (spec §6.30; audit 2026-11-15,
+  // sale P2-1).
+  const heading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    heading.current?.focus();
+  }, []);
   return (
     // Under the thumb, as the receipt's, at the menu's top (spec §6.5;
     // audit 2026-11-13, sale P1-2).
@@ -2094,7 +2110,12 @@ function NothingSold({
         </button>
       }
     >
-      <ScreenHeader pushed title="Продажу немає" />
+      <ScreenHeader
+        ref={heading}
+        focusable
+        className="result-title t-sheet"
+        title="Продажу немає"
+      />
       <p>Нічого з кошика не було на полиці.</p>
       <Settled own>
         <h3>Нестачу записано</h3>

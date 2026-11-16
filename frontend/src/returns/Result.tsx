@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { JSX } from "react";
 import { kopecks, money } from "@/orders/types";
 import type { Store } from "@/orders/types";
@@ -200,6 +200,9 @@ type Next =
       more: () => void;
       /** Whatever holds the sections holds the way to the till too. */
       blocked: boolean;
+      /** The sale's lines' sizes by their id: the stub names what came
+       * back (audit 2026-11-15, sale P2-2). */
+      sizes: Readonly<Record<string, string>>;
     };
 
 /**
@@ -233,6 +236,13 @@ export function Result({
   useEffect(() => {
     if (!kept) heading.current?.focus();
   }, [kept]);
+  // Its lines beyond the third, on a tap, as S22's goods: the list takes
+  // the focus where they appear.
+  const [allLines, setAllLines] = useState(false);
+  const linesList = useRef<HTMLUListElement>(null);
+  useEffect(() => {
+    if (allLines) linesList.current?.focus();
+  }, [allLines]);
   const paper = refund.outage ?? null;
   const firstDays = paper?.first_days === true;
   const way = refund.payment_method ?? null;
@@ -341,6 +351,55 @@ export function Result({
       )}
     </div>
   );
+  // What came back, by the sale's lines, first under the perforation (spec
+  // §6.30; audit 2026-11-15, sale P2-2): «Лоран шоколад · M × 1», as the
+  // form's dock says one line — the answer's names, the sale's sizes, its
+  // intact and damaged units together. The kept one's notice stays compact.
+  const counted = new Map<string, { name: string; units: number }>();
+  for (const item of refund.items) {
+    const had = counted.get(item.sale_item_id);
+    if (had) had.units += item.quantity;
+    else
+      counted.set(item.sale_item_id, {
+        name: visible(item.display_name),
+        units: item.quantity,
+      });
+  }
+  const lines = next.kept
+    ? []
+    : [...counted].map(([id, { name, units }]) => {
+        const size = next.sizes[id];
+        return `${name}${size === undefined ? "" : ` · ${size}`} × ${String(units)}`;
+      });
+  const hiddenLines = allLines ? 0 : Math.max(0, lines.length - 3);
+  const returned = lines.length > 0 && (
+    // Named as a supplier's return names its lines.
+    <ul
+      ref={linesList}
+      className="return-lines"
+      aria-label="Що повернули"
+      tabIndex={-1}
+    >
+      {lines.slice(0, lines.length - hiddenLines).map((line, index) => (
+        <li key={index} className="stub-line">
+          {line}
+        </li>
+      ))}
+      {hiddenLines > 0 && (
+        <li className="stub-line">
+          <button
+            type="button"
+            className="more-goods"
+            onClick={() => {
+              setAllLines(true);
+            }}
+          >
+            + ще {hiddenLines}
+          </button>
+        </li>
+      )}
+    </ul>
+  );
   // Inside the stub, under the way's sticker and over the sum: whose money
   // it is belongs with the money (stage 2, orders task list, P2-1).
   const elsewhereLine = elsewhere && (
@@ -413,6 +472,7 @@ export function Result({
         <div className="hand-back">{handed}</div>
         {debt}
         <Perforation />
+        {returned}
         {goods}
       </Stub>
       {/* How a mistaken return is mended (owner decision, 2026-10-17,
