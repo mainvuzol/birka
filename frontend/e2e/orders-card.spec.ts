@@ -156,6 +156,13 @@ interface Server {
   others?: Record<string, Stubbed>;
   /** The next read of the order answered only once this opens. */
   readHeld?: Promise<void>;
+  /** «Каса»'s read of a collected order's way: whether it may be changed
+   * now — by default it may — or the read failed. */
+  way?: "fail" | { may_change: boolean };
+  /** The next read of the way answered only once this opens. */
+  wayHeld?: Promise<void>;
+  /** How many times the way was read. */
+  wayReads?: number;
 }
 
 async function stub(page: Page, server: Server): Promise<void> {
@@ -191,6 +198,39 @@ async function stub(page: Page, server: Server): Promise<void> {
     const id = new URL(route.request().url()).pathname.split("/").at(-1);
     await route.fulfill({ json: server.others?.[id ?? ""] ?? server.order });
   });
+  await page.route(
+    (url) => /^\/api\/v1\/cash\/sales\/[^/]+\/method$/.test(url.pathname),
+    async (route) => {
+      server.wayReads = (server.wayReads ?? 0) + 1;
+      if (server.wayHeld) {
+        const held = server.wayHeld;
+        delete server.wayHeld;
+        await held;
+      }
+      if (server.way === "fail") {
+        await route.fulfill({
+          status: 500,
+          json: { code: "INTERNAL_ERROR", message: "Internal error" },
+        });
+        return;
+      }
+      const sale =
+        new URL(route.request().url()).pathname.split("/").at(-2) ?? "";
+      await route.fulfill({
+        json: {
+          sale_id: sale,
+          target: "SALE",
+          target_id: sale,
+          amount_taken: server.order.total,
+          method: server.order.payment_method ?? null,
+          corrected: false,
+          refund_method: null,
+          may_change: server.way?.may_change ?? true,
+          is_order: true,
+        },
+      });
+    },
+  );
   for (const step of [
     "dispatch",
     "arrive",
@@ -1746,6 +1786,200 @@ test("a collected order whose way is not given to this person offers no «Змі
   await expect(
     page.getByRole("button", { name: "Змінити спосіб оплати" }),
   ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Оформити повернення" }),
+  ).toBeVisible();
+});
+
+/** Two frames painted: what an answer drew is on the screen. */
+async function frames(page: Page): Promise<void> {
+  await page.evaluate(
+    () =>
+      new Promise((done) => {
+        requestAnimationFrame(() => requestAnimationFrame(done));
+      }),
+  );
+}
+
+/** Where an element stands on the page, whatever the page's scroll. */
+function standsAt(locator: Locator): Promise<number[]> {
+  return locator.evaluate((node) => {
+    const box = node.getBoundingClientRect();
+    return [box.top + window.scrollY, box.left, box.width, box.height];
+  });
+}
+
+test("a collected order seen later offers «Змінити спосіб оплати» only while the server says its way may be changed: not where it may not, nothing said where its read failed; drawn once both are answered, nothing coming under it later, and it leads to the operation's card as before (audit 2026-11-15, orders-cash P2-3 (а))", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  const collected = (way: "fail" | { may_change: boolean }): Server => ({
+    order: order({
+      status: "COLLECTED",
+      sale_id: randomUUID(),
+      payment_method: "CASH",
+    }),
+    sent: [],
+    way,
+  });
+  const line = page.getByText("Продаж записано · Готівка", { exact: true });
+  const fix = page.getByRole("button", { name: "Змінити спосіб оплати" });
+  const giveBack = page.getByRole("button", { name: "Оформити повернення" });
+  // Yesterday's, the drawer closed since: not offered; the return is.
+  const closed = collected({ may_change: false });
+  await open(page, closed);
+  await expect(line).toBeVisible();
+  await expect(giveBack).toBeVisible();
+  await expect(fix).toHaveCount(0);
+  await expect(page.locator(".link-held")).toHaveCount(0);
+  expect(closed.wayReads).toBe(1);
+  // Its read failed: nothing offered and nothing said — a read, never a
+  // command.
+  await open(page, collected("fail"));
+  await expect(line).toBeVisible();
+  await expect(giveBack).toBeVisible();
+  await expect(fix).toHaveCount(0);
+  await expect(page.locator(".link-held")).toHaveCount(0);
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Спробувати ще раз" }),
+  ).toHaveCount(0);
+  // It may: the card waits for both answers, read together from its row —
+  // the way asked while the order's own read is still on its way.
+  let answer = (): void => {};
+  let read = (): void => {};
+  const may = collected({ may_change: true });
+  may.wayHeld = new Promise((done) => {
+    answer = done;
+  });
+  may.readHeld = new Promise((done) => {
+    read = done;
+  });
+  await open(page, may);
+  await expect.poll(() => may.wayReads).toBe(1);
+  const placeholder = page.locator(".order-placeholder");
+  const delivery = page.getByRole("heading", { name: "Доставка" });
+  await expect(placeholder).toBeVisible();
+  const orderRead = page.waitForResponse((response) =>
+    /^\/api\/v1\/orders\/[^/]+$/.test(new URL(response.url()).pathname),
+  );
+  read();
+  await orderRead;
+  await frames(page);
+  // The order answered, its way not yet: the card still waits.
+  expect(await placeholder.isVisible()).toBe(true);
+  expect(await line.count()).toBe(0);
+  expect(await delivery.count()).toBe(0);
+  answer();
+  await expect(fix).toBeVisible();
+  await expect(placeholder).toHaveCount(0);
+  const drawn = await standsAt(delivery);
+  await page.waitForTimeout(500);
+  expect(await standsAt(delivery)).toEqual(drawn);
+  expect(may.wayReads).toBe(1);
+  // Left and opened again, the drawer closed meanwhile: the way read again
+  // before the card is drawn, never the «may» read before.
+  may.way = { may_change: false };
+  let again = (): void => {};
+  may.wayHeld = new Promise((done) => {
+    again = done;
+  });
+  await page
+    .locator(".screen-header")
+    .getByRole("button", { name: "До замовлень", exact: true })
+    .click();
+  await page.locator(".order-row").first().click();
+  await expect.poll(() => may.wayReads).toBe(2);
+  await frames(page);
+  expect(await placeholder.isVisible()).toBe(true);
+  expect(await fix.count()).toBe(0);
+  again();
+  await expect(line).toBeVisible();
+  await expect(fix).toHaveCount(0);
+  await expect(page.locator(".link-held")).toHaveCount(0);
+  // The way slow: a second at most past the order's answer, then the card
+  // drawn, the link's place held, unseen — then the link in it, nothing
+  // under it moving.
+  let late = (): void => {};
+  const slow = collected({ may_change: true });
+  slow.wayHeld = new Promise((done) => {
+    late = done;
+  });
+  await open(page, slow);
+  await expect(line).toBeVisible();
+  const held = page.locator(".link-held");
+  await expect(held).toBeAttached();
+  await expect(held).toBeHidden();
+  await expect(fix).toHaveCount(0);
+  const place = await standsAt(held);
+  const before = await standsAt(delivery);
+  late();
+  await expect(fix).toBeVisible();
+  await expect(held).toHaveCount(0);
+  expect(await standsAt(fix)).toEqual(place);
+  expect(await standsAt(delivery)).toEqual(before);
+  // As before: the operation's card in «Каса», its ways to choose.
+  await fix.click();
+  await expect(
+    page.getByRole("group", { name: "Новий спосіб оплати" }),
+  ).toBeVisible();
+  expect(slow.sent).toEqual([]);
+});
+
+test("«Клієнт забрав» just recorded: «Змінити спосіб оплати»'s place held under the stub, unseen, until the server says the way may be changed — then the link in it, nothing under it moving; where it may not, no link (audit 2026-11-15, orders-cash P2-3 (а))", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  const server: Server = {
+    order: order({ status: "ARRIVED", waybill: "20450012345678" }),
+    sent: [],
+  };
+  await open(page, server);
+  let answer = (): void => {};
+  server.wayHeld = new Promise((done) => {
+    answer = done;
+  });
+  await (
+    await ways(page)
+  )
+    .getByRole("button", { name: "Готівка", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Продаж записано" }),
+  ).toBeFocused();
+  await expect.poll(() => server.wayReads).toBe(1);
+  const held = page.locator(".order-collected .link-held");
+  await expect(held).toBeAttached();
+  await expect(held).toBeHidden();
+  await expect(held).not.toBeFocused();
+  const fix = page.getByRole("button", { name: "Змінити спосіб оплати" });
+  await expect(fix).toHaveCount(0);
+  const delivery = page.getByRole("heading", { name: "Доставка" });
+  const place = await standsAt(held);
+  const before = await standsAt(delivery);
+  answer();
+  await expect(fix).toBeVisible();
+  await expect(held).toHaveCount(0);
+  expect(await standsAt(fix)).toEqual(place);
+  expect(await standsAt(delivery)).toEqual(before);
+  // Where it may not — paid off the till, say — no link, its place gone.
+  const offTill: Server = {
+    order: order({ status: "ARRIVED", waybill: "20450012345678" }),
+    sent: [],
+    way: { may_change: false },
+  };
+  await open(page, offTill);
+  await (
+    await ways(page)
+  )
+    .getByRole("button", { name: "Накладений платіж", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Продаж записано" }),
+  ).toBeFocused();
+  await expect.poll(() => offTill.wayReads).toBe(1);
+  await expect(held).toHaveCount(0);
+  await expect(fix).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "Оформити повернення" }),
   ).toBeVisible();

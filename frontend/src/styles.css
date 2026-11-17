@@ -1953,6 +1953,12 @@ html {
   margin-top: 8px;
   display: block;
 }
+/* «Змінити спосіб оплати» on a card already drawn, not yet answered whether
+   the way may be changed: its place, unseen and out of reach (audit
+   2026-11-15, orders-cash P2-3 (а)). */
+.link-held {
+  visibility: hidden;
+}
 /* «Повернення»'s list (returns task list, P0-1): a sale a row, the whole
    row one target, its goods first; never a sum or a way (G32). */
 /* A day's heading the section's caption, `t-label` in pencil, as «В інших
@@ -4115,6 +4121,19 @@ span.cash-difference > .difference-sign {
 }
 .correct-row .history-sum {
   white-space: nowrap;
+}
+/* The sum and, on a row that opens, its chevron on the title's first line;
+   a row that opens nothing keeps its sum in the same column — the
+   chevron's 16 and its gap of 12 (audit 2026-11-15, orders-cash P2-4;
+   decided here). */
+.correct-end {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 12px;
+}
+.correct-row:disabled .correct-end {
+  padding-right: 28px;
 }
 .correct-row:disabled {
   opacity: 1;

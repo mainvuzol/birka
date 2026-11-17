@@ -312,6 +312,49 @@ function rows(page: Page): Locator {
   return page.getByRole("list", { name: "Операції дня" });
 }
 
+/** A row's chevron — 16, in pencil — and where its sum and chevron stand:
+ * on the title's first line, the sum's right edge 28 inside the row's
+ * padding (the chevron's 16 and its gap of 12), whether or not it has one
+ * (audit 2026-11-15, orders-cash P2-4). */
+function rowEnd(row: Locator): Promise<{
+  chevron: number | null;
+  pencil: boolean;
+  sumFromEnd: number;
+  onTitleLine: boolean;
+}> {
+  return row.evaluate((node) => {
+    const probe = document.createElement("span");
+    probe.style.color = "var(--pencil)";
+    document.body.append(probe);
+    const pencil = getComputedStyle(probe).color;
+    probe.remove();
+    const chevron = node.querySelector(".correct-head svg.sale-open");
+    const sum = node.querySelector(".history-sum");
+    const title = node.querySelector(".cash-row-title")?.firstChild;
+    if (!sum || !title) throw new Error("not laid out");
+    const first = document.createRange();
+    first.setStart(title, 0);
+    first.setEnd(title, 1);
+    const line = first.getBoundingClientRect();
+    const middle = (box: DOMRect): number => box.top + box.height / 2;
+    const within = (box: DOMRect): boolean =>
+      middle(box) > line.top && middle(box) < line.bottom;
+    const sumBox = sum.getBoundingClientRect();
+    const chevronBox = chevron?.getBoundingClientRect();
+    return {
+      chevron: chevronBox ? chevronBox.width : null,
+      pencil: chevron ? getComputedStyle(chevron).color === pencil : false,
+      sumFromEnd: Math.round(
+        node.getBoundingClientRect().right -
+          parseFloat(getComputedStyle(node).paddingRight) -
+          sumBox.right,
+      ),
+      onTitleLine:
+        within(sumBox) && (chevronBox === undefined || within(chevronBox)),
+    };
+  });
+}
+
 test("yesterday's operation is changed in seven taps, without a calendar — «Каса» under «Ще» for whoever reads the report, one more; its row says its close, and its card the close it explains (cash task list, P2-4; «Усе на бірці» task list, P0-4)", async ({
   page,
 }) => {
@@ -344,6 +387,17 @@ test("yesterday's operation is changed in seven taps, without a calendar — «�
   await expectGlyphBeside(first.locator(".way-pill"));
   // A closed refund may be changed by the owner as any other (B6.2).
   await expect(rows(page).getByRole("button").nth(1)).toBeEnabled();
+  // Each opens its card, and says so as «Ваші операції»'s rows: a chevron
+  // of 16 in pencil, on the title's line with the sum, at 360 (audit
+  // 2026-11-15, orders-cash P2-4).
+  for (const row of await rows(page).getByRole("button").all())
+    expect(await rowEnd(row)).toEqual({
+      chevron: 16,
+      pencil: true,
+      sumFromEnd: 28,
+      onTitleLine: true,
+    });
+  await expect(rows(page)).not.toContainText("›");
   await first.click();
   // The closed day's line under the card, never a plate.
   await expect(page.locator(".fix-note")).toHaveText(
@@ -491,6 +545,14 @@ test("an operation from before the drawer was first counted says it may not be c
     "Сукня Мія · M · змінити не можна",
   );
   await expect(row).toBeDisabled();
+  // It opens nothing: no chevron, its sum in the column of the sums of
+  // those that open (audit 2026-11-15, orders-cash P2-4; decided here).
+  expect(await rowEnd(row)).toEqual({
+    chevron: null,
+    pencil: false,
+    sumFromEnd: 28,
+    onTitleLine: true,
+  });
   // Not faded: why is to be read.
   expect(await row.evaluate((node) => getComputedStyle(node).opacity)).toBe(
     "1",
