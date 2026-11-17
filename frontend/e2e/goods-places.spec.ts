@@ -1,9 +1,12 @@
 import {
   test,
   expect,
+  blockRow,
   gridCell,
   comeBack,
+  expectHeldRow,
   holdReads,
+  newModelSheet,
   openModel,
   openStore,
   receiveInto,
@@ -238,6 +241,8 @@ test("«Перевірка каталогу» read slowly: three proposals' rows
   await enter(page, "Перевірка каталогу");
   const grey = page.locator(".placeholder .catalog-rows > .catalog-proposal");
   await expect(grey).toHaveCount(3);
+  // On the queue's white block, as its rows (audit 2026-11-15, goods P2-2).
+  await blockRow(grey.first());
   // Its lines the row's width, as the row's own words; under them a
   // sticker's place, 28 high.
   expect(
@@ -309,6 +314,43 @@ test("«Перевірка каталогу» read slowly: three proposals' rows
   await expect(rows.nth(20).getByRole("button")).toBeFocused();
   await expect(retry).toHaveCount(0);
   await expect(more).toHaveCount(0);
+});
+
+test("while a catalogue command is on its way, «Перевірка каталогу»'s rows take no tap, drawn on their white block as every held row — never faded, the words in pencil (audit 2026-11-15, goods P2-2)", async ({
+  page,
+}) => {
+  await page.route("**/api/v1/catalog/match-decisions?**", (route) =>
+    route.fulfill({
+      json: { items: [proposal(1), proposal(2)], has_more: false },
+    }),
+  );
+  await enter(page, "Перевірка каталогу");
+  // Under the sheet, out of a reader's reach: found by their list.
+  const rows = page.locator('ul[aria-label="Пропозиції"] .catalog-proposal');
+  await expect(rows).toHaveCount(2);
+  const sent = heldAnswer(proposal(3, "Запис у дорозі"));
+  await page.route("**/api/v1/catalog/match-decisions", (route) =>
+    route.request().method() === "POST" ? sent.answer(route) : route.fallback(),
+  );
+  await page
+    .getByRole("button", { name: "Нова пропозиція", exact: true })
+    .click();
+  const sheet = await newModelSheet(page);
+  await sheet.getByLabel("Як записано").fill("Запис у дорозі");
+  await sheet.getByRole("button", { name: "Далі", exact: true }).click();
+  await expect.poll(sent.asked).toBe(true);
+  for (const row of await rows.all()) {
+    await blockRow(row);
+    await expectHeldRow(row, row.locator(".catalog-raw"));
+  }
+  const answered = page.waitForResponse(
+    (r) =>
+      r.request().method() === "POST" &&
+      r.url().endsWith("/catalog/match-decisions"),
+  );
+  sent.release();
+  await answered;
+  await page.unrouteAll({ behavior: "wait" });
 });
 
 test("«Перевірка каталогу» with nothing: the blank tag on each of its three switches, in their words (goods task list after stage 2, P2-2)", async ({
@@ -446,6 +488,8 @@ test("«Прийшов товар» read slowly: two warehouses' choices in grey
   await page.getByLabel("Пошук у каталозі").fill(word);
   const greyRows = page.locator(".placeholder .catalog-found > .catalog-row");
   await expect(greyRows).toHaveCount(3);
+  // On the found rows' white block (audit 2026-11-15, goods P2-2).
+  await blockRow(greyRows.first());
   // Counted once: the held answer lets itself go after ten seconds.
   expect(await greyRows.first().locator(".skeleton-meta").count()).toBe(0);
   await heardOnly(page, "Шукаємо…");

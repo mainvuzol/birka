@@ -224,8 +224,10 @@ export function Stock({
                     aria-pressed={location.id === chosen}
                     disabled={refreshing}
                     onClick={() => {
-                      // A choice, felt (spec §4.4).
-                      buzz("selection");
+                      // A choice changed, felt (spec §4.4): the one chosen
+                      // tapped again changes nothing (audit 2026-11-15,
+                      // goods P2-3).
+                      if (location.id !== chosen) buzz("selection");
                       setLocationId(location.id);
                       setSelectionLost(false);
                     }}

@@ -2,15 +2,21 @@ import {
   test,
   expect,
   addModel,
+  blockRow,
   expectFold,
   expectWarningPlate,
+  feels,
+  haptics,
   leaveNewModel,
+  listRow,
   more,
   newModelSheet,
   openStore,
   propose,
   refuseOnce,
+  rowTitle,
   section,
+  sheetRow,
   sizeCell,
   typeSize,
 } from "./fixtures";
@@ -222,6 +228,9 @@ test("reject proposal and retrieve its preserved reason from history", async ({
     .getByRole("list", { name: "Пропозиції" })
     .getByRole("button", { name: new RegExp(raw) });
   await expect(row).toHaveText(`«${raw}»Відхилено`);
+  // A list's row on the queue's white block, its chevron to the proposal
+  // (audit 2026-11-15, goods P2-2).
+  await listRow(page, row, ".catalog-raw");
   await row.click();
   await expect(
     page.getByText("Причина відхилення: Це інша модель", { exact: true }),
@@ -392,6 +401,64 @@ test("a proposal kept on the phone is felt once, a warning; its later checks, lo
   await again.click();
   await expect(sheet.getByText("Може, це модель, що вже є?")).toBeVisible();
   expect(await buzzes()).toEqual(warned);
+});
+
+test("inside Telegram a model offered, chosen, is felt as a choice — never the one chosen tapped again — in «Нова модель»'s sheet and on «Пропозиція»'s screen; for «Інший колір нашої моделі» a similar model's chip and a model found felt too (audit 2026-11-15, goods P2-3)", async ({
+  page,
+}) => {
+  const felt = await haptics(page);
+  const selection = { type: "selection_change" };
+  await page.goto(launch("8.0"));
+  await openStore(page, "Основний MAIN");
+  await section(page, "Перевірка каталогу");
+  // Its words the catalogue's «Лоран»'s, so it is offered among many.
+  const sheet = await draft(
+    page,
+    `Лоран шоколад відчутна ${randomUUID().slice(0, 8)}`,
+  );
+  // Telegram's MainButton is the sheet's «Далі».
+  await pressMain(page);
+  await expect(sheet.getByText("Може, це модель, що вже є?")).toBeVisible();
+  await feels(felt, () => itIs(sheet).click(), [selection]);
+  await expect(itIs(sheet)).toHaveAttribute("aria-pressed", "true");
+  await feels(felt, () => itIs(sheet).click(), []);
+  // Its own screen: the same.
+  await leave(page);
+  await feels(felt, () => itIs(page).click(), [selection]);
+  await expect(itIs(page)).toHaveAttribute("aria-pressed", "true");
+  await feels(felt, () => itIs(page).click(), []);
+  // «Створити нову», another colour of a model the catalogue has: a similar
+  // model's chip, then a model found, each felt.
+  await page.getByRole("button", { name: "Створити нову" }).click();
+  const making = await newModelSheet(page);
+  await making
+    .getByRole("group", { name: "Яка модель" })
+    .getByRole("button", { name: "Інший колір нашої моделі" })
+    .click();
+  await feels(
+    felt,
+    () =>
+      making
+        .getByRole("group", { name: "Схожі моделі" })
+        .getByRole("button")
+        .first()
+        .click(),
+    [selection],
+  );
+  await expect(making.getByText(/^Модель: /)).toBeVisible();
+  await making.getByRole("button", { name: "Інша модель" }).click();
+  // Found by its name, not its colour.
+  await making.getByLabel("Пошук моделі в каталозі").fill("Лоран");
+  await feels(
+    felt,
+    () =>
+      making
+        .getByRole("button", { name: /^Обрати модель: Лоран/ })
+        .first()
+        .click(),
+    [selection],
+  );
+  await expect(making.getByText(/^Модель: /)).toBeVisible();
 });
 
 test("a proposal kept on the phone asks before Бірка closes, never while its first send is on its way, and lets it go once its check answers it (audit 2026-11-13, frame P2-5)", async ({
@@ -1101,6 +1168,10 @@ test("search selects an existing family outside preview without creating another
     exact: true,
   });
   await expect(choice).toBeVisible();
+  // In the sheet, white already: a row 64 with no block (audit 2026-11-15,
+  // goods P2-2).
+  await sheetRow(choice);
+  await rowTitle(choice);
   await expect(sheet.getByText(/^Модель: /)).toHaveCount(0);
   expect(
     await page.evaluate(
@@ -1340,6 +1411,12 @@ test("at 360 px a proposal is its own screen: its words large, the models offere
     offered.getByRole("button", { name: /^Це вона: / }).first(),
   ).toBeVisible();
   await expect(offered.getByRole("button", { pressed: true })).toHaveCount(0);
+  // The models offered as a list's rows on its white block, each named
+  // 17/600 in ink (audit 2026-11-15, goods P2-2).
+  for (const item of await offered.getByRole("listitem").all()) {
+    await blockRow(item);
+    await rowTitle(item.locator(".new-model-name strong"));
+  }
   await expect(page.getByRole("button", { name: /^Підтвердити/ })).toHaveCount(
     0,
   );

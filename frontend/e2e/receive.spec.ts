@@ -3,6 +3,9 @@ import {
   expect,
   expectNoticeLead,
   addModel,
+  feels as feelsAs,
+  haptics,
+  blockRow,
   countTaps,
   dockOnMenu,
   leaveNewModel,
@@ -16,7 +19,9 @@ import {
   receiveWayDone,
   recordReceipt,
   refuseOnce,
+  rowTitle,
   section,
+  sheetRow,
   sizeCell,
 } from "./fixtures";
 import type { Page, Request } from "@playwright/test";
@@ -1149,6 +1154,11 @@ test("a coat the catalogue has not is added from the empty search, in the sheet 
     sheet.getByRole("button", { name: /^Це вона: / }).first(),
   ).toBeVisible();
   await expect(sheet.getByRole("button", { pressed: true })).toHaveCount(0);
+  // In the sheet, white already: rows 64 with no block (audit 2026-11-15,
+  // goods P2-2).
+  const offered = sheet.locator(".new-model-candidates > li");
+  await sheetRow(offered.first());
+  await rowTitle(offered.first().locator(".new-model-name strong"));
   await expect(sheet.getByRole("button", { name: /^Підтвердити/ })).toHaveCount(
     0,
   );
@@ -1560,4 +1570,179 @@ test("a name spelt like one the catalogue uses is offered its spelling, never gi
     page.getByRole("button", { name: /^Змінити модель/ }),
   ).toHaveCount(0);
   await expect(page.getByLabel("Пошук у каталозі")).toHaveValue(missing);
+});
+
+test("«Прийшов товар» at 360 in both themes: the catalogue's models found as a list's rows on a white block; «У поставці» a white block of rows, a long name wrapped in its row, how many, how it came and its price under it, «Прибрати …» under them named as before, nothing past the width (audit 2026-11-15, goods P2-2)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 740 });
+  // A model's name as long as a supplier's may write it: its words wrap in
+  // the row, never past it.
+  const tail = "пальто кокон подовжене з поясом і накладними кишенями";
+  await page.route(
+    "**/api/v1/catalog/receivable-variants?**",
+    async (route) => {
+      const response = await route.fetch();
+      const body = (await response.json()) as {
+        items: { display_name: string }[];
+      };
+      for (const item of body.items)
+        if (item.display_name.startsWith("Лоран шоколад"))
+          item.display_name = `${item.display_name} ${tail}`;
+      await route.fulfill({ response, json: body });
+    },
+  );
+  await enter(page);
+  await receiveInto(page, "Каса-склад");
+  await find(page, "лоран шоколад");
+  const radio = page
+    .getByRole("radiogroup", { name: "Знайдені товари" })
+    .getByRole("radio", { name: /Лоран шоколад/ })
+    .first();
+  await blockRow(radio);
+  await rowTitle(radio);
+  await radio.click();
+  await plus(page, "M", 2);
+  await plus(page, "L", 1);
+  await page.getByRole("button", { name: "Додати ще модель" }).click();
+  await twoLines(page);
+  const lines = page
+    .getByRole("region", { name: "У поставці" })
+    .getByRole("listitem");
+  await expect(lines).toHaveCount(2);
+  for (const scheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    for (const line of await lines.all()) {
+      await blockRow(line);
+      const what = line.locator(".receive-line-what");
+      await rowTitle(what);
+      await expect(what).toContainText(tail);
+      // Wrapped: two lines and more, inside the row's sides.
+      const words = await what.boundingBox();
+      const row = await line.boundingBox();
+      const meta = await line.locator(".sale-meta").boundingBox();
+      const remove = await line.getByRole("button").boundingBox();
+      expect(words && row && meta && remove).toBeTruthy();
+      if (!words || !row || !meta || !remove) return;
+      expect(words.height).toBeGreaterThanOrEqual(40);
+      expect(words.x + words.width).toBeLessThanOrEqual(
+        row.x + row.width - 16 + 0.5,
+      );
+      // How many and how it came under the name, «Прибрати» under them.
+      expect(meta.y).toBeGreaterThanOrEqual(words.y + words.height - 0.5);
+      expect(remove.y).toBeGreaterThanOrEqual(meta.y + meta.height - 0.5);
+      expect(remove.height).toBeGreaterThanOrEqual(44);
+    }
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth > innerWidth,
+      ),
+    ).toBe(false);
+    await page.screenshot({
+      path: `test-results/receive-lines-360-${scheme}.png`,
+      fullPage: true,
+    });
+  }
+  // «Прибрати» named by its line, as before.
+  await expect(
+    page.getByRole("button", { name: /^Прибрати Лоран шоколад.* · L$/ }),
+  ).toHaveText(/^Прибрати Лоран шоколад/);
+  await page
+    .getByRole("button", { name: /^Прибрати Лоран шоколад.* · L$/ })
+    .click();
+  await expect(lines).toHaveCount(1);
+  await blockRow(lines.first());
+});
+
+test("inside Telegram «Прийшов товар» is felt: a warehouse, a model or a way chosen anew as a choice, never the one chosen again; «−» as «+», nothing at 0; a price that is not money at «Готово», the same line twice and a refusal as an error — nothing as a price is typed (audit 2026-11-15, goods P2-3)", async ({
+  page,
+}) => {
+  const felt = await haptics(page);
+  const feels = (act: () => Promise<unknown>, want: unknown[]) =>
+    feelsAs(felt, act, want);
+  const selection = { type: "selection_change" };
+  const light = { type: "impact", impact_style: "light" };
+  const error = { type: "notification", notification_type: "error" };
+  await page.goto(launch("6.2"));
+  await openStore(page, "Основний MAIN");
+  // Entered: nothing felt.
+  const entered = (await felt()).length;
+  await section(page, "Приймання");
+  const place = page
+    .getByRole("group", { name: "Склад", exact: true })
+    .getByRole("button", { name: "Каса-склад", exact: true });
+  await expect(place).toBeVisible();
+  expect((await felt()).slice(entered)).toEqual([]);
+  // A warehouse chosen: felt; the one chosen tapped again, nothing.
+  await feels(() => place.click(), [selection]);
+  await feels(() => place.click(), []);
+  // A model chosen from what is found: felt.
+  await find(page, "лоран шоколад");
+  const radio = page.getByRole("radio", { name: /Лоран шоколад/ });
+  await feels(() => radio.click(), [selection]);
+  // «−» as «+»; at 0 it takes no tap, and nothing is felt.
+  const down = receiveSize(page, "M").getByRole("button", { name: "Менше" });
+  const up = receiveSize(page, "M").getByRole("button", { name: "Більше" });
+  await feels(() => down.click({ force: true }), []);
+  await feels(() => up.click(), [light]);
+  await feels(() => down.click(), [light]);
+  await feels(() => down.click({ force: true }), []);
+  // «Як надійшов»: a way chosen anew felt, the one chosen nothing; a price
+  // that is not money nothing as typed, an error at «Готово».
+  const sheet = await receiveWay(page);
+  const ways = sheet.getByRole("group", { name: "Як надійшов" });
+  await feels(
+    () => ways.getByRole("button", { name: "Закупівля", exact: true }).click(),
+    [],
+  );
+  await feels(
+    () => ways.getByRole("button", { name: "Під реалізацію" }).click(),
+    [selection],
+  );
+  await feels(
+    () => ways.getByRole("button", { name: "Закупівля", exact: true }).click(),
+    [selection],
+  );
+  const price = sheet.getByLabel(/^Закупівельна ціна/);
+  await feels(() => price.fill("1,2,3"), []);
+  await feels(
+    () => sheet.getByRole("button", { name: "Готово" }).click(),
+    [error],
+  );
+  await expect(sheet.getByRole("alert")).toHaveText(
+    "Закупівельну ціну вкажіть у гривнях, до копійок, наприклад 1850,50.",
+  );
+  await price.fill("");
+  await receiveWayDone(sheet);
+  // The same line twice: said at «Додати ще модель», felt as an error.
+  await up.click();
+  await page.getByRole("button", { name: "Додати ще модель" }).click();
+  await find(page, "лоран шоколад");
+  await feels(() => radio.click(), [selection]);
+  await up.click();
+  await feels(
+    () => page.getByRole("button", { name: "Додати ще модель" }).click(),
+    [error],
+  );
+  await expect(page.getByRole("alert")).toHaveText(
+    "Такий рядок уже в списку. Приберіть його, щоб змінити кількість.",
+  );
+  await down.click();
+  // Refused by the server: said, and felt as the till's refusal.
+  await refuseOnce(page, "**/api/v1/inventory/receipts", 422);
+  await feels(
+    () =>
+      page.evaluate(() => {
+        window.dispatchEvent(
+          new MessageEvent("message", {
+            data: JSON.stringify({ eventType: "main_button_pressed" }),
+            source: window.parent,
+          }),
+        );
+      }),
+    [error],
+  );
+  await expect(page.getByRole("alert")).toHaveText(
+    "Нічого не прийнято, список збережено. Перевірте рядки.",
+  );
 });

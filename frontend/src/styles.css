@@ -814,30 +814,29 @@ nav:not(.tab-bar, .more-list) {
   overflow-wrap: anywhere;
 }
 /* The catalogue's search as it is typed (stage 2, goods task list, P0-1):
-   what it found as rows, each a touch high, the one chosen filled; found
-   nothing, it says so, and — where a model may be added — offers it. */
+   what it found as a list's rows 64 — on a screen on its white block, in a
+   sheet with no block, the sheet white already (audit 2026-11-15, goods
+   P2-2) —, the one chosen filled; found nothing, it says so, and — where a
+   model may be added — offers it. */
 .catalog-found {
   display: flex;
   flex-direction: column;
-  gap: 8px;
   margin: 8px 0;
 }
-.catalog-row {
-  justify-content: flex-start;
-  min-height: var(--touch);
-  padding: 0 14px;
-  border: 1px solid var(--edge);
-  border-radius: var(--r-m);
-  background: var(--card);
-  color: var(--ink);
+/* Over `.sale-row`'s own weight, drawn later. */
+.sale-row.catalog-row {
+  font-size: 17px;
   font-weight: 600;
-  text-align: left;
   overflow-wrap: anywhere;
 }
-.catalog-row[aria-checked="true"] {
-  border-color: var(--chosen);
+.list-block .catalog-row[aria-checked="true"] {
   background: var(--chosen);
   color: var(--on-chosen);
+}
+/* Pressed, the one chosen keeps its fill: its words never fade into the
+   fold (review). */
+.list-block .catalog-row[aria-checked="true"]:active {
+  background-color: var(--chosen);
 }
 .catalog-none {
   display: flex;
@@ -865,23 +864,13 @@ nav:not(.tab-bar, .more-list) {
 .new-model-raw textarea {
   min-height: 72px;
 }
+/* The models offered, a list's rows 64, «Це вона» on their right: on
+   «Пропозиція» on a white block, in a sheet with no block (audit
+   2026-11-15, goods P2-2). */
 .new-model-candidates {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
   margin: 0;
   padding: 0;
   list-style: none;
-}
-.new-model-candidates li {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-height: var(--touch);
-  padding: 8px 12px;
-  border: 1px solid var(--edge);
-  border-radius: var(--r-m);
-  background: var(--card);
 }
 .new-model-name {
   display: flex;
@@ -889,6 +878,11 @@ nav:not(.tab-bar, .more-list) {
   flex-direction: column;
   min-width: 0;
   overflow-wrap: anywhere;
+}
+.new-model-name strong {
+  color: var(--ink);
+  font-size: 17px;
+  font-weight: 600;
 }
 .new-model-candidates button {
   flex-shrink: 0;
@@ -957,8 +951,9 @@ nav:not(.tab-bar, .more-list) {
   gap: 12px;
 }
 /* «Перевірка каталогу» (P1-1): «Нова пропозиція» in the header; the
-   queue's rows on the paper, its words in quotes and its sticker; a
-   proposal's words large. */
+   queue's rows 64 on a white block, its words in quotes and its sticker
+   under them, the chevron 16 — «Моделі»'s search the same (audit
+   2026-11-15, goods P2-2); a proposal's words large. */
 .catalog-ways {
   display: flex;
   flex-wrap: wrap;
@@ -966,30 +961,21 @@ nav:not(.tab-bar, .more-list) {
   gap: 8px;
 }
 .catalog-rows {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
   margin: 12px 0;
   padding: 0;
   list-style: none;
 }
-.catalog-proposal {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
+/* Its words and its sticker 6 apart, as before. */
+.catalog-proposal .sale-main {
   gap: 6px;
-  width: 100%;
-  min-height: var(--touch);
-  padding: 12px 14px;
-  border: 1px solid var(--edge);
-  border-radius: var(--r-m);
-  background: var(--card);
-  color: var(--ink);
-  text-align: left;
 }
 .catalog-proposal .catalog-raw {
+  color: var(--ink);
   font-size: 17px;
   font-weight: 600;
+}
+.catalog-proposal:disabled .catalog-raw {
+  color: inherit;
 }
 .catalog-raw-large {
   margin: 8px 0;
@@ -2873,15 +2859,6 @@ section.credits.customer-card {
 .placeholder-line {
   margin: 12px 0;
   font-size: 16px;
-}
-/* «Товар»'s places while read (goods task list after stage 2, P2-2): a
-   found model's row one line, 44, as the radio it holds the place of. */
-.placeholder .catalog-row {
-  display: flex;
-  align-items: center;
-}
-.placeholder .catalog-row .sale-main {
-  flex: 1;
 }
 /* A size's steps: its letters 28 × 26, «−», the count and «+» 44 high in
    the buttons' corner. */
@@ -7019,6 +6996,29 @@ p.receive-place {
 .receive-list h2 {
   margin: 0;
 }
+/* «У поставці» on a white block (audit 2026-11-15, goods P2-2): the model
+   and its size, how many, how it came and its price under it; «Прибрати»,
+   its model named, under them until the owner reads the one word on the
+   row's right. */
+.receive-lines {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.receive-line {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+.receive-line > .sale-main {
+  align-self: stretch;
+}
+.receive-line-what {
+  color: var(--ink);
+  font-size: 17px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
 /* The line a return was refused for, as more than is free (audit
    2026-11-15, money P1-3): what is free, on a warning's sticker under its
    count — only that line grows. */
@@ -7505,14 +7505,6 @@ p.receive-place {
   margin: 0;
   padding: 0;
   list-style: none;
-}
-.counted-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-height: 64px;
-  padding: 8px 0;
-  border-bottom: 1px solid var(--hairline);
 }
 .counted-main {
   flex: 1;
@@ -8227,8 +8219,6 @@ button:disabled:where(
         .pressed,
         .size-cell,
         .sale-row,
-        .catalog-row,
-        .catalog-proposal,
         .supplier-row,
         .pick-value,
         .set-off-return,
@@ -8247,8 +8237,6 @@ button:disabled:where(
 }
 button:disabled:where(
     .size-cell,
-    .catalog-row,
-    .catalog-proposal,
     .supplier-row,
     .pick-value,
     .set-off-return,

@@ -10,6 +10,7 @@ import type { MoreBack } from "@/shared/More";
 import { ScreenHeader } from "@/shared/ScreenHeader";
 import { Sheet } from "@/shared/Sheet";
 import { Stub } from "@/shared/Stub";
+import { buzz } from "@/shared/telegram";
 import { visible } from "@/shared/visible";
 import type { Location, Store } from "@/orders/types";
 import { Correction } from "./Correction";
@@ -295,6 +296,9 @@ export function Stocktaking({
                     key={location.id}
                     aria-pressed={selected?.id === location.id}
                     onClick={() => {
+                      // A choice changed, felt (spec §4.4; audit
+                      // 2026-11-15, goods P2-3).
+                      if (selected?.id !== location.id) buzz("selection");
                       setChosen(location.id);
                       setLost(false);
                       setCounting(null);

@@ -3,11 +3,15 @@ import {
   expect,
   basketDone,
   basketSheet,
+  blockRow,
   fromPaper,
   openStore,
+  rowTitle,
   toTill,
   shortage,
   expectEmpty,
+  feels,
+  haptics,
 } from "./fixtures";
 import type { Page, Request } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
@@ -387,7 +391,21 @@ test("a coat in hand from the catalogue is asked its warehouse by deciding chips
     panel.getByRole("button", { name: "До списку", exact: true }),
   ).toBeVisible();
   await panel.getByLabel("Пошук у каталозі").fill("лоран");
-  await panel.getByRole("radio", { name: "Лоран беж" }).click();
+  // Found as a list's rows on a white block; the one chosen filled in the
+  // chosen colours, as before (audit 2026-11-15, goods P2-2).
+  const picked = panel.getByRole("radio", { name: "Лоран беж" });
+  await blockRow(picked);
+  await rowTitle(picked);
+  await picked.click();
+  await expect(picked).toHaveAttribute("aria-checked", "true");
+  await expect(picked).toHaveCSS("background-color", colours[0] ?? "");
+  await expect(picked).toHaveCSS("color", colours[1] ?? "");
+  // Pressed again, it keeps its fill, its words in sight (review).
+  await picked.hover();
+  await page.mouse.down();
+  await expect(picked).toHaveCSS("background-color", colours[0] ?? "");
+  await page.mouse.move(1, 1);
+  await page.mouse.up();
   const cells = panel.getByRole("group", { name: "Розмір: Лоран беж" });
   const cell = cells.getByRole("button", { name: "M", exact: true });
   // The till's cell, 60 × 60, its letter and no count under it: the books
@@ -618,4 +636,44 @@ test("from paper, the press names both warehouses the lines leave from", async (
   await expect(
     page.getByRole("group", { name: "Продати — як платить покупець" }),
   ).toContainText("склади: Спільний, Свій");
+});
+
+test("inside Telegram a model found in the catalogue at the till is felt as a choice; the one chosen, tapped again, nothing — the list stays open here alone (audit 2026-11-15, goods P2-3; review)", async ({
+  page,
+}) => {
+  const felt = await haptics(page);
+  await twoWarehouses(page);
+  await page.route("**/api/v1/catalog/stock-options?**", (route) =>
+    route.fulfill({ json: { items: [], has_more: false } }),
+  );
+  await page.route("**/api/v1/catalog/receivable-variants?**", (route) =>
+    route.fulfill({
+      json: {
+        items: [
+          { product_variant_id: fixture.variant_id, display_name: "Лоран беж" },
+        ],
+        has_more: false,
+      },
+    }),
+  );
+  await page.route("**/api/v1/catalog/sizes?**", (route) =>
+    route.fulfill({
+      json: [{ size_id: fixture.size_id, code: "M", system: "ALPHA" }],
+    }),
+  );
+  await page.goto(`${launch()}&tgWebAppVersion=8.0`);
+  await openStore(page, "Основний MAIN");
+  await toTill(page);
+  await page.getByRole("button", { name: "Знайти в каталозі" }).click();
+  await page
+    .getByRole("group", { name: "З якого складу віддаєте?" })
+    .getByRole("button", { name: "Спільний" })
+    .click();
+  const panel = page.getByRole("region", { name: "Товар з каталогу" });
+  await panel.getByLabel("Пошук у каталозі").fill("лоран");
+  const picked = panel.getByRole("radio", { name: "Лоран беж" });
+  const selection = { type: "selection_change" };
+  await feels(felt, () => picked.click(), [selection]);
+  await expect(picked).toHaveAttribute("aria-checked", "true");
+  await feels(felt, () => picked.click(), []);
 });

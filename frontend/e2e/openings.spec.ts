@@ -4,6 +4,7 @@ import {
   addModel,
   expectFold,
   expectSheetCancel,
+  feels,
   holdReads,
   listWay,
   rejectList,
@@ -441,6 +442,7 @@ test("a list is typed, each line answered, and approved into opening stock", asy
 async function telegram(page: Page): Promise<{
   main: () => Promise<unknown>;
   back: () => Promise<unknown>;
+  felt: () => Promise<unknown[]>;
   pressMain: () => Promise<void>;
   pressBack: () => Promise<void>;
 }> {
@@ -480,6 +482,12 @@ async function telegram(page: Page): Promise<{
   return {
     main: () => told("web_app_setup_main_button"),
     back: () => told("web_app_setup_back_button"),
+    felt: () =>
+      page.evaluate(() =>
+        (window as unknown as { told: [string, unknown][] }).told
+          .filter(([name]) => name === "web_app_trigger_haptic_feedback")
+          .map(([, data]) => data),
+      ),
     pressMain: () => press("main_button_pressed"),
     pressBack: () => press("back_button_pressed"),
   };
@@ -488,7 +496,7 @@ async function telegram(page: Page): Promise<{
 test("inside Telegram a line's answer is its MainButton, naming what is recorded, and the next line opens; «Назад» goes back to the list, hidden while an answer is on its way; «Пропустити» opens the next line with nothing sent; approval is the MainButton and its sheet's; lines typed and the rejection are ⋯'s, each with its own MainButton, «Назад» the list (stage 2, goods task list, P0-5, P0-6; after stage 2, P0-1)", async ({
   page,
 }) => {
-  const { main, back, pressMain, pressBack } = await telegram(page);
+  const { main, back, felt, pressMain, pressBack } = await telegram(page);
   const coat = await model(page);
   await noListWaits(page, fixture.opening_location_id);
   const sent: string[] = [];
@@ -546,8 +554,11 @@ test("inside Telegram a line's answer is its MainButton, naming what is recorded
   });
 
   // Its answer, the MainButton naming it; while it is on its way, «Назад»
-  // is hidden and does nothing.
-  await pick(page, "Розбір рядка 2", coat);
+  // is hidden and does nothing. Its model found and chosen, felt as a
+  // choice (audit 2026-11-15, goods P2-3; review).
+  await feels(felt, () => pick(page, "Розбір рядка 2", coat), [
+    { type: "selection_change" },
+  ]);
   await size(editor, "M");
   await expect.poll(main).toMatchObject({
     is_visible: true,
@@ -725,6 +736,68 @@ test("inside Telegram a line's answer is its MainButton, naming what is recorded
   await expect.poll(() => sent.length).toBe(4);
   expect(sent[3]).toMatch(/\/approve$/);
   await expect(sheet).toHaveCount(0);
+});
+
+test("inside Telegram «Новий список» is felt: a warehouse chosen anew as a choice, never the one chosen tapped again; «Зберегти список» refused as an error, its answer lost as nothing — it may have been saved —, saved as success (audit 2026-11-15, goods P2-3)", async ({
+  page,
+}) => {
+  const { main, felt, pressMain } = await telegram(page);
+  const coat = await model(page);
+  await noListWaits(page, fixture.opening_location_id);
+  await openings(page, "8.0");
+  // «Новий список» opened: nothing felt.
+  const entered = (await felt()).length;
+  await pressMain();
+  await expect(page.getByRole("form", { name: "Новий список" })).toBeVisible();
+  expect((await felt()).slice(entered)).toEqual([]);
+  const selection = { type: "selection_change" };
+  const place = page
+    .getByRole("form", { name: "Новий список" })
+    .getByRole("group", { name: "Склад" })
+    .getByRole("button", {
+      name: await placeName(page, fixture.opening_location_id),
+      exact: true,
+    });
+  await feels(felt, () => place.click(), [selection]);
+  await expect(place).toHaveAttribute("aria-pressed", "true");
+  await feels(felt, () => place.click(), []);
+  await aboutList(page);
+  const source = `Зошит відчутний ${word()}`;
+  await page.getByLabel("Звідки список (необов’язково)").fill(source);
+  await page
+    .getByLabel("Рядки списку — кожен товар з нового рядка, як написано")
+    .fill(`${coat} сірий 2 шт`);
+  await expect.poll(main).toMatchObject({
+    is_visible: true,
+    is_active: true,
+    text: "Зберегти список",
+  });
+  // Refused: said, and felt as an error.
+  await refuseOnce(page, "**/api/v1/snapshots", "form");
+  await feels(felt, pressMain, [
+    { type: "notification", notification_type: "error" },
+  ]);
+  await expect(page.getByRole("alert")).toHaveText(
+    "Список не збережено. Перевірте рядки.",
+  );
+  // Its answer lost: said, and nothing felt — it may have been saved.
+  let lost = false;
+  await page.route("**/api/v1/snapshots", async (route) => {
+    if (lost || route.request().method() !== "POST") return route.fallback();
+    lost = true;
+    await route.abort("failed");
+  });
+  const before = (await felt()).length;
+  await pressMain();
+  await expect(page.getByText(/Невідомо, чи збережено список/)).toBeVisible();
+  expect((await felt()).slice(before)).toEqual([]);
+  // Saved: felt as a success, the list open.
+  await feels(felt, pressMain, [
+    { type: "notification", notification_type: "success" },
+  ]);
+  await expect(page.getByRole("heading", { name: source })).toBeVisible();
+  // The warehouse free for the journeys after.
+  await noListWaits(page, fixture.opening_location_id);
 });
 
 test("lines answered where they wait: the line answered leaves its filter and the next opens, past the page read too; the last that waits says «Зберегти», back to the list's tag (stage 2, goods task list, P0-5)", async ({

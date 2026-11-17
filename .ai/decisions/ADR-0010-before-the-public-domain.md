@@ -116,6 +116,14 @@ The owner decided:
 - **The API image's Python is pinned** (`python:3.12.14-slim`).
 - **`pip-audit`** runs in CI on the runtime lock, as `npm audit` does for the
   app.
+- **An advisory no release fixes yet** may be let through, by name, with why
+  and until when, never silently: `--ignore-vuln <ID>` for `pip-audit`, and
+  the list in `.github/scripts/npm-audit.mjs` for the app (npm has no flag
+  for one advisory; the script reads `npm audit --json` and fails on every
+  other high or critical one). Each one let through is a warning on every
+  run; after its day it fails again. First: picomatch's GHSA-fc5q-39xc-vjpf
+  on 2026-11-17, until 2026-12-17 (only under vite and typescript-eslint,
+  never in the bundle).
 - **Rejected for now:** hashes (generating them needs the network), and
   Dependabot pull requests (no one is named to act on them yet). Hashes,
   and every image by its digest, came on 2026-10-10

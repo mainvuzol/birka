@@ -1252,6 +1252,116 @@ export async function expectHeldRow(
 }
 
 /**
+ * Telegram's host, stubbed before the page opens: what the app has it feel,
+ * in order (`web_app_trigger_haptic_feedback`). The page is launched with a
+ * version that buzzes, e.g. `tgWebAppVersion=8.0`.
+ */
+export async function haptics(page: Page): Promise<() => Promise<unknown[]>> {
+  await page.addInitScript(() => {
+    const host = window as unknown as {
+      TelegramWebviewProxy: {
+        postEvent: (event: string, data: string) => void;
+      };
+      told: [string, unknown][];
+    };
+    host.told = [];
+    host.TelegramWebviewProxy = {
+      postEvent: (event, data) => {
+        host.told.push([event, data ? (JSON.parse(data) as unknown) : null]);
+      },
+    };
+  });
+  return () =>
+    page.evaluate(() =>
+      (window as unknown as { told: [string, unknown][] }).told
+        .filter(([name]) => name === "web_app_trigger_haptic_feedback")
+        .map(([, data]) => data),
+    );
+}
+
+/** What `act` is felt as, and nothing more (audit 2026-11-15, goods P2-3):
+ * felt at the tap, or once an answer comes. */
+export async function feels(
+  felt: () => Promise<unknown[]>,
+  act: () => Promise<unknown>,
+  want: unknown[],
+): Promise<void> {
+  const at = (await felt()).length;
+  await act();
+  await expect.poll(async () => (await felt()).slice(at)).toEqual(want);
+}
+
+/**
+ * A row on its list's white block by spec §6.8: 64 high at least, sides of
+ * 16, a hairline under it from its text's edge — 68 past two letters, 16
+ * else — and none under its block's last. Whatever it does when tapped:
+ * radios and rows with a button of their own too (audit 2026-11-15, goods
+ * P2-2).
+ */
+export async function blockRow(row: Locator): Promise<void> {
+  expect((await row.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(64);
+  expect(
+    await row.evaluate((node) => [
+      node.closest(".list-block") !== null,
+      getComputedStyle(node).paddingLeft,
+      getComputedStyle(node).paddingRight,
+    ]),
+  ).toEqual([true, "16px", "16px"]);
+  expect(
+    await row.evaluate((node) => {
+      const block = node.closest(".list-block");
+      const last = block?.lastElementChild?.contains(node) ?? false;
+      const inset = node.querySelector(":scope > .debt-mark") ? 68 : 16;
+      const style = getComputedStyle(node);
+      return last
+        ? style.backgroundImage === "none"
+        : style.backgroundImage.startsWith("linear-gradient") &&
+            style.backgroundPositionX === `${String(inset)}px` &&
+            style.backgroundSize === `calc(100% - ${String(inset)}px) 1px`;
+    }),
+  ).toBe(true);
+}
+
+/** A row's title by spec §6.8: 17/600 in ink. */
+export async function rowTitle(title: Locator): Promise<void> {
+  expect(
+    await title.evaluate((node) => {
+      const probe = document.createElement("span");
+      probe.style.color = "var(--ink)";
+      document.body.append(probe);
+      const ink = getComputedStyle(probe).color;
+      probe.remove();
+      const style = getComputedStyle(node);
+      return [style.fontSize, style.fontWeight, style.color === ink];
+    }),
+  ).toEqual(["17px", "600", true]);
+}
+
+/**
+ * A row in a sheet, white already (audit 2026-11-15, goods P2-2): 64 high
+ * at least, on no block of its own, the line's hairline under it.
+ */
+export async function sheetRow(row: Locator): Promise<void> {
+  expect((await row.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(64);
+  expect(
+    await row.evaluate((node) => {
+      const probe = document.createElement("span");
+      probe.style.color = "var(--line)";
+      document.body.append(probe);
+      const line = getComputedStyle(probe).color;
+      probe.remove();
+      const style = getComputedStyle(node);
+      return [
+        node.closest(".list-block") !== null,
+        node.closest('[role="dialog"]') !== null,
+        style.borderBottomWidth,
+        style.borderBottomColor === line,
+      ];
+    }),
+  ).toEqual([false, true, "1px", true]);
+}
+
+/**
  * A list's row by spec §6.8 (audit after stage 2, frame P2-2): 64 high at
  * least, on its list's white block with sides of 16; its title 17/600 in
  * ink; its chevron the set's 16 in pencil, never a «›»; pressed, the fold
@@ -1275,29 +1385,7 @@ export async function listRow(
     probe.remove();
     return { ...said, fold };
   });
-  expect((await row.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(64);
-  expect(
-    await row.evaluate((node) => [
-      node.closest(".list-block") !== null,
-      getComputedStyle(node).paddingLeft,
-      getComputedStyle(node).paddingRight,
-    ]),
-  ).toEqual([true, "16px", "16px"]);
-  // A hairline under it from its text's edge — 68 past two letters, 16
-  // else; none under its block's last.
-  expect(
-    await row.evaluate((node) => {
-      const block = node.closest(".list-block");
-      const last = block?.lastElementChild?.contains(node) ?? false;
-      const inset = node.querySelector(":scope > .debt-mark") ? 68 : 16;
-      const style = getComputedStyle(node);
-      return last
-        ? style.backgroundImage === "none"
-        : style.backgroundImage.startsWith("linear-gradient") &&
-            style.backgroundPositionX === `${String(inset)}px` &&
-            style.backgroundSize === `calc(100% - ${String(inset)}px) 1px`;
-    }),
-  ).toBe(true);
+  await blockRow(row);
   expect(
     await row
       .locator(title)

@@ -246,6 +246,13 @@ export function Receive({
     setValidation("");
   }
 
+  /** Why what was pressed may not go in, said under the list and felt
+   * (audit 2026-11-15, goods P2-3): an error said as it is typed is not. */
+  function refuse(text: string): void {
+    setValidation(text);
+    buzz("error");
+  }
+
   /** The counted sizes as the delivery's lines, the way and at the price
    * the sheet says; null, with the reason said, when they may not go in. */
   function take(): Draft[] | null {
@@ -253,13 +260,13 @@ export function Receive({
     const stated = cost.trim();
     const cents = stated ? kopecks(stated) : null;
     if (stated && cents === null) {
-      setValidation(
+      refuse(
         "Закупівельну ціну вкажіть у гривнях, до копійок, наприклад 1850,50.",
       );
       return null;
     }
     if (paidWhenSold(acquisition) && (cents === null || cents <= 0n)) {
-      setValidation(
+      refuse(
         "Вкажіть ціну за одиницю, домовлену з постачальником: її сплатять, коли товар продадуть.",
       );
       return null;
@@ -286,13 +293,13 @@ export function Receive({
         ),
       )
     ) {
-      setValidation(
+      refuse(
         "Такий рядок уже в списку. Приберіть його, щоб змінити кількість.",
       );
       return null;
     }
     if (draft.length + lines.length > LINES) {
-      setValidation(
+      refuse(
         `В одній поставці — до ${String(LINES)} рядків. Запишіть цю, а решту прийміть окремою поставкою.`,
       );
       return null;
@@ -316,7 +323,7 @@ export function Receive({
     if (all.length === 0) return;
     const owed = all.some((d) => paidWhenSold(d.line.acquisition_type));
     if (owed && !supplierId) {
-      setValidation("Оберіть постачальника, чий це товар.");
+      refuse("Оберіть постачальника, чий це товар.");
       return;
     }
     // The counted sizes join the list as it is sent: refused, it is kept,
@@ -361,6 +368,9 @@ export function Receive({
       setNotes("");
       setCommandId(crypto.randomUUID());
     } else if (outcome.kind === "refused") {
+      // Refused, felt as the till's (audit 2026-11-15, goods P2-3); kept on
+      // the phone, the journal's own warning.
+      buzz("error");
       setRefusal(outcome.error);
     }
   }
@@ -553,6 +563,9 @@ export function Receive({
                   key={location.id}
                   aria-pressed={location.id === locationId}
                   onClick={() => {
+                    // A choice changed, felt (spec §4.4; audit 2026-11-15,
+                    // goods P2-3).
+                    if (location.id !== locationId) buzz("selection");
                     setLocationId(location.id);
                     setValidation("");
                   }}
@@ -641,7 +654,10 @@ export function Receive({
                           // Held, not disabled: the cursor stays on it at 0.
                           aria-disabled={got <= 0}
                           onClick={() => {
-                            if (got > 0) count(size, (units) => units - 1);
+                            if (got <= 0) return;
+                            count(size, (units) => units - 1);
+                            // As «+» (audit 2026-11-15, goods P2-3).
+                            buzz("light");
                           }}
                         >
                           −
@@ -711,33 +727,41 @@ export function Receive({
           {draft.length > 0 && (
             <section className="receive-list" aria-label="У поставці">
               <h2 className="t-label">У поставці</h2>
-              {draft.map((d, index) => (
-                <div
-                  className="line"
-                  key={`${d.line.product_variant_id}:${d.line.size_id}:${d.line.acquisition_type}:${d.line.unit_cost ?? ""}`}
-                >
-                  <strong>
-                    {visible(d.name)} · {visible(d.size)}
-                  </strong>
-                  <span>
-                    {d.line.quantity} шт. ·{" "}
-                    {acquisitionLabels[d.line.acquisition_type]}
-                    {d.line.unit_cost !== null &&
-                      ` · ${money(d.line.unit_cost)} за шт.`}
-                  </span>
-                  <button
-                    type="button"
-                    className="quiet"
-                    // A model's sizes are lines of their own.
-                    aria-label={`Прибрати ${visible(d.name)} · ${visible(d.size)}${d.line.unit_cost !== null ? ` · ${money(d.line.unit_cost)}` : ""}`}
-                    onClick={() => {
-                      replaceDraft(draft.filter((_, i) => i !== index));
-                    }}
+              {/* Rows on a white block: the model and its size, under them
+                  how many, how it came and its price (spec §6.8; audit
+                  2026-11-15, goods P2-2). «Прибрати» under them, its model
+                  named, until the owner reads the one word on the right. */}
+              <ul className="receive-lines list-block">
+                {draft.map((d, index) => (
+                  <li
+                    className="sale-row receive-line"
+                    key={`${d.line.product_variant_id}:${d.line.size_id}:${d.line.acquisition_type}:${d.line.unit_cost ?? ""}`}
                   >
-                    Прибрати {visible(d.name)}
-                  </button>
-                </div>
-              ))}
+                    <span className="sale-main">
+                      <span className="receive-line-what">
+                        {visible(d.name)} · {visible(d.size)}
+                      </span>
+                      <span className="sale-meta">
+                        {d.line.quantity} шт. ·{" "}
+                        {acquisitionLabels[d.line.acquisition_type]}
+                        {d.line.unit_cost !== null &&
+                          ` · ${money(d.line.unit_cost)} за шт.`}
+                      </span>
+                    </span>
+                    <button
+                      type="button"
+                      className="quiet"
+                      // A model's sizes are lines of their own.
+                      aria-label={`Прибрати ${visible(d.name)} · ${visible(d.size)}${d.line.unit_cost !== null ? ` · ${money(d.line.unit_cost)}` : ""}`}
+                      onClick={() => {
+                        replaceDraft(draft.filter((_, i) => i !== index));
+                      }}
+                    >
+                      Прибрати {visible(d.name)}
+                    </button>
+                  </li>
+                ))}
+              </ul>
               {costed.length > 0 && (
                 <p className="total">
                   Закупівельна вартість{" "}
@@ -796,9 +820,10 @@ export function Receive({
               onClick={() => {
                 // A price typed that is not money is said here, where it
                 // is mended.
-                if (cost.trim() && kopecks(cost.trim()) === null)
+                if (cost.trim() && kopecks(cost.trim()) === null) {
                   setCostWrong(true);
-                else setDetails(false);
+                  buzz("error");
+                } else setDetails(false);
               }}
             >
               Готово
@@ -816,6 +841,7 @@ export function Receive({
                       key={key}
                       aria-pressed={acquisition === key}
                       onClick={() => {
+                        if (acquisition !== key) buzz("selection");
                         setAcquisition(key);
                         setValidation("");
                       }}
