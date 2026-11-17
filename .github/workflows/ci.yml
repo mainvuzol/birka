@@ -565,7 +565,11 @@ jobs:
       - run: npm ci
       # Dependabot could not act on the vite advisories while no lockfile
       # existed. Failing the build on a known vulnerability keeps that visible.
-      - run: npm audit --audit-level=high
+      # It is `npm audit --audit-level=high` with named exceptions: npm has no
+      # flag to let one advisory through, so the script reads its JSON. An
+      # exception goes in the script's list with why and until when, as the
+      # backend's `--ignore-vuln`, and is printed on every run.
+      - run: node ../.github/scripts/npm-audit.mjs
       - run: npm run lint
       - run: npm run typecheck
       - run: npm run build

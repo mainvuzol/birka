@@ -215,6 +215,32 @@ Not a mutant:
   only by a file whose send tips over the bound. A journey of its own would
   need a file built to the byte.
 
+## CI: the frontend's audit (#222)
+
+The first run's `frontend (lint, types, build)` stopped at `npm audit
+--audit-level=high`, before lint. Nothing in this batch: its lockfile is
+main's, and main's fails the same. On 2026-11-17 GitHub widened picomatch's
+high advisory GHSA-fc5q-39xc-vjpf to every release up to 4.0.7, the latest,
+with no fix; npm's only way out is vite 6.2.7, a breaking step back.
+
+By the user's word («Yes, in this PR»), the step is now
+`node ../.github/scripts/npm-audit.mjs`: `npm audit --json`, failing on
+every high or critical advisory but the named exceptions. One for now:
+picomatch's, only under vite and typescript-eslint (through tinyglobby and
+fdir), never in the bundle, matching our own config's patterns.
+
+Decided here: until 2026-12-17, a month. After it, the check fails again so
+that someone looks at it. Recorded in ADR-0010 §5 beside `pip-audit`'s
+`--ignore-vuln`.
+
+Checked with a stand-in `npm`:
+- passes on today's tree, the exception printed as a warning;
+- fails on another high advisory;
+- fails on the same advisory id reported on another package;
+- fails when npm gives no report;
+- fails once the exception's day has passed;
+- an advisory no longer reported is a notice to remove its exception.
+
 ## Not covered
 
 - The look on a real phone, in Telegram's own haptics.
