@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useId, useLayoutEffect, useRef, useState } from "react";
 import type { JSX } from "react";
 import { periods, rangeOf, usePeriodReport } from "@/money/reads";
 import type { Period } from "@/money/reads";
@@ -53,8 +53,36 @@ function WayRow({
   );
 }
 
-/** «Інші дні» (spec §6.29): the first and the last day, shown once
- * «Показати» is pressed; the server says whether they make a period. */
+/** The longest period the server reads at once, a leap day included
+ * (`MAX_DAYS`, backend/app/modules/reports/sales.py): the phone repeats it
+ * only to say so before «Показати»; the server still decides. */
+const maxDays = 366;
+
+/** A day as the server reads it, «2026-03-10»: a year of five figures or
+ * more, which a desktop's date field lets one type, is none (review). */
+function isDay(day: string): boolean {
+  return /^\d{4}-\d\d-\d\d$/.test(day);
+}
+
+/** A day as a count of days, to measure a period. */
+function dayCount(day: string): number {
+  return Date.parse(`${day}T00:00:00Z`) / 86_400_000;
+}
+
+/** Days the server would refuse, both chosen: one it cannot read, the last
+ * before the first, or more than a year — its own bound, `(last − first).days
+ * ≥ 366`. */
+function refusedDays(from: string, to: string): boolean {
+  if (from === "" || to === "") return false;
+  if (!isDay(from) || !isDay(to)) return true;
+  return to < from || dayCount(to) - dayCount(from) >= maxDays;
+}
+
+/** «Інші дні» (spec §6.29): the first and the last day. Days the server
+ * would refuse are said under them as they are chosen, in its own words,
+ * and «Показати» holds; the dates' own pickers keep the first not after the
+ * last — a year is said, never bounded, so days long past are two picks
+ * away (audit 2026-11-15, money P2-3 (а); review). */
 function OtherDays({
   shown,
   choose,
@@ -66,6 +94,8 @@ function OtherDays({
 }): JSX.Element {
   const [from, setFrom] = useState(shown?.from ?? "");
   const [to, setTo] = useState(shown?.to ?? "");
+  const wrong = refusedDays(from, to);
+  const wrongLine = useId();
   return (
     <Sheet
       title="Інші дні"
@@ -74,7 +104,7 @@ function OtherDays({
         <button
           type="button"
           className="sheet-done primary"
-          disabled={!from || !to}
+          disabled={!from || !to || wrong}
           onClick={() => {
             choose({ from, to });
             close();
@@ -90,6 +120,9 @@ function OtherDays({
           <input
             type="date"
             value={from}
+            max={to || undefined}
+            aria-invalid={wrong || undefined}
+            aria-describedby={wrong ? wrongLine : undefined}
             onChange={(event) => {
               setFrom(event.target.value);
             }}
@@ -100,12 +133,21 @@ function OtherDays({
           <input
             type="date"
             value={to}
+            min={from || undefined}
+            aria-invalid={wrong || undefined}
+            aria-describedby={wrong ? wrongLine : undefined}
             onChange={(event) => {
               setTo(event.target.value);
             }}
           />
         </label>
       </div>
+      {wrong && (
+        <p id={wrongLine} className="field-wrong" role="alert">
+          Оберіть період від одного дня до року; перший день — не пізніше
+          останнього.
+        </p>
+      )}
     </Sheet>
   );
 }

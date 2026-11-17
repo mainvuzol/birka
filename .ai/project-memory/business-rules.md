@@ -10561,3 +10561,69 @@ words a reader already heard (P2-4).
   - A line with no figure and «Видано сьогодні»'s lines are `meta` 14/19
     500, never a third size between `meta` and `body`; their colours as
     before (pencil for nothing and a failure, ink for what was taken out).
+
+## Chosen in chat — 2026-11-17 (audit 2026-11-15, batch 6: the answer before the press — «Інші дні» says days the server would refuse before «Показати»; «Нова накладна» says more paid at once than its sum as it is typed, «1500,» read as 1500; the set-off's returns as radios; «Зберегти» and «Додати постачальника» with the ring and «Ще надсилаємо…»; the two «nothing yet» lines in pencil at 14; money P2-3, P2-6)
+
+The money task list's last open points but P1-3 (б), which waits for
+В15-Г1 («merged, go next» after #219). Nothing recorded, sent or counted
+changes, and the server checks everything as before: the phone only says
+earlier what the server would answer. No word on a screen changes.
+
+- **«Інші дні»** (money P2-3 (а); spec §6.29, §6.30): days the server would
+  refuse — the last before the first, or more than a year, its own bound
+  `(last − first).days ≥ 366` (`MAX_DAYS`, `backend/app/modules/reports/sales.py`)
+  — are said under the two days as they are chosen, in the server's words
+  («Оберіть період від одного дня до року; перший день — не пізніше
+  останнього.»), and «Показати» holds: nothing is asked, the table behind
+  the sheet stands. 366 days may be shown, 367 may not.
+  - Decided here: both days are said wrong and described by the line —
+    either may be the one to change.
+  - The dates' own pickers keep the first not after the last, as the task
+    list asks. Decided here (review): a year is said by the line, never
+    bounded in the pickers — bounded, a period long past would take turns of
+    both days to reach.
+  - Decided here (review): a day the server cannot read — a year of five
+    figures or more, which a desktop's date field lets one type — is said
+    the same once both days are chosen.
+  - The server's refusal, should it come, is said as before, in its words,
+    with no «Спробувати ще раз».
+- **«Нова накладна»** (money P2-3 (б); the same measure as the payment's
+  «more than owed», audit 2026-11-13, money P2-5 (а)): «Сплачено одразу» more
+  than the invoice's sum is said under its field as it is typed — «Сплачено
+  одразу не може бути більше, ніж сума накладної.» —, the field wrong and
+  described by the line, «Записати накладну» held. As much as the sum is
+  not more.
+  - Decided here: «1500,» in either field is a sum still being typed and is
+    read as 1500 — on sending too, as the payment's (batch 5, money P2-2
+    (в)): the sum sent is the one typed. Before, «1500,» in «Сума за
+    накладною» was refused on the phone as not a sum.
+  - Decided here: the line stands whatever else is said under the form.
+- **A field said wrong** (decided here, one form): its edge in the error's
+  colour, as the keypad's sum — the new invoice's and the report's fields,
+  and wherever a field already said so: the set-off's sum, «Прийшов
+  товар»'s price. The line under it is `meta`-sized 14, 600, in the error's
+  colour, as the payment's «Це більше, ніж винні…».
+- **The set-off's returns** (money P2-6 (а); one of a list chosen is a radio,
+  audit 2026-11-13, frame P2-2): «Зарахувати повернення»'s returns are a
+  group of radios, «Повернення», none chosen beforehand; drawn as before,
+  the chosen in the chosen colours.
+  - Decided here: the arrows choose as they go, as a phone's own radios —
+    down or right to the next, up or left to the one before, round the
+    ends —, those taking no tap passed over; Tab stops once in the group, on
+    the one chosen, or the first. Only here: a list whose pick closes it (a
+    supplier's) would close on the first arrow.
+- **«Зберегти» and «Додати постачальника»** (money P2-6 (б); spec §6.5):
+  pressed, the eyelet's ring 20 on the button, drawn, never faded, and «Ще
+  надсилаємо…» over it after 3 s, as a sheet that asks why; the button
+  stands where it stood, and is never pressed twice, as before.
+  - Decided here (review): «Ще надсилаємо…» in any sheet's foot stands 8
+    over its first button, as over the till's dock. Before, a sheet that
+    asks why, the set-off, a debt's write-off, a store's sheet and a
+    borrowed lot's sheet drew it over the sheet's top edge.
+  - Decided here (review): in place («Як надійшов», «Брак») «Додати
+    постачальника» takes its row's width, «Скасувати» under it, so its ring
+    moves nothing.
+- **Nothing yet** (money P2-6 (в)): «Оплат і заліків ще не було.» on an
+  invoice and «Цей магазин нічого не повертав постачальнику «…».» in the
+  set-off are `meta` 14 in pencil, as an empty search's; a reader hears them
+  as before.

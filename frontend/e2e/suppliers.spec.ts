@@ -1834,6 +1834,99 @@ for (const [name, theme] of [
     }
   });
 
+test("«Додати постачальника» and «Зберегти» on their way: the eyelet's ring on the pressed button, never faded, «Ще надсилаємо…» over it past 3 s, the button where it stood; never sent twice; answered, as before (audit 2026-11-15, money P2-6 (б))", async ({
+  page,
+}) => {
+  const key = randomUUID().slice(0, 6);
+  const [added, edited] = [`Кільце ${key}`, `Зміна ${key}`];
+  await aSupplier(page, edited);
+  // Each write of a supplier held until it is let go: a slow network.
+  let writes = 0;
+  let answer = (): void => undefined;
+  await page.route("**/api/v1/suppliers**", async (route) => {
+    if (route.request().method() === "GET") {
+      await route.fallback();
+      return;
+    }
+    writes += 1;
+    await new Promise<void>((done) => {
+      answer = done;
+    });
+    await route.fallback();
+  });
+  /** The pressed button waits as a sheet that asks why. */
+  async function waits(where: Locator, button: Locator): Promise<void> {
+    const before = await button.boundingBox();
+    const sent = writes;
+    await button.click();
+    await expect.poll(() => writes).toBe(sent + 1);
+    await expect(button).toHaveClass(/\bpressed\b/);
+    await expect(button.locator(".eyelet-spin")).toBeVisible();
+    await expect(button).toBeDisabled();
+    await expect(button).toHaveCSS("opacity", "1");
+    const line = where.locator(".sending-line");
+    await expect(line).toHaveRole("status");
+    await expect(line).not.toContainText("Ще надсилаємо…");
+    await expect(line).toHaveText("Ще надсилаємо…", { timeout: 6000 });
+    // Over the button, never moving it.
+    const [said, after] = [
+      await line.locator("span").boundingBox(),
+      await button.boundingBox(),
+    ];
+    if (!said || !after || !before) throw new Error("not laid out");
+    // Right over it, 8 as over the till's dock — never over the sheet's
+    // top (review).
+    expect(said.y + said.height).toBeLessThanOrEqual(after.y);
+    expect(after.y - (said.y + said.height)).toBeLessThanOrEqual(12);
+    expect(Math.abs(after.y - before.y)).toBeLessThanOrEqual(1);
+    await button.click({ force: true });
+    answer();
+  }
+
+  // «Додати постачальника», in the field's sheet.
+  await newReturn(page);
+  const list = await supplierList(page, { of: returnForm(page) });
+  await list
+    .getByRole("button", { name: "Новий постачальник", exact: true })
+    .click();
+  await list.getByLabel("Назва постачальника").fill(added);
+  await waits(
+    list,
+    list.getByRole("button", { name: "Додати постачальника", exact: true }),
+  );
+  await expect(list).toHaveCount(0);
+  await expect(supplierField(page)).toHaveAccessibleName(
+    `Постачальник ${added}`,
+  );
+  // Answered: written once, the press while it waited taking nothing.
+  expect(writes).toBe(1);
+
+  // «Зберегти», in «Змінити постачальника».
+  await page
+    .getByRole("button", { name: "Постачальникам", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Список постачальників" }).click();
+  await page
+    .getByRole("searchbox", { name: "Пошук постачальника" })
+    .fill(edited);
+  await page
+    .getByRole("list", { name: "Постачальники" })
+    .locator(".supplier-row")
+    .click();
+  const edit = page.getByRole("dialog", { name: "Змінити постачальника" });
+  await expect(edit).toHaveAttribute("data-ready", "");
+  await edit.getByLabel("Телефон").fill("067 000 11 22");
+  await waits(
+    edit,
+    edit.getByRole("button", { name: "Зберегти", exact: true }),
+  );
+  await expect(edit).toHaveCount(0);
+  await expect(
+    page.getByRole("list", { name: "Постачальники" }).locator(".t-meta"),
+  ).toHaveText("067 000 11 22");
+  expect(writes).toBe(2);
+});
+
 /** The WCAG contrast of an element's text against what it is drawn on. */
 async function contrast(element: Locator): Promise<number> {
   return element.evaluate((node) => {

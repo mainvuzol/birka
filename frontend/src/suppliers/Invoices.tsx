@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { JSX, ReactNode } from "react";
 import {
   useInfiniteQuery,
@@ -780,12 +780,19 @@ function NewInvoice({
   // Telegram asks before Бірка closes, as its payment does (audit
   // 2026-11-13, money P2-6).
   useAskBeforeClosing(recorded === null && (supplier !== "" || amount !== ""));
+  // «1500,» is a sum still being typed: read as 1500, as the payment's — on
+  // sending too (audit 2026-11-15, money P2-3 (б)). Nothing paid at once is a
+  // choice too (owner decision, 2026-10-01).
+  const total = kopecks(amount.replace(/[.,]$/, ""));
+  const paid =
+    paidNow.trim() === "" ? 0n : kopecks(paidNow.replace(/[.,]$/, ""));
+  // More paid at once than the invoice's sum is said under the field as it
+  // is typed, and «Записати накладну» holds; the server checks it as before.
+  const paidOver = total !== null && paid !== null && paid > total;
+  const overLine = useId();
 
   function submit(): void {
     setProblem(null);
-    const total = kopecks(amount);
-    // Nothing paid at once is a choice too (owner decision, 2026-10-01).
-    const paid = paidNow.trim() === "" ? 0n : kopecks(paidNow);
     if (!supplier) {
       setProblem("Оберіть постачальника.");
       return;
@@ -798,10 +805,8 @@ function NewInvoice({
       setProblem("Вкажіть, скільки сплачено одразу, з точністю до копійок.");
       return;
     }
-    if (paid > total) {
-      setProblem("Сплачено одразу не може бути більше, ніж сума накладної.");
-      return;
-    }
+    // Held by the button already; a second check, as the payment's.
+    if (paidOver) return;
     void send({
       kind: "invoice",
       supplier_id: supplier,
@@ -879,11 +884,18 @@ function NewInvoice({
                   enterKeyHint="next"
                   placeholder="0,00"
                   value={paidNow}
+                  aria-invalid={paidOver || undefined}
+                  aria-describedby={paidOver ? overLine : undefined}
                   onChange={(event) => {
                     setPaidNow(event.target.value);
                   }}
                 />
               </label>
+              {paidOver && (
+                <p id={overLine} className="field-wrong" role="alert">
+                  Сплачено одразу не може бути більше, ніж сума накладної.
+                </p>
+              )}
               <label>
                 Примітка (необов’язково)
                 <input
@@ -904,7 +916,7 @@ function NewInvoice({
                 className={
                   pressing ? "sheet-done primary pressed" : "sheet-done primary"
                 }
-                disabled={held}
+                disabled={held || paidOver}
                 onClick={submit}
               >
                 {pressing && <Eyelet state="spin" size={20} />}
@@ -1111,7 +1123,9 @@ function InvoiceDetail({
         )}
         <h3 className="t-label customer-history-title">Історія</h3>
         {invoice.entries.length === 0 ? (
-          <p>Оплат і заліків ще не було.</p>
+          // Nothing yet: a `meta` line in pencil, as an empty search's
+          // (audit 2026-11-15, money P2-6 (в)).
+          <p className="t-meta nothing-yet">Оплат і заліків ще не було.</p>
         ) : (
           <ul
             className="timeline invoice-history"

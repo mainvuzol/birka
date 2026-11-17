@@ -670,6 +670,11 @@ textarea {
 textarea {
   min-height: 90px;
 }
+/* A field said wrong under it: its edge in the error's colour, as the
+   keypad's sum (audit 2026-11-15, money P2-3). */
+:is(input, select, textarea)[aria-invalid="true"] {
+  border-color: var(--danger);
+}
 .fields {
   align-items: stretch;
 }
@@ -1512,7 +1517,14 @@ html {
   padding-bottom: calc(16px + env(safe-area-inset-bottom));
 }
 .sheet-foot {
+  position: relative;
   padding-top: 12px;
+}
+/* «Ще надсилаємо…» in a sheet's foot stands 8 over its first button, under
+   the foot's 12 of room, as over the till's dock — never over the sheet's
+   top (audit 2026-11-15, money P2-6 (б); review). */
+.sheet-foot > .sending-line {
+  bottom: calc(100% - 4px);
 }
 .sheet-done {
   width: 100%;
@@ -2275,8 +2287,11 @@ button.sale-row:disabled .sale-goods {
 .till-dock .pay-ways button {
   min-height: var(--h-pay);
 }
-/* More than is owed: said in the error's colour, the ways dark (spec S21). */
-.pay-over {
+/* More than is owed: said in the error's colour, the ways dark (spec S21).
+   A field the server would refuse, said under it as it is typed or chosen,
+   in the same form (audit 2026-11-15, money P2-3). */
+.pay-over,
+.field-wrong {
   margin: 8px 0 0;
   font-size: 14px;
   font-weight: 600;
@@ -7077,6 +7092,14 @@ p.receive-place {
 .supplier-new {
   margin: 0;
 }
+/* In place, «Додати постачальника» its row's width, «Скасувати» under it:
+   pressed, its ring takes no room from anything (review). */
+.supplier-new .supplier-add-room {
+  margin-top: 12px;
+}
+.supplier-new .supplier-add-room > button {
+  width: 100%;
+}
 .supplier-in-place {
   margin: 0 0 16px;
 }
@@ -7260,13 +7283,18 @@ p.receive-place {
 .set-off-return .t-meta {
   color: var(--pencil);
 }
-.set-off-return[aria-pressed="true"] {
+.set-off-return[aria-checked="true"] {
   border-color: var(--chosen);
   background: var(--chosen);
   color: var(--on-chosen);
 }
-.set-off-return[aria-pressed="true"] .t-meta {
+.set-off-return[aria-checked="true"] .t-meta {
   color: var(--on-chosen);
+}
+/* Nothing yet — no payment on an invoice, no return to set off: a `meta`
+   line in pencil, as an empty search's (audit 2026-11-15, money P2-6 (в)). */
+.nothing-yet {
+  color: var(--pencil);
 }
 .invoice-result {
   margin-top: 12px;
