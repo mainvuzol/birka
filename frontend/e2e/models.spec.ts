@@ -2,11 +2,14 @@ import {
   test,
   expect,
   addModel,
+  blockRow,
   expectFold,
   expectNoticeLead,
   FAILED_REQUEST_ID,
+  feels,
   fillLine,
   leaveNewModel,
+  listRow,
   more,
   newModelSheet,
   openStore,
@@ -16,8 +19,10 @@ import {
   receiveUnits,
   recordReceipt,
   refuseOnce,
+  rowTitle,
   section,
   sections,
+  sheetRow,
   tapSize,
   waitsFor,
   sellsFrom,
@@ -1024,6 +1029,11 @@ test("only a person with the right in every store is offered a merge", async ({
   });
   await expect(it).toHaveAttribute("aria-pressed", "false");
   await expect(apart).toHaveAttribute("aria-pressed", "false");
+  // In the sheet, white already: rows 64 with no block (audit 2026-11-15,
+  // goods P2-2).
+  const forkRow = fork.locator(".new-model-candidates > li").first();
+  await sheetRow(forkRow);
+  await rowTitle(forkRow.locator(".new-model-name strong"));
   await expect(saveName(sheet)).toBeDisabled();
   // The other way opens what tells it apart, the cursor in it, and looks
   // chosen as a chosen «Це вона» would.
@@ -1976,6 +1986,8 @@ test("the models' search read slowly: three rows in grey, one line each, where t
   const search = page.locator(".models-search");
   const grey = search.locator(".placeholder .catalog-proposal");
   await expect(grey).toHaveCount(3);
+  // On the list's white block, as its rows (audit 2026-11-15, goods P2-2).
+  await blockRow(grey.first());
   await expect(grey.locator(".skeleton-name")).toHaveCount(3);
   await expect(grey.locator(".skeleton-meta")).toHaveCount(0);
   await expect(
@@ -1996,6 +2008,9 @@ test("the models' search read slowly: three rows in grey, one line each, where t
   expect(
     Math.abs((row?.height ?? 0) - (greyRow?.height ?? 0)),
   ).toBeLessThanOrEqual(4);
+  // Found, a list's row on its white block, its chevron to the model
+  // (audit 2026-11-15, goods P2-2).
+  await listRow(page, found, ".catalog-raw");
 });
 
 test("a retirement an opening list stops says so", async ({ page }) => {
@@ -2343,4 +2358,44 @@ test("at 360 px, light and dark, the model's big tag and the merge's two tags fi
   }
   // The tags drawn in each theme's own colours.
   expect(tags[0]).not.toBe(tags[1]);
+});
+
+test("inside Telegram the rename's fork is felt as a choice: «Це вона» or «Окрема модель зі схожою назвою» chosen anew, never the one chosen tapped again (audit 2026-11-15, goods P2-3)", async ({
+  page,
+}) => {
+  const { told, fire } = await telegram(page);
+  const felt = () => told("web_app_trigger_haptic_feedback");
+  const bearer = await token(page);
+  const name = `Розвилка ${randomUUID().slice(0, 8)}`;
+  await model(page, bearer, { concept: name, variant: { color: "графіт" } }, 0);
+  await model(
+    page,
+    bearer,
+    { concept: `${name} друга`, variant: { color: "графіт" } },
+    0,
+  );
+  await enter(page, "Моделі", "7.0");
+  await open(page, `${name} друга`, /друга графіт/);
+  const sheet = await renameSheet(page);
+  await sheet.getByLabel("Назва моделі", { exact: true }).fill(name);
+  // «Зберегти назву», Telegram's: the fork asked.
+  await fire("main_button_pressed");
+  const fork = sheet.locator(".rename-fork");
+  const it = fork.getByRole("button", {
+    name: `Це вона: ${name}`,
+    exact: true,
+  });
+  const apart = fork.getByRole("button", {
+    name: "Окрема модель зі схожою назвою",
+    exact: true,
+  });
+  await expect(it).toBeVisible();
+  const selection = { type: "selection_change" };
+  await feels(felt, () => it.click(), [selection]);
+  await expect(it).toHaveAttribute("aria-pressed", "true");
+  await feels(felt, () => it.click(), []);
+  await feels(felt, () => apart.click(), [selection]);
+  await expect(apart).toHaveAttribute("aria-pressed", "true");
+  await feels(felt, () => apart.click(), []);
+  await feels(felt, () => it.click(), [selection]);
 });

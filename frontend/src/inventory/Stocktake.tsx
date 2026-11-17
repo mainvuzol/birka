@@ -1287,7 +1287,17 @@ export function Stocktake({
                 said="Завантажуємо позиції…"
                 {...(mode === "uncounted"
                   ? { tags: 2 }
-                  : { rows: 3, day: false })}
+                  : // «Пораховані»'s rows on their white block (audit
+                    // 2026-11-15, goods P2-2; review).
+                    {
+                      rows: 3,
+                      day: false,
+                      block: true,
+                      rowShape: {
+                        list: "counted-rows",
+                        row: "sale-row counted-row",
+                      },
+                    })}
               />
             ) : neverRead ? (
               <Unread error={list.error} retry={reread} />
@@ -1325,7 +1335,12 @@ export function Stocktake({
                     ))}
                   </div>
                 ) : (
-                  <ul className="counted-rows" aria-label="Пораховані позиції">
+                  // Rows 64 on a white block (spec §6.8; audit 2026-11-15,
+                  // goods P2-2).
+                  <ul
+                    className="counted-rows list-block"
+                    aria-label="Пораховані позиції"
+                  >
                     {items.map(
                       (item) =>
                         item.count && (
@@ -1577,7 +1592,7 @@ function CountedRow({
 }): JSX.Element {
   const what = `${visible(position.display_name)} · ${sizeWord(targetOf(position))}`;
   return (
-    <li className="counted-row">
+    <li className="sale-row counted-row">
       <div className="counted-main">
         <p className="t-row counted-what">
           {what} — {countedWords(count)}

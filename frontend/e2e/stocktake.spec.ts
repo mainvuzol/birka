@@ -1,9 +1,11 @@
 import {
   test,
   expect,
+  blockRow,
   gridCell,
   countTaps,
   expectSheetCancel,
+  feels,
   leaveNewModel,
   menu,
   more,
@@ -12,6 +14,7 @@ import {
   openStore,
   readsOf,
   refuseOnce,
+  rowTitle,
   section,
 } from "./fixtures";
 import type { Locator, Page, Request, Route } from "@playwright/test";
@@ -496,6 +499,11 @@ test("a warehouse is counted cell by cell, each difference applied at once, and 
       .getByRole("listitem")
       .first(),
   ).toContainText(" · L — ");
+  // Rows 64 on a white block, the last with no hairline, each named 17/600
+  // in ink (audit 2026-11-15, goods P2-2).
+  await blockRow(countedRow(page, "L"));
+  await blockRow(countedRow(page));
+  await rowTitle(countedRow(page).locator(".counted-what"));
   await noUnits(page);
 
   // Each count travels with the balance it was counted against: the refused
@@ -1170,6 +1178,26 @@ async function telegram(page: Page): Promise<{
   };
 }
 
+test("inside Telegram «Інвентаризація» entered feels nothing; a warehouse chosen is felt as a choice, the one chosen tapped again nothing (audit 2026-11-15, goods P2-3)", async ({
+  page,
+}) => {
+  const { buzzes } = await telegram(page);
+  await stubbed(page);
+  await page.goto(launch("8.0"));
+  await openStore(page, "Основний MAIN");
+  const entered = (await buzzes()).length;
+  await section(page, "Інвентаризація");
+  const place = page
+    .getByRole("group", { name: "Склад" })
+    .getByRole("button", { name: "Склад інвентаризації", exact: true });
+  await expect(place).toBeVisible();
+  expect((await buzzes()).slice(entered)).toEqual([]);
+  const selection = { type: "selection_change" };
+  await feels(buzzes, () => place.click(), [selection]);
+  await expect(place).toHaveAttribute("aria-pressed", "true");
+  await feels(buzzes, () => place.click(), []);
+});
+
 test("inside Telegram a model of four sizes is one tag, its cells in the sizes' order, counted in five taps and four numbers: the sheet goes on to the next cell, round from the one tapped, and closes after the last; the menu aside, kept upright, closing asked only while a number is typed (stage 2, goods task list, P0-2, P0-3)", async ({
   page,
 }) => {
@@ -1699,11 +1727,22 @@ test("«Пораховані»'s next page refused: the fifty read stand, one «
   }));
   let refuse: "next" | "all" | null = "next";
   const asked: string[] = [];
+  // Its first read held: the grey rows in its place.
+  let free = (): void => undefined;
+  const held = new Promise<void>((resolve) => {
+    free = resolve;
+    setTimeout(resolve, 10_000);
+  });
+  let holding = true;
   await page.route(
     "**/api/v1/stocktakes/*/positions?**state=counted**",
     async (route) => {
       const url = new URL(route.request().url());
       const offset = Number(url.searchParams.get("offset") ?? "0");
+      if (holding && offset === 0) {
+        holding = false;
+        await held;
+      }
       asked.push(`offset=${String(offset)}`);
       if (
         (refuse === "next" && offset === 50) ||
@@ -1728,10 +1767,26 @@ test("«Пораховані»'s next page refused: the fifty read stand, one «
   await modes(page)
     .getByRole("button", { name: /^Пораховані/ })
     .click();
+  // Read slowly: three rows in grey on the list's white block, in its rows'
+  // shape, where the rows come (audit 2026-11-15, goods P2-2; review).
+  const grey = counting(page).locator(
+    ".placeholder .counted-rows > .counted-row",
+  );
+  await expect(grey).toHaveCount(3);
+  await blockRow(grey.first());
+  const greyAt = (await grey.first().boundingBox())?.y ?? 0;
+  free();
   const list = counting(page).getByRole("list", {
     name: "Пораховані позиції",
   });
   await expect(list.getByRole("listitem")).toHaveCount(50);
+  await expect(grey).toHaveCount(0);
+  expect(
+    Math.abs(
+      ((await list.getByRole("listitem").first().boundingBox())?.y ?? 0) -
+        greyAt,
+    ),
+  ).toBeLessThanOrEqual(2);
   const more = counting(page).getByRole("button", { name: "Показати ще" });
   await more.click();
   const foot = counting(page).locator(".read-failure");

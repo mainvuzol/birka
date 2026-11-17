@@ -451,9 +451,11 @@ export function NewModel({
                 <p>Не обирайте товар лише через схожість назви.</p>
               </div>
             )}
+            {/* In the sheet, white already: rows 64 with no block (audit
+                2026-11-15, goods P2-2). */}
             <ul className="new-model-candidates">
               {candidates.map((c) => (
-                <li key={c.variant_id}>
+                <li className="sale-row" key={c.variant_id}>
                   <span className="new-model-name">
                     <strong>{visible(c.display_name)}</strong>
                     {c.distinction_note && (
@@ -469,7 +471,9 @@ export function NewModel({
                     aria-label={`Це вона: ${visible(c.display_name)}`}
                     disabled={blocked}
                     onClick={() => {
-                      buzz("selection");
+                      // A choice changed, felt (spec §4.4; audit
+                      // 2026-11-15, goods P2-3).
+                      if (chosen !== c.variant_id) buzz("selection");
                       setChosen(c.variant_id);
                     }}
                   >
@@ -550,6 +554,8 @@ export function NewModel({
                         key={c.family_id}
                         disabled={blocked}
                         onClick={() => {
+                          // A choice, felt (audit 2026-11-15, goods P2-3).
+                          buzz("selection");
                           setFamily({
                             family_id: c.family_id,
                             concept_name: c.display_name,

@@ -2,6 +2,8 @@ import {
   test,
   expect,
   comeBack,
+  feels,
+  haptics,
   menu,
   more,
   openStore,
@@ -206,6 +208,35 @@ test("«Залишки»: a chip a warehouse, none taken until tapped; its model
     path: "test-results/stock-mobile.png",
     fullPage: true,
   });
+});
+
+test("inside Telegram a warehouse chosen anew is felt as a choice; the one chosen, tapped again, nothing (audit 2026-11-15, goods P2-3)", async ({
+  page,
+}) => {
+  const felt = await haptics(page);
+  await noTill(page);
+  await page.goto(
+    `/#${new URLSearchParams({ tgWebAppData: initData(), tgWebAppVersion: "8.0" }).toString()}`,
+  );
+  await openStore(page, "Основний MAIN");
+  // Entered: nothing felt.
+  const entered = (await felt()).length;
+  await section(page, "Залишки");
+  const selection = { type: "selection_change" };
+  const main = chip(page, "Основний склад");
+  await expect(main).toBeVisible();
+  expect((await felt()).slice(entered)).toEqual([]);
+  await feels(felt, () => main.click(), [selection]);
+  await expect(main).toHaveAttribute("aria-pressed", "true");
+  await feels(felt, () => main.click(), []);
+  const other = page
+    .getByRole("group", { name: "Склад", exact: true })
+    .getByRole("button")
+    .filter({ hasNotText: "Основний склад" })
+    .first();
+  await feels(felt, () => other.click(), [selection]);
+  await expect(other).toHaveAttribute("aria-pressed", "true");
+  await feels(felt, () => main.click(), [selection]);
 });
 
 test("a tap on a model's tag — its name or anywhere on it — opens its detail with «← Залишки», «Ще» marked; back, the same warehouse and its tags (stage 2, goods task list, P2-5)", async ({

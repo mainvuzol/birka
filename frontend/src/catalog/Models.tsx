@@ -238,9 +238,10 @@ function ModelSearch({
             said="Шукаємо моделі…"
             rows={3}
             day={false}
+            block
             rowShape={{
               list: "catalog-rows",
-              row: "catalog-proposal",
+              row: "sale-row catalog-proposal",
               meta: false,
             }}
           />
@@ -254,12 +255,14 @@ function ModelSearch({
           </p>
         )}
       {items.length > 0 && (
-        <ul className="catalog-rows" aria-label="Знайдені моделі">
+        // Rows 64 on a white block, each opening its model (spec §6.8;
+        // audit 2026-11-15, goods P2-2).
+        <ul className="catalog-rows list-block" aria-label="Знайдені моделі">
           {items.map((item) => (
             <li key={item.product_variant_id}>
               <button
                 type="button"
-                className="catalog-proposal"
+                className="sale-row catalog-proposal"
                 data-model={item.product_variant_id}
                 aria-label={foundName(item)}
                 onClick={() => {
@@ -268,12 +271,15 @@ function ModelSearch({
                   choose(item);
                 }}
               >
-                <span className="catalog-raw">
-                  {visible(item.display_name)}
+                <span className="sale-main">
+                  <span className="catalog-raw">
+                    {visible(item.display_name)}
+                  </span>
+                  {item.status !== "ACTIVE" && (
+                    <Sticker>{statusText[item.status]}</Sticker>
+                  )}
                 </span>
-                {item.status !== "ACTIVE" && (
-                  <Sticker>{statusText[item.status]}</Sticker>
-                )}
+                <Icon name="chevron-right" size={16} className="sale-open" />
               </button>
             </li>
           ))}
@@ -704,11 +710,13 @@ function RenameSheet({
                   }}
                 />
               )}
+              {/* In the sheet, white already: rows 64 with no block (audit
+                  2026-11-15, goods P2-2). */}
               <ul className="new-model-candidates">
                 {(families.data?.items ?? [])
                   .filter((item) => candidates.includes(item.family_id))
                   .map((item) => (
-                    <li key={item.family_id}>
+                    <li className="sale-row" key={item.family_id}>
                       <span className="new-model-name">
                         <strong>{familyLabel(item)}</strong>
                       </span>
@@ -718,7 +726,10 @@ function RenameSheet({
                         aria-pressed={!separate && family === item.family_id}
                         aria-label={`Це вона: ${familyLabel(item)}`}
                         onClick={() => {
-                          buzz("selection");
+                          // A choice changed, felt (spec §4.4; audit
+                          // 2026-11-15, goods P2-3).
+                          if (separate || family !== item.family_id)
+                            buzz("selection");
                           setFamily(item.family_id);
                           setSeparate(false);
                         }}
@@ -733,6 +744,7 @@ function RenameSheet({
                 className="quiet"
                 aria-pressed={separate}
                 onClick={() => {
+                  if (!separate) buzz("selection");
                   setSeparate(true);
                   setFamily(null);
                 }}

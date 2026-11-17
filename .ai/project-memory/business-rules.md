@@ -10677,3 +10677,68 @@ is the server's, as before. No word on a screen changes.
   - Decided here: a row that opens nothing keeps its sum in the column of
     the sums of those that open (the chevron's 16 and its gap of 12 kept
     empty), so the sums read down one column.
+
+## Chosen in chat — 2026-11-17 (audit 2026-11-15, batch 8: the goods' tail — «Товар»'s lists as a list's rows 64 on a white block, in a sheet with no block; felt as the rest of Бірка feels — a choice only when it changes, «−» as «+», a press that may not go in and a refusal as an error, a new list saved as a success; goods P2-2, P2-3)
+
+The goods task list's last open points («merged, go next» after #221).
+Nothing recorded, sent or counted changes; no request, order of rows, page
+or choice changes. No word on a screen changes.
+
+- **«Товар»'s lists** (goods P2-2; spec §6.8; design direction §5 «Строка
+  списка»): on a screen, a list's rows on its white block (`.list-block`) —
+  64 high at least, sides of 16, a hairline from the text's edge, none under
+  the last — as «Гроші», «Каса», «Покупці», «Ще» and the suppliers' lists:
+  - «Перевірка каталогу»'s queue and «Моделі»'s search: the words in quotes
+    or the model's name 17/600 in ink, its sticker under it, the chevron of
+    16 on the right (the row opens a screen);
+  - the catalogue's search on a screen (`CatalogPicker`: «Прийшов товар»,
+    «Знайшли товар…», a line of an opening list, the till's «з каталогу»):
+    radios 64, the one chosen filled in the chosen colours, as before;
+  - «Пропозиція»'s models offered, «Це вона» on their right, as before;
+  - «Пораховані», «Перерахувати» on the right, as before;
+  - «У поставці»: the model and its size 17/600, under them how many, how
+    it came and its price; its `aria-label` as before.
+  In a sheet («Нова модель»'s «Схожі», the rename's fork, «Інший колір
+  нашої моделі»'s search), rows 64 with the line's hairline and no block:
+  the sheet is white already (as money P2-4). The grey places while a list
+  is read are the same rows, on the same block.
+  - Decided here: «Прибрати {модель}» stays a visible quiet button under the
+    line's two lines, not one word on the row's right: the task list's
+    «Прибрати» alone waits for the owner's reading [нужно утверждение]. Once
+    read, it moves to the right of the title, its `aria-label` as now.
+  - Decided here: a row's title is 17/600 in ink wherever it is a list's row
+    — the found models, the models offered, the counted, the delivered.
+  - Decided here: a queue's row taking no tap (a kept catalogue command, the
+    phone's storage full) is drawn as every held row — never faded, its
+    words in pencil (frame P2-4 after the audit 2026-11-13).
+  - Decided here: a grey place drawn on a block keeps its list's own class
+    (`Placeholder`'s `block` with `rowShape.list`), so the grey rows have the
+    rows' own shape — «Пораховані»'s too (review).
+  - Decided here (review): the chosen found row, pressed again (the till's
+    «з каталогу», where the list stays open), keeps its chosen fill — never
+    the fold under words in the chosen ink. Its own hairline gives way to the
+    fill; the fill's square corner over the block's rounded one is left.
+  - `CatalogPicker` stands on the till's «з каталогу» too: its rows change
+    there as well (said to pass 2, the sale).
+- **Felt** (goods P2-3; design direction §6 rule 9; the spec's haptics):
+  - a choice — `selection`, only when it changes; the one chosen tapped
+    again feels nothing (as «Каса»'s switch and the pickers): the warehouse
+    chips of «Прийшов товар», «Інвентаризація», «Залишки» and «Новий
+    список»; «Як надійшов»'s ways; «Схожі моделі»'s chips; «Це вона» on
+    «Пропозиція», in «Нова модель» and in the rename's fork; «Окрема модель
+    зі схожою назвою»; a model found by the catalogue's search and by
+    «Інший колір нашої моделі»;
+  - «−» on «Прийшов товар» — `light`, as «+»; at 0 it takes no tap and
+    nothing is felt;
+  - `error` on «Прийшов товар»: the server's refusal of the delivery, and an
+    input that may not go in, said at the press — a price that is not money
+    («Готово» in «Як надійшов», «Додати ще модель»), the same line twice,
+    more than 200 lines, «Оберіть постачальника…». An error said as it is
+    typed feels nothing;
+  - «Зберегти список» in «Новий список»: `success` once saved, `error` once
+    refused — the file too large for one send, a conflict and the server's
+    own failure (500, said «Список не збережено…» on the screen) too; its
+    answer lost or slow, nothing: it may have been saved.
+  - Entering a screen, typing and scrolling feel nothing, as the spec says.
+  - Not changed: `warning` on a count's and a correction's refusal (stage
+    2's decisions).

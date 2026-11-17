@@ -9,6 +9,7 @@ import {
 import { ApiError, api } from "@/shared/api";
 import { Eyelet } from "@/shared/Eyelet";
 import { Fold } from "@/shared/Fold";
+import { Icon } from "@/shared/Icon";
 import { ModeSwitch } from "@/shared/ModeSwitch";
 import { Sheet } from "@/shared/Sheet";
 import { Stub } from "@/shared/Stub";
@@ -351,9 +352,12 @@ export function Catalog({
               said="Завантажуємо чергу…"
               rows={3}
               day={false}
+              // On the queue's white block, as its rows (audit
+              // 2026-11-15, goods P2-2).
+              block
               rowShape={{
                 list: "catalog-rows",
-                row: "catalog-proposal",
+                row: "sale-row catalog-proposal",
                 pill: true,
               }}
             />
@@ -381,16 +385,18 @@ export function Catalog({
                   meta={emptyQueue[queue].meta}
                 />
               ) : (
+                // Rows 64 on a white block, each opening its proposal, as
+                // every list's (spec §6.8; audit 2026-11-15, goods P2-2).
                 <ul
                   ref={shelf}
-                  className="catalog-rows"
+                  className="catalog-rows list-block"
                   aria-label="Пропозиції"
                 >
                   {rows.map((d) => (
                     <li key={d.decision_id}>
                       <button
                         type="button"
-                        className="catalog-proposal"
+                        className="sale-row catalog-proposal"
                         disabled={blocked}
                         onClick={() => {
                           forgetCatalogRefusal();
@@ -398,10 +404,17 @@ export function Catalog({
                           setSuccess("");
                         }}
                       >
-                        <span className="catalog-raw">
-                          «{visible(d.preview.raw_text)}»
+                        <span className="sale-main">
+                          <span className="catalog-raw">
+                            «{visible(d.preview.raw_text)}»
+                          </span>
+                          <Sticker>{statusLabels[d.status]}</Sticker>
                         </span>
-                        <Sticker>{statusLabels[d.status]}</Sticker>
+                        <Icon
+                          name="chevron-right"
+                          size={16}
+                          className="sale-open"
+                        />
                       </button>
                     </li>
                   ))}
@@ -465,9 +478,9 @@ function ProposalPlaceholder(): JSX.Element {
         <p>
           <span className="skeleton skeleton-pill" />
         </p>
-        <ul className="new-model-candidates">
+        <ul className="new-model-candidates list-block">
           {[0, 1].map((n) => (
-            <li key={n}>
+            <li className="sale-row" key={n}>
               <span className="new-model-name">
                 <span className="skeleton skeleton-name" />
               </span>
@@ -636,9 +649,14 @@ function Detail({
                 : "Кандидатів немає. Перевірте опис або відхиліть пропозицію з поясненням."}
             </p>
           )}
-          <ul className="new-model-candidates" aria-label="Схожі моделі">
+          {/* The models offered as a list's rows on its white block (audit
+              2026-11-15, goods P2-2). */}
+          <ul
+            className="new-model-candidates list-block"
+            aria-label="Схожі моделі"
+          >
             {candidates.map((c) => (
-              <li key={c.variant_id}>
+              <li className="sale-row" key={c.variant_id}>
                 <span className="new-model-name">
                   <strong>{visible(c.display_name)}</strong>
                   {c.distinction_note && (
@@ -664,7 +682,9 @@ function Detail({
                   aria-label={`Це вона: ${visible(c.display_name)}`}
                   disabled={blocked}
                   onClick={() => {
-                    buzz("selection");
+                    // A choice changed, felt (spec §4.4; audit 2026-11-15,
+                    // goods P2-3).
+                    if (chosen !== c.variant_id) buzz("selection");
                     setChosen(c.variant_id);
                   }}
                 >

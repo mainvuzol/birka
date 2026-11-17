@@ -4,7 +4,7 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import type { InfiniteData } from "@tanstack/react-query";
 import { api } from "@/shared/api";
 import { SearchField } from "@/shared/SearchField";
-import { hideKeyboard } from "@/shared/telegram";
+import { buzz, hideKeyboard } from "@/shared/telegram";
 import { Stub } from "@/shared/Stub";
 import { visible } from "@/shared/visible";
 import { Unread } from "@/shared/Unread";
@@ -193,9 +193,10 @@ export function CatalogPicker({
             said="Шукаємо…"
             rows={3}
             day={false}
+            block
             rowShape={{
               list: "catalog-found",
-              row: "catalog-row",
+              row: "sale-row catalog-row",
               meta: false,
             }}
           />
@@ -237,9 +238,12 @@ export function CatalogPicker({
               </div>
             )}
             {found.length > 0 && (
+              // Rows 64 on a white block, the one chosen filled, as before
+              // (spec §6.8; audit 2026-11-15, goods P2-2): on every screen
+              // it stands on, the till's «з каталогу» too.
               <div
                 ref={shelf}
-                className="catalog-found"
+                className="catalog-found list-block"
                 role="radiogroup"
                 aria-label="Знайдені товари"
               >
@@ -251,9 +255,15 @@ export function CatalogPicker({
                       variant?.product_variant_id === item.product_variant_id
                     }
                     key={item.product_variant_id}
-                    className="catalog-row"
+                    className="sale-row catalog-row"
                     onClick={() => {
                       hideKeyboard();
+                      // A row chosen, felt, as «Моделі»'s (spec §6.9; audit
+                      // 2026-11-15, goods P2-3).
+                      if (
+                        variant?.product_variant_id !== item.product_variant_id
+                      )
+                        buzz("selection");
                       onVariant(item);
                     }}
                   >

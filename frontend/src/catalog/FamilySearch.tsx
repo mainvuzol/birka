@@ -6,7 +6,7 @@ import { api } from "@/shared/api";
 import { useNextPageFailed } from "@/shared/nextPage";
 import { Placeholder } from "@/shared/Placeholder";
 import { SearchField } from "@/shared/SearchField";
-import { hideKeyboard } from "@/shared/telegram";
+import { buzz, hideKeyboard } from "@/shared/telegram";
 import { Unread } from "@/shared/Unread";
 import { visible } from "@/shared/visible";
 
@@ -167,7 +167,7 @@ export function FamilySearch({
             day={false}
             rowShape={{
               list: "catalog-found",
-              row: "catalog-row",
+              row: "sale-row catalog-row",
               meta: false,
             }}
           />
@@ -212,11 +212,16 @@ export function FamilySearch({
                   <button
                     key={family.family_id}
                     type="button"
-                    className="catalog-row"
+                    // In the sheet, white already: rows 64 with no block
+                    // (audit 2026-11-15, goods P2-2).
+                    className="sale-row catalog-row"
                     disabled={blocked}
                     aria-label={`Обрати модель: ${familyLabel(family)}`}
                     onClick={() => {
                       hideKeyboard();
+                      // A row chosen, felt, as «Моделі»'s (spec §6.9; audit
+                      // 2026-11-15, goods P2-3).
+                      buzz("selection");
                       choose(family);
                     }}
                   >

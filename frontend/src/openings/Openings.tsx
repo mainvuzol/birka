@@ -772,6 +772,7 @@ function NewList({
         ? { ...envelope, file: read.file, file_name: read.name }
         : { ...envelope, lines };
     if (draft.mode === "file" && bodyBytes(body) > MAX_BODY_BYTES) {
+      buzz("error");
       setProblems([TOO_LARGE]);
       return;
     }
@@ -788,6 +789,9 @@ function NewList({
         { slow: draft.mode === "file" },
       );
       saveDraft(store, null);
+      // Saved, or refused, felt as a line's and a file's (audit 2026-11-15,
+      // goods P2-3); no answer, nothing — it may still have been saved.
+      buzz("success");
       done(list);
     } catch (error) {
       // No answer, none in time, or a gateway's own (502, 503, 504) leaves
@@ -802,6 +806,7 @@ function NewList({
       const conflict =
         error instanceof ApiError && error.code === "IDEMPOTENCY_CONFLICT";
       const unanswered = !(error instanceof ApiError) || unreachable(error);
+      if (!unanswered) buzz("error");
       if (unanswered) setDraft({ unsettled: true });
       if (conflict) setDraft({ unsettled: false });
       if (error instanceof SlowAnswer || conflict || listConflict(error))
@@ -897,8 +902,10 @@ function NewList({
                 key={location.id}
                 aria-pressed={draft.location_id === location.id}
                 onClick={() => {
-                  // A choice, felt (spec §4.4).
-                  buzz("selection");
+                  // A choice changed, felt (spec §4.4): the one chosen
+                  // tapped again changes nothing (audit 2026-11-15, goods
+                  // P2-3).
+                  if (draft.location_id !== location.id) buzz("selection");
                   setDraft({ location_id: location.id });
                 }}
               >

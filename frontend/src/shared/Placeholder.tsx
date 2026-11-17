@@ -217,7 +217,15 @@ export function Placeholder({
         {status}
         <div className="placeholder" aria-hidden="true">
           {!debts && day && <span className="skeleton skeleton-day" />}
-          <div className={block ? "list-block" : rowShape?.list}>
+          {/* On a block, the list's own class too: its margins, so the rows
+              come where the grey stood (audit 2026-11-15, goods P2-2). */}
+          <div
+            className={
+              block
+                ? ["list-block", rowShape?.list ?? ""].join(" ").trim()
+                : rowShape?.list
+            }
+          >
             {Array.from({ length: rows }, (_, n) => (
               <div
                 className={
