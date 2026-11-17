@@ -13,7 +13,9 @@ import { Unread } from "@/shared/Unread";
 import { Placeholder } from "@/shared/Placeholder";
 import type { Store } from "@/orders/types";
 import { visible } from "@/shared/visible";
+import { Eyelet } from "@/shared/Eyelet";
 import { Icon } from "@/shared/Icon";
+import { SendingLine } from "@/shared/Sending";
 import { SearchField } from "@/shared/SearchField";
 import { Sheet } from "@/shared/Sheet";
 import { buzz } from "@/shared/telegram";
@@ -392,19 +394,30 @@ export function SupplierPicker({
       {none ? `Новий постачальник «${typed}»` : "Новий постачальник"}
     </button>
   );
+  // Pressed, the eyelet's ring on it and «Ще надсилаємо…» right over it
+  // after 3 s, in a sheet's foot or in place (spec §6.5; audit 2026-11-15,
+  // money P2-6 (б); review).
   const addButton = (
-    <button
-      type="button"
-      // In a sheet already, whose foot or MainButton is its main: the
-      // secondary (audit after stage 2, frame P1-1; review).
-      className={inPlace ? undefined : "sheet-done primary"}
-      disabled={disabled || busy || name.trim() === ""}
-      onClick={() => {
-        void add();
-      }}
-    >
-      Додати постачальника
-    </button>
+    <div className="sending-room supplier-add-room">
+      <SendingLine busy={busy} />
+      <button
+        type="button"
+        // In a sheet already, whose foot or MainButton is its main: the
+        // secondary (audit after stage 2, frame P1-1; review).
+        className={
+          [inPlace ? "" : "sheet-done primary", busy ? "pressed" : ""]
+            .filter(Boolean)
+            .join(" ") || undefined
+        }
+        disabled={disabled || busy || name.trim() === ""}
+        onClick={() => {
+          void add();
+        }}
+      >
+        {busy && <Eyelet state="spin" size={20} />}
+        Додати постачальника
+      </button>
+    </div>
   );
   const fields = (
     <fieldset className="supplier-new" disabled={disabled || busy}>

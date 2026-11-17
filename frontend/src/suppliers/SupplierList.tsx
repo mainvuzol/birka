@@ -13,6 +13,8 @@ import { buzz } from "@/shared/telegram";
 import { enterGoes } from "@/shared/enter";
 import { visible } from "@/shared/visible";
 import { Empty } from "@/shared/Empty";
+import { Eyelet } from "@/shared/Eyelet";
+import { SendingLine } from "@/shared/Sending";
 import type { Store } from "@/orders/types";
 import { matching, useSuppliers } from "./Picker";
 import type { Supplier } from "./types";
@@ -207,17 +209,26 @@ function SupplierEdit({
         if (!busy) close();
       }}
       fallback={fallback}
+      // Pressed, the eyelet's ring on it and «Ще надсилаємо…» over it after
+      // 3 s, as a sheet that asks why (spec §6.5; audit 2026-11-15, money
+      // P2-6 (б)); never pressed twice, as before.
       foot={
-        <button
-          type="button"
-          className="sheet-done primary"
-          disabled={busy || name.trim() === ""}
-          onClick={() => {
-            void save();
-          }}
-        >
-          Зберегти
-        </button>
+        <>
+          <SendingLine busy={busy} />
+          <button
+            type="button"
+            className={
+              busy ? "sheet-done primary pressed" : "sheet-done primary"
+            }
+            disabled={busy || name.trim() === ""}
+            onClick={() => {
+              void save();
+            }}
+          >
+            {busy && <Eyelet state="spin" size={20} />}
+            Зберегти
+          </button>
+        </>
       }
     >
       <label>

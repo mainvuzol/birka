@@ -944,6 +944,88 @@ for (const [name, theme] of [
     await page.screenshot({ path: `test-results/borrowed-sold-${name}.png` });
   });
 
+test("in «Як надійшов» «Додати постачальника» in place, on its way: the eyelet's ring on it, never faded, «Ще надсилаємо…» right over it past 3 s; it and «Скасувати» under it never move; written once (audit 2026-11-15, money P2-6 (б); review)", async ({
+  page,
+}) => {
+  const coat = await aModel(page);
+  const name = `На місці ${randomUUID().slice(0, 6)}`;
+  // The new supplier's write held until it is let go: a slow network.
+  let writes = 0;
+  let answer = (): void => undefined;
+  await page.route("**/api/v1/suppliers", async (route) => {
+    if (route.request().method() !== "POST") {
+      await route.fallback();
+      return;
+    }
+    writes += 1;
+    await new Promise<void>((done) => {
+      answer = done;
+    });
+    await route.fallback();
+  });
+  await openAs(page, hanna);
+  await section(page, "Приймання");
+  await receiveModel(page, coat.model);
+  await receiveUnits(page, "M", 1);
+  const way = await receiveWay(page);
+  await way
+    .getByRole("group", { name: "Як надійшов", exact: true })
+    .getByRole("button", { name: "Позичено", exact: true })
+    .click();
+  const list = await supplierList(page, { inside: way });
+  await list
+    .getByRole("button", { name: "Новий постачальник", exact: true })
+    .click();
+  await way.getByLabel("Назва постачальника").fill(name);
+  const fields = way.locator(".supplier-new");
+  const add = fields.getByRole("button", {
+    name: "Додати постачальника",
+    exact: true,
+  });
+  const cancel = fields.getByRole("button", { name: "Скасувати", exact: true });
+  const [addAt, cancelAt] = [
+    await add.boundingBox(),
+    await cancel.boundingBox(),
+  ];
+  if (!addAt || !cancelAt) throw new Error("not laid out");
+  // «Скасувати» under it, on its own line.
+  expect(cancelAt.y).toBeGreaterThanOrEqual(addAt.y + addAt.height - 1);
+  await add.click();
+  await expect.poll(() => writes).toBe(1);
+  await expect(add).toHaveClass(/\bpressed\b/);
+  await expect(add.locator(".eyelet-spin")).toBeVisible();
+  await expect(add).toHaveCSS("opacity", "1");
+  const line = fields.locator(".sending-line");
+  await expect(line).toHaveRole("status");
+  await expect(line).not.toContainText("Ще надсилаємо…");
+  await expect(line).toHaveText("Ще надсилаємо…", { timeout: 6000 });
+  const [said, addNow, cancelNow] = [
+    await line.locator("span").boundingBox(),
+    await add.boundingBox(),
+    await cancel.boundingBox(),
+  ];
+  if (!said || !addNow || !cancelNow) throw new Error("not laid out");
+  // Right over it, 8 as over the till's dock.
+  expect(said.y + said.height).toBeLessThanOrEqual(addNow.y);
+  expect(addNow.y - (said.y + said.height)).toBeLessThanOrEqual(12);
+  // Nothing moves: the button's place and size, «Скасувати»'s place.
+  for (const [now, was] of [
+    [addNow, addAt],
+    [cancelNow, cancelAt],
+  ] as const) {
+    expect(Math.abs(now.x - was.x)).toBeLessThanOrEqual(1);
+    expect(Math.abs(now.y - was.y)).toBeLessThanOrEqual(1);
+    expect(Math.abs(now.width - was.width)).toBeLessThanOrEqual(1);
+    expect(Math.abs(now.height - was.height)).toBeLessThanOrEqual(1);
+  }
+  await add.click({ force: true });
+  answer();
+  await expect(
+    way.getByRole("button", { name: `Постачальник ${name}`, exact: true }),
+  ).toBeVisible();
+  expect(writes).toBe(1);
+});
+
 /** The WCAG contrast of an element's text against what it is drawn on. */
 async function contrast(element: Locator): Promise<number> {
   return element.evaluate((node) => {

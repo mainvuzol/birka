@@ -765,15 +765,16 @@ test("goods returned are set off against an invoice, and their return waits for 
   await expect(setOff).toContainText(
     `Повернення постачальнику «${supplier}» з цього магазину`,
   );
-  // The one standing, none chosen beforehand.
+  // The one standing, none chosen beforehand: one of a group chosen, a
+  // radio (audit 2026-11-15, money P2-6 (а)).
   const returns = setOff
-    .getByRole("list", { name: "Повернення" })
-    .getByRole("button");
+    .getByRole("radiogroup", { name: "Повернення" })
+    .getByRole("radio");
   await expect(returns).toHaveCount(1);
   await expect(returns).toHaveText(/^\d\d\.\d\d · 2 шт\. · склад «.+»$/);
-  await expect(returns).toHaveAttribute("aria-pressed", "false");
+  await expect(returns).not.toBeChecked();
   await returns.click();
-  await expect(returns).toHaveAttribute("aria-pressed", "true");
+  await expect(returns).toBeChecked();
   // More than is owed: said as it is typed, under the field, and the button
   // holds — nothing sent — as the payment's (audit 2026-11-13, money P2-5
   // (а)).
@@ -827,7 +828,7 @@ test("goods returned are set off against an invoice, and their return waits for 
   await expect(setOff.getByRole("alert")).toHaveText(
     "Не записано: дані змінилися — перегляньте їх.",
   );
-  await expect(returns).toHaveAttribute("aria-pressed", "true");
+  await expect(returns).toBeChecked();
   await expect(
     setOff.getByLabel("Скільки зарахував постачальник, грн"),
   ).toHaveValue("1200");
@@ -1088,7 +1089,7 @@ test("read slowly, «Зарахувати повернення» holds three ret
   ).toHaveClass(/\bvisually-hidden\b/);
   returns();
   await expect(
-    setOff.getByRole("list", { name: "Повернення" }).getByRole("button"),
+    setOff.getByRole("radiogroup", { name: "Повернення" }).getByRole("radio"),
   ).toHaveCount(1);
   await expect(cards).toHaveCount(0);
   await page.keyboard.press("Escape");
@@ -2261,6 +2262,209 @@ for (const [name, theme] of [
       "font-size",
       "32px",
     );
+  });
+
+for (const [name, theme] of [
+  ["light", light],
+  ["dark", dark],
+] as const)
+  test(`in the ${name} theme «Нова накладна» says more paid at once than its sum as it is typed, under the field, and «Записати накладну» holds — «1500,» read as 1500, on sending too; a history with nothing in it and a set-off with no return say so in pencil at 14; two returns to set off are radios the arrows go through (audit 2026-11-15, money P2-3 (б), P2-6 (а)(в))`, async ({
+    page,
+  }) => {
+    const key = randomUUID().slice(0, 6);
+    const [lone, two] = [`Порожня ${key}`, `Два повернення ${key}`];
+    const headers = await headersOf(page, hanna);
+    await anInvoice(page, await aSupplier(page, lone), "1000.00");
+    // Two returns standing to one supplier, a unit each.
+    const twoId = await aSupplier(page, two);
+    const created = await page.request.post("/api/v1/catalog/products", {
+      headers: { ...headers, "Idempotency-Key": randomUUID() },
+      data: {
+        store_id: centre,
+        concept: `Радіо ${randomUUID().slice(0, 8)}`,
+        variant: { color: "сірий" },
+        sizes: [{ system: "ALPHA", code: "L" }],
+      },
+    });
+    const product = (await created.json()) as {
+      product_variant_id: string;
+      sizes: { size_id: string }[];
+    };
+    const goods = {
+      product_variant_id: product.product_variant_id,
+      size_id: product.sizes[0]?.size_id ?? "",
+    };
+    const receipt = await page.request.post("/api/v1/inventory/receipts", {
+      headers: { ...headers, "Idempotency-Key": randomUUID() },
+      data: {
+        store_id: centre,
+        location_id: fixture.network_shared_location_id,
+        command_id: randomUUID(),
+        lines: [{ ...goods, quantity: 2, acquisition_type: "PURCHASE" }],
+        notes: null,
+      },
+    });
+    expect(receipt.status()).toBe(201);
+    for (let at = 0; at < 2; at += 1) {
+      const returned = await page.request.post("/api/v1/supplier-returns", {
+        headers,
+        data: {
+          command_id: randomUUID(),
+          store_id: centre,
+          location_id: fixture.network_shared_location_id,
+          supplier_id: twoId,
+          lines: [{ ...goods, quantity: 1 }],
+          note: null,
+        },
+      });
+      expect(returned.status()).toBe(201);
+    }
+    await anInvoice(page, twoId, "3000.00");
+    const recorded = posts(page, /\/api\/v1\/supplier-invoices$/);
+    await page.setViewportSize({ width: 360, height: 640 });
+    await invoicesAt(page, hanna, { theme });
+    const pencil = await resolved(page, "var(--pencil)");
+
+    // Nothing paid or set off yet: a `meta` line in pencil (P2-6 (в)).
+    await open(page, lone);
+    const none = page.getByText("Оплат і заліків ще не було.", {
+      exact: true,
+    });
+    await expect(none).toHaveCSS("font-size", "14px");
+    await expect(none).toHaveCSS("color", pencil);
+    expect(await contrast(none)).toBeGreaterThanOrEqual(4.5);
+    // No return to set off: the same.
+    await act(page, "Зарахувати повернення");
+    const empty = await sheet(page, "Зарахувати повернення");
+    const nothing = empty.getByText(
+      `Цей магазин нічого не повертав постачальнику «${lone}».`,
+      { exact: true },
+    );
+    await expect(nothing).toHaveCSS("font-size", "14px");
+    await expect(nothing).toHaveCSS("color", pencil);
+    expect(await contrast(nothing)).toBeGreaterThanOrEqual(4.5);
+    await page.keyboard.press("Escape");
+    await expect(empty).toHaveCount(0);
+
+    // Two returns: one chosen of a group, radios; Tab's one stop the first,
+    // none chosen; the arrows choose as they go, round the ends (P2-6 (а)).
+    await back(page, "Накладні").click();
+    await open(page, two);
+    await act(page, "Зарахувати повернення");
+    const setOff = await sheet(page, "Зарахувати повернення");
+    const radios = setOff
+      .getByRole("radiogroup", { name: "Повернення" })
+      .getByRole("radio");
+    await expect(radios).toHaveCount(2);
+    const [first, second] = [radios.nth(0), radios.nth(1)];
+    await expect(first).not.toBeChecked();
+    await expect(second).not.toBeChecked();
+    await expect(first).toHaveAttribute("tabindex", "0");
+    await expect(second).toHaveAttribute("tabindex", "-1");
+    await first.focus();
+    for (const [arrow, now, was] of [
+      ["ArrowDown", second, first],
+      ["ArrowDown", first, second],
+      ["ArrowUp", second, first],
+      ["ArrowLeft", first, second],
+      ["ArrowRight", second, first],
+    ] as const) {
+      await page.keyboard.press(arrow);
+      await expect(now).toBeFocused();
+      await expect(now).toBeChecked();
+      await expect(was).not.toBeChecked();
+      await expect(now).toHaveAttribute("tabindex", "0");
+      await expect(was).toHaveAttribute("tabindex", "-1");
+    }
+    // The chosen in the chosen colours, as before.
+    await expect(second).toHaveCSS(
+      "background-color",
+      await resolved(page, "var(--chosen)"),
+    );
+    await expect(first).toHaveCSS(
+      "background-color",
+      await resolved(page, "var(--card)"),
+    );
+    // Taken by a tap too.
+    await first.click();
+    await expect(first).toBeChecked();
+    await expect(second).not.toBeChecked();
+    await page.keyboard.press("Escape");
+    await expect(setOff).toHaveCount(0);
+
+    // More paid at once than the sum: said under the field as it is typed,
+    // the field wrong and described by it, «Записати накладну» held, nothing
+    // sent (P2-3 (б)).
+    await back(page, "Накладні").click();
+    await page
+      .getByRole("button", { name: "Записати накладну", exact: true })
+      .click();
+    await expect(
+      page.getByRole("heading", { name: "Нова накладна", level: 1 }),
+    ).toBeVisible();
+    await pickSupplier(page, lone);
+    const sum = page.getByLabel("Сума за накладною, грн");
+    const paidNow = page.getByLabel("Сплачено одразу, грн");
+    const over = page.locator(".field-wrong");
+    const words = "Сплачено одразу не може бути більше, ніж сума накладної.";
+    const make = page
+      .locator(".order-dock")
+      .getByRole("button", { name: "Записати накладну", exact: true });
+    await sum.fill("1000");
+    await paidNow.fill("1200");
+    await expect(over).toHaveText(words);
+    await expect(over).toHaveAttribute("role", "alert");
+    await expect(over).toHaveCSS("font-size", "14px");
+    await expect(over).toHaveCSS(
+      "color",
+      await resolved(page, "var(--danger)"),
+    );
+    expect(await contrast(over)).toBeGreaterThanOrEqual(4.5);
+    await expect(paidNow).toHaveAttribute("aria-invalid", "true");
+    await expect(paidNow).toHaveAccessibleDescription(words);
+    await expect(paidNow).toHaveCSS(
+      "border-top-color",
+      await resolved(page, "var(--danger)"),
+    );
+    // Under its field, over the note.
+    const [field, line, note] = [
+      await paidNow.boundingBox(),
+      await over.boundingBox(),
+      await page.getByLabel("Примітка (необов’язково)").boundingBox(),
+    ];
+    if (!field || !line || !note) throw new Error("not laid out");
+    expect(line.y).toBeGreaterThanOrEqual(field.y + field.height - 1);
+    expect(line.y + line.height).toBeLessThanOrEqual(note.y);
+    await expect(make).toBeDisabled();
+    await make.click({ force: true });
+    // As much as the sum is not more: no line, the button free.
+    await paidNow.fill("1000");
+    await expect(over).toHaveCount(0);
+    await expect(paidNow).not.toHaveAttribute("aria-invalid", "true");
+    await expect(paidNow).not.toHaveAttribute("aria-describedby", /.+/);
+    await expect(make).toBeEnabled();
+    // A sum still being typed, its comma last, is read as it stands.
+    await paidNow.fill("1000,");
+    await expect(over).toHaveCount(0);
+    await paidNow.fill("1000,01");
+    await expect(over).toBeVisible();
+    await sum.fill("1500,");
+    await expect(over).toHaveCount(0);
+    await paidNow.fill("1500,01");
+    await expect(over).toBeVisible();
+    await expect(make).toBeDisabled();
+    await paidNow.fill("1000,");
+    await expect(over).toHaveCount(0);
+    expect(recorded.bodies).toHaveLength(0);
+    await make.click();
+    await expect(
+      result(page).getByRole("heading", { name: "Накладну записано" }),
+    ).toBeVisible();
+    expect(recorded.bodies).toHaveLength(1);
+    expect(recorded.bodies[0]).toMatchObject({
+      amount: "1500.00",
+      paid_now: "1000.00",
+    });
   });
 
 test("at 390 × 844 the total and three tags show at once, at 360 × 640 the total and one; a forty-letter name wraps, its sum whole; its age said once five minutes old", async ({

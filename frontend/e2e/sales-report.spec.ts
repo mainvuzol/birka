@@ -565,7 +565,7 @@ test("a manager reads their store alone, with no store to choose; a seller has n
   ).toHaveCount(0);
 });
 
-test("«Сьогодні», «Вчора», «Тиждень» and «Місяць» as on «Гроші», from the server's today; days of one's own in «Інші дні», refused when they make no period", async ({
+test("«Сьогодні», «Вчора», «Тиждень» and «Місяць» as on «Гроші», from the server's today; days of one's own in «Інші дні», said in the sheet before «Показати» when they make no period — a year at most, as the server counts it — and refused in the server's words if sent (audit 2026-11-15, money P2-3 (а))", async ({
   page,
 }) => {
   const asked: string[] = [];
@@ -643,23 +643,114 @@ test("«Сьогодні», «Вчора», «Тиждень» and «Місяц�
   });
   await expect(change).toBeVisible();
 
-  // The last day before the first is refused, in the server's words.
+  // The last day before the first: said under the days as they are chosen,
+  // in the server's words; «Показати» holds and nothing is asked; the table
+  // behind the sheet stands (audit 2026-11-15, money P2-3 (а)).
   await change.click();
   await expect(sheet).toHaveAttribute("data-ready", "");
-  await expect(sheet.getByLabel("До", { exact: true })).toHaveValue(
-    "2026-03-10",
-  );
-  await sheet.getByLabel("Від").fill("2026-03-11");
-  await sheet.getByRole("button", { name: "Показати", exact: true }).click();
-  await expect(page.getByRole("alert")).toHaveText(
-    "Оберіть період від одного дня до року; перший день — не пізніше останнього.",
-  );
+  const from = sheet.getByLabel("Від");
+  const to = sheet.getByLabel("До", { exact: true });
+  await expect(to).toHaveValue("2026-03-10");
+  // The dates' own pickers keep the first not after the last; a year is
+  // said, never bounded, so days long past stay two picks away (review).
+  await expect(from).toHaveAttribute("max", "2026-03-10");
+  await expect(to).toHaveAttribute("min", "2026-03-09");
+  await expect(from).not.toHaveAttribute("min", /.+/);
+  await expect(to).not.toHaveAttribute("max", /.+/);
+  const show = sheet.getByRole("button", { name: "Показати", exact: true });
+  const wrong = sheet.locator(".field-wrong");
+  const words =
+    "Оберіть період від одного дня до року; перший день — не пізніше останнього.";
+  await expect(wrong).toHaveCount(0);
+  await from.fill("2026-03-11");
+  await expect(wrong).toHaveText(words);
+  await expect(wrong).toHaveAttribute("role", "alert");
+  await expect(wrong).toHaveCSS("font-size", "14px");
+  for (const field of [from, to]) {
+    await expect(field).toHaveAttribute("aria-invalid", "true");
+    await expect(field).toHaveAccessibleDescription(words);
+  }
+  await expect(show).toBeDisabled();
+  const before = asked.length;
+  await show.click({ force: true });
+  await expect(sheet).toBeVisible();
+  expect(asked).toHaveLength(before);
+  await expect(table(page)).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Моделі", exact: true }),
+  ).toHaveCount(1);
+  // Days that make a period again: the line gone, «Показати» free.
+  await from.fill("2026-03-10");
+  await expect(wrong).toHaveCount(0);
+  await expect(from).not.toHaveAttribute("aria-invalid", "true");
+  await expect(from).not.toHaveAttribute("aria-describedby", /.+/);
+  await expect(show).toBeEnabled();
+  // A year at most, as the server counts it: 365 days apart may be shown,
+  // 366 apart may not.
+  await from.fill("2025-03-09");
+  await expect(wrong).toHaveText(words);
+  await expect(show).toBeDisabled();
+  // A year of six figures, which a desktop's field lets one type: no
+  // crash; with the other day empty, «Показати» holds and nothing is said;
+  // with both, it is said (review).
+  const typed = (field: Locator, value: string): Promise<void> =>
+    field.evaluate((node, text) => {
+      const input = node as HTMLInputElement;
+      Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        "value",
+      )?.set?.call(input, text);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    }, value);
+  await to.fill("");
+  await typed(from, "202666-10-03");
+  await expect(from).toHaveValue("202666-10-03");
+  await expect(sheet).toBeVisible();
+  await expect(wrong).toHaveCount(0);
+  await expect(show).toBeDisabled();
+  await from.fill("2026-03-09");
+  await typed(to, "202666-10-03");
+  await expect(to).toHaveValue("202666-10-03");
+  await expect(wrong).toHaveText(words);
+  await expect(show).toBeDisabled();
+  // Nothing was asked meanwhile.
+  expect(asked).toHaveLength(before);
+  await from.fill("2025-03-09");
+  await to.fill("2026-03-09");
+  await expect(wrong).toHaveCount(0);
+  await show.click();
+  await expect(sheet).toHaveCount(0);
+  await expect
+    .poll(() => asked.at(-1))
+    .toBe("?date_from=2025-03-09&date_to=2026-03-09");
+  await expect(table(page)).toBeVisible();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+
+  // Refused all the same — the server decides —: said in its words, as
+  // before.
+  await page.route("**/api/v1/reports/sales?*", async (route) => {
+    await route.fulfill({
+      status: 422,
+      json: {
+        code: "VALIDATION_FAILED",
+        message: "From one day to 366 days, the first not after the last",
+        details: { reason: "PERIOD", max_days: 366 },
+      },
+    });
+  });
+  await page.getByRole("button", { name: /^.+ · Змінити$/ }).click();
+  await expect(sheet).toHaveAttribute("data-ready", "");
+  await from.fill("2026-03-09");
+  await to.fill("2026-03-11");
+  await show.click();
+  await expect(page.getByRole("alert")).toHaveText(words);
   await expect(
     page.getByRole("button", { name: "Моделі", exact: true }),
   ).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "Спробувати ще раз" }),
   ).toHaveCount(0);
+  await page.unroute("**/api/v1/reports/sales?*");
   await period("Сьогодні").click();
   await expect(period("Сьогодні")).toHaveAttribute("aria-pressed", "true");
   await expect(

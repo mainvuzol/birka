@@ -11,6 +11,7 @@ import { Eyelet } from "@/shared/Eyelet";
 import { Icon } from "@/shared/Icon";
 import { SendingLine } from "@/shared/Sending";
 import { Sheet } from "@/shared/Sheet";
+import { radioArrows } from "@/shared/radioKeys";
 import { shortDay } from "@/credits/format";
 import {
   doneText,
@@ -416,6 +417,11 @@ function SetOff({
   const over = typing !== null && typing > (kopecks(invoice.owed) ?? 0n);
   const overSaid = over && problem === null;
   const overLine = useId();
+  // Where Tab enters the returns: the one chosen while it stands, else the
+  // first.
+  const stop = standing.some((item) => item.id === chosen)
+    ? chosen
+    : standing[0]?.id;
 
   function submit(): void {
     setProblem(null);
@@ -486,24 +492,37 @@ function SetOff({
           }}
         />
       ) : standing.length === 0 ? (
-        <p>
+        // Nothing to choose: a `meta` line in pencil (audit 2026-11-15,
+        // money P2-6 (в)).
+        <p className="t-meta nothing-yet">
           Цей магазин нічого не повертав постачальнику «
           {visible(invoice.supplier.name)}».
         </p>
       ) : (
         <>
-          <ul className="set-off-returns" aria-label="Повернення">
+          {/* One return chosen: a radio each, the arrows going through
+              them (audit 2026-11-15, money P2-6 (а)); the chosen in the
+              chosen colours, as before. One stop for Tab: the chosen, or
+              the first. */}
+          <ul
+            className="set-off-returns"
+            role="radiogroup"
+            aria-label="Повернення"
+            onKeyDown={radioArrows}
+          >
             {standing.map((item) => {
               const counted = item.set_offs.reduce(
                 (sum, setOff) => sum + (kopecks(setOff.amount) ?? 0n),
                 0n,
               );
               return (
-                <li key={item.id}>
+                <li key={item.id} role="none">
                   <button
                     type="button"
+                    role="radio"
                     className="set-off-return"
-                    aria-pressed={chosen === item.id}
+                    aria-checked={chosen === item.id}
+                    tabIndex={item.id === stop ? 0 : -1}
                     disabled={held || pressing}
                     onClick={() => {
                       setChosen(item.id);
