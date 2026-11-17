@@ -192,6 +192,7 @@ import {
 import type { Sale as SaleReceipt } from "@/sales/types";
 import { Cash, useDrawer } from "@/cash/Cash";
 import type { FixTarget } from "@/cash/Cash";
+import type { EventMethod } from "@/cash/types";
 import { loadCashCommand, useCashCommand } from "@/cash/commands";
 import {
   adjustmentErrorText,
@@ -1395,6 +1396,50 @@ function Workspace({
     queryFn: () => api<Order>(`/orders/${selectedId ?? ""}`, token),
     enabled: selectedId !== null,
   });
+  // A collected order's sale, where «Каса» is opened and the server gives
+  // this person its way: whether its way may be changed now is the
+  // server's, read with the card — from its row in the list, at once
+  // (audit 2026-11-15, orders-cash P2-3 (а)). «Каса»'s own read of it.
+  const shownOrder =
+    detail.data ?? (opening?.id === selectedId ? opening : null);
+  const fixSale =
+    canSeeCash && shownOrder?.sale_id && shownOrder.payment_method
+      ? shownOrder.sale_id
+      : null;
+  const saleWay = useQuery({
+    queryKey: ["cash-method", "SALE", fixSale],
+    queryFn: () =>
+      api<EventMethod>(
+        `/cash/sales/${fixSale ?? ""}/method?store_id=${store.id}`,
+        token,
+      ),
+    enabled: fixSale !== null,
+    retry: false,
+  });
+  // The card drawn once both are answered, so nothing comes under it
+  // later — a way read before, read again first, so a close since is never
+  // drawn as «may»; a second at most past the order's own answer, then
+  // drawn as one already is. Drawn already — collected on it, read again
+  // collected, or the way slow — the link's place held until the server
+  // says (decided here; review).
+  const [drawnId, setDrawnId] = useState<string | null>(null);
+  if (selectedId === null && drawnId !== null) setDrawnId(null);
+  const cardWaits =
+    detail.data !== undefined &&
+    fixSale !== null &&
+    (saleWay.isPending || saleWay.isFetching) &&
+    drawnId !== selectedId;
+  if (detail.data !== undefined && !cardWaits && drawnId !== selectedId)
+    setDrawnId(selectedId);
+  useEffect(() => {
+    if (!cardWaits) return;
+    const waited = window.setTimeout(() => {
+      setDrawnId(selectedId);
+    }, 1000);
+    return () => {
+      window.clearTimeout(waited);
+    };
+  }, [cardWaits, selectedId]);
   // The order command last sent, when it was a saved one resent: refused
   // for want of a way, it was an old «Клієнт забрав» (ADR-0012, B12), and
   // refused as having recorded nothing, it says which (ADR-0013 §1).
@@ -4198,16 +4243,16 @@ function Workspace({
           }}
         />
       ) : !canSeeOrders ? null : selectedId ? (
-        detail.data === undefined ? (
+        detail.data === undefined || cardWaits ? (
           // In the card's own frame, its way back and its title's place
           // where the card's will stand: nothing moves when it comes
           // (orders task list, P2-2).
           <>
             <ScreenHeader
               pushed
-              waiting={detail.isPending}
+              waiting={detail.isPending || cardWaits}
               after={
-                detail.isPending ? (
+                detail.isPending || cardWaits ? (
                   <CardLinePlace
                     order={opening?.id === selectedId ? opening : null}
                   />
@@ -4227,7 +4272,7 @@ function Workspace({
               }
             />
             <section className="order">
-              {detail.isPending ? (
+              {detail.isPending || cardWaits ? (
                 <CardPlaceholder
                   order={opening?.id === selectedId ? opening : null}
                 />
@@ -4296,22 +4341,21 @@ function Workspace({
                 setCollected(null);
               }}
               // Its sale, as the receipt's: «Каса» on it for whoever opens
-              // «Каса», «Повернення» on it for whoever takes returns.
+              // «Каса», «Повернення» on it for whoever takes returns. Only
+              // where the server gives this person its way — anywhere else,
+              // «Каса» would say it (G32; review, 2026-10-24) — and only
+              // while the server says it may be changed: what may not be
+              // done is not offered (audit 2026-11-15, orders-cash P2-3
+              // (а)); its read failed, nothing is said.
               fixWay={
-                canSeeCash &&
-                detail.data.sale_id &&
-                // Only where the server gives this person its way: anywhere
-                // else, «Каса» would say it (G32; review, 2026-10-24).
-                detail.data.payment_method
+                fixSale !== null && saleWay.data?.may_change
                   ? () => {
-                      setCashFix({
-                        target: "SALE",
-                        id: detail.data.sale_id ?? "",
-                      });
+                      setCashFix({ target: "SALE", id: fixSale });
                       setTab("cash");
                     }
                   : undefined
               }
+              fixHeld={fixSale !== null && saleWay.isPending}
               returnSale={
                 canReturn && detail.data.sale_id
                   ? () => {

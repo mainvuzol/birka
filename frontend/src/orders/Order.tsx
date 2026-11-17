@@ -133,8 +133,11 @@ interface CardProps {
   action: (action: string, extra?: Record<string, unknown>) => void;
   /** «До замовлень». */
   back: () => void;
-  /** «Каса» on its sale, for whoever opens «Каса». */
+  /** «Каса» on its sale, for whoever opens «Каса», while its way may be
+   * changed. */
   fixWay?: (() => void) | undefined;
+  /** Whether it may is not answered yet: its place held. */
+  fixHeld?: boolean;
   /** «Повернення» on its sale, for whoever takes returns. */
   returnSale?: (() => void) | undefined;
   /** Another order with the same waybill, opened from its row. */
@@ -315,6 +318,7 @@ function Card({
   action,
   back,
   fixWay,
+  fixHeld = false,
   returnSale,
   openOther,
   openSheet,
@@ -585,12 +589,14 @@ function Card({
               order={order}
               kept={collected === "kept"}
               fixWay={fixWay}
+              fixHeld={fixHeld}
               returnSale={returnSale}
             />
           ) : (
             <CollectedLine
               order={order}
               fixWay={fixWay}
+              fixHeld={fixHeld}
               returnSale={returnSale}
             />
           ))}

@@ -10627,3 +10627,53 @@ earlier what the server would answer. No word on a screen changes.
   invoice and «Цей магазин нічого не повертав постачальнику «…».» in the
   set-off are `meta` 14 in pencil, as an empty search's; a reader hears them
   as before.
+
+## Chosen in chat — 2026-11-17 (audit 2026-11-15, batch 7: «Каса»'s tail — «Змінити спосіб оплати» on a collected order only while the server says the way may be changed; «Операції дня»'s rows that open with their chevron; orders-cash P2-3 (а), P2-4)
+
+The orders-cash task list's last open points («merged, go next» after
+#220). P2-3 is built by its option (а), as the task list says until the
+owner answers В15-З1: the owner may still choose (б), the link as before.
+Nothing recorded, sent or counted changes; who may change a way, and when,
+is the server's, as before. No word on a screen changes.
+
+- **«Змінити спосіб оплати» on a collected order** (orders-cash P2-3 (а);
+  design direction P7 — what may not be done is not there): offered, as
+  before, only where «Каса» is opened and the server gives this person the
+  sale's way (G32), and now only while the server says the way may be
+  changed now — `may_change` of «Каса»'s own read of the sale's way
+  (`/cash/sales/{id}/method`). Nothing on the phone decides it: a seller's
+  own sale before the close, the owner and managers any time, nothing in a
+  store that does not trade or for a sale with no drawer's period — all as
+  the server answers. Its read failed: no link, nothing said — a read,
+  never a command. «Оформити повернення» as before.
+  - The card is read with its way: from its row in the list (or «Сьогодні»'s
+    search), both are asked at once; and it is drawn once both are
+    answered, so nothing comes under it later.
+  - Decided here (review): a way read before is read again before the card
+    is drawn, so a close since — on another phone — is never drawn as
+    «may».
+  - Decided here (review): the card waits for its way a second at most past
+    the order's own answer; then it is drawn as a card already drawn is
+    (next point), the delivery, the waybill and the return not held by a
+    slow read. Past that second, a way read before stands until it is read
+    again.
+  - Decided here: a card already drawn — «Клієнт забрав» just pressed on
+    it, kept and confirmed later, read again collected, or its way slow —
+    holds the link's place, unseen and out of reach, under the stub until
+    the server says: the link comes into it, nothing under it moving. Where
+    the server says no — rare for whoever collected it: a sale with no
+    drawer's period, a store that does not trade — the place goes and what
+    is under it moves up once.
+  - «Каса»'s screen «Змінити спосіб оплати» and its line «…тепер може лише
+    менеджер або власник.» stay, for the race (the drawer closed between
+    the read and the tap) and for the till's receipt; the refusal at the
+    press is as before.
+- **«Операції дня»** (orders-cash P2-4; spec §6.8): a row that opens its
+  operation's card — one the server says may be changed — has the chevron
+  of 16 in pencil, as «Ваші операції»'s, on the title's first line beside
+  its sum; one that may not be changed has none, «змінити не можна» in its
+  line as before. The row's height, its sum and its way's sticker stand
+  where they stood.
+  - Decided here: a row that opens nothing keeps its sum in the column of
+    the sums of those that open (the chevron's 16 and its gap of 12 kept
+    empty), so the sums read down one column.

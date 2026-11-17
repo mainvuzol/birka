@@ -68,20 +68,36 @@ function OwedLines({
 }
 
 /** «Змінити спосіб оплати» and «Оформити повернення», as the receipt has
- * them: for whoever opens «Каса», and whoever takes returns. */
+ * them: for whoever opens «Каса» while the server says the way may be
+ * changed, and whoever takes returns. Not answered yet on a card already
+ * drawn, the link's place is held, unseen, so nothing under it moves when
+ * it comes (audit 2026-11-15, orders-cash P2-3 (а); decided here). */
 export function SaleLinks({
   fixWay,
+  fixHeld = false,
   returnSale,
 }: {
   fixWay?: (() => void) | undefined;
+  fixHeld?: boolean;
   returnSale?: (() => void) | undefined;
 }): JSX.Element {
   return (
     <>
-      {fixWay && (
+      {fixWay ? (
         <button type="button" className="quiet" onClick={fixWay}>
           Змінити спосіб оплати
         </button>
+      ) : (
+        fixHeld && (
+          <button
+            type="button"
+            className="quiet link-held"
+            tabIndex={-1}
+            aria-hidden="true"
+          >
+            Змінити спосіб оплати
+          </button>
+        )
       )}
       {returnSale && (
         // A sale is never changed: a mistake is returned, then sold again
@@ -113,11 +129,13 @@ export function Collected({
   order,
   kept,
   fixWay,
+  fixHeld = false,
   returnSale,
 }: {
   order: Order;
   kept: boolean;
   fixWay?: (() => void) | undefined;
+  fixHeld?: boolean;
   returnSale?: (() => void) | undefined;
 }): JSX.Element {
   const heading = useRef<HTMLHeadingElement>(null);
@@ -172,7 +190,7 @@ export function Collected({
         {/* Said in ink: what to do at the terminal, or not. */}
         {kept && way === "CARD" && <p>{chargeOnce(taken)}</p>}
       </Stub>
-      <SaleLinks fixWay={fixWay} returnSale={returnSale} />
+      <SaleLinks fixWay={fixWay} fixHeld={fixHeld} returnSale={returnSale} />
     </div>
   );
 }
@@ -182,10 +200,12 @@ export function Collected({
 export function CollectedLine({
   order,
   fixWay,
+  fixHeld = false,
   returnSale,
 }: {
   order: Order;
   fixWay?: (() => void) | undefined;
+  fixHeld?: boolean;
   returnSale?: (() => void) | undefined;
 }): JSX.Element {
   const owed = owedText(order);
@@ -201,7 +221,7 @@ export function CollectedLine({
           <OwedLines owed={order.credit.owed} />
         </>
       )}
-      <SaleLinks fixWay={fixWay} returnSale={returnSale} />
+      <SaleLinks fixWay={fixWay} fixHeld={fixHeld} returnSale={returnSale} />
     </>
   );
 }

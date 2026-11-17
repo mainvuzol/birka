@@ -1157,8 +1157,21 @@ function CorrectStep({
                             {targetLabels[event.target]} · {timeOf(event.at)} ·{" "}
                             {visible(event.by)}
                           </span>
-                          <span className="history-sum">
-                            {money(event.amount)}
+                          {/* One that opens its card says so on the
+                              title's line, as «Ваші операції»'s; one that
+                              may not be changed opens nothing (audit
+                              2026-11-15, orders-cash P2-4). */}
+                          <span className="correct-end">
+                            <span className="history-sum">
+                              {money(event.amount)}
+                            </span>
+                            {event.may_change && (
+                              <Icon
+                                name="chevron-right"
+                                size={16}
+                                className="sale-open"
+                              />
+                            )}
                           </span>
                         </span>
                         <span className="sale-meta">
