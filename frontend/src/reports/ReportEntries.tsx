@@ -180,6 +180,8 @@ export function ReportEntries({
           const first =
             before === undefined || dayOf(before.at, today).key !== key;
           const paper = paperLine(entry);
+          const sum =
+            entry.kind === "SALE" ? money(entry.amount) : minus(entry.amount);
           return (
             <li key={`${entry.kind}:${entry.id}`} className="timeline-row">
               <span className="timeline-day">
@@ -197,9 +199,11 @@ export function ReportEntries({
               <span className="timeline-node" aria-hidden="true" />
               <span className="timeline-main">
                 <span className="timeline-what">
-                  {entry.kind === "SALE"
-                    ? `Продаж ${money(entry.amount)}`
-                    : `Повернення ${minus(entry.amount)}`}
+                  {entry.kind === "SALE" ? "Продаж" : "Повернення"}
+                  {/* Heard in its place, as before; seen on the right, the
+                      sums under one another (audit 2026-11-15, money
+                      P2-1). */}
+                  <span className="visually-hidden"> {sum}</span>
                 </span>
                 <span className="timeline-meta">
                   {[
@@ -216,6 +220,9 @@ export function ReportEntries({
                 {paper && (
                   <span className="timeline-meta paper-meta">{paper}</span>
                 )}
+              </span>
+              <span className="timeline-sum" aria-hidden="true">
+                {sum}
               </span>
             </li>
           );

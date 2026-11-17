@@ -10492,3 +10492,72 @@ now has its own screen in place of a line (sale P2-3).
   - Decided here: an order opened later says what is owed so far (the
     server's answer). Once nothing is left, «Покупець винен 0,00 грн» stays
     as it was, plain, not in the debt's colour.
+
+## Chosen in chat — 2026-11-16 (audit 2026-11-15, batch 5: money's lines and cards — a history's and the report's sums on the right in money-s; the invoice stickers in their tones' colours and marks; the report table's figures at 16; «Винні» 56 and a short phone's payment as S21; «1500,» read as 1500; «Записати накладну» and «Повернути товар постачальнику» in words; «Де гроші зараз» waiting in the shape it comes with; money P2-1, P2-2, P2-4, P2-5)
+
+The money batch («merged, go next» after #218). Nothing recorded, sent or
+counted changes, and no sum is computed anew: every sum is the server's
+answer, as before. No word on a screen changes, except that two «+» say the
+words a reader already heard (P2-4).
+
+- **A line's sum on the right** (money P2-1 (а); spec §6.21): in an
+  invoice's «Історія» and in «Продажі й повернення» the line's title is its
+  word — «Оплата», «Залік за повернення», «Списано», «Продаж», «Повернення» —
+  and its sum stands on the right in `money-s` (16/20, 600, even digits), as
+  on «Каса»'s and a customer's timelines; «Повернення»'s with its «−».
+  - Decided here: a reader hears each line as before, the sum after its word
+    (it stays in the title for the reader alone); the sum on the right is
+    for the eye alone.
+  - In an invoice's history the sum stands before the chevron's place: the
+    sums' right edges are one vertical whether the line may be cancelled or
+    not.
+  - `.timeline-sum` is `money-s` everywhere it is used: «Каса», a customer's
+    history, an invoice's, the report's.
+- **The invoice stickers** (money P2-1 (б); spec §6.18): «Сплачено
+  повністю» in the paid's colours with the paid's own mark (`collected`),
+  as a customer's «Сплачено»; «Залишок списано» grey (`offline`) keeping its
+  minus, as a customer's «Списано»; «Скасовано» as it was.
+- **The report table's figures** (money P2-1 (в); S29 №14): `money-s` 16/20
+  600, as «Надійшло» on «Гроші» — the report no longer draws them at 15.
+  Where the table is wider than the phone, it scrolls alone, as before, a
+  column stopping whole beside the first.
+  - Decided here (review): two stores and «Усі разом» with five-figure
+    sums are wider than 390 in the iPhone's face — 376 px in a 358 px
+    wrap; at 15 they were already 362. The table scrolls, as with three
+    stores at 360; the stores' column stays 118 px. Four-figure sums fit.
+- **«Винні» on an invoice** (money P2-2 (а)): an open invoice's «Винні» is
+  `money-xl` 56 on its card, its payment and its grey place — one class; a
+  closed one's sum stays `money-l` 32. The grey place waits at 56 for
+  either, as most invoices opened are open ones (decided here, review).
+- **The payment on a short phone** (money P2-2 (б); S21): under 700 px high,
+  as S21 — the keys 44, the sum's field 64, «Винні» and what is owed one line
+  in `money-l` 32, «Сплачено X з Y» under it, all over the dock unscrolled;
+  above 700 px, 56.
+- **«1500,»** (money P2-2 (в)): a sum ending in its comma is still being
+  typed and is read as 1500, as the set-off's: «Сплатити 1 500,00 грн» and
+  the line «Це більше, ніж винні…» never blink under the finger. What is
+  sent is the sum the button shows. The server checks the payment as before.
+- **«+» in words** (money P2-4; direction: an icon always with its word):
+  «Накладні»'s «+» is «+ Записати накладну», «Постачальникам»'s «+ Повернути
+  товар постачальнику» — the words a reader already heard — drawn as «+ Нове
+  замовлення» (one class for the three, `.head-add`); under the title where
+  they do not fit beside it. Only where the button was.
+- **«Де гроші зараз» while read** (money P2-5; direction P7): a store's place
+  waits in the shape it comes with — grey words before, a grey figure as
+  tall as the figure at this width, grey words after — so nothing grows once
+  read.
+  - Decided here: the shape is the place's own: a drawer's last count and
+    what customers owe — words, figure, words; card and transfers — the
+    figure alone; what is owed to suppliers — the figure, then words. A
+    place that answers with one line («Каса ще не рахувалась», «Ніхто не
+    винен», «Нічого не винні») is shorter than it waited when no store of it
+    has a figure.
+  - Decided here (review): the grey figure is one line of the figure at
+    this width. A figure that will not be one line — a million or more, or
+    a sum too long for its column at 32 (by the review's estimate, a
+    six-figure one at 390) — makes its place one line taller once read. The phone cannot know a figure's length before it is
+    read.
+  - Nothing of the grey is heard.
+  - A line with no figure and «Видано сьогодні»'s lines are `meta` 14/19
+    500, never a third size between `meta` and `body`; their colours as
+    before (pencil for nothing and a failure, ink for what was taken out).

@@ -2711,8 +2711,13 @@ section.credits.customer-card {
   font-size: 16px;
   font-weight: 600;
 }
+/* A line's sum on the right, `money-s` 16/20 600 in even digits, the sums
+   under one another — the till's, a customer's, an invoice's and the
+   report's alike (spec §6.21; audit 2026-11-15, money P2-1). */
 .timeline-sum {
+  font-size: 16px;
   font-weight: 600;
+  line-height: 20px;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -3700,6 +3705,33 @@ section.cash-count {
     line-height: 34px;
     letter-spacing: 0;
   }
+  /* An invoice's payment on a short phone as S21: the keys and the sum as
+     the count's; «Винні» and what is owed one line in money-l, «Сплачено X
+     з Y» under it, all over the dock unscrolled (audit 2026-11-15, money
+     P2-2). */
+  .invoice-pay .till-dock {
+    --h-key: 44px;
+  }
+  .invoice-pay .till-dock .keypad-sum {
+    height: 64px;
+    margin: 6px 0;
+  }
+  .invoice-pay .invoice-owed {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    align-items: last baseline;
+    column-gap: 8px;
+  }
+  .invoice-pay .invoice-owed .debt-bar,
+  .invoice-pay .invoice-owed .owed-count {
+    flex-basis: 100%;
+  }
+  .invoice-pay .invoice-owed-sum {
+    font-size: 32px;
+    line-height: 34px;
+    letter-spacing: 0;
+  }
 }
 /* «Закрити касу: у касі 5 260,00 грн?» (spec S27): the sum in money-xl on
    a line of its own, «Скасувати» under MainButton's place. */
@@ -4090,13 +4122,15 @@ span.cash-difference > .difference-sign {
    never cut. Its words are wide enough to be its hit area, so nothing pads
    them, and the title gives it 8 px, not 12. In the device's face, or its
    text larger, it goes under the title whole: the title's word is never
-   broken (review). A class, not `:has()`. */
+   broken (review). A class, not `:has()`. «Записати накладну» and
+   «Повернути товар постачальнику» are said the same way (audit 2026-11-15,
+   money P2-4). */
 .screen-title.wraps {
   flex-wrap: wrap;
   column-gap: 8px;
   row-gap: 0;
 }
-.orders-add {
+.head-add {
   display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
@@ -4110,7 +4144,7 @@ span.cash-difference > .difference-sign {
   font-weight: 600;
   white-space: nowrap;
 }
-.orders-add .icon {
+.head-add .icon {
   flex: none;
 }
 .order-rows {
@@ -6366,12 +6400,17 @@ button.money-place-open {
 .money-place-open .sale-open {
   margin-left: auto;
 }
+/* A place's lines: a line with no figure («Каса ще не рахувалась», «Ніхто
+   не винен», «не вдалося прочитати») and «Видано сьогодні»'s in `meta`
+   14/19, never a third size between it and `body` (audit 2026-11-15, money
+   P2-5); the names and figures have their own. */
 .money-lines {
   margin: 0;
   padding: 0;
   list-style: none;
-  font-size: 15px;
-  line-height: 20px;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 19px;
   color: var(--ink);
 }
 .money-line {
@@ -7041,15 +7080,10 @@ p.receive-place {
 .supplier-in-place {
   margin: 0 0 16px;
 }
-/* «Накладні» (stage 2, money task list, P0-1): the «+» by the title; the
-   total in ink, never the debts' red, its age beside it; the
-   invoices as tags, their sums on the right in ink; «Накладні магазинів,
-   що не працюють ›» a row under them. */
-.invoice-head-ways {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
+/* «Накладні» (stage 2, money task list, P0-1): «Записати накладну» by the
+   title (`.head-add`); the total in ink, never the debts' red, its age
+   beside it; the invoices as tags, their sums on the right in ink;
+   «Накладні магазинів, що не працюють ›» a row under them. */
 .invoice-total {
   display: flex;
   flex-wrap: wrap;
@@ -7098,9 +7132,10 @@ p.receive-place {
 .invoice-elsewhere .icon {
   color: var(--pencil);
 }
-/* The invoice's card and its payment (P0-2): what is owed 56 in ink, the
-   bar of what is paid in the paid's green; a closed one its sticker and
-   its sum. */
+/* The invoice's card and its payment (P0-2): what is owed 56 in ink
+   (`t-money-xl` alone; audit 2026-11-15, money P2-2), the bar of what is
+   paid in the paid's green; a closed one its sticker and its sum in
+   money-l. */
 .invoice-owed,
 .invoice-closed {
   margin: 12px 0 16px;
@@ -7179,6 +7214,11 @@ p.receive-place {
 .timeline-node.hollow {
   background: var(--card);
   box-shadow: inset 0 0 0 1.5px var(--edge);
+}
+/* An invoice's history: its sum, then the chevron's place (audit
+   2026-11-15, money P2-1). */
+.invoice-history .timeline-row {
+  grid-template-columns: 44px 16px minmax(0, 1fr) auto 16px;
 }
 /* A line that may be cancelled says so by the set's chevron, in pencil at
    its end; the others keep the place empty (spec §6.8; audit 2026-11-15,
@@ -7991,9 +8031,10 @@ label.way-option {
 .report-table td {
   vertical-align: top;
 }
+/* Its figures `money-s` 16/20 600, as «Надійшло» on «Гроші» (`.money-table`;
+   audit 2026-11-15, money P2-1). */
 .report-table td {
   padding-left: 4px;
-  font-size: 15px;
 }
 .report-table thead th,
 .report-table thead td {
@@ -8186,7 +8227,7 @@ button:disabled:where(
 :is(
     .text-button,
     .sheet-cancel,
-    .orders-add,
+    .head-add,
     .search-clear,
     .debt-more,
     .tab,

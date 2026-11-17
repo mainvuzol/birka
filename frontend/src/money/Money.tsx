@@ -22,7 +22,7 @@ import { visible } from "@/shared/visible";
 import { Sticker } from "@/shared/Sticker";
 import { Sum } from "@/shared/Sum";
 import type { SupplierDebts } from "@/suppliers/types";
-import { Stamp, Waiting, dayLine, staleOf, useNow } from "@/today/age";
+import { Stamp, dayLine, staleOf, useNow } from "@/today/age";
 import {
   ageOf,
   reportStores,
@@ -116,7 +116,19 @@ type Said =
       line: ReactNode;
       /** In pencil: what was never read. */
       unread?: boolean | undefined;
+    }
+  | {
+      /** Read still: the parts it will have, grey (audit 2026-11-15, money
+       * P2-5). */
+      waiting: Shape;
     };
+
+/** Which parts a place's store will have around its figure, once read:
+ * its height kept while it is read. */
+interface Shape {
+  before: boolean;
+  after: boolean;
+}
 
 /** A figure of a place: its sum, and whether it is a million or more. */
 function sumOf(value: string): { sum: string; long: boolean } {
@@ -126,12 +138,18 @@ function sumOf(value: string): { sum: string; long: boolean } {
   };
 }
 
-/** A store not read: what failed, or its figure's place in grey. */
-function unreadOr(failed: boolean): Said {
-  return failed
-    ? { line: unread, unread: true }
-    : { line: <Waiting width="6em" /> };
+/** A store not read: what failed, or its parts grey in the shape it will
+ * have (audit 2026-11-15, money P2-5). */
+function unreadOr(failed: boolean, shape: Shape): Said {
+  return failed ? { line: unread, unread: true } : { waiting: shape };
 }
+
+/** «учора порахували · 5 380,00 грн · о 20:06»; «Винні · … · 4 людини». */
+const aroundFigure: Shape = { before: true, after: true };
+/** «38 000,00 грн · 3 накладні». */
+const figureThenWords: Shape = { before: false, after: true };
+/** A way's figure alone. */
+const figureAlone: Shape = { before: false, after: false };
 
 /** «учора порахували · 5 380,00 грн · о 20:06»: the cash counted at the
  * last close, by the drawer's day — never what was to be there (G13). */
@@ -156,10 +174,11 @@ function drawerSaid(
   drawer: UseQueryResult<Drawer>,
   close: UseQueryResult<Close> | undefined,
 ): Said {
-  if (drawer.data === undefined) return unreadOr(drawer.isError);
+  if (drawer.data === undefined) return unreadOr(drawer.isError, aroundFigure);
   if (drawer.data.next_is_opening || !drawer.data.last_close)
     return { line: "Каса ще не рахувалась" };
-  if (close?.data === undefined) return unreadOr(close?.isError === true);
+  if (close?.data === undefined)
+    return unreadOr(close?.isError === true, aroundFigure);
   return counted(close.data);
 }
 
@@ -212,19 +231,22 @@ function suppliersSaid(debts: SupplierDebts): Said {
     : { line: "Нічого не винні" };
 }
 
-/** A store read by its own read: what it says, held while read. */
+/** A store read by its own read: what it says, held while read in the
+ * shape it will have. */
 function readSaid<T>(
   read: UseQueryResult<T> | undefined,
   said: (data: T) => Said,
+  shape: Shape,
 ): Said {
   if (read === undefined) return { line: null };
-  if (read.data === undefined) return unreadOr(read.isError);
+  if (read.data === undefined) return unreadOr(read.isError, shape);
   return said(read.data);
 }
 
 /** The phrase a store is heard as, after its name: «учора порахували
  * 5 380,00 грн о 20:06»; none while read. */
 function phrase(said: Said): string | undefined {
+  if ("waiting" in said) return undefined;
   if ("line" in said)
     return typeof said.line === "string" ? said.line : undefined;
   return `${said.before === undefined ? "" : `${said.before} `}${said.sum}${
@@ -235,6 +257,33 @@ function phrase(said: Said): string | undefined {
 /** A store's parts in its column or row, after its name: the colon and
  * the joint for a reader, never seen. */
 function Parts({ said }: { said: Said }): JSX.Element {
+  if ("waiting" in said)
+    // Each part grey in its own size — the words in `meta`, the figure as
+    // tall as it will be at this width — so the place does not grow once
+    // read (spec P7; audit 2026-11-15, money P2-5). Nothing heard.
+    return (
+      <>
+        {said.waiting.before && (
+          <span className="t-meta money-before" aria-hidden="true">
+            <span className="skeleton-line">
+              <span>учора порахували</span>
+            </span>
+          </span>
+        )}
+        <span className="money-figure" aria-hidden="true">
+          <span className="skeleton-line">
+            <span>0{"\u00a0"}000,00</span>
+          </span>
+        </span>
+        {said.waiting.after && (
+          <span className="t-meta money-after" aria-hidden="true">
+            <span className="skeleton-line">
+              <span>о 00:00</span>
+            </span>
+          </span>
+        )}
+      </>
+    );
   if ("line" in said)
     return (
       <>
@@ -334,7 +383,7 @@ function InvoicesStore({
   open: Way;
   held: boolean;
 }): JSX.Element {
-  const said = readSaid(read, suppliersSaid);
+  const said = readSaid(read, suppliersSaid, figureThenWords);
   const heard = phrase(said);
   const mark = store.state === "ACTIVE" ? "" : ` ${stateWords[store.state]}`;
   return (
@@ -540,7 +589,7 @@ export function Money({
   const figuresOf = (store: Store): StoreFigures | undefined =>
     day.data?.stores.find((one) => one.store_id === store.id);
   const waySaid = (store: Store, method: "CARD" | "TRANSFER"): Said => {
-    if (day.data === undefined) return unreadOr(day.isError);
+    if (day.data === undefined) return unreadOr(day.isError, figureAlone);
     const figures = figuresOf(store);
     return figures ? sumOf(wayNet(figures, method)) : { line: null };
   };
@@ -682,7 +731,7 @@ export function Money({
                   key={store.id}
                   store={store}
                   tone={debtsTone(debts.get(store.id))}
-                  said={readSaid(debts.get(store.id), debtsSaid)}
+                  said={readSaid(debts.get(store.id), debtsSaid, aroundFigure)}
                 />
               ))}
             </Stores>
@@ -712,7 +761,11 @@ export function Money({
                   <StoreSaid
                     key={store.id}
                     store={store}
-                    said={readSaid(suppliers.get(store.id), suppliersSaid)}
+                    said={readSaid(
+                      suppliers.get(store.id),
+                      suppliersSaid,
+                      figureThenWords,
+                    )}
                   />
                 ),
               )}

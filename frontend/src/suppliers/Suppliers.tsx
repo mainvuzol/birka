@@ -202,18 +202,20 @@ export function Suppliers({
         focusable
         title="Постачальникам"
         back={back && <BackToMore back={back} />}
+        wraps
         aside={
-          <span className="invoice-head-ways">
-            <button
-              type="button"
-              className="debt-more"
-              aria-label="Повернути товар постачальнику"
-              disabled={blocked || working}
-              onClick={make}
-            >
-              <Icon name="plus" />
-            </button>
-          </span>
+          // Said in words, its «+» before them, as «Нове замовлення»; under
+          // the title when they do not fit beside it (audit 2026-11-15,
+          // money P2-4).
+          <button
+            type="button"
+            className="head-add"
+            disabled={blocked || working}
+            onClick={make}
+          >
+            <Icon name="plus" size={20} />
+            Повернути товар постачальнику
+          </button>
         }
       />
       <section className="supplier-returns">

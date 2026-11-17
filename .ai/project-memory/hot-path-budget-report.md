@@ -708,3 +708,30 @@ that names a model — and each other warehouse it reads by its own
 address, the same text; the organization's sizes where receiving's right
 reads them. None is the till's own read, which stands as it was: the hot
 path's cases stand as last measured.
+
+## Update — 2026-11-16: an idle connection let go after 1 s
+
+CI's hot path job failed once in 30 runs (PR #218, run 43945816140)
+with every case printed «pass»: the measuring script stopped on
+`httpx.ReadError` in the warm-up of «stock-options · search (6 sellers)».
+
+The cause is the harness, not the API. The measuring client kept an idle
+connection 5.0 s (httpx's default `keepalive_expiry`), the same 5 s after
+which uvicorn closes one (`--timeout-keep-alive`, not set in CI). A
+six-seller case leaves five spare connections; they sat idle through the
+one-seller search (220 requests × ~21 ms ≈ 4.7–5 s), and the next warm-up
+could write into one the server was closing.
+
+The client now lets an idle connection go after 1 s
+(`httpx.Limits(keepalive_expiry=1.0)`), so it never reuses one near the
+server's 5 s. The server is run as before.
+
+Proof, a minimal uvicorn app on the locked uvicorn 0.54.0 and httpx 0.28.1:
+ten pooled connections each time, reused after 4.990–5.010 s idle.
+- httpx's default: 1 `ReadError` in 880 requests, then 1 in 3,300.
+- 1 s: none in 3,300.
+
+What is measured is unchanged. Within a case, requests follow each other
+far sooner than 1 s, so the samples still ride warm connections. Only a
+connection idle between cases is replaced, in the warm-up, which is not
+measured. No budget or case changed. The job itself is left to CI.

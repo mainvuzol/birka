@@ -1341,6 +1341,108 @@ test("«Надійшло»'s periods wait for the server's today; meanwhile the 
   ).toBeLessThanOrEqual(1);
 });
 
+for (const [name, theme] of [
+  ["light", { bg_color: "#ffffff", text_color: "#000000" }],
+  ["dark", { bg_color: "#17212b", text_color: "#f5f5f5" }],
+] as const)
+  test(`in the ${name} theme at 360 and 390 a place read slowly waits in the shape it comes with — grey words before, its figure as tall as it will be, words after — and is not one pixel taller once read; a line with no figure and «Видано сьогодні» in \`meta\` 14/19 (audit 2026-11-15, money P2-5)`, async ({
+    page,
+  }) => {
+    await me(page);
+    await s29(page);
+    // «Ринок»'s customers owe nothing: a line with no figure.
+    await debts(page, market, "0.00", 0);
+    let gate: Promise<void> = Promise.resolve();
+    let release = (): void => undefined;
+    const hold = async (route: Route): Promise<void> => {
+      await gate;
+      await route.fallback();
+    };
+    // Every place's figure held: the drawers' last counts, the day's
+    // report, what customers owe and what is owed to suppliers.
+    await page.route(/\/api\/v1\/cash\/closes\//, hold);
+    await page.route(/\/api\/v1\/reports\/sales$/, hold);
+    await page.route(/\/api\/v1\/credits\/summary\?/, hold);
+    await page.route(/\/api\/v1\/supplier-invoices\/summary\?/, hold);
+    // «Ринок»'s drawer itself held too: one drawer waits for its drawer,
+    // the other for its last count — each in the same shape.
+    await page.route(`**/api/v1/cash/drawer?store_id=${market}`, hold);
+    const names = [
+      "У касах",
+      "Картка сьогодні · звірте з чеком",
+      "Перекази сьогодні",
+      "Вам винні клієнти",
+      "Ви винні постачальникам",
+    ];
+    for (const width of [360, 390]) {
+      gate = new Promise<void>((done) => {
+        release = done;
+      });
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto("about:blank");
+      await onMoney(page, owner(theme));
+      // Held: each store's parts grey in their own sizes, no figure, and
+      // nothing of them heard.
+      for (const one of names)
+        await expect(
+          place(page, one).locator(".skeleton-line").first(),
+        ).toBeVisible();
+      await expect(page.locator(".money .money-figure .sum")).toHaveCount(0);
+      for (const grey of await page
+        .locator(".money .money-cell .skeleton-line")
+        .all())
+        await expect(
+          grey.locator("xpath=ancestor::*[@aria-hidden='true'][1]"),
+        ).toHaveCount(1);
+      // A drawer's: the words before, the figure, the words after.
+      await expect(cells(page, "У касах")).toHaveCount(2);
+      for (const drawer of await cells(page, "У касах").all())
+        for (const part of [".money-before", ".money-figure", ".money-after"])
+          await expect(drawer.locator(`${part} .skeleton-line`)).toHaveCount(1);
+      // A way's: its figure alone.
+      await expect(
+        cells(page, "Картка сьогодні · звірте з чеком")
+          .first()
+          .locator(".money-before, .money-after"),
+      ).toHaveCount(0);
+      // «Видано сьогодні» is not held: read before the places are measured.
+      await expect(
+        place(page, "У касах").locator(".money-out .money-line").first(),
+      ).toBeVisible();
+      const tall: number[] = [];
+      for (const one of names)
+        tall.push((await boxOf(place(page, one))).height);
+      await page.screenshot({
+        path: `test-results/money-waiting-${String(width)}-${name}.png`,
+      });
+      release();
+      await expect(
+        placeSums(page, "Ви винні постачальникам").first(),
+      ).toHaveText("38 000,00 грн");
+      await expect(page.locator(".money .skeleton-line")).toHaveCount(0);
+      // Read: every place as tall as it waited.
+      for (const [at, one] of names.entries())
+        expect(
+          Math.abs((await boxOf(place(page, one))).height - (tall[at] ?? 0)),
+        ).toBeLessThanOrEqual(2);
+      await page.screenshot({
+        path: `test-results/money-read-${String(width)}-${name}.png`,
+      });
+    }
+    // A line with no figure, and «Видано сьогодні»'s, in `meta` 14/19: the
+    // nothing in pencil, what was taken out in ink, as before.
+    const none = place(page, "Вам винні клієнти").locator(".money-said");
+    await expect(none).toHaveText("Ніхто не винен");
+    const out = place(page, "У касах").locator(".money-out .money-line");
+    await expect(out.first()).toBeVisible();
+    for (const line of [none, out.first()]) {
+      await expect(line).toHaveCSS("font-size", "14px");
+      await expect(line).toHaveCSS("line-height", "19px");
+    }
+    expect(await colour(none)).toBe(await token(page, "--pencil"));
+    expect(await colour(out.first())).toBe(await token(page, "--ink"));
+  });
+
 test("a period kept while today's report was forgotten, and it cannot be read again: «Надійшло» says so with «Спробувати ще раз», never waits without end", async ({
   page,
 }) => {

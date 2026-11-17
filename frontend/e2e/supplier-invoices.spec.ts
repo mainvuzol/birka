@@ -27,6 +27,8 @@ import {
 import type { Locator, Page, Request } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { icons } from "../src/shared/icons";
+import type { IconName } from "../src/shared/icons";
 
 /**
  * What a store owes its suppliers (owner decisions, 2026-10-01): an invoice
@@ -339,6 +341,27 @@ async function resolved(page: Page, value: string): Promise<string> {
     probe.remove();
     return shown;
   }, value);
+}
+
+/** Whether the one icon in `where` is the set's `name`, as the page reads
+ * both. */
+function drawn(where: Locator, name: IconName): Promise<boolean> {
+  return where.locator(".icon").evaluate((svg, want) => {
+    const probe = document.createElementNS(svg.namespaceURI, "svg");
+    probe.innerHTML = want;
+    return svg.innerHTML === probe.innerHTML;
+  }, icons[name]);
+}
+
+/** What a reader hears of a line: its words without what is drawn for the
+ * eye alone. */
+function heard(line: Locator): Promise<string> {
+  return line.evaluate((node) => {
+    const copy = node.cloneNode(true) as Element;
+    for (const unseen of copy.querySelectorAll('[aria-hidden="true"]'))
+      unseen.remove();
+    return copy.textContent;
+  });
 }
 
 /** The WCAG contrast of an element's text against what it is drawn on. */
@@ -2046,6 +2069,200 @@ for (const [name, theme] of [
     await page.screenshot({ path: `test-results/invoice-paid-${name}.png` });
   });
 
+for (const [name, theme] of [
+  ["light", light],
+  ["dark", dark],
+] as const)
+  test(`in the ${name} theme at 360 px «Записати накладну» is said in words by the title; a history's sums on the right in money-s, under one another with the chevron or without, each heard in its line's place; «Сплачено повністю» and «Залишок списано» in their tones' colours and marks; what is owed 56 on the card, a closed one's 32 (audit 2026-11-15, money P2-1, P2-2, P2-4)`, async ({
+    page,
+  }) => {
+    const key = randomUUID().slice(0, 6);
+    const [open, settled, written] = [
+      `Стовпчик ${key}`,
+      `Сплачено ${key}`,
+      `Списано ${key}`,
+    ];
+    const headers = await headersOf(page, hanna);
+    const invoiceId = await anInvoice(
+      page,
+      await aSupplier(page, open),
+      "1500.00",
+      "500.00",
+    );
+    // A second payment, cancelled: its line keeps no chevron.
+    const paid = await page.request.post(
+      `/api/v1/supplier-invoices/${invoiceId}/payments`,
+      { headers, data: { command_id: randomUUID(), amount: "300.00" } },
+    );
+    expect(paid.status()).toBe(201);
+    const { entries } = (await paid.json()) as {
+      entries: { id: string; kind: string; amount: string }[];
+    };
+    const second = entries.find(
+      (entry) => entry.kind === "PAYMENT" && entry.amount === "300.00",
+    );
+    if (second === undefined) throw new Error("no second payment");
+    expect(
+      (
+        await page.request.post(
+          `/api/v1/supplier-invoices/${invoiceId}/entries/${second.id}/cancel`,
+          { headers, data: { reason: "двічі" } },
+        )
+      ).status(),
+    ).toBe(200);
+    await anInvoice(page, await aSupplier(page, settled), "200.00", "200.00");
+    const writtenId = await anInvoice(
+      page,
+      await aSupplier(page, written),
+      "100.00",
+    );
+    expect(
+      (
+        await page.request.post(
+          `/api/v1/supplier-invoices/${writtenId}/write-off`,
+          {
+            headers,
+            data: { command_id: randomUUID(), reason: "пробачив" },
+          },
+        )
+      ).status(),
+    ).toBe(200);
+    await page.setViewportSize({ width: 360, height: 740 });
+    await invoicesAt(page, hanna, { theme });
+
+    // «Записати накладну» in words, its «+» before them, by the title or
+    // under it, nothing cut or wider than the phone (P2-4).
+    const make = page.getByRole("button", {
+      name: "Записати накладну",
+      exact: true,
+    });
+    await expect(make).toHaveText("Записати накладну");
+    await expect(make.locator("svg.icon")).toHaveCount(1);
+    expect(await drawn(make, "plus")).toBe(true);
+    await expect(make).toBeInViewport({ ratio: 1 });
+    expect((await make.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+    // Its words seen, whole, in the link's colour — never an icon's square.
+    expect((await make.boundingBox())?.width ?? 0).toBeGreaterThan(100);
+    expect(
+      await make.evaluate((node) => node.scrollWidth <= node.clientWidth),
+    ).toBe(true);
+    await expect(make).toHaveClass(/\bhead-add\b/);
+    const title = page.getByRole("heading", { name: "Накладні", level: 1 });
+    await expect(title).toBeInViewport({ ratio: 1 });
+    expect(
+      await title.evaluate((node) => node.scrollWidth <= node.clientWidth),
+    ).toBe(true);
+    // The title's word never broken to make room for it: one line.
+    expect(
+      await title.evaluate(
+        (node) =>
+          node.getBoundingClientRect().height <
+          parseFloat(getComputedStyle(node).lineHeight) * 1.5,
+      ),
+    ).toBe(true);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(360);
+    expect(await contrast(make)).toBeGreaterThanOrEqual(4.5);
+
+    // Closed: «Сплачено повністю» in the paid's colours with the paid's own
+    // mark, «Залишок списано» grey with its minus, as a customer's (P2-1
+    // (б)); each at 4.5:1.
+    await mode(page, "Усі").click();
+    const paidOff = tag(page, settled).locator(".sticker");
+    await expect(paidOff).toHaveText("Сплачено повністю");
+    await expect(paidOff).toHaveClass(/\btone-paid\b/);
+    expect(await drawn(paidOff, "collected")).toBe(true);
+    const writtenOff = tag(page, written).locator(".sticker");
+    await expect(writtenOff).toHaveText("Залишок списано");
+    await expect(writtenOff).toHaveClass(/\btone-offline\b/);
+    expect(await drawn(writtenOff, "minus")).toBe(true);
+    for (const sticker of [paidOff, writtenOff]) {
+      await expectGlyphBeside(sticker);
+      expect(await contrast(sticker)).toBeGreaterThanOrEqual(4.5);
+    }
+    await page.screenshot({
+      path: `test-results/invoice-stickers-${name}.png`,
+    });
+
+    // The open one's card: what is owed in money-xl (P2-2).
+    await tag(page, open).locator(".order-row").click();
+    await expect(
+      page.getByRole("heading", { name: open, level: 1 }),
+    ).toBeVisible();
+    await expect(owes(page).locator(".invoice-owed-sum")).toHaveText(
+      "1 000,00 грн",
+    );
+    await expect(owes(page).locator(".invoice-owed-sum")).toHaveCSS(
+      "font-size",
+      "56px",
+    );
+
+    // Its history: the word on the line, its sum on the right in money-s,
+    // never in the line's title; the sums' right edges one vertical, the
+    // chevron's place after them kept or used (P2-1 (а)).
+    const standing = line(page, "Оплата 500,00 грн");
+    const cancelled = line(page, "Оплата 300,00 грн");
+    await expect(standing.locator("svg.timeline-open")).toHaveCount(1);
+    await expect(cancelled.locator("svg.timeline-open")).toHaveCount(0);
+    await expect(cancelled.locator(".sticker")).toHaveText("Скасовано");
+    const sums = history(page).locator(".timeline-sum");
+    await expect(sums).toHaveCount(2);
+    for (const [one, sum] of [
+      [standing, "500,00 грн"],
+      [cancelled, "300,00 грн"],
+    ] as const) {
+      const shown = one.locator(".timeline-sum");
+      await expect(shown).toHaveText(sum);
+      await expect(shown).toHaveAttribute("aria-hidden", "true");
+      await expect(shown).toHaveCSS("font-size", "16px");
+      await expect(shown).toHaveCSS("line-height", "20px");
+      await expect(shown).toHaveCSS("font-weight", "600");
+      await expect(shown).toHaveCSS("font-variant-numeric", "tabular-nums");
+      expect(await contrast(shown)).toBeGreaterThanOrEqual(4.5);
+      // Beside the line's words, never inside its title.
+      const words = await one.locator(".timeline-main").boundingBox();
+      const figure = await shown.boundingBox();
+      expect(figure?.x ?? 0).toBeGreaterThanOrEqual(
+        (words?.x ?? 0) + (words?.width ?? 0),
+      );
+    }
+    const edges = await sums.evaluateAll((nodes) =>
+      nodes.map((node) => node.getBoundingClientRect().right),
+    );
+    expect(Math.abs((edges[0] ?? 0) - (edges[1] ?? 9))).toBeLessThanOrEqual(
+      0.5,
+    );
+    // The chevron after the sum, in the place a cancelled line keeps.
+    const [sumBox, chevron] = [
+      await standing.locator(".timeline-sum").boundingBox(),
+      await standing.locator("svg.timeline-open").boundingBox(),
+    ];
+    expect(chevron?.x ?? 0).toBeGreaterThanOrEqual(
+      (sumBox?.x ?? 999) + (sumBox?.width ?? 0) - 0.5,
+    );
+    // A reader hears each line as before: its sum once, after its word.
+    await expect(standing.getByRole("button")).toHaveAccessibleName(
+      /^Скасувати: ?\d\d\.\d\d ?Оплата 500,00\sгрн ?Тест$/,
+    );
+    expect(await heard(cancelled)).toMatch(
+      /^\d\d\.\d\dОплата 300,00\sгрнТест.*Скасовано/,
+    );
+    expect((await heard(cancelled)).split("300,00").length).toBe(2);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(360);
+    await page.screenshot({ path: `test-results/invoice-history-${name}.png` });
+
+    // A closed one's sum stays money-l.
+    await back(page, "Накладні").click();
+    await tag(page, settled).locator(".order-row").click();
+    await expect(page.locator(".invoice-closed .invoice-owed-sum")).toHaveCSS(
+      "font-size",
+      "32px",
+    );
+  });
+
 test("at 390 × 844 the total and three tags show at once, at 360 × 640 the total and one; a forty-letter name wraps, its sum whole; its age said once five minutes old", async ({
   page,
 }) => {
@@ -2222,16 +2439,58 @@ test("inside Telegram «Сплатити» is its MainButton on the card, never 
     "inputmode",
     "none",
   );
-  for (const [width, height] of [
-    [360, 640],
-    [390, 844],
+  // What is owed in money-xl over 700 px; on a short phone as S21 — the
+  // keys 44, the sum 64, «Винні» and what is owed one line in money-l,
+  // over the dock unscrolled (audit 2026-11-15, money P2-2).
+  for (const [width, height, size] of [
+    [360, 640, "32px"],
+    [390, 844, "56px"],
   ] as const) {
     await page.setViewportSize({ width, height });
     await expect(payButton(page)).toBeInViewport({ ratio: 1 });
     await expect(key(page, "0")).toBeInViewport({ ratio: 1 });
+    const sum = owes(page).locator(".invoice-owed-sum");
+    await expect(sum).toHaveCSS("font-size", size);
+    const dockTop =
+      (await page.locator(".pay-panel").boundingBox())?.y ?? Number.NaN;
+    for (const part of [owes(page).locator(".owed-what"), sum]) {
+      await expect(part).toBeInViewport({ ratio: 1 });
+      const box = await part.boundingBox();
+      expect((box?.y ?? 0) + (box?.height ?? 999)).toBeLessThanOrEqual(dockTop);
+    }
+    if (height === 640) {
+      await expect(key(page, "0")).toHaveCSS("height", "44px");
+      await expect(page.locator(".pay-panel .keypad-sum")).toHaveCSS(
+        "height",
+        "64px",
+      );
+      // «Винні» on the figure's line, «Сплачено X з Y» under it.
+      const what = await owes(page).locator(".owed-what").boundingBox();
+      const figure = await sum.boundingBox();
+      const count = await owes(page).locator(".owed-count").boundingBox();
+      expect((what?.x ?? 0) + (what?.width ?? 0)).toBeLessThanOrEqual(
+        figure?.x ?? 0,
+      );
+      expect(count?.y ?? 0).toBeGreaterThanOrEqual(
+        (figure?.y ?? 0) + (figure?.height ?? 999) - 1,
+      );
+    }
   }
-  // More than is owed: never pressed, and said why.
-  await keyIn(page, "1500");
+  // More than is owed: never pressed, and said why. Typed key by key, the
+  // button says the sum so far at each, and «1500,» is still 1 500,00 —
+  // the button and the line never blink under the finger (P2-2 (в)).
+  for (const [one, said] of [
+    ["1", "1,00"],
+    ["5", "15,00"],
+    ["0", "150,00"],
+    ["0", "1 500,00"],
+    [",", "1 500,00"],
+  ] as const) {
+    await keyIn(page, one);
+    await expect(payButton(page)).toHaveText(`Сплатити ${said} грн`);
+  }
+  // The comma taken: the sum is still being typed.
+  await expect(page.getByLabel("Сума, грн")).toHaveValue(/^1\s?500,$/);
   await expect(payButton(page)).toBeDisabled();
   await expect(page.locator(".pay-over")).toHaveText(
     "Це більше, ніж винні: залишок 1 000,00 грн. Сплатіть не більше.",

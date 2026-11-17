@@ -744,7 +744,7 @@ export function Orders({
             // P1-4; В-ЗП4 (а)).
             <button
               type="button"
-              className="orders-add"
+              className="head-add"
               disabled={blocked}
               onClick={create}
             >

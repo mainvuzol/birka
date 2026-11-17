@@ -1002,6 +1002,16 @@ for (const [name, theme, scheme] of [
       table(page).locator("tbody").last().locator("th[scope='row']"),
     ).toHaveText(["Переказ наперед"]);
     await expect(cell(page, "Переказ наперед", 2)).toHaveText("150,00");
+    // Its figures `money-s` 16/20 600, as «Надійшло» on «Гроші» (audit
+    // 2026-11-15, money P2-1 (в)).
+    for (const figure of [
+      cell(page, "Переказ наперед", 2),
+      table(page).locator(".money-total td").first(),
+    ]) {
+      await expect(figure).toHaveCSS("font-size", "16px");
+      await expect(figure).toHaveCSS("line-height", "20px");
+      await expect(figure).toHaveCSS("font-weight", /^(600|700)$/);
+    }
     await expect(page.locator(".report-note")).toHaveText([
       "Виправлення способу оплати: переказ наперед −350,00 грн, готівка +350,00 грн («Вокзал»)",
     ]);
@@ -1222,8 +1232,30 @@ test("«Продажі й повернення»: a thread by day, the newest fi
   const thread = page.getByRole("list", { name: "Продажі й повернення" });
   await expect(thread.getByRole("listitem")).toHaveCount(2);
   await expect(thread.getByRole("listitem").first()).toHaveText(
-    "05.11Продаж 1 850,00 грн20:05 · Оля · Кокон графіт, Mоплачено повністю готівкою · «Центр»",
+    "05.11Продаж 1 850,00 грн20:05 · Оля · Кокон графіт, Mоплачено повністю готівкою · «Центр»1 850,00 грн",
   );
+  // The word on the line, its sum on the right in money-s, the sums' right
+  // edges one vertical; a reader hears it in its place, once (audit
+  // 2026-11-15, money P2-1 (а)).
+  const sums = thread.locator(".timeline-sum");
+  await expect(sums).toHaveText(["1 850,00 грн", "−1 850,00 грн"]);
+  for (const sum of await sums.all()) {
+    await expect(sum).toHaveAttribute("aria-hidden", "true");
+    await expect(sum).toHaveCSS("font-size", "16px");
+    await expect(sum).toHaveCSS("line-height", "20px");
+    await expect(sum).toHaveCSS("font-weight", "600");
+    await expect(sum).toHaveCSS("font-variant-numeric", "tabular-nums");
+  }
+  const edges = await sums.evaluateAll((nodes) =>
+    nodes.map((node) => node.getBoundingClientRect().right),
+  );
+  expect(Math.abs((edges[0] ?? 0) - (edges[1] ?? 9))).toBeLessThanOrEqual(0.5);
+  await expect(thread.locator(".timeline-what").first()).toHaveText(
+    "Продаж 1 850,00 грн",
+  );
+  await expect(
+    thread.locator(".timeline-what").first().locator(".visually-hidden"),
+  ).toHaveText("1 850,00 грн");
   // The day once, at its first entry; a reader hears it at each.
   await expect(thread.locator(".timeline-day").nth(1)).toHaveText("05.11");
   await expect(
@@ -1266,7 +1298,7 @@ test("«Продажі й повернення»: a thread by day, the newest fi
     .poll(() => offsets.at(-1))
     .toBe("00000000-0000-4000-8000-000000000001:0");
   await expect(thread.getByRole("listitem").first()).toHaveText(
-    "05.11Продаж 1 850,00 грн20:05 · Оля · Кокон графіт, Mоплачено повністю готівкою",
+    "05.11Продаж 1 850,00 грн20:05 · Оля · Кокон графіт, Mоплачено повністю готівкою1 850,00 грн",
   );
 
   await backToReport(page);

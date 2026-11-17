@@ -40,6 +40,7 @@ import { readFileSync } from "node:fs";
 interface Fixture {
   network_centre_seller_telegram_user_id: string;
   network_market_seller_telegram_user_id: string;
+  network_owner_telegram_user_id: string;
   network_centre_store_id: string;
   network_market_store_id: string;
   network_shared_location_id: string;
@@ -52,6 +53,7 @@ const fixture = JSON.parse(
 ) as Fixture;
 const hanna = fixture.network_centre_seller_telegram_user_id;
 const petro = fixture.network_market_seller_telegram_user_id;
+const owner = fixture.network_owner_telegram_user_id;
 
 function initData(telegramUserId: string): string {
   const fields = new URLSearchParams({
@@ -1695,6 +1697,46 @@ for (const [name, theme] of [
     await expect(ways.getByRole("button")).toHaveCount(2);
     await expectListBlock(ways, ways.locator(".sale-row"));
     await expect(page.locator("html")).toHaveJSProperty("scrollWidth", 360);
+    // «Повернути товар постачальнику» said in words, its «+» before them,
+    // under the title where they do not fit beside it: neither cut (audit
+    // 2026-11-15, money P2-4).
+    const make = page.getByRole("button", {
+      name: "Повернути товар постачальнику",
+      exact: true,
+    });
+    await expect(make).toHaveText("Повернути товар постачальнику");
+    await expect(make.locator("svg.icon")).toHaveCount(1);
+    await expect(make).toBeInViewport({ ratio: 1 });
+    expect((await make.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+    // Its words seen, whole — never an icon's square.
+    expect((await make.boundingBox())?.width ?? 0).toBeGreaterThan(100);
+    expect(
+      await make.evaluate((node) => node.scrollWidth <= node.clientWidth),
+    ).toBe(true);
+    await expect(make).toHaveClass(/\bhead-add\b/);
+    const title = page.getByRole("heading", {
+      name: "Постачальникам",
+      level: 1,
+    });
+    await expect(title).toBeInViewport({ ratio: 1 });
+    expect(
+      await title.evaluate((node) => node.scrollWidth <= node.clientWidth),
+    ).toBe(true);
+    // The title's word never broken to make room for it: one line.
+    expect(
+      await title.evaluate(
+        (node) =>
+          node.getBoundingClientRect().height <
+          parseFloat(getComputedStyle(node).lineHeight) * 1.5,
+      ),
+    ).toBe(true);
+    const [named, verb] = [await title.boundingBox(), await make.boundingBox()];
+    // Beside it or under it, never over it.
+    expect(
+      (verb?.y ?? 0) >= (named?.y ?? 0) + (named?.height ?? 999) - 1 ||
+        (verb?.x ?? 0) >= (named?.x ?? 0) + (named?.width ?? 999),
+    ).toBe(true);
+    expect(await contrast(make)).toBeGreaterThanOrEqual(4.5);
     await page.screenshot({
       path: `test-results/supplier-returns-${name}.png`,
     });
@@ -1763,6 +1805,33 @@ for (const [name, theme] of [
     await page.screenshot({
       path: `test-results/supplier-return-done-${name}.png`,
     });
+
+    // For whoever has two stores — the owner — «Змінити магазин» stays on
+    // the context line, under the title and its verb, whole within the
+    // phone, on «Постачальникам» and «Накладні» (audit 2026-11-15, money
+    // P2-4).
+    await openAs(page, owner, theme);
+    await openStore(page, "Центр CENTRE");
+    for (const [screen, verb] of [
+      ["Постачальникам", "Повернути товар постачальнику"],
+      ["Накладні", "Записати накладну"],
+    ] as const) {
+      await section(page, screen);
+      const pressed = page.getByRole("button", { name: verb, exact: true });
+      const change = page
+        .locator(".store-line")
+        .getByRole("button", { name: "Змінити магазин", exact: true });
+      await expect(pressed).toBeInViewport({ ratio: 1 });
+      await expect(change).toBeInViewport({ ratio: 1 });
+      const [moved, above] = [
+        await change.boundingBox(),
+        await pressed.boundingBox(),
+      ];
+      expect(moved?.y ?? 0).toBeGreaterThanOrEqual(
+        (above?.y ?? 0) + (above?.height ?? 999) - 1,
+      );
+      await expect(page.locator("html")).toHaveJSProperty("scrollWidth", 360);
+    }
   });
 
 /** The WCAG contrast of an element's text against what it is drawn on. */
