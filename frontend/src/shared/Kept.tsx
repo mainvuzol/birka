@@ -1,4 +1,6 @@
+import { createContext, useContext, useLayoutEffect, useState } from "react";
 import type { JSX, ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { Banner } from "./Banner";
 import { Eyelet, Waiting } from "./Eyelet";
 import { noteChecked, secondsOf, useReach } from "./reach";
@@ -28,6 +30,67 @@ export function CheckLine({ busy }: { busy: boolean }): JSX.Element | null {
       {busy && <Waiting />}
     </p>
   );
+}
+
+/**
+ * Where a kept operation's stub stands on its own screen: under the
+ * screen's title and line (spec S12; audit 2026-11-15, frame P2-9), the
+ * place the screen's header gave (`UnderHeaderContext`). None — the screen
+ * draws no header — it stands where it is drawn, over the screen, as
+ * before. Given to the journals' stubs the app draws; a screen's own stubs
+ * stand where the screen draws them.
+ */
+export const StubPlaceContext = createContext<HTMLElement | null>(null);
+
+/**
+ * A stub on its own screen, in its place. It moves as it comes there, as
+ * before: drawn again elsewhere on its screens — under another header, a
+ * list's row's card opened, «←»; over a result — it keeps still (audit
+ * 2026-11-15, frame P2-9; decided here). Told by where it first stood, not
+ * by time (review).
+ */
+function OwnStub({
+  state,
+  role,
+  children,
+}: {
+  state: "kept" | "recorded";
+  role?: "status";
+  children: ReactNode;
+}): JSX.Element {
+  const place = useContext(StubPlaceContext);
+  // The first place it stood in under a header.
+  const [first, setFirst] = useState<HTMLElement | null>(null);
+  useLayoutEffect(() => {
+    if (first === null && place !== null) setFirst(place);
+  }, [first, place]);
+  const stub = (
+    <section className="notice stub-notice" role={role}>
+      <Stub state={state} still={first !== null && first !== place}>
+        {children}
+      </Stub>
+    </section>
+  );
+  return place === null ? stub : createPortal(stub, place);
+}
+
+/**
+ * What is said of a kept operation besides its stub — a server's answer
+ * that settles nothing yet — stands under its stub, where the stub stands
+ * on its own screen (audit 2026-11-15, frame P2-9; review); over any other
+ * screen, or once the operation is no longer kept, it stays over the
+ * screen, as every plate.
+ */
+export function UnderStub({
+  on,
+  children,
+}: {
+  /** Kept, and on its own screen. */
+  on: boolean;
+  children: ReactNode;
+}): JSX.Element {
+  const place = useContext(StubPlaceContext);
+  return on && place !== null ? createPortal(children, place) : <>{children}</>;
 }
 
 /**
@@ -95,15 +158,13 @@ export function Kept({
   );
   if (!own) return <Banner kind="kept">{body}</Banner>;
   return (
-    <section className="notice stub-notice">
-      <Stub state="kept">
-        {/* A sticker, not a line: its words come first. */}
-        <div className="stub-head">
-          <Sticker tone="kept">Ще не підтверджено</Sticker>
-        </div>
-        {body}
-      </Stub>
-    </section>
+    <OwnStub state="kept">
+      {/* A sticker, not a line: its words come first. */}
+      <div className="stub-head">
+        <Sticker tone="kept">Ще не підтверджено</Sticker>
+      </div>
+      {body}
+    </OwnStub>
   );
 }
 
@@ -125,8 +186,8 @@ export function Settled({
       </Banner>
     );
   return (
-    <section className="notice stub-notice" role="status">
-      <Stub state="recorded">{children}</Stub>
-    </section>
+    <OwnStub state="recorded" role="status">
+      {children}
+    </OwnStub>
   );
 }

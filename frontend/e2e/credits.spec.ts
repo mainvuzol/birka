@@ -12,6 +12,7 @@ import {
   grn,
   more,
   openStore,
+  ownStub,
   toTill,
   readsOf,
   refuseOnce,
@@ -658,6 +659,8 @@ test("a payment whose answer is lost blocks the app until it is resent unchanged
   await expect(
     page.getByRole("heading", { name: "Внесок ще не підтверджено" }),
   ).toBeVisible();
+  // Under the debt's title and its line (audit 2026-11-15, frame P2-9).
+  await ownStub(page, /./, "Внесок ще не підтверджено");
   await expect(
     page.getByText(
       /^Внесок 700,00\sгрн переказом за «.+» — сервер не відповів\. Двічі він не запишеться\. Поки чекаємо, інші дії недоступні\.$/,

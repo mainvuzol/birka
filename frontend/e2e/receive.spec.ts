@@ -12,6 +12,7 @@ import {
   more,
   newModelSheet,
   openStore,
+  ownStub,
   receiveInto,
   receiveSize,
   receiveUnits,
@@ -503,9 +504,11 @@ test("a delivery whose outcome is unknown blocks the app until it is resent unch
   await plus(page, "M", 1);
   await recordReceipt(page, 1).click();
   // On «Прийшов товар», its own screen: the sale's stub, still attached
-  // (stage 2, orders task list, P0-1).
+  // (stage 2, orders task list, P0-1), under the title and its line, over
+  // the delivery (audit 2026-11-15, frame P2-9).
   const kept = page.locator(".stub-notice .stub");
   await expect(kept).toHaveClass(/\bstub-kept\b/);
+  await ownStub(page, "Прийшов товар", "Приймання ще не підтверджено");
   await expect(kept.locator(".stub-head")).toHaveText("Ще не підтверджено");
   await expect(
     kept.getByRole("heading", { name: "Приймання ще не підтверджено" }),
@@ -517,8 +520,9 @@ test("a delivery whose outcome is unknown blocks the app until it is resent unch
   await page
     .getByRole("button", { name: "Перевірити результат приймання" })
     .click();
-  // Confirmed: torn off, once (В-ЗП2 (а)).
+  // Confirmed: torn off, once (В-ЗП2 (а)), where it stood.
   await expect(kept).toHaveClass(/\bstub-recorded\b/);
+  await ownStub(page, "Прийшов товар", "Приймання записано один раз");
   await expect(
     kept.getByRole("heading", { name: "Приймання записано один раз" }),
   ).toBeVisible();

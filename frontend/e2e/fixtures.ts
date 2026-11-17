@@ -2012,3 +2012,48 @@ export async function expectCaption(caption: Locator): Promise<void> {
     text: true,
   });
 }
+
+/**
+ * A kept operation's stub on its own screen, as S12 draws it (audit
+ * 2026-11-15, frame P2-9): in the place the screen's header gives, right
+ * after it — under the title and the line — and over the screen's own
+ * blocks; the title is `title` — none where the screen's name is on its
+ * own tag under the line, as a model's. Measured once it has come to
+ * rest. A result's screen, or one hidden under another, gives no place
+ * (review).
+ */
+export async function ownStub(
+  page: Page,
+  title: string | RegExp | null,
+  heading: string | RegExp,
+): Promise<Locator> {
+  const stub = page
+    .locator("header.screen-header + .under-header > .stub-notice")
+    .filter({ has: page.getByRole("heading", { name: heading }) });
+  await expect(stub).toHaveCount(1);
+  // The stub's own sway or tear; never its check line's ring, which turns
+  // while it is asked (review).
+  await stub
+    .locator(":scope > .stub")
+    .evaluate((node) =>
+      Promise.all(
+        node
+          .getAnimations()
+          .map((each) => each.finished.catch(() => undefined)),
+      ),
+    );
+  // Its place no box of its own: the stub is the screen's next block.
+  await expect(stub.locator("xpath=..")).toHaveCSS("display", "contents");
+  const header =
+    title === null
+      ? page.locator("header.screen-header")
+      : page.locator("header.screen-header").filter({
+          has: page.getByRole("heading", { level: 1, name: title }),
+        });
+  await expect(header).toHaveCount(1);
+  const top = await header.boundingBox();
+  const box = await stub.boundingBox();
+  if (!top || !box) throw new Error("not laid out");
+  expect(top.y + top.height).toBeLessThanOrEqual(box.y + 0.5);
+  return stub;
+}

@@ -5,6 +5,7 @@ import {
   menu,
   more,
   openStore,
+  ownStub,
   toTill,
   returnUnits,
   section,
@@ -353,6 +354,9 @@ test("a return whose outcome is unknown blocks the app until it is resent unchan
   const banner = page.locator("section.notice", {
     has: page.getByRole("heading", { name: "Повернення ще не підтверджено" }),
   });
+  // On the form, its own screen: the stub under «Повернення» and its line
+  // (audit 2026-11-15, frame P2-9).
+  await ownStub(page, "Повернення", "Повернення ще не підтверджено");
   await expect(banner.locator("p").first()).toHaveText(
     new RegExp(
       `^Повернення: ${model}.* · M × 1 · 3\\s000,00\\sгрн готівкою — сервер не відповів\\. Двічі воно не запишеться, і гроші двічі не повернуться\\. Поки чекаємо, інші дії недоступні\\.`,
@@ -386,6 +390,8 @@ test("a return whose outcome is unknown blocks the app until it is resent unchan
   await expect(
     page.getByRole("heading", { name: "Повернення записано один раз" }),
   ).toBeVisible();
+  // «Повернення» opened afresh: torn off under its title, «Продаж».
+  await ownStub(page, "Продаж", "Повернення записано один раз");
   expect(sent.bodies[1]).toEqual(sent.bodies[0]);
   expect(sent.keys[1]).toBe(sent.keys[0]);
   await expect(

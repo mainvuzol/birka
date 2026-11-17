@@ -26,13 +26,18 @@ const eyelets = {
 
 export function Stub({
   state,
+  still = false,
   children,
 }: {
   state: StubState;
+  /** Drawn again where it stood already, as another of its screens opens:
+   * it came once, and does not sway or tear again (audit 2026-11-15, frame
+   * P2-9). */
+  still?: boolean;
   children: ReactNode;
 }): JSX.Element {
   return (
-    <div className={`stub stub-${state}`}>
+    <div className={`stub stub-${state}${still ? " stub-still" : ""}`}>
       <Eyelet state={eyelets[state]} />
       {children}
     </div>

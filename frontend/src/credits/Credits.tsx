@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
-import type { JSX } from "react";
+import type { JSX, ReactNode } from "react";
 import { BackToMore } from "@/shared/More";
 import type { MoreBack } from "@/shared/More";
 import {
@@ -842,12 +842,20 @@ function Block({
               </button>
             </Empty>
           ) : (
-            <p className="hint">Нікого не знайдено.</p>
+            <BlockEmpty lines={["Нікого не знайдено."]} />
           )
         ) : status === "SETTLED" ? (
-          <p className="hint">Сплачених боргів тут немає.</p>
+          alone ? (
+            <p className="hint">Сплачених боргів тут немає.</p>
+          ) : (
+            <BlockEmpty lines={["Сплачених боргів тут немає."]} />
+          )
         ) : status === "WRITTEN_OFF" ? (
-          <p className="hint">Списаних боргів тут немає.</p>
+          alone ? (
+            <p className="hint">Списаних боргів тут немає.</p>
+          ) : (
+            <BlockEmpty lines={["Списаних боргів тут немає."]} />
+          )
         ) : store.id === here.id && !readOnly ? (
           // In a block among several, its lines as before: the tag is the
           // whole list's (2026-11-01).
@@ -855,7 +863,7 @@ function Block({
         ) : alone ? (
           <Empty title="Зараз ніхто не винен цьому магазину." />
         ) : (
-          <p>Зараз ніхто не винен цьому магазину.</p>
+          <BlockEmpty lines={["Зараз ніхто не винен цьому магазину."]} />
         )
       ) : (
         <Rows
@@ -999,14 +1007,37 @@ function NobodyOwes({
     </button>
   );
   return plain ? (
-    <div className="empty">
-      <p>{`${title} ${meta}`}</p>
-      {button}
-    </div>
+    <BlockEmpty lines={[title, meta]}>{button}</BlockEmpty>
   ) : (
     <Empty title={title} meta={meta}>
       {button}
     </Empty>
+  );
+}
+
+/**
+ * A store's block with nothing in it, among several (audit 2026-11-15, sale
+ * P2-6): one look whatever the reason — its lines of meta in pencil, a
+ * line a sentence, the fact first and then the step, as the blank tag says
+ * them; its button, if any, under them. The whole list's, alone, is the
+ * blank tag (2026-11-01).
+ */
+function BlockEmpty({
+  lines,
+  children,
+}: {
+  lines: readonly string[];
+  children?: ReactNode;
+}): JSX.Element {
+  return (
+    <div className="empty block-empty">
+      {lines.map((line) => (
+        <p key={line} className="t-meta">
+          {line}
+        </p>
+      ))}
+      {children}
+    </div>
   );
 }
 

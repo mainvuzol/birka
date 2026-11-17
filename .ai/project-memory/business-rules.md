@@ -10742,3 +10742,57 @@ or choice changes. No word on a screen changes.
   - Entering a screen, typing and scrolling feel nothing, as the spec says.
   - Not changed: `warning` on a count's and a correction's refusal (stage
     2's decisions).
+
+## Chosen in chat — 2026-11-18 (audit 2026-11-15, batch 9: a kept operation's stub on its own screen under the screen's title and line, as S12; «Покупці»'s empty block among several one look; frame P2-9, sale P2-6)
+
+Picked by «merged, go next» after #222. Nothing recorded, sent or counted
+changes. No request, check, journal or word changes, and no stub's or
+banner's words.
+
+- **A kept operation's stub on its own screen** (frame P2-9; spec S12 №1–6):
+  - On the screen it belongs to, a journal's stub («… ще не підтверджено»)
+    and its torn-off form («… записано один раз») stand right under the
+    screen's title and its line, over the screen's own blocks. The order is:
+    the paper's plate, the title and the line, the stub. This holds for the
+    sale, the delivery, the return, a payment or write-off, a correction, a
+    stocktake's count, an invoice's operation, a return to a supplier and an
+    order's step.
+  - Over any other screen it is a banner over the title, as before (the
+    audit 2026-11-13's §12, on purpose). The paper's plate stays over
+    everything, as before.
+  - A server's answer that settles nothing yet (its red plate: a 500, a
+    slow answer, a conflict that proves nothing) stands right under its
+    stub, where the stub stands, as it did before the stub moved (review).
+    Over another screen, and once the operation is no longer kept, every
+    red plate stays over the screen, as before. P1-2 draws none for an
+    attempt last sent with no answer.
+  - A result's screen (a receipt, «Внесок записано», a return's result, a
+    delivery's, a collected order) gives no place under its title: the
+    title is followed by what it says, never by another operation's stub,
+    which stands over the result as before. Neither does a screen kept
+    hidden under another (the order's card under «Товар повернувся на
+    склад»), or the stub would be hidden with it (review).
+  - How: while a stub is to stand on the open screen, every screen header
+    draws a place after itself and hands it over. The first one on the page
+    takes the stub; the place has no box of its own. A screen's own stubs
+    (the till's «Продажу немає», «Каса», the catalogue, the stores' states)
+    stand where the screen draws them, as before.
+  - Decided here: an own screen that draws no header keeps the stub over
+    it, as before. Every own screen draws one today.
+  - Decided here: a stub sways or tears as it comes, as before, and again
+    when its tab is opened again, as before. Drawn again elsewhere on its
+    tab, for example under a list's row's card, after «←», or over the
+    receipt of a sale made meanwhile, it keeps still. This is told by the
+    place it first stood in, not by time (review).
+- **«Покупці»'s empty block among several** (sale P2-6; spec §5 «Пустое
+  состояние»; 2026-11-01: in a block among several, lines, no tag):
+  - Whatever the reason, it is one look: its lines `meta` (14/500) in
+    pencil, one sentence a line, the fact first and then the step, as the
+    blank tag says them.
+  - The reasons are: nobody owes the open store (two lines, «Новий продаж»
+    under them where it was), nobody owes another store, a search that found
+    nobody, none paid, none written off.
+  - The words are as before; the open store's two sentences are only split
+    at the full stop.
+  - One store alone (the whole list) is as before: the blank tag. Its «none
+    paid» and «none written off» stay the short pencil line.
