@@ -215,6 +215,22 @@ is restored.
 - sale P2-3 and frame P2-6: `rowverb`, `rowtill`, `rowerased`, `elsewhere`,
   `search`.
 
+## CI fix
+
+CI's full run at `b4e0cb58`: 1195 passed, 1 failed, in a journey this batch
+does not touch, `openings.spec.ts:1171`:
+- it counted the warehouse's reads after pressing «Зберегти список» a
+  second time;
+- the conflict's refusal reads the warehouse again inside its own `catch`,
+  before its words are drawn, and on CI the quick answer was in before the
+  press returned;
+- so the count already held the re-read, and the poll waited for another.
+
+Fixed in the test, by counting before the press. A form's refusal before
+it reads nothing again (`src/openings/Openings.tsx:812`). Checked:
+- the journey passed 3 of 3 on a fresh seed;
+- with the conflict's re-read removed from the app, it fails at the poll.
+
 ## Not covered
 
 - The look on a real phone, in Telegram.

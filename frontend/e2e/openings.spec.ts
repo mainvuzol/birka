@@ -1185,8 +1185,12 @@ test("a new list refused for a reason the screen does not name says so by what w
     "Список не збережено. Перевірте рядки.",
   );
   await refuseOnce(page, "**/api/v1/snapshots", "conflict");
-  await save.click();
+  // Counted before the press: the warehouse is read again in the refusal's
+  // own catch, before its words are drawn, and a quick answer reads it
+  // before the press returns (CI, 2026-11-18). A form's refusal above reads
+  // nothing again.
   const before = listReads();
+  await save.click();
   await expect(page.getByRole("alert")).toHaveText(
     "Список не збережено. Поки ви працювали, дані змінилися: перевірте склад і натисніть «Зберегти список» ще раз.",
   );
