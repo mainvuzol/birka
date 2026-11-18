@@ -326,6 +326,9 @@ export function useFound({
           here={store.id}
           held={held}
           open={opening(search?.customer, customer)}
+          // Its card, as «Покупці»'s row with a phone (audit 2026-11-18,
+          // frame P2-6).
+          opens="card"
         />
       )),
     },

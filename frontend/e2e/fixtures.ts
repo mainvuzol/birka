@@ -2057,3 +2057,29 @@ export async function ownStub(
   expect(top.y + top.height).toBeLessThanOrEqual(box.y + 0.5);
   return stub;
 }
+
+/**
+ * A total's line — «Разом», «Зараз … · винен …», a return's — as one rule
+ * (spec §6.15; audit 2026-11-18, frame P2-5, orders-cash P2-1): its words
+ * `meta` 14/500/19 in pencil, each sum in it money-l 32/34, 800, in ink.
+ */
+export async function expectTotal(
+  page: Page,
+  total: Locator,
+  sums = 1,
+): Promise<void> {
+  const pencil = await tokenColour(page, "--pencil");
+  const ink = await tokenColour(page, "--ink");
+  await expect(total).toHaveCSS("font-size", "14px");
+  await expect(total).toHaveCSS("font-weight", "500");
+  await expect(total).toHaveCSS("line-height", "19px");
+  await expect(total).toHaveCSS("color", pencil);
+  const figures = total.locator(".sum");
+  await expect(figures).toHaveCount(sums);
+  for (const sum of await figures.all()) {
+    await expect(sum).toHaveCSS("font-size", "32px");
+    await expect(sum).toHaveCSS("line-height", "34px");
+    await expect(sum).toHaveCSS("font-weight", "800");
+    await expect(sum).toHaveCSS("color", ink);
+  }
+}

@@ -534,8 +534,11 @@ export function Closed({
       <ScreenHeader
         ref={heading}
         focusable
-        pushed
-        className="result-title"
+        // The result's own heading, 24 as every result's — never a pushed
+        // screen's 28, though «← Каса» stands over it while a reason is
+        // owed (spec S28 №1; audit 2026-11-18, orders-cash P2-2).
+        pushed={false}
+        className="result-title t-sheet"
         // Which close, in the screen's one line: its store, who counted and
         // its day — a reason owed is the closer's in any store (review,
         // 2026-10-21; orders and «Каса» task list after stage 2, P2-1).

@@ -1,4 +1,11 @@
-import { test, expect, openStore, toTill, sellsFrom } from "./fixtures";
+import {
+  test,
+  expect,
+  expectTotal,
+  openStore,
+  toTill,
+  sellsFrom,
+} from "./fixtures";
 import type { Locator, Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -232,6 +239,9 @@ test("the tray comes with the first coat: the basket in one row, «Разом»,
   await expect(tray(page).locator(".pay-total")).toHaveText(
     /^Разом\s1\s850,00\sгрн$/,
   );
+  // «Разом» `meta` in pencil, the sum money-l (spec §6.15; audit
+  // 2026-11-18, frame P2-5).
+  await expectTotal(page, tray(page).locator(".pay-total"));
   // Each the primary, 17/700: the button is the sale (spec §6.15; audit
   // after stage 2, frame P1-1).
   const primary = await primaryColour(page);
@@ -486,6 +496,7 @@ test("with the keyboard up, the sheet keeps within what is left of the screen, i
 test("paying in parts is in the sheet: the tray says what is paid now and what is left, and the keyboard's «Готово» after the sum closes the sheet", async ({
   page,
 }) => {
+  await page.setViewportSize({ width: 360, height: 640 });
   await goods(page);
   await onTheTill(page);
   await cell(page, fixture.size_id).click();
@@ -501,6 +512,17 @@ test("paying in parts is in the sheet: the tray says what is paid now and what i
   await expect(tray(page).locator(".pay-total")).toHaveText(
     /^Зараз\s1\s000,00\sгрн\s·\sвинен\s850,00\sгрн$/,
   );
+  // «Зараз» and «винен» quiet, both sums money-l; at 360 the line wraps
+  // within the screen, the ways in view (audit 2026-11-18, frame P2-5).
+  await expectTotal(page, tray(page).locator(".pay-total"), 2);
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(360);
+  for (const way of ["Готівка", "Картка", "Переказ"])
+    await expect(
+      tray(page).getByRole("button", { name: way, exact: true }),
+    ).toBeInViewport({ ratio: 1 });
+  await page.screenshot({ path: "test-results/till-tray-owing-360.png" });
 });
 
 test("the basket emptied in its sheet closes it, and the tray goes; the next coat brings the tray, not the sheet", async ({

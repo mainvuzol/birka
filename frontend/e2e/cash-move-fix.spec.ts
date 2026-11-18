@@ -1519,6 +1519,13 @@ for (const [name, theme] of [
       .click();
     const ways = page.getByRole("group", { name: "Новий спосіб оплати" });
     await ways.getByRole("button", { name: "Готівка", exact: true }).click();
+    // Its sum money-l, as every sum of a place (audit 2026-11-18,
+    // orders-cash P2-1).
+    await expect(page.locator(".fix-sum .sum")).toHaveCSS("font-size", "32px");
+    await expect(page.locator(".fix-sum .sum")).toHaveCSS(
+      "line-height",
+      "34px",
+    );
     for (const part of [
       page.locator(".fix-what"),
       page.locator(".fix-sum .sum"),

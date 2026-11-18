@@ -5,6 +5,7 @@ import {
   basketSheet,
   expectEmpty,
   expectPlate,
+  expectTotal,
   menu,
   openStore,
   section,
@@ -544,6 +545,8 @@ test("a new order as a sale: a task screen, the cursor in the search, two letter
   await expect(tray(page).locator(".pay-total")).toHaveText(
     "Разом 1 850,00 грн",
   );
+  // As the till's «Разом» (audit 2026-11-18, frame P2-5).
+  await expectTotal(page, tray(page).locator(".pay-total"));
   await expect(search(page)).not.toBeFocused();
   expect(await felt(page)).toContainEqual({
     type: "impact",

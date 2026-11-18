@@ -240,7 +240,7 @@ async function opened(
   await openStore(page, "Основний MAIN");
   await toTill(page);
   await section(page, "Покупці");
-  await page.getByRole("button", { name: /^Відкрити борг: Оксана/ }).click();
+  await page.getByRole("button", { name: /^Оксана/ }).click();
   await page
     .getByRole("list", { name: "Борги в магазині «Основний»" })
     .getByRole("button", { name: /^Відкрити борг: Лоран/ })
@@ -296,7 +296,7 @@ test("«Покупці», her card and the debt's detail lie on the paper, never
   await openStore(page, "Основний MAIN");
   await toTill(page);
   await section(page, "Покупці");
-  const her = page.getByRole("button", { name: /^Відкрити борг: Оксана/ });
+  const her = page.getByRole("button", { name: /^Оксана/ });
   await expect(her).toBeVisible();
   await onPaper(page, "S19");
   // A list's row by §6.8 (audit after stage 2, frame P2-2).
@@ -346,7 +346,7 @@ test("«Ще» › «Покупці» opened again on a debt brings the list's f
   ).toBeVisible();
   await expect(page.locator(".debt-detail")).toHaveCount(0);
   await expect(
-    page.getByRole("button", { name: /^Відкрити борг: Оксана/ }),
+    page.getByRole("button", { name: /^Оксана/ }),
   ).toBeVisible();
 });
 
@@ -466,7 +466,7 @@ test("«Винні» one look on her card and on the debt's own screen as on S21
   await openStore(page, "Основний MAIN");
   await toTill(page);
   await section(page, "Покупці");
-  await page.getByRole("button", { name: /^Відкрити борг: Оксана/ }).click();
+  await page.getByRole("button", { name: /^Оксана/ }).click();
   const reading = page.locator(".customer-block .owed-lines .owed-sum").first();
   await expect(reading).toBeAttached();
   expect(Math.round((await reading.boundingBox())?.height ?? 0)).toBe(56);
@@ -646,7 +646,7 @@ test("«Внесок» on a debt opens S21 on it: the sum keyed in, a way, the r
   await toTill(page);
   await section(page, "Покупці");
   await page.getByLabel("Ім’я або телефон").fill("Окс");
-  await page.getByRole("button", { name: /^Відкрити борг: Оксана/ }).click();
+  await page.getByRole("button", { name: /^Оксана/ }).click();
   await page
     .getByRole("list", { name: "Борги в магазині «Основний»" })
     .getByRole("button", { name: /^Відкрити борг: Лоран/ })
@@ -1047,7 +1047,7 @@ test("a kept write-off confirmed while the phone keeps an invoice operation it c
   );
   await expect(page.locator(".paid-result.kept .owed-left")).toHaveCount(0);
   // The write-off settled, the invoice is not: no payment begins.
-  await page.getByRole("button", { name: /^Відкрити борг: Оксана/ }).click();
+  await page.getByRole("button", { name: /^Оксана/ }).click();
   await expect(
     page.getByRole("heading", { name: "Оксана Петренко", level: 1 }),
   ).toBeVisible();
@@ -1695,7 +1695,7 @@ test("written off on her card, «Внесок» waits while the card is read aga
   await openStore(page, "Основний MAIN");
   await toTill(page);
   await section(page, "Покупці");
-  await page.getByRole("button", { name: /^Відкрити борг: Оксана/ }).click();
+  await page.getByRole("button", { name: /^Оксана/ }).click();
   const pay = deposit(page);
   await expect(pay).toBeEnabled();
   await act(page, "Списати борг");
@@ -1779,7 +1779,7 @@ test("inside Telegram a write-off on her card is its own result's screen: Telegr
   await openStore(page, "Основний MAIN");
   await toTill(page);
   await section(page, "Покупці");
-  await page.getByRole("button", { name: /^Відкрити борг: Оксана/ }).click();
+  await page.getByRole("button", { name: /^Оксана/ }).click();
   // Her card's «Внесок» is Telegram's.
   await expect
     .poll(async () => (await mains()).at(-1))
@@ -1835,7 +1835,7 @@ test("written off on her card, her last: the card read again has nothing left to
   await openStore(page, "Основний MAIN");
   await toTill(page);
   await section(page, "Покупці");
-  await page.getByRole("button", { name: /^Відкрити борг: Оксана/ }).click();
+  await page.getByRole("button", { name: /^Оксана/ }).click();
   await expect(deposit(page)).toBeEnabled();
   await act(page, "Списати борг");
   const sheet = page.getByRole("dialog", { name: "Списати борг" });
@@ -1923,7 +1923,7 @@ test("the owner's ⋯ open on her card when it is read again into two debts: the
   await openStore(page, "Основний MAIN");
   await toTill(page);
   await section(page, "Покупці");
-  await page.getByRole("button", { name: /^Відкрити борг: Оксана/ }).click();
+  await page.getByRole("button", { name: /^Оксана/ }).click();
   await expect(
     page.getByRole("heading", { name: "Оксана Петренко", level: 1 }),
   ).toBeVisible();
@@ -2767,7 +2767,7 @@ test.describe("«Продаж» › «Внесок»: a payment on a debt from t
 
     // And back: S21 opened from her card, with its sum keyed in, is
     // «Покупці»'s — left by its «←», back to her card.
-    await page.getByRole("button", { name: /^Відкрити борг: / }).click();
+    await page.getByRole("button", { name: /^Оксана Петренко, / }).click();
     await page.getByRole("button", { name: "Внесок", exact: true }).click();
     await expect(panel(page)).toBeVisible();
     await keyIn(page, "300");

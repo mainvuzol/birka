@@ -288,7 +288,7 @@ test("text from outside is shown with its hidden characters marked, on every scr
   await shownSafely(page, `Марта ${tag}${marks[LRI]}`);
   await page
     .getByRole("button", {
-      name: `Відкрити борг: Марта ${tag}${marks[LRI]},`,
+      name: `Марта ${tag}${marks[LRI]},`,
     })
     .click();
   await shownSafely(

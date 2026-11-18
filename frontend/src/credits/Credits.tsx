@@ -605,6 +605,7 @@ export function Credits({
             here={store.id}
             open={till ? openAtTill : openCard(store, true)}
             dated={!till}
+            card={!till}
           />
         )}
         {askElsewhere && (
@@ -773,8 +774,12 @@ function Block({
                 {/* Grey lines the size of the figures to come; what sizes
                     them is never seen, nor read (review, 2026-10-21). */}
                 <p className="owed-sum" aria-hidden="true">
+                  {/* «,00» and «грн» at their own sizes, as a sum's: they
+                      make its line's height (audit 2026-11-18, sale P2-2). */}
                   <strong className="sum skeleton-line">
                     <span>00 000</span>
+                    <span className="sum-kop">,00</span>
+                    <span className="sum-unit">{"\u00a0грн"}</span>
                   </strong>
                 </p>
                 <p className="owed-count" aria-hidden="true">
@@ -872,6 +877,7 @@ function Block({
           here={store.id}
           label={alone ? "Хто винен" : `Хто винен магазину «${name}»`}
           open={open}
+          card
         />
       )}
       {ask && answered && (
@@ -897,6 +903,7 @@ function Rows({
   label = "Хто винен",
   open,
   dated = true,
+  card,
 }: {
   customers: UseInfiniteQueryResult<InfiniteData<CustomerPage>>;
   listed: readonly Customer[];
@@ -906,6 +913,10 @@ function Rows({
   /** «Покупці»'s rows say their date; the till's «Внесок» does not (audit
    * 2026-11-15, sale P1-1). */
   dated?: boolean;
+  /** «Покупці»'s: a row with a phone opens the customer's card, an erased
+   * one its one debt; the till's open a debt (audit 2026-11-18, sale
+   * P2-3) — as `openCard` and `openAtTill` do. */
+  card: boolean;
 }): JSX.Element {
   return (
     <>
@@ -931,6 +942,7 @@ function Rows({
                 open(each);
               }}
               dated={dated}
+              opens={card && each.phone_digits !== null ? "card" : "debt"}
             />
           </div>
         ))}

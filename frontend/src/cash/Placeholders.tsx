@@ -1,4 +1,6 @@
 import type { JSX } from "react";
+import { Perforation } from "@/shared/Stub";
+import { Sticker } from "@/shared/Sticker";
 
 /**
  * «Каса»'s places while it is read (cash task list, P2-2): grey blocks in
@@ -13,6 +15,20 @@ function Line({ size }: { size: string }): JSX.Element {
   return (
     <span className="skeleton-line">
       <span>{size}</span>
+    </span>
+  );
+}
+
+/** A sum's place, sized as a `Sum` is drawn: its figures, then «,00» and
+ * «грн» at their own sizes — their lines are what make a sum's line, so
+ * the place stands as tall as the sum to come (audit 2026-11-18,
+ * orders-cash P2-2). */
+function SumLine({ figures }: { figures: string }): JSX.Element {
+  return (
+    <span className="skeleton-line">
+      <span>{figures}</span>
+      <span className="sum-kop">,00</span>
+      <span className="sum-unit">{"\u00a0грн"}</span>
     </span>
   );
 }
@@ -74,7 +90,7 @@ export function OperationPlaceholder(): JSX.Element {
           </p>
           <p className="fix-sum">
             <span className="sum">
-              <Line size={"000,00\u00a0грн"} />
+              <SumLine figures="000" />
             </span>
           </p>
           <span className="skeleton skeleton-pill" />
@@ -89,29 +105,61 @@ export function OperationPlaceholder(): JSX.Element {
   );
 }
 
-/** A close's three figures, as its result shows them. */
+/** The close a reason is owed for, while it is read: its stub's shape —
+ * the torn top, «Мало бути» and «Порахували» at 32, the sticker's place,
+ * the perforation, the card's and the transfer's rows — so the reason's
+ * field under it stays where it is when the stub comes (audit 2026-11-18,
+ * orders-cash P2-2). Only a close that differs owes a reason: two figures,
+ * never the first count's one. */
 export function ClosePlaceholder(): JSX.Element {
   return (
     <>
       <p role="status" className="visually-hidden">
         Завантажуємо закриття…
       </p>
-      <div className="owed-card cash-figures placeholder" aria-hidden="true">
-        {["Мало бути", "Порахували"].map((what) => (
-          <div className="cash-figure" key={what}>
-            <p className="owed-what">
-              <Line size={what} />
-            </p>
-            <p className="cash-sum">
-              <span className="sum">
+      <div className="close-stub-place placeholder" aria-hidden="true">
+        <div className="cash-figures">
+          {["Мало бути", "Порахували"].map((what) => (
+            <div className="cash-figure" key={what}>
+              <p className="owed-what">
+                <Line size={what} />
+              </p>
+              <p className="cash-sum">
+                <span className="sum">
+                  <SumLine figures={"0\u00a0000"} />
+                </span>
+              </p>
+            </div>
+          ))}
+          <p className="cash-sticker">
+            {/* The shared sticker in grey: its glyph's place and words
+                never seen. */}
+            <Sticker>
+              <span className="sticker-glyph-place" />
+              <span>{"Нестача 00,00\u00a0грн"}</span>
+            </Sticker>
+          </p>
+        </div>
+        <Perforation />
+        <ul className="history cash-slip">
+          {["Картка", "Переказ"].map((what) => (
+            <li className="history-row" key={what}>
+              <span className="history-main">
+                <span className="history-what">
+                  <Line size={what} />
+                </span>
+                {what === "Картка" && (
+                  <span className="history-meta">
+                    <Line size="звірте з чеком терміналу" />
+                  </span>
+                )}
+              </span>
+              <span className="history-sum">
                 <Line size={"0\u00a0000,00\u00a0грн"} />
               </span>
-            </p>
-          </div>
-        ))}
-        <p className="cash-difference">
-          <Line size={"Нестача 00,00\u00a0грн"} />
-        </p>
+            </li>
+          ))}
+        </ul>
       </div>
     </>
   );

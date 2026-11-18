@@ -251,6 +251,45 @@ function drawn(where: Locator, name: IconName): Promise<boolean> {
   }, icons[name]);
 }
 
+/** A result's title as it is drawn: its size, line and weight, how many
+ * lines its words take, and whether its eyelet stands beside the first. */
+async function titleLook(title: Locator): Promise<{
+  size: string;
+  line: string;
+  weight: string;
+  lines: number;
+  beside: boolean;
+}> {
+  return title.evaluate((node) => {
+    const style = getComputedStyle(node);
+    const words = [...node.childNodes].find(
+      (child) => child.nodeType === Node.TEXT_NODE && child.textContent?.trim(),
+    );
+    if (words === undefined) throw new Error("no words");
+    const range = document.createRange();
+    range.selectNodeContents(words);
+    const rects = [...range.getClientRects()];
+    const first = rects[0];
+    const eyelet = node.querySelector("svg")?.getBoundingClientRect();
+    const middle = eyelet && (eyelet.top + eyelet.bottom) / 2;
+    return {
+      size: style.fontSize,
+      line: style.lineHeight,
+      weight: style.fontWeight,
+      lines: new Set(rects.map((rect) => Math.round(rect.top))).size,
+      // Before the words, its middle on their first line — never between
+      // two lines, as a centred row would put it (review).
+      beside:
+        first !== undefined &&
+        eyelet !== undefined &&
+        middle !== undefined &&
+        eyelet.right <= first.left + 1 &&
+        middle >= first.top &&
+        middle <= first.bottom,
+    };
+  });
+}
+
 function card(page: Page): Locator {
   return page.getByRole("button", { name: "Закрити касу", exact: true });
 }
@@ -694,6 +733,7 @@ test("the close's figures are the server's: «Мало бути» and «Пора
 test("to the kopeck is the till's match with its knot, and the first count is one figure (orders and «Каса» task list after stage 2, P1-4)", async ({
   page,
 }) => {
+  await page.setViewportSize({ width: 360, height: 640 });
   const state: { now: Drawer; answer: Record<string, unknown> | number } = {
     now: drawer(),
     answer: closeOf(),
@@ -737,9 +777,20 @@ test("to the kopeck is the till's match with its knot, and the first count is on
   await field(page).fill("320");
   await page.getByRole("button", { name: "Закрити касу", exact: true }).click();
   await confirmClose(page);
-  await expect(
-    page.getByRole("heading", { name: "Перший підрахунок записано" }),
-  ).toBeVisible();
+  const recorded = page.getByRole("heading", {
+    name: "Перший підрахунок записано",
+  });
+  await expect(recorded).toBeVisible();
+  // A result's 24, two lines at most at 360, its eyelet by the first
+  // (audit 2026-11-18, orders-cash P2-2).
+  const look = await titleLook(recorded);
+  expect(look).toMatchObject({
+    size: "24px",
+    line: "26px",
+    weight: "800",
+    beside: true,
+  });
+  expect(look.lines).toBeLessThanOrEqual(2);
   const first = page.getByRole("group", { name: "Підрахунок" });
   await expect(first.locator(".cash-sum")).toHaveText("320,00 грн");
   await expect(first).toContainText("З цієї суми почнемо наступного разу.");
@@ -842,6 +893,100 @@ test("a difference owes its reason under the thumb, the figures read first, and 
   await expect(page.locator(".cash-context")).toHaveText(
     /^Сьогодні закрито о \d{2}:\d{2} · Оля$/,
   );
+});
+
+test("a close owed a reason, opened by itself while it is read: its place the stub's shape — torn top, two figures of 32, the sticker's place, the perforation, the slip — and the reason's field under it moves no more than 8 px when the stub comes (audit 2026-11-18, orders-cash P2-2)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  const owed = closeOf({
+    expected: "2050.00",
+    difference: "-50.00",
+    reason_required: true,
+  });
+  await stubDrawer(page, {
+    now: drawer({
+      last_close: { ...lastClose, ...owed, mine: true },
+      closed_today: true,
+      reason_owed: owed,
+    }),
+    answer: owed,
+  });
+  let release = (): void => undefined;
+  const held = new Promise<void>((done) => {
+    release = done;
+  });
+  await page.route(
+    `**/api/v1/cash/closes/${String(owed.id)}`,
+    async (route) => {
+      await held;
+      await route.fallback();
+    },
+  );
+  await page.goto("about:blank");
+  await page.goto(launch(olya));
+  await openStore(page, /^Каса CASH/);
+  // Owed from before: «Каса» opens its result by itself, the close read.
+  const place = page.locator(".cash-closed .close-stub-place");
+  await expect(place).toBeVisible();
+  await expect(page.getByText("Завантажуємо закриття…")).toBeAttached();
+  await expect(place).toHaveAttribute("aria-hidden", "true");
+  // The stub's torn top, never its tear: nothing has come yet.
+  expect(
+    await place.evaluate((node) => {
+      const style = getComputedStyle(node);
+      return {
+        torn: style.clipPath.startsWith("polygon("),
+        moves: style.animationName,
+      };
+    }),
+  ).toEqual({ torn: true, moves: "none" });
+  await expect(place.locator(".cash-figure")).toHaveCount(2);
+  for (const sum of await place.locator(".cash-sum .sum").all()) {
+    await expect(sum).toHaveCSS("font-size", "32px");
+    await expect(sum).toHaveCSS("line-height", "34px");
+  }
+  await expect(place.locator(".sticker")).toHaveCount(1);
+  // Its grey sticker breathes as every grey line, and keeps still where
+  // motion is reduced (review).
+  await expect(place.locator(".sticker")).toHaveCSS(
+    "animation-name",
+    "skeleton-breathe",
+  );
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await expect(place.locator(".sticker")).toHaveCSS("animation-name", "none");
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await expect(place.locator(".perforation")).toHaveCount(1);
+  await expect(place.locator(".history-row")).toHaveCount(2);
+  // What sizes it is never seen.
+  await expect(place.getByText("Мало бути")).toBeHidden();
+  await expect(place.getByText(/Нестача/)).toBeHidden();
+  // A result's title while it is read too: 24, no pushed screen's 28.
+  const title = page.getByRole("heading", { name: "Касу закрито" });
+  await expect(title).toHaveCSS("font-size", "24px");
+  await expect(title).toHaveCSS("line-height", "26px");
+  // Not a pushed screen's, though «← Каса» stands over it: no 28's room
+  // under it.
+  await expect(title).not.toHaveClass(/\bt-title-l\b/);
+  const reason = page.getByLabel("Чому не збігається? (обов’язково)");
+  await expect(reason).toBeVisible();
+  const before = await reason.boundingBox();
+  await page.screenshot({ path: "test-results/cash-close-place-360.png" });
+  release();
+  const stub = page.locator(".cash-closed .stub");
+  await expect(stub).toHaveClass(/\bstub-recorded\b/);
+  await expect(place).toHaveCount(0);
+  await expect(
+    page.getByRole("group", { name: "Закриття каси" }).locator(".cash-sum"),
+  ).toHaveText(["2 050,00 грн", "2 000,00 грн"]);
+  await stub.evaluate((node) =>
+    Promise.all(node.getAnimations().map((motion) => motion.finished)),
+  );
+  const after = await reason.boundingBox();
+  if (!before || !after) throw new Error("not laid out");
+  expect(Math.abs(after.y - before.y)).toBeLessThanOrEqual(8);
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
+  await page.screenshot({ path: "test-results/cash-close-owed-360.png" });
 });
 
 test("inside Telegram the count is a task's screen — kept upright, closing asked while a sum is typed — «Так, закрити» and «Записати причину» are its MainButton, a press carried from «Закрити касу» let go («Усе на бірці» sections task list, P1-2, P1-3)", async ({
@@ -1293,6 +1438,14 @@ for (const [name, theme, scheme] of [
     expect(
       await page.evaluate(() => document.documentElement.dataset.theme),
     ).toBe(scheme);
+    // Where the drawer stands, `meta` as the screen's line (audit
+    // 2026-11-18, orders-cash P2-1).
+    await expect(page.locator(".cash-context")).toHaveCSS("font-size", "14px");
+    await expect(page.locator(".cash-context")).toHaveCSS("font-weight", "500");
+    await expect(page.locator(".cash-context")).toHaveCSS(
+      "line-height",
+      "19px",
+    );
     for (const part of [
       page.locator(".cash-card-title"),
       page.locator(".cash-card-hint"),
@@ -1377,6 +1530,22 @@ for (const [name, theme, scheme] of [
       figures.locator(".cash-difference"),
     ])
       expect(await contrast(part)).toBeGreaterThanOrEqual(4.5);
+    // Its figures money-l, its title a result's 24 on one line at 360 with
+    // the check in its eyelet beside it (spec S28 №1–3; audit 2026-11-18,
+    // orders-cash P2-1, P2-2).
+    for (const sum of await figures.locator(".cash-sum .sum").all()) {
+      await expect(sum).toHaveCSS("font-size", "32px");
+      await expect(sum).toHaveCSS("line-height", "34px");
+    }
+    expect(
+      await titleLook(page.getByRole("heading", { name: "Касу закрито" })),
+    ).toEqual({
+      size: "24px",
+      line: "26px",
+      weight: "800",
+      lines: 1,
+      beside: true,
+    });
     await page.screenshot({ path: `test-results/cash-closed-${name}.png` });
   });
 

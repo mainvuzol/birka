@@ -9,6 +9,7 @@ import {
   expectLinkChevron,
   expectOwed,
   expectStub,
+  expectTotal,
   openStore,
   ownStub,
   section,
@@ -1376,6 +1377,10 @@ test("«Клієнт забрав»: its sheet of five ways in two rows, each th
     "Лоран шоколад · M · Нова пошта",
   );
   await expect(taking.locator(".pay-total")).toHaveText("Разом 1 200,15 грн");
+  // The parcel's sum money-l, as on the card and at the till; «Разом» quiet
+  // (audit 2026-11-18, frame P2-5, orders-cash P2-1). The five ways still
+  // in view at 360 under it.
+  await expectTotal(page, taking.locator(".pay-total"));
   const now = taking.getByRole("group", { name: "Зараз, у магазині" });
   const ahead = taking.getByRole("group", { name: "Наперед чи перевізнику" });
   await expect(now.getByRole("button")).toHaveText([
@@ -1685,6 +1690,12 @@ test("«Клієнт забрав» in parts: terms not taken said over the ways
   await expect(taking.locator(".pay-total")).toHaveText(
     /^Зараз 500,00\sгрн · винен 2\s500,00\sгрн$/,
   );
+  // Both sums money-l, as the till's; wrapped within the screen at 360
+  // (audit 2026-11-18, orders-cash P2-1).
+  await expectTotal(page, taking.locator(".pay-total"), 2);
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(360);
   await cash.click();
   await expect(
     page.getByRole("heading", { name: "Продаж записано" }),
@@ -3528,6 +3539,12 @@ for (const [name, theme] of [
       page.getByRole("button", { name: "Скасувати замовлення", exact: true }),
     ])
       expect(await contrast(part)).toBeGreaterThanOrEqual(4.5);
+    // «Разом» as every total: the word `meta` in pencil, the sum money-l in
+    // ink (audit 2026-11-18, frame P2-5, orders-cash P2-1).
+    await expectTotal(page, page.locator(".order-total"));
+    expect(
+      await contrast(page.locator(".order-total .sum")),
+    ).toBeGreaterThanOrEqual(4.5);
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth),
     ).toBeLessThanOrEqual(360);
@@ -3570,6 +3587,10 @@ for (const [name, theme] of [
       taking.getByText("Оплата частинами", { exact: true }),
     ])
       expect(await contrast(part)).toBeGreaterThanOrEqual(4.5);
+    await expectTotal(page, taking.locator(".pay-total"));
+    expect(
+      await contrast(taking.locator(".pay-total .sum")),
+    ).toBeGreaterThanOrEqual(4.5);
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth),
     ).toBeLessThanOrEqual(360);

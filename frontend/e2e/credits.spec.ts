@@ -230,9 +230,15 @@ function rows(page: Page) {
     .getByRole("listitem");
 }
 
-/** One customer's row: the whole row opens their card — at the till, their
- * debt, or their debts. */
+/** One customer's row in «Покупці»: the whole row opens their card, so it
+ * is named by who, no verb (audit 2026-11-18, sale P2-3). */
 function customerRow(page: Page, name: string) {
+  return page.getByRole("button", { name: new RegExp(`^${name},`) });
+}
+
+/** One customer's row at the till: it opens their debt, or the choice
+ * among their debts — «Відкрити борг» (audit 2026-11-18, sale P2-3). */
+function tillRow(page: Page, name: string) {
   return page.getByRole("button", { name: `Відкрити борг: ${name},` });
 }
 
@@ -402,9 +408,7 @@ test("a sale paid in parts leaves the rest owed, and «Покупці» takes it
   await searchField(page).fill(tel);
   // What is owed, never the sale's sum or a way (credits task list, P0-1).
   const row = customerRow(page, name);
-  await expect(row).toHaveAccessibleName(
-    `Відкрити борг: ${name}, винні 2 000,00 грн`,
-  );
+  await expect(row).toHaveAccessibleName(`${name}, винні 2 000,00 грн`);
   await expect(row).toContainText(coat.model);
   await expect(row).toContainText("2 000,00 грн");
   await expect(row).not.toContainText("3 000,00");
@@ -1416,7 +1420,7 @@ test("one phone is one customer, whatever the name, and the store sees what it i
   // title (audit after stage 2, sale P2-4).
   await atTheTill(page);
   await searchField(page).fill(tel);
-  await customerRow(page, name).click();
+  await tillRow(page, name).click();
   const choose = page.getByRole("dialog", { name: "На який борг вносить?" });
   await expect(choose).toHaveAccessibleDescription(
     `${name} · винні всього 4 000,00 грн`,
@@ -1427,7 +1431,7 @@ test("one phone is one customer, whatever the name, and the store sees what it i
   // Escape closes it on the list, as the card's does.
   await page.keyboard.press("Escape");
   await expect(choose).toHaveCount(0);
-  await expect(customerRow(page, name)).toBeFocused();
+  await expect(tillRow(page, name)).toBeFocused();
 
   await page.goto(launch());
   await openStore(page, "Основний MAIN");
@@ -1445,9 +1449,7 @@ test("one phone is one customer, whatever the name, and the store sees what it i
   await expect(rows(page)).toHaveCount(1);
   // The newest debt names the customer; what they owe in all, as summed.
   const row = customerRow(page, name);
-  await expect(row).toHaveAccessibleName(
-    `Відкрити борг: ${name}, винні 4 000,00 грн`,
-  );
+  await expect(row).toHaveAccessibleName(`${name}, винні 4 000,00 грн`);
   await expect(row).toContainText("2 борги");
   await row.click();
   await expect(
@@ -1511,7 +1513,7 @@ test("one phone is one customer, whatever the name, and the store sees what it i
   await expect(total.locator(".owed-sum")).toHaveText(hryvnias(before));
   await searchField(page).fill(tel);
   await expect(customerRow(page, name)).toHaveAccessibleName(
-    `Відкрити борг: ${name}, винні 2 000,00 грн`,
+    `${name}, винні 2 000,00 грн`,
   );
   await expect(rows(page)).toHaveCount(1);
 });
@@ -1715,9 +1717,7 @@ test("an order collected may be paid in parts, by the till's rules", async ({
   await section(page, "Покупці");
   await searchField(page).fill(tel);
   const row = customerRow(page, name);
-  await expect(row).toHaveAccessibleName(
-    `Відкрити борг: ${name}, винні 2 500,00 грн`,
-  );
+  await expect(row).toHaveAccessibleName(`${name}, винні 2 500,00 грн`);
   await expect(row).toContainText(model);
 });
 
@@ -1983,7 +1983,7 @@ test("the network's owner erases a closed debt's customer who asks, and every su
     await customersOf(page, query, { as: fixture.owner_telegram_user_id });
     await expect(rows(page)).toHaveCount(1);
     await expect(customerRow(page, name)).toHaveAccessibleName(
-      `Відкрити борг: ${name}, винні 2 000,00 грн`,
+      `${name}, винні 2 000,00 грн`,
     );
     await statusWay(page, "Сплачені").click();
     await expect(rows(page)).toHaveCount(0);
@@ -2307,7 +2307,7 @@ test.describe("«Продаж» › «Внесок»: payments on debts from the
     await atTheTill(page);
     await searchField(page).fill(name);
     await expect(rows(page)).toHaveCount(1);
-    await customerRow(page, name).click();
+    await tillRow(page, name).click();
     await expect(page.getByRole("navigation", { name: "Розділи" })).toHaveCount(
       0,
     );
@@ -2341,7 +2341,7 @@ test.describe("«Продаж» › «Внесок»: payments on debts from the
     const { sale, token } = await onCredit(page, name);
     await atTheTill(page);
     await searchField(page).fill(name);
-    await customerRow(page, name).click();
+    await tillRow(page, name).click();
     await expect(
       page.getByRole("group", { name: "Скільки винні" }).locator(".owed-sum"),
     ).toHaveText("2 000,00 грн");
