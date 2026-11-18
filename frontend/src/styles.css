@@ -506,11 +506,30 @@ section {
 p {
   line-height: 1.55;
 }
-/* A link — a customer's phone, to call — in the theme's accent, the same
+/* A link — a customer's phone, to call — in the link's colour, the same
    once called, underlined to read as one; never the browser's own blue. */
 a,
 a:visited {
-  color: var(--accent-text);
+  color: var(--link);
+}
+/* A text button is one look (spec §5.5 `button-s`, the `link` token
+   «underlined»; audit 2026-11-18, frame P2-1): its words in the link's
+   colour, underlined 1 at 3 in their own colour, in both themes — in the
+   light one the link is the ink, and only the line tells it from the words
+   beside it. «+ ще N» in a line of goods keeps that line's face, a phone
+   its own; underlined, as the task list asks, though it starts with «+».
+   One with a sign — «←», the header's «+ …», «×», «ⓘ … ›» — is told by
+   its sign and never underlined. Taking no tap, its words and line in pencil
+   (the rules at the end of this file). */
+.text-button,
+.sheet-cancel,
+.store-line button,
+.report-days,
+.more-goods,
+a {
+  text-decoration-line: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
 }
 button,
 input,
@@ -2288,13 +2307,33 @@ button.sale-row:disabled .sale-goods {
 }
 /* More than is owed: said in the error's colour, the ways dark (spec S21).
    A field the server would refuse, said under it as it is typed or chosen,
-   in the same form (audit 2026-11-15, money P2-3). */
+   in the same form (audit 2026-11-15, money P2-3): a line, never a
+   refusal's plate — its crossed circle 16 by the first line, 14/600 in the
+   error's colour, no fill, no padding round it, as the tray's refusal is
+   drawn (audit 2026-11-18, frame P2-2). Its role, its id and the field's
+   red edge are as they were: a reader hears the same. */
 .pay-over,
 .field-wrong {
   margin: 8px 0 0;
   font-size: 14px;
   font-weight: 600;
+  line-height: 19px;
   color: var(--danger);
+}
+.pay-over[role="alert"],
+.field-wrong[role="alert"] {
+  padding: 0 0 0 22px;
+  border-radius: 0;
+  background: none;
+}
+.pay-over[role="alert"]::before,
+.field-wrong[role="alert"]::before {
+  top: 1.5px;
+  left: 0;
+  width: 16px;
+  height: 16px;
+  -webkit-mask-size: 16px 16px;
+  mask-size: 16px 16px;
 }
 /* The app's own keypad (spec §6.25): the sum 56 to the right in a 72 box,
    twelve keys 60 high under it, in the display face. The phone's keyboard
@@ -2748,10 +2787,6 @@ section.credits.customer-card {
 .timeline-row:focus {
   outline-offset: 2px;
 }
-.history-more {
-  min-height: var(--touch);
-  margin-top: 4px;
-}
 /* A payment's result (credits task list, P0-5), and once confirmed later,
    compact (P1-2): the return's result block, its sum large. */
 .paid-result:not(.kept, .result-screen) {
@@ -2799,9 +2834,8 @@ section.credits.customer-card {
   margin: -12px -4px;
   border: 0;
   background: transparent;
-  color: var(--accent-text);
+  color: var(--link);
   font: inherit;
-  text-decoration: underline;
 }
 .debt-goods {
   margin: 6px 0 0;
@@ -3350,7 +3384,9 @@ section.credits.customer-card {
   font-size: 17px;
   font-weight: 700;
 }
-/* A text button, «Спробувати ще раз» (spec §5.5 `button-s`, `link`). */
+/* A text button (spec §5.5 `button-s`, `link`): «Спробувати ще раз», the
+   receipt's «Оформити повернення», «Шукати там» and «Вношу продаж з
+   паперу» (audit 2026-11-18, frame P2-1 (б)). */
 .text-button {
   min-height: var(--touch);
   margin: 8px 0 0 -4px;
@@ -3360,6 +3396,17 @@ section.credits.customer-card {
   color: var(--link);
   font-size: 15px;
   font-weight: 600;
+}
+/* «Пізніше», a text button in pencil (spec §6.10, S12 «Recovered»; audit
+   2026-11-18, frame P2-1 (б)). */
+.text-button.later {
+  color: var(--pencil);
+}
+/* A banner's text buttons side by side at their words' width, at any
+   width: never a row of full-width buttons (spec §6.23 «two text
+   buttons»). */
+.banner-body .actions .text-button {
+  width: auto;
 }
 /* «Де ви сьогодні?» (spec S06's door; P1-4): its line under the title, and
    a store's tag each — the hero's silhouette 96 high, its eyelet at the
@@ -3610,7 +3657,7 @@ section.cash {
   margin: 0;
   padding: 0;
   border: 0;
-  color: var(--accent-text);
+  color: var(--link);
   font-weight: 600;
   text-align: left;
 }
@@ -4346,7 +4393,8 @@ span.cash-difference > .difference-sign {
   color: var(--pencil);
   transition: transform var(--dur-base) var(--ease-standard);
 }
-.fold[aria-expanded="true"] .fold-chevron {
+.fold[aria-expanded="true"] .fold-chevron,
+.pick-value[aria-expanded="true"] .fold-chevron {
   transform: rotate(90deg);
 }
 @media (prefers-reduced-motion: reduce) {
@@ -6241,7 +6289,14 @@ button.day-folded {
   justify-content: center;
   gap: 10px;
 }
-.today-more {
+/* «+ ще N» and «Показати ще» under a list are one look (spec §6.10; audit
+   2026-11-18, frame P2-4): the list's whole width, 44 high, the edge, 15/600
+   in ink, on nothing — on «Сьогодні», a stocktake's «Попередні» and a
+   finished one's «Розбіжності» (its «+ ще N» and its next page),
+   «Початкові залишки», a customer's history and the report's entries.
+   Their words, what they do and where the cursor goes, as before; «+ ще N»
+   inside a line of goods is a link (frame P2-1). */
+.list-more {
   width: 100%;
   min-height: 44px;
   margin-top: 8px;
@@ -8124,16 +8179,17 @@ label.way-option {
 .report-periods button {
   font-size: 15px;
 }
+/* A text button's look, in the link's colour in both themes (audit
+   2026-11-18, frame P2-1). */
 .report-days {
   min-height: 44px;
   margin: -8px 0 4px;
   padding: 0;
   border-color: transparent;
+  color: var(--link);
   font-size: 15px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-  text-decoration: underline;
-  text-underline-offset: 3px;
 }
 .report-age {
   margin: 0 0 4px;

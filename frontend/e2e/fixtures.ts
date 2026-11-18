@@ -687,12 +687,28 @@ export async function supplierList(
   page: Page,
   { of, inside }: SupplierField = {},
 ): Promise<Locator> {
-  await (inside ?? of ?? page)
-    .getByRole("button", { name: /^Постачальник / })
-    .click();
+  const field = (inside ?? of ?? page).getByRole("button", {
+    name: /^Постачальник /,
+  });
+  // In place, what opens in place says so: the set's chevron 16 in pencil,
+  // turned a quarter while open; in a sheet, the way's 20 (audit
+  // 2026-11-18, frame P2-4 (б)).
+  const chevron = field.locator("svg.icon");
+  if (inside) {
+    await expect(chevron).toHaveClass(/\bfold-chevron\b/);
+    await expect(chevron).toHaveAttribute("width", "16");
+    await expect(chevron).toHaveCSS(
+      "color",
+      await tokenColour(page, "--pencil"),
+    );
+    await expect.poll(() => chevronTurn(field)).toBe(0);
+  } else await expect(chevron).toHaveAttribute("width", "20");
+  await field.click();
   if (inside) {
     const list = inside.locator(".supplier-in-place");
     await expect(list).toBeVisible();
+    await expect(field).toHaveAttribute("aria-expanded", "true");
+    await expect.poll(() => chevronTurn(field)).toBe(90);
     return list;
   }
   const sheet = page.getByRole("dialog", { name: "Постачальник" });
@@ -1670,6 +1686,147 @@ export async function expectSheetCancel(button: Locator): Promise<void> {
     link: true,
     tall: true,
   });
+  // Underlined, as every text button (audit 2026-11-18, frame P2-1).
+  await expectTextLink(button);
+}
+
+/**
+ * A text button, as every one is drawn (spec §5.5 `button-s`, the `link`
+ * token «underlined»; audit 2026-11-18, frame P2-1): its words in the
+ * link's colour in both themes, underlined 1 at 3 in their own colour, on
+ * nothing, 15/600. `size: null` for one that keeps its line's face — «+ ще
+ * N» in a line of goods, a phone; `pencil` for «Пізніше», in pencil.
+ */
+export async function expectTextLink(
+  button: Locator,
+  {
+    size = "15px",
+    pencil = false,
+  }: { size?: string | null; pencil?: boolean } = {},
+): Promise<void> {
+  await expect(button).toBeVisible();
+  const look = await button.evaluate(
+    (node, [inPencil, sized]) => {
+      const probe = document.createElement("span");
+      document.body.append(probe);
+      // Its colour whatever the theme: in the light one the link is the
+      // ink's too, so the dark one is read as well — set and put back here,
+      // with nothing drawn between.
+      const ours = (): boolean => {
+        probe.style.color = inPencil ? "var(--pencil)" : "var(--link)";
+        return getComputedStyle(node).color === getComputedStyle(probe).color;
+      };
+      const root = document.documentElement;
+      const was = root.dataset.theme;
+      const here = ours();
+      root.dataset.theme = "dark";
+      const dark = ours();
+      if (was === undefined) delete root.dataset.theme;
+      else root.dataset.theme = was;
+      probe.remove();
+      const style = getComputedStyle(node);
+      return {
+        colour: here && dark,
+        line: style.textDecorationLine,
+        thickness: style.textDecorationThickness,
+        offset: style.textUnderlineOffset,
+        lineColour: style.textDecorationColor === style.color,
+        // No edge seen: none, or one of nothing («Інші дні» keeps the
+        // button's 1, transparent).
+        edge:
+          style.borderTopWidth === "0px" ||
+          style.borderTopColor === "rgba(0, 0, 0, 0)",
+        fill: style.backgroundColor,
+        ...(sized ? { size: style.fontSize, weight: style.fontWeight } : {}),
+      };
+    },
+    [pencil, size !== null] as const,
+  );
+  expect(look).toEqual({
+    colour: true,
+    line: "underline",
+    thickness: "1px",
+    offset: "3px",
+    lineColour: true,
+    edge: true,
+    fill: "rgba(0, 0, 0, 0)",
+    ...(size !== null ? { size, weight: "600" } : {}),
+  });
+}
+
+/**
+ * A field said wrong, under it (audit 2026-11-15, money P2-3; 2026-11-18,
+ * frame P2-2): a line, never a refusal's plate — the crossed circle 16 by
+ * its first line, 14/600/19 in the error's colour, nothing round it; read
+ * out as an alert, as before.
+ */
+export async function expectFieldLine(line: Locator): Promise<void> {
+  await expect(line).toBeVisible();
+  await expect(line).toHaveAttribute("role", "alert");
+  const look = await line.evaluate((node) => {
+    const style = getComputedStyle(node);
+    const mark = getComputedStyle(node, "::before");
+    const probe = document.createElement("span");
+    probe.style.color = "var(--danger)";
+    document.body.append(probe);
+    const danger = getComputedStyle(probe).color;
+    probe.remove();
+    return {
+      fill: style.backgroundColor,
+      padding: style.padding,
+      corner: style.borderTopLeftRadius,
+      size: style.fontSize,
+      weight: style.fontWeight,
+      line: style.lineHeight,
+      colour: style.color === danger,
+      mark: [mark.width, mark.height, mark.left, mark.top].join(" "),
+    };
+  });
+  expect(look).toEqual({
+    fill: "rgba(0, 0, 0, 0)",
+    padding: "0px 0px 0px 22px",
+    corner: "0px",
+    size: "14px",
+    weight: "600",
+    line: "19px",
+    colour: true,
+    mark: "16px 16px 0px 1.5px",
+  });
+}
+
+/** «+ ще N» and «Показати ще» under a list, one look wherever it stands
+ * (spec §6.10; audit 2026-11-18, frame P2-4): the list's width, from its
+ * side, 44 high at least, its edge, 15/600 in ink on nothing. */
+export async function expectListMore(
+  button: Locator,
+  list: Locator,
+): Promise<void> {
+  await expect(button).toBeVisible();
+  const page = button.page();
+  const [box, of] = [await button.boundingBox(), await list.boundingBox()];
+  if (!box || !of) throw new Error("the list or its «+ ще» not laid out");
+  expect(Math.abs(box.x - of.x), "from the list's side").toBeLessThanOrEqual(1);
+  expect(
+    Math.abs(box.width - of.width),
+    "the list's width",
+  ).toBeLessThanOrEqual(1);
+  expect(box.height).toBeGreaterThanOrEqual(44);
+  await expect(button).toHaveCSS("border-top-width", "1px");
+  await expect(button).toHaveCSS(
+    "border-top-color",
+    await tokenColour(page, "--edge"),
+  );
+  await expect(button).toHaveCSS("color", await tokenColour(page, "--ink"));
+  await expect(button).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  await expect(button).toHaveCSS("font-size", "15px");
+  await expect(button).toHaveCSS("font-weight", "600");
+}
+
+/** A text button with a sign — «←», «+», «×», «ⓘ … ›» — told by its sign,
+ * never underlined (audit 2026-11-18, frame P2-1). */
+export async function expectSignedLink(button: Locator): Promise<void> {
+  await expect(button).toBeVisible();
+  await expect(button).toHaveCSS("text-decoration-line", "none");
 }
 
 /** The shared empty place (spec §6.28; audit after stage 2, frame P2-1):

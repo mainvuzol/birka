@@ -202,7 +202,7 @@ export function Move({
           />
         </div>
         {unread && (
-          <p className="hint" role="alert" id={wrong}>
+          <p className="field-wrong" role="alert" id={wrong}>
             Вкажіть суму з точністю до копійок.
           </p>
         )}

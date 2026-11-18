@@ -189,9 +189,11 @@ export function Returns({
   const offer = (
     <p className="hint elsewhere-offer">
       <span id={offerId}>Купили в іншому магазині мережі?</span>{" "}
+      {/* A link of its sentence, never a button's edge (spec S11; audit
+          2026-11-18, frame P2-1 (б)). */}
       <button
         type="button"
-        className="quiet"
+        className="text-button"
         aria-describedby={offerId}
         onClick={() => {
           setElsewhere(true);

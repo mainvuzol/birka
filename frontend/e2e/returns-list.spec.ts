@@ -1,6 +1,7 @@
 import {
   test,
   expect,
+  expectTextLink,
   expectEmpty,
   expectPlate,
   listRow,
@@ -571,6 +572,9 @@ test("the other stores are offered from two letters under this store's results, 
   const under = await offer.boundingBox();
   if (!row || !under) throw new Error("not laid out");
   expect(under.y).toBeGreaterThan(row.y);
+  // A link of its sentence, never a button's edge (audit 2026-11-18, frame
+  // P2-1 (б)).
+  await expectTextLink(offer);
   expect(asked.some((params) => params.get("elsewhere") === "true")).toBe(
     false,
   );

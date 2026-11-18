@@ -1,6 +1,7 @@
 import {
   test,
   expect,
+  expectSignedLink,
   addSupplier,
   countTaps,
   expectEmpty,
@@ -1721,6 +1722,8 @@ for (const [name, theme] of [
       await make.evaluate((node) => node.scrollWidth <= node.clientWidth),
     ).toBe(true);
     await expect(make).toHaveClass(/\bhead-add\b/);
+    // Told by its «+», never underlined (audit 2026-11-18, frame P2-1).
+    await expectSignedLink(make);
     const title = page.getByRole("heading", {
       name: "Постачальникам",
       level: 1,

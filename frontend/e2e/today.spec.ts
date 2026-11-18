@@ -1,6 +1,7 @@
 import {
   test,
   expect,
+  expectListMore,
   expectEmpty,
   expectSumRole,
   holdReads,
@@ -1847,6 +1848,11 @@ test("past seven, «+ ще N»: tapped, the rest, the cursor on the first of the
   );
   await expect(tab(page, "Сьогодні")).toHaveAccessibleDescription(
     "Чекає на вас: 10",
+  );
+  // As every list's (audit 2026-11-18, frame P2-4).
+  await expectListMore(
+    waiting(page).getByRole("button", { name: "+ ще 3" }),
+    waiting(page).locator("ul").first(),
   );
   await waiting(page).getByRole("button", { name: "+ ще 3" }).click();
   await expect(tags(page)).toHaveCount(10);

@@ -801,7 +801,7 @@ function History({ credits }: { credits: readonly Credit[] }): JSX.Element {
       {rest > 0 && (
         <button
           type="button"
-          className="quiet history-more"
+          className="list-more"
           onClick={() => {
             setAll(true);
           }}

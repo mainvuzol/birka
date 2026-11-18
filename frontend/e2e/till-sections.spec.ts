@@ -1,6 +1,7 @@
 import {
   test,
   expect,
+  expectTextLink,
   expectSeries,
   menu,
   more,
@@ -1201,6 +1202,28 @@ test("a phone that saw the server come back says once, at the till, to type the 
   );
   const paper = page.getByLabel("Вношу продаж з паперу");
   await expect(paper).not.toBeChecked();
+  // Its two text buttons, side by side: the link, and «Пізніше» in pencil
+  // (spec S12 «Recovered», §6.23; audit 2026-11-18, frame P2-1 (б)).
+  const typeIn = reminder(page).getByRole("button", {
+    name: "Вношу продаж з паперу",
+  });
+  const later = reminder(page).getByRole("button", { name: "Пізніше" });
+  await expect(typeIn).toBeEnabled();
+  await expectTextLink(typeIn);
+  await expectTextLink(later, { pencil: true });
+  // Both in one frame: the till's mode above can still settle (review).
+  const [one, two] = await reminder(page).evaluate((node) =>
+    [...node.querySelectorAll(".actions button")].map((each) => {
+      const box = each.getBoundingClientRect();
+      return { x: box.x, y: box.y, width: box.width };
+    }),
+  );
+  if (!one || !two) throw new Error("the reminder not laid out");
+  expect(Math.abs(one.y - two.y)).toBeLessThanOrEqual(1);
+  expect(two.x).toBeGreaterThan(one.x + one.width);
+  await reminder(page).screenshot({
+    path: "test-results/till-server-back-links.png",
+  });
   await reminder(page)
     .getByRole("button", { name: "Вношу продаж з паперу" })
     .click();

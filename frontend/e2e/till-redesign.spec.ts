@@ -2,6 +2,7 @@ import {
   more,
   test,
   expect,
+  expectTextLink,
   basketSheet,
   fillLine,
   fromPaper,
@@ -215,6 +216,9 @@ test("two stores are chosen each time, nothing chosen beforehand, and the day co
     .locator(".store-line")
     .getByRole("button", { name: "Змінити магазин" });
   await expect(change).toBeVisible();
+  // A text button: the link underlined, in the light theme too, where the
+  // link is the ink (audit 2026-11-18, frame P2-1).
+  await expectTextLink(change);
   await more(page);
   await expect(
     page

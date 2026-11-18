@@ -1,6 +1,7 @@
 import {
   test,
   expect,
+  expectListMore,
   listRow,
   openStore,
   section,
@@ -1982,6 +1983,12 @@ test("the card's history: every debt's lines, the newest first, a debt opened «
   // no fold's «expanded» (audit 2026-11-13, frame P2-3).
   const more = page.getByRole("button", { name: "+ ще 1", exact: true });
   await expect(more).not.toHaveAttribute("aria-expanded");
+  // The history's width, one look with every list's (audit 2026-11-18,
+  // frame P2-4).
+  await expectListMore(
+    more,
+    page.getByRole("list", { name: "Історія покупця" }),
+  );
   await more.click();
   await expect(lines).toHaveCount(8);
   await expect(lines.nth(7)).toBeFocused();

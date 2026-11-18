@@ -428,7 +428,7 @@ function Form({
         {...(cents === 0n ? { describedBy: zeroId } : {})}
       />
       {cents === 0n && (
-        <p role="alert" id={zeroId}>
+        <p className="field-wrong" role="alert" id={zeroId}>
           Ціну вкажіть у гривнях, до копійок, більше нуля, наприклад 1850,50.
         </p>
       )}

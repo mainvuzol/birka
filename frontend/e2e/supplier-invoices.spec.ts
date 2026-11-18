@@ -4,6 +4,7 @@ import {
   countTaps,
   dockOnMenu,
   expectEmpty,
+  expectFieldLine,
   expectGlyphBeside,
   expectHeldRow,
   expectListBlock,
@@ -786,6 +787,8 @@ test("goods returned are set off against an invoice, and their return waits for 
     "Це більше, ніж винні: залишок 4 000,00 грн. Решту зарахуйте на іншу накладну.",
   );
   await expect(over).toHaveAttribute("role", "alert");
+  // A field's line, never a refusal's plate (audit 2026-11-18, frame P2-2).
+  await expectFieldLine(over);
   await expect(field).toHaveAttribute("aria-invalid", "true");
   await expect(field).toHaveAccessibleDescription(
     "Це більше, ніж винні: залишок 4 000,00 грн. Решту зарахуйте на іншу накладну.",
@@ -2418,6 +2421,8 @@ for (const [name, theme] of [
     await expect(over).toHaveText(words);
     await expect(over).toHaveAttribute("role", "alert");
     await expect(over).toHaveCSS("font-size", "14px");
+    // A line, never a refusal's plate (audit 2026-11-18, frame P2-2).
+    await expectFieldLine(over);
     await expect(over).toHaveCSS(
       "color",
       await resolved(page, "var(--danger)"),
@@ -2702,6 +2707,7 @@ test("inside Telegram «Сплатити» is its MainButton on the card, never 
   await expect(page.locator(".pay-over")).toHaveText(
     "Це більше, ніж винні: залишок 1 000,00 грн. Сплатіть не більше.",
   );
+  await expectFieldLine(page.locator(".pay-over"));
   await expect(page.getByLabel("Сума, грн")).toHaveAttribute(
     "aria-invalid",
     "true",

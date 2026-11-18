@@ -484,7 +484,7 @@ function WaitingTags({
           {folded && (
             <button
               type="button"
-              className="today-more"
+              className="list-more"
               onClick={() => {
                 setAll(true);
               }}

@@ -3,9 +3,11 @@ import {
   expect,
   dockOnMenu,
   expectHeldLook,
+  expectFieldLine,
   expectOwed,
   expectStub,
   expectSheetCancel,
+  expectTextLink,
   openStore,
   toTill,
   listRow,
@@ -1411,6 +1413,8 @@ for (const [name, theme] of [
     await opened(page, theme);
     const more = page.locator(".more-goods");
     expect(await contrast(more)).toBeGreaterThanOrEqual(4.5);
+    // A text button in the line's own face (audit 2026-11-18, frame P2-1).
+    await expectTextLink(more, { size: null });
     await more.click();
     expect(
       await contrast(page.locator(".debt-goods li").first()),
@@ -2453,9 +2457,10 @@ test.describe("«Продаж» › «Внесок»: a payment on a debt from t
     await expect(rows.nth(1)).toContainText("Магазин «Ринок»");
   });
 
-  test("more than is owed darkens the ways and says so in the error's colour, and nothing is sent; the keypad keeps a sum to the kopeck", async ({
+  test("more than is owed darkens the ways and says so in the error's colour — a line under the sum, never a refusal's plate, the three ways in view at 360×640 — and nothing is sent; the keypad keeps a sum to the kopeck (audit 2026-11-18, frame P2-2)", async ({
     page,
   }) => {
+    await page.setViewportSize({ width: 360, height: 640 });
     const sent = await serve(page, coat());
     await atTheTill(page);
     await page.getByRole("button", { name: /^Відкрити борг: / }).click();
@@ -2477,10 +2482,17 @@ test.describe("«Продаж» › «Внесок»: a payment on a debt from t
       }),
     );
     await expect(sum).toHaveAttribute("aria-invalid", "true");
+    // A field's line, never the plate of a refusal: nothing was sent (audit
+    // 2026-11-18, frame P2-2).
+    await expectFieldLine(over);
     // Nothing to press: each greyed as the main is, never faded (S21 №10;
-    // audit 2026-11-15, frame P2-7).
-    for (const way of ["Готівка", "Картка", "Переказ"])
-      await expectHeldLook(panel(page).getByRole("button", { name: way }), "main");
+    // audit 2026-11-15, frame P2-7) — all three in view with the line.
+    for (const way of ["Готівка", "Картка", "Переказ"]) {
+      const button = panel(page).getByRole("button", { name: way });
+      await expectHeldLook(button, "main");
+      await expect(button).toBeInViewport({ ratio: 1 });
+    }
+    await page.screenshot({ path: "test-results/credits-debt-over-360.png" });
     // One figure off: under the debt, the ways back, the line gone.
     await key(page, "Стерти").click();
     await expect(sum).toHaveValue("250");

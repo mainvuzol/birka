@@ -7,6 +7,7 @@ import {
   expectLinkChevron,
   test,
   expect,
+  expectSignedLink,
   menu,
   moveSheet,
   openStore,
@@ -407,6 +408,13 @@ test("the count: the card reads the drawer again, a task's screen with the app's
       exact: true,
     }),
     "Спершу запишіть видане з каси",
+  );
+  // Told by its signs, never underlined (audit 2026-11-18, frame P2-1).
+  await expectSignedLink(
+    page.getByRole("button", {
+      name: "Спершу запишіть видане з каси",
+      exact: true,
+    }),
   );
   const close = page.getByRole("button", { name: "Закрити касу", exact: true });
   const panel = page.locator(".pay-panel");

@@ -243,7 +243,7 @@ export function ReportEntries({
       {entries.hasNextPage && !entries.isFetchNextPageError && (
         <button
           type="button"
-          className="quiet history-more"
+          className="list-more"
           disabled={entries.isFetching}
           onClick={() => {
             void entries.fetchNextPage();

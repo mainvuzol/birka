@@ -3,7 +3,10 @@ import {
   expect,
   comeBack,
   countTaps,
+  expectFieldLine,
   expectListBlock,
+  expectListMore,
+  expectTextLink,
   grn,
   holdReads,
   menu,
@@ -619,6 +622,10 @@ test("«Сьогодні», «Вчора», «Тиждень» and «Місяц�
   );
 
   // Days of one's own: in a sheet, shown once «Показати» is pressed.
+  // A text button, the link underlined (audit 2026-11-18, frame P2-1).
+  await expectTextLink(
+    page.getByRole("button", { name: "Інші дні", exact: true }),
+  );
   await page.getByRole("button", { name: "Інші дні", exact: true }).click();
   const sheet = page.getByRole("dialog", { name: "Інші дні" });
   // A tap carried from the one that opened it is let go: ready first.
@@ -666,6 +673,8 @@ test("«Сьогодні», «Вчора», «Тиждень» and «Місяц�
   await expect(wrong).toHaveText(words);
   await expect(wrong).toHaveAttribute("role", "alert");
   await expect(wrong).toHaveCSS("font-size", "14px");
+  // A line, never a refusal's plate (audit 2026-11-18, frame P2-2).
+  await expectFieldLine(wrong);
   for (const field of [from, to]) {
     await expect(field).toHaveAttribute("aria-invalid", "true");
     await expect(field).toHaveAccessibleDescription(words);
@@ -1354,6 +1363,12 @@ test("«Продажі й повернення»: a thread by day, the newest fi
   ).toHaveCount(1);
   await expect(thread.getByRole("listitem").nth(1)).toContainText(
     "Повернення −1 850,00 грн12:00 · Оля · Кокон графіт, M",
+  );
+  // Under the thread, its width, one look with every list's (audit
+  // 2026-11-18, frame P2-4).
+  await expectListMore(
+    page.getByRole("button", { name: "Показати ще", exact: true }),
+    thread,
   );
   await page.getByRole("button", { name: "Показати ще", exact: true }).click();
   // The page failed: asked again by its own retry, one button, not two.

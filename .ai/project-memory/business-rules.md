@@ -10913,3 +10913,104 @@ server's, through `Sum` / `money()`, as before.
   written-off debt's result (`frontend/src/credits/Customer.tsx:165-172`).
   The TZ's sale P2-3 said the focus was there as now; it was not. The
   journeys check the title is shown.
+
+## Chosen in chat — 2026-11-18 (audit 2026-11-18, batch 3: one hand — a text button one look, underlined in the link's colour, a sign's never; «Оформити повернення», «Шукати там» and the server-back banner's two as links; a field said wrong a line under it, never a refusal's plate; «+ ще N» under a list one look; the in-place supplier picker's chevron the fold's; frame P2-1, P2-2, P2-4)
+
+Picked by «merged, go next» after #226; closes the frame task list of the
+audit 2026-11-18. Nothing recorded, sent or counted changes. No request,
+check, journal, right or word changes; what each button does and where it
+stands are as before.
+
+- **A text button is one look** (frame P2-1; spec §5.5 `button-s`, the
+  `link` token «underlined»):
+  - its words in the link's colour, underlined 1 px at 3 in their own
+    colour, in both themes; 15/600 on nothing, 44 high. In the light theme
+    the link is the ink, and only the line tells it from the words beside
+    it.
+  - One rule for «Спробувати ще раз» (`.text-button`), a sheet's «Скасувати»
+    / «Не скасовувати» (`.sheet-cancel`), «Змінити магазин» on the store's
+    line and «Інші дні» of «Звіт про продажі» — now the link's colour in the
+    dark theme too, where it was the ink.
+  - «+ ще N» in a line of goods (`.more-goods`) keeps that line's face, in
+    the link's colour.
+  - Decided here: a customer's phone (`a`) takes the same line, 1 at 3; it
+    was the browser's.
+  - One with a sign — the header's «+ …», the «←» line, the search's «×»,
+    «ⓘ Спершу запишіть видане з каси ›» and the other ways with the set's
+    chevron — is told by its sign and never underlined. «Спершу запишіть…»
+    takes `--link` over its alias; it looks the same.
+  - Taking no tap: its words and its line in pencil, nothing round them, as
+    before.
+  - Not touched, as decided before: a tag's model name (`.model-open`), the
+    order card's rare ways with their chevron.
+- **The reference's links** (frame P2-1 (б); spec S11 №9, S12 «Recovered»,
+  §6.23; revises batch 3 after stage 2, which kept them quiet buttons and
+  left the banner's text buttons for later):
+  - «Помилилися з товаром чи ціною? Оформити повернення» under the till's
+    receipt and «Купили в іншому магазині мережі? Шукати там» on
+    «Повернення»: the link of their sentence, no edge, where they stood.
+  - Decided here: «Клієнт забрав»'s receipt says the same sentence «as from
+    the till's receipt» — its «Оформити повернення» is the same link. The
+    task list named only the till's and «Повернення»'s.
+  - «Сервер знову відповідає»: «Вношу продаж з паперу» a link and
+    «Пізніше» a text button in pencil (spec §6.10), side by side at their
+    words' width at any width — never the row of full-width buttons a phone
+    narrower than 480 drew.
+  - Decided here: «Пізніше» is underlined too, in pencil, as every text
+    button. While «Вношу продаж з паперу» takes no tap (a kept operation
+    sent or waiting), both are in pencil; the held one takes no tap.
+  - Owner reading (the task list's §11, decided there without a question).
+    By the review: while «Вношу продаж з паперу» is held, «Пізніше» in
+    pencil reads as held too, though it takes a tap — the spec's pencil
+    (§6.24), kept; part of the same reading.
+  - The banner's two got `type="button"`; they stand in no form, so nothing
+    changes.
+- **A field said wrong is a line under it** (frame P2-2; spec S21; the
+  rule of 2026-11-17):
+  - the crossed circle 16 by its first line, 14/600/19 in the error's
+    colour, no fill, no padding and no corner round it — as the tray's
+    refusal is drawn, at 600. One rule on `.field-wrong` and `.pay-over`,
+    stronger than `[role="alert"]`'s plate.
+  - Its places: «Це більше, ніж винні…» (a debt's payment, an invoice's
+    payment, a set-off), «Сплачено одразу не може бути більше…», «Оберіть
+    період…», and, given the class now, «Вкажіть суму з точністю до
+    копійок.» (cash out or in), the purchase price in «Як надійшов», a
+    price of nothing, a stocktake's count and a correction's number.
+  - Their role, id, `aria-describedby`, `aria-invalid` and the field's red
+    edge are as before: a reader hears the same. The checks that hold a
+    send are as before.
+  - The plate stays the server's answers and the presses the phone did not
+    let go: a price's, a correction's and a receiving's refusals.
+  - At 360×640 S21 keeps its three ways in view with «Це більше, ніж
+    винні…» under the sum.
+  - Left: «Вкажіть суму з точністю до копійок.» in «Видати з каси» /
+    «Внести в касу» is reached by no journey (the keypad gives no such
+    sum); its rule is checked on the design system's probe.
+- **«+ ще N» under a list is one look** (frame P2-4 (а); spec §6.10):
+  - the list's whole width, 44 high, the edge, 15/600 in ink, on nothing —
+    one class, `.list-more` (was `.today-more`).
+  - Its places: «Сьогодні», a stocktake's «Попередні» and a finished one's
+    «Розбіжності», «Початкові залишки»' «Показати ще», a customer's history
+    and, decided here, «Продажі й повернення»'s «Показати ще» and a finished
+    stocktake's «Розбіжності»' next page «Показати ще» (by the review: it
+    comes under the same list right after «+ ще N») — the task list named
+    the first five.
+  - Decided here: 8 over the list, as «Сьогодні»'s was; a customer's history
+    and the report's entries had 4, so their «+ ще N» / «Показати ще» stands
+    4 lower.
+  - Their words, what they do and where the cursor goes, as before. Taking
+    no tap, as a secondary: dashed, in pencil.
+- **The in-place supplier picker's chevron** (frame P2-4 (б)): in «Як
+  надійшов» and «Брак», where the list opens under the field, the set's
+  chevron 16 in pencil, turned a quarter while open — as every fold's. In
+  a sheet, the way's chevron 20, as before. The button's look as before.
+  `chevron-up` has no user now; it stays in the set of P0-1.
+- **Found by the review, not changed** (the next audit's):
+  - Thirteen other «Показати ще» under a list are still quiet buttons at
+    their words' width: «Позичене», «Постачальники», «Накладні», the till's
+    stock search, «Операції дня»'s history, «Моделі», the catalogue and its
+    family search, «Залишки», a stocktake's count, «Повернення»,
+    «Замовлення», «Покупці». P2-4 named none of them.
+  - «Вкажіть додатну довжину до 9999,9 см…» in «Нова модель» and «Моделі»
+    is a field said wrong as typed, still drawn as a refusal's plate. P2-2
+    did not name it.

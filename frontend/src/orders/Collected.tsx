@@ -104,7 +104,9 @@ export function SaleLinks({
         // (I8), as from the till's receipt.
         <p className="hint return-offer">
           Помилилися з товаром чи ціною?{" "}
-          <button type="button" className="quiet" onClick={returnSale}>
+          {/* A link of its sentence, as the till's receipt's (spec S11 №9;
+              audit 2026-11-18, frame P2-1 (б)). */}
+          <button type="button" className="text-button" onClick={returnSale}>
             Оформити повернення
           </button>
         </p>
