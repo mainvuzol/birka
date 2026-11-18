@@ -81,9 +81,11 @@ test("a size typed «м» under another system is the shop's M, and says so", as
 }) => {
   const name = `Модель ${randomUUID().slice(0, 8)}`;
   await createWithSize(page, name, "UNSPECIFIED", "м");
-  // The seed's M is a letter size: the model takes it, in its own system.
+  // The seed's M is a letter size: the model takes it, in its own system —
+  // shown by where its cell stands, never by the system's code (audit
+  // 2026-11-18, goods P1-1).
   await expect(
-    page.getByText(`Збережений товар: ${name}. Розміри: M (ALPHA)`, {
+    page.getByText(`Збережений товар: ${name}. Розміри: M`, {
       exact: true,
     }),
   ).toBeVisible();
@@ -106,7 +108,7 @@ test("«2хл» is written XXL, and XXL typed later is the same size", async ({
   const first = `Модель ${randomUUID().slice(0, 8)}`;
   await createWithSize(page, first, "ALPHA", "2хл");
   await expect(
-    page.getByText(`Збережений товар: ${first}. Розміри: XXL (ALPHA)`, {
+    page.getByText(`Збережений товар: ${first}. Розміри: XXL`, {
       exact: true,
     }),
   ).toBeVisible();
@@ -119,7 +121,7 @@ test("«2хл» is written XXL, and XXL typed later is the same size", async ({
   const second = `Модель ${randomUUID().slice(0, 8)}`;
   await createWithSize(page, second, "ALPHA", "XXL");
   await expect(
-    page.getByText(`Збережений товар: ${second}. Розміри: XXL (ALPHA)`, {
+    page.getByText(`Збережений товар: ${second}. Розміри: XXL`, {
       exact: true,
     }),
   ).toBeVisible();
@@ -136,7 +138,7 @@ test("«46 – 48» is 46-48, and 46/48 stays another size", async ({ page }) =>
   const dash = `Модель ${randomUUID().slice(0, 8)}`;
   await createWithSize(page, dash, "NUMERIC_EU", "46 – 48");
   await expect(
-    page.getByText(`Збережений товар: ${dash}. Розміри: 46-48 (NUMERIC_EU)`, {
+    page.getByText(`Збережений товар: ${dash}. Розміри: 46-48`, {
       exact: true,
     }),
   ).toBeVisible();
@@ -144,7 +146,7 @@ test("«46 – 48» is 46-48, and 46/48 stays another size", async ({ page }) =>
   const slash = `Модель ${randomUUID().slice(0, 8)}`;
   await createWithSize(page, slash, "NUMERIC_EU", "46/48");
   await expect(
-    page.getByText(`Збережений товар: ${slash}. Розміри: 46/48 (NUMERIC_EU)`, {
+    page.getByText(`Збережений товар: ${slash}. Розміри: 46/48`, {
       exact: true,
     }),
   ).toBeVisible();

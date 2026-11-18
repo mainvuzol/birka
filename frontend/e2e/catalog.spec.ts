@@ -819,7 +819,7 @@ test("create a reviewed product and recover a lost response without duplication"
   // (ADR-0013 §4.3).
   await openStore(reopened, "Основний MAIN");
   await expect(
-    reopened.getByText(`Збережений товар: ${name} синій. Розміри: L (ALPHA)`, {
+    reopened.getByText(`Збережений товар: ${name} синій. Розміри: L`, {
       exact: true,
     }),
   ).toBeVisible();
@@ -836,6 +836,47 @@ test("create a reviewed product and recover a lost response without duplication"
     path: "test-results/catalog-created-mobile.png",
     fullPage: true,
   });
+});
+
+test("a product created says its sizes as the cells do, never the system's code; at 360 a long name wraps on the screen (audit 2026-11-18, goods P1-1)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  await enter(page);
+  const name = `Модель ${randomUUID().slice(0, 8)} з довгою назвою для переносу`;
+  const sheet = await create(page, name);
+  await sheet.getByRole("button", { name: "Ні, це нова модель" }).click();
+  await sheet.getByLabel("Назва моделі", { exact: true }).fill(name);
+  await sizeCell(sheet, "M").click();
+  await sizeCell(sheet, "L").click();
+  await addModel(sheet).click();
+  const line = page.getByText(`Збережений товар: ${name}. Розміри: M, L`, {
+    exact: true,
+  });
+  await expect(line).toBeVisible();
+  await expect(page.getByText(/ALPHA|NUMERIC_EU|UNSPECIFIED/)).toHaveCount(0);
+  // Wrapped inside the screen's sides, never cut or pushed past them.
+  const box = await line.boundingBox();
+  expect(box).not.toBeNull();
+  if (box === null) return;
+  expect(box.x).toBeGreaterThanOrEqual(16 - 0.5);
+  expect(box.x + box.width).toBeLessThanOrEqual(360 - 16 + 0.5);
+  const lineHeight = await line.evaluate((node) =>
+    parseFloat(getComputedStyle(node).lineHeight),
+  );
+  expect(box.height).toBeGreaterThan(lineHeight * 1.5);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth > innerWidth,
+    ),
+  ).toBe(false);
+  for (const theme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: theme });
+    await page.screenshot({
+      path: `test-results/catalog-created-sizes-${theme}.png`,
+      fullPage: true,
+    });
+  }
 });
 
 test("ambiguous named model retains explicit form then allows a distinct model", async ({
@@ -862,7 +903,7 @@ test("ambiguous named model retains explicit form then allows a distinct model",
     .fill("Інший крій для тесту");
   await addModel(sheet).click();
   await expect(
-    page.getByText("Збережений товар: Лоран. Розміри: XL (ALPHA)", {
+    page.getByText("Збережений товар: Лоран. Розміри: XL", {
       exact: true,
     }),
   ).toBeVisible();
@@ -1064,7 +1105,7 @@ test("cancelling a lost committed creation shows its saved product", async ({
   // Saved already: shown as it is, the model added.
   await expect(sheet).toHaveCount(0);
   await expect(
-    page.getByText(`Збережений товар: ${name}. Розміри: M (ALPHA)`, {
+    page.getByText(`Збережений товар: ${name}. Розміри: M`, {
       exact: true,
     }),
   ).toBeVisible();

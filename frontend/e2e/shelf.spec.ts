@@ -4,7 +4,10 @@ import {
   dockOnMenu,
   expectStub,
   fillLine,
+  menu,
+  more,
   openStore,
+  ownStub,
   tapSize,
   sellsFrom,
   shortage,
@@ -292,9 +295,10 @@ test("a basket with nothing on the shelf records the shortage and sells nothing:
   ).toHaveCount(0);
 });
 
-test("an empty shelf whose answer was lost is checked, and not recorded twice", async ({
+test("an empty shelf whose answer was lost is checked, and not recorded twice; kept and then found recorded, its stub stands under «Продаж» and tears there, a banner over «Ще» (audit 2026-11-18, frame P2-3)", async ({
   page,
 }) => {
+  await page.setViewportSize({ width: 360, height: 640 });
   const empty = await model(page, 1);
   let calls = 0;
   await page.route("**/api/v1/shelf-shortages", async (route) => {
@@ -325,15 +329,60 @@ test("an empty shelf whose answer was lost is checked, and not recorded twice", 
       "Сервер не відповів. Двічі нестача не запишеться. Поки чекаємо, інші дії недоступні.",
     ),
   ).toBeVisible();
+  // Kept, on the till: its stub under «Продаж» and its line (audit
+  // 2026-11-15, frame P2-9).
+  await ownStub(page, "Продаж", "Запис нестачі ще не підтверджено");
 
   await page
     .getByRole("button", { name: "Перевірити результат продажу" })
     .click();
-  await expect(
-    page.getByRole("heading", { name: "Продажу не було" }),
-  ).toBeVisible();
+  // Nothing sold: the same stub torn, as «Продаж записано один раз», still
+  // under «Продаж» and its line — never a plate over the title (audit
+  // 2026-11-18, frame P2-3).
+  const torn = await ownStub(page, "Продаж", "Продажу не було");
+  await expect(torn.locator(":scope > .stub")).toHaveClass(/\bstub-recorded\b/);
+  // It tears where it stands, as the sold one does — never drawn still
+  // (review).
+  await expect(torn.locator(":scope > .stub")).not.toHaveClass(
+    /\bstub-still\b/,
+  );
+  await expect(torn.locator(":scope > .stub")).toHaveCSS(
+    "animation-name",
+    "stub-tear",
+  );
+  for (const theme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: theme });
+    await page.screenshot({
+      path: `test-results/shelf-nothing-sold-${theme}.png`,
+    });
+  }
+  await page.emulateMedia({ colorScheme: "light" });
   expect(calls).toBe(2);
   expect(await held(page, empty)).toBe(0);
+  // Over another screen, a banner over its title, as before; no place
+  // under the title there.
+  await more(page);
+  const banner = page.locator("section.banner-recorded");
+  await expect(
+    banner.getByRole("heading", { name: "Продажу не було" }),
+  ).toBeVisible();
+  await expect(page.locator(".under-header")).toHaveCount(0);
+  const over = await banner.boundingBox();
+  const title = await page
+    .getByRole("heading", { level: 1, name: "Ще", exact: true })
+    .boundingBox();
+  if (!over || !title) throw new Error("not laid out");
+  expect(over.y + over.height).toBeLessThanOrEqual(title.y + 0.5);
+  // Back on the till, under «Продаж» again; its own «Зрозуміло» lets it go
+  // and the place under the title with it, nothing sent again (review).
+  await menu(page).getByRole("button", { name: "Продаж", exact: true }).click();
+  const again = await ownStub(page, "Продаж", "Продажу не було");
+  await again.getByRole("button", { name: "Зрозуміло" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Продажу не було" }),
+  ).toHaveCount(0);
+  await expect(page.locator(".under-header")).toHaveCount(0);
+  expect(calls).toBe(2);
 });
 
 test("whoever may not report goods missing is not offered the empty shelf", async ({

@@ -3083,7 +3083,7 @@ function Workspace({
   // while one is to stand there; the first header on the page gives its
   // place. A screen with no header: the stub stands over it, as before.
   const stubUnder = Boolean(
-    ((keptSale || settled) && saleOwn) ||
+    ((keptSale || settled || shelfSettled) && saleOwn) ||
       ((keptReceipt || receiptSettled) && receiptOwn) ||
       ((keptReturn || returnSettled) && returnsOwn) ||
       (keptCredit && creditOwn(keptCredit.body.kind)) ||
@@ -3220,8 +3220,12 @@ function Workspace({
           </button>
         </Settled>
       )}
+      {/* A kept shortage checked and found recorded, nothing sold: the same
+          torn stub as «Продаж записано один раз», under «Продаж» on the
+          till, a banner over any other screen (audit 2026-11-18, frame
+          P2-3). */}
       {shelfSettled && (
-        <Banner kind="recorded" role="status">
+        <Settled own={saleOwn}>
           <h3>Продажу не було</h3>
           <p>
             Нічого з кошика не було на полиці — нестачу записано. Повторно вона
@@ -3234,7 +3238,7 @@ function Workspace({
           >
             Зрозуміло
           </button>
-        </Banner>
+        </Settled>
       )}
       {saleCommand.error !== null && !onStub(keptSale, saleCommand.error) && (
         <UnderStub on={Boolean(keptSale) && saleOwn}>
