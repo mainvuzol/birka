@@ -240,7 +240,9 @@ function SupplierList({
             ))}
           </ul>
           {query.trim() !== "" && found.length === 0 && (
-            <p className="t-meta" role="status">
+            // A choice in a sheet, so a line: `meta` in pencil, as an empty
+            // search's (audit 2026-11-18, money P2-4 (в)).
+            <p className="t-meta nothing-yet" role="status">
               Нічого не знайшли за «{visible(query.trim())}»
             </p>
           )}

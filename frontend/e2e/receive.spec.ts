@@ -2,6 +2,7 @@ import {
   test,
   expect,
   expectFieldLine,
+  expectHeldLook,
   expectNoticeLead,
   addModel,
   feels as feelsAs,
@@ -1691,6 +1692,9 @@ test("inside Telegram «Прийшов товар» is felt: a warehouse, a mode
   // «−» as «+»; at 0 it takes no tap, and nothing is felt.
   const down = receiveSize(page, "M").getByRole("button", { name: "Менше" });
   const up = receiveSize(page, "M").getByRole("button", { name: "Більше" });
+  // Held at 0: a secondary taking no tap, never faded — the rule its twin
+  // «Повернути постачальнику» shares (audit 2026-11-18, money P2-4 (а)).
+  await expectHeldLook(down, "stepped");
   await feels(() => down.click({ force: true }), []);
   await feels(() => up.click(), [light]);
   await feels(() => down.click(), [light]);

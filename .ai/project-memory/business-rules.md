@@ -11014,3 +11014,70 @@ stands are as before.
   - «Вкажіть додатну довжину до 9999,9 см…» in «Нова модель» and «Моделі»
     is a field said wrong as typed, still drawn as a refusal's plate. P2-2
     did not name it.
+
+## Chosen in chat — 2026-11-18 (audit 2026-11-18, batch 4: «Повернути постачальнику» the twin of «Прийшов товар» — «У поверненні» rows on a white block, its choices and refusals felt; the return's and «Позичене»'s results a result's screen; a held stepper drawn, never faded; «Надійшло»'s row names meta; a whole list's nothing found the empty place; money P2-1, P2-2, P2-4)
+
+Picked by «merged, go next» after #227: the money task list's own batch
+«Близнець приходу». P2-3 waits for Д1: whether Telegram's «Далі» moves the
+cursor by itself on iOS and Android, which only a real phone shows.
+Nothing recorded, sent or counted changes. No request, check, journal,
+right or word changes.
+
+- **«У поверненні» rows on a white block** (money P2-1 (а); spec S24,
+  §6.8; goods P2-2 of 2026-11-15 drew «У поставці» so):
+  - `ul.receive-lines.list-block`, a row `li.sale-row.receive-line` as «У
+    поставці»: «{модель} · {розмір}» 17/600 in ink, «N шт.» under it in the
+    meta's 14, «Прибрати {модель}» a quiet button under them with the same
+    name for a reader.
+  - «вільно N» (audit 2026-11-15, money P1-3) a warning's sticker under «N
+    шт.» in its own row; its `aria-describedby` as before.
+  - The label «У поверненні» and the region's name as before.
+- **Felt as its twin** (money P2-1 (б); spec §4.4, Telegram rule 9):
+  - another warehouse's chip, and a model found and taken: `selection`,
+    only when the choice changes — the same chip again, a model put away,
+    nothing;
+  - «Оберіть постачальника.», «Такий рядок уже в списку…» and «В одному
+    поверненні — до 100 рядків…» at their press: `error`; nothing while
+    typed. The server's refusal and ±1 as before.
+  - Left: «до 100 рядків» is reached by no journey; it goes through the
+    same `refuse` as the other two.
+- **Its result and «Позичене»'s a result's screen** (money P2-2; spec §5
+  «Док дій», §6.5; frame P2-9 of 2026-11-13):
+  - «Повернено постачальнику «…»: N шт.», and «Позичене»'s «Продано N шт.»
+    and «Повернено постачальнику «…»: N шт.» are `ResultScreen`s. Outside
+    Telegram «Готово» is the MainButton's place in its dock at the menu's
+    top, sticking there on a long stub; inside it, Telegram's MainButton,
+    no dock — as before.
+  - The return keeps «← Постачальникам» and Telegram's «Назад» over its
+    title; «Позичене» keeps its screen's header. The focus and what
+    «Продано» is heard with, as before. The stubs' lines as before.
+  - The return's form's dock lets its room go on the result (as «Прийшов
+    товар»'s): only the result's dock is kept clear.
+  - By the review: the menu is back under the return's result, before it
+    is painted, as on «Прийшов товар»'s and a payment's on «Борги» (audit
+    2026-11-13, sale P1-2). It had stayed aside for the whole of «Повернути
+    постачальнику», so «Готово» stood at the screen's foot, not over the
+    menu as P2-2's criterion says. The form keeps the menu aside, as
+    before. «Позичене»'s results had the menu already.
+  - A kept operation's stub stands over a result, never under its title
+    (frame P2-9 of 2026-11-15): the header is inside the result's screen.
+- **A held stepper drawn, never faded** (money P2-4 (а); spec §6.5
+  secondary-disabled; frame P2-7 of 2026-11-15):
+  - «Менше» / «Більше» held at their bound (`aria-disabled`, the cursor
+    kept on it) in a size's cell of «Повернути постачальнику» and of
+    «Прийшов товар» (one rule, Д4), and in a lot's sheet on «Позичене»:
+    the fold, a dashed edge, pencil — at 4.5:1 in both themes — no fade.
+  - Nothing felt and nothing changed at a held press, and the cursor stays
+    on it, as before.
+- **«Надійшло»'s row names `meta`** (money P2-4 (б)): the ways' names and
+  «грн» 14/19 500 in pencil, as the report's table; «Разом» 14, 700 in
+  ink. Decided here: the line 19 of `meta`, where the report's is 18.
+- **A whole list's nothing found the empty place** (money P2-4 (в); spec
+  §6.28; frame P2-3 of 2026-11-15):
+  - «Список постачальників»: «Нічого не знайшли за «…»» is the blank tag
+    with that one line, nothing under it, no empty list; the search where
+    it was. A reader hears it as before (`role="status"` round it).
+  - The return's «За «…» на складі «…» вільного товару немає.» and the
+    supplier's sheet's «Нічого не знайшли за «…»» stay lines — a block
+    among others, a choice in a sheet — `meta` 14 in pencil. Decided here:
+    the class `.nothing-yet` of money P2-6 (в), one rule.

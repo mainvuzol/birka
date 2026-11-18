@@ -11,6 +11,7 @@ import {
 } from "@/shared/api";
 import { Unread } from "@/shared/Unread";
 import { Placeholder } from "@/shared/Placeholder";
+import { ResultScreen } from "@/shared/ResultScreen";
 import { money } from "@/orders/types";
 import { sizeLabel } from "@/returns/types";
 import type { Store } from "@/orders/types";
@@ -23,7 +24,6 @@ import { SendingLine } from "@/shared/Sending";
 import { Sheet } from "@/shared/Sheet";
 import { Perforation, Stub } from "@/shared/Stub";
 import { Sum } from "@/shared/Sum";
-import { usePanelRoom } from "@/shared/panel";
 import { buzz, useMainButton } from "@/shared/telegram";
 import type { JournalOutcome } from "@/shared/journal";
 import { BackToMore } from "@/shared/More";
@@ -228,8 +228,6 @@ export function Borrowed({
     },
     { shown: done !== null },
   );
-  const dock = useRef<HTMLDivElement>(null);
-  usePanelRoom(dock, done !== null && !main);
   // The stub's words take the cursor, the button pressed being gone; and
   // the heading once «Готово» is — never as the screen opens.
   const said = useRef<HTMLParagraphElement>(null);
@@ -252,7 +250,26 @@ export function Borrowed({
 
   if (done)
     return (
-      <>
+      // A result's screen, as every other of the section's: outside
+      // Telegram «Готово» in its dock at the menu's top, its MainButton's
+      // place; inside it, the MainButton. The screen's header as it was
+      // (audit 2026-11-18, money P2-2).
+      <ResultScreen
+        as="div"
+        dock={
+          !main && (
+            <button
+              type="button"
+              className="main-mimic"
+              onClick={() => {
+                setDone(null);
+              }}
+            >
+              Готово
+            </button>
+          )
+        }
+      >
         {heading}
         <section className="receipt receive-done borrowed-done">
           <p
@@ -310,22 +327,8 @@ export function Borrowed({
               </p>
             </Stub>
           )}
-          {!main && (
-            // Outside Telegram, its MainButton as the dock's one button.
-            <div className="pay-panel order-dock" ref={dock}>
-              <button
-                type="button"
-                className="main-mimic"
-                onClick={() => {
-                  setDone(null);
-                }}
-              >
-                Готово
-              </button>
-            </div>
-          )}
         </section>
-      </>
+      </ResultScreen>
     );
 
   return (

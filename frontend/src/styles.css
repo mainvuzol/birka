@@ -6757,12 +6757,15 @@ button.money-line-open:disabled {
   white-space: normal;
   vertical-align: bottom;
 }
+/* Its rows' names and «грн» `meta` 14/19 500 in pencil, as the report's
+   table (audit 2026-11-18, money P2-4 (б)). */
 .money-table th[scope="row"],
 .money-table .money-unit {
   padding-left: 0;
   vertical-align: bottom;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 500;
+  line-height: 19px;
   text-align: left;
   color: var(--pencil);
 }
@@ -7059,9 +7062,16 @@ p.receive-place {
   border-radius: var(--r-l);
   font-size: 22px;
 }
-/* Held at 0 or at the most, not disabled: the cursor stays on it. */
-.receive-size button[aria-disabled="true"] {
-  opacity: 0.45;
+/* Held at 0 or at the most, not disabled: the cursor stays on it. Drawn
+   as a secondary taking no tap, never faded (spec §6.5; audit 2026-11-18,
+   money P2-4 (а)) — «Прийшов товар»'s and «Повернути постачальнику»'s
+   size cells, and a lot's count in «Позичене»'s sheet. */
+.receive-size button[aria-disabled="true"],
+.lot-count .stepper button[aria-disabled="true"] {
+  border-style: dashed;
+  border-color: var(--edge);
+  background: var(--fold);
+  color: var(--pencil);
   cursor: not-allowed;
 }
 .receive-size input {
@@ -7438,7 +7448,9 @@ p.receive-place {
   color: var(--on-chosen);
 }
 /* Nothing yet — no payment on an invoice, no return to set off: a `meta`
-   line in pencil, as an empty search's (audit 2026-11-15, money P2-6 (в)). */
+   line in pencil, as an empty search's (audit 2026-11-15, money P2-6 (в));
+   and nothing found where a line says so — the return's models, the
+   supplier's sheet (audit 2026-11-18, money P2-4 (в)). */
 .nothing-yet {
   color: var(--pencil);
 }
@@ -7563,10 +7575,6 @@ p.receive-place {
   padding: 0;
   font-size: 22px;
   border-radius: var(--r-l);
-}
-.lot-count .stepper button[aria-disabled="true"] {
-  opacity: 0.45;
-  cursor: not-allowed;
 }
 .lot-ways {
   display: flex;

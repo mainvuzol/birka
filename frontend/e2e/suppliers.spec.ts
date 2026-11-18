@@ -3,8 +3,11 @@ import {
   expect,
   expectSignedLink,
   addSupplier,
+  blockRow,
   countTaps,
+  dockOnMenu,
   expectEmpty,
+  expectHeldLook,
   expectListBlock,
   expectResultHeading,
   more,
@@ -18,6 +21,10 @@ import {
   sections,
   supplierList,
   holdReads,
+  haptics,
+  feels as feelsAs,
+  rowTitle,
+  tokenColour,
   under14,
 } from "./fixtures";
 import type { Locator, Page, Request } from "@playwright/test";
@@ -335,6 +342,10 @@ test("a return's result keeps «← Постачальникам» and Telegram'
       });
     await press("main_button_pressed");
     await expect(result).toBeFocused();
+    // A result's screen, as every other; inside Telegram no dock of its
+    // own, «Готово» the MainButton (audit 2026-11-18, money P2-2).
+    await expect(page.locator(".result-screen")).toHaveCount(1);
+    await expect(page.locator(".result-dock")).toHaveCount(0);
     // On the result: «← Постачальникам» over its title, Telegram's «Назад»
     // shown, «Готово» the MainButton.
     await expect(arrow).toBeVisible();
@@ -471,6 +482,22 @@ test("goods go back to a supplier from a warehouse, and come back when it is can
   await expect(page.locator(".stub-recorded")).toContainText(
     "склад «Склад мережі»",
   );
+  // A result's screen: «Готово» the MainButton's place in its dock at the
+  // menu's top, the menu back under it, at 360 × 640 and 390 × 844 — never
+  // the form's dock (audit 2026-11-18, money P2-2; review).
+  const seen = page.viewportSize();
+  for (const [width, height] of [
+    [360, 640],
+    [390, 844],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    await expect(page.locator("nav.tab-bar")).toBeVisible();
+    await expect(
+      (await dockOnMenu(page)).getByRole("button", { name: "Готово" }),
+    ).toHaveClass("main-mimic");
+  }
+  await expect(page.locator(".pay-panel, .order-dock")).toHaveCount(0);
+  if (seen) await page.setViewportSize(seen);
   await page.getByRole("button", { name: "Готово", exact: true }).click();
   // The two refused above, then the same return as a new command.
   expect(sent.bodies).toHaveLength(3);
@@ -555,9 +582,27 @@ test("goods go back to a supplier from a warehouse, and come back when it is can
   await expect(
     page.getByRole("heading", { name: "Список постачальників" }),
   ).toBeVisible();
-  await page
-    .getByRole("searchbox", { name: "Пошук постачальника" })
-    .fill(supplier);
+  // Nothing found: the whole list's answer, so the shared empty place — the
+  // blank tag, the words as they were, said to a reader; no empty list,
+  // the search where it was (audit 2026-11-18, money P2-4 (в)).
+  const lookFor = page.getByRole("searchbox", { name: "Пошук постачальника" });
+  await lookFor.fill(`${supplier} нікого`);
+  const none = page
+    .getByRole("status")
+    .filter({ has: page.locator(".orders-empty") });
+  await expect(none).toHaveText(`Нічого не знайшли за «${supplier} нікого»`);
+  for (const scheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    await expectEmpty(
+      none.locator(".orders-empty"),
+      `Нічого не знайшли за «${supplier} нікого»`,
+    );
+  }
+  await page.emulateMedia({ colorScheme: "light" });
+  // Not drawn at all, not an empty block hidden by its rule (mutant).
+  await expect(page.locator("ul.supplier-rows")).toHaveCount(0);
+  await expect(lookFor).toBeVisible();
+  await lookFor.fill(supplier);
   const list = page.getByRole("list", { name: "Постачальники" });
   await expect(list.locator(".supplier-row")).toHaveCount(1);
   await expect(list.locator(".supplier-row .t-meta")).toHaveText(
@@ -664,6 +709,14 @@ test("goods held for an order are not offered to go back", async ({ page }) => {
   });
   await expect(none).toBeVisible();
   await expect(none).toHaveClass(/\bt-meta\b/);
+  // A block among others, so a line: `meta` 14 in pencil, as an empty
+  // search's, in both themes (audit 2026-11-18, money P2-4 (в); review).
+  for (const scheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    await expect(none).toHaveCSS("font-size", "14px");
+    await expect(none).toHaveCSS("color", await tokenColour(page, "--pencil"));
+  }
+  await page.emulateMedia({ colorScheme: "light" });
   await expect(page.getByRole("list", { name: "Товар на складі" })).toHaveCount(
     0,
   );
@@ -1095,7 +1148,168 @@ test("inside Telegram a size's ±1 on «Повернути постачальн�
   await expect.poll(impacts).toEqual([light, light, light]);
 });
 
-test("a return refused as more than is free marks the line the server named with what is free, keeps the list, and the model found again says what is free now; another line taken out keeps the mark, its own takes it for good, and the model again goes back in four taps — five when added to the list first (audit 2026-11-15, money P1-3)", async ({
+test("inside Telegram «Повернути постачальнику» is felt as «Прийшов товар»: another warehouse or a model found taken as a choice, never the one chosen again; nothing as a model is searched; no supplier and the same line twice as an error (audit 2026-11-18, money P2-1 (б))", async ({
+  page,
+}) => {
+  // «Ринок» takes returns from two warehouses: chips.
+  const coat = await received(page, petro, fixture.network_market_store_id, 2);
+  const felt = await haptics(page);
+  const feels = (act: () => Promise<unknown>, want: unknown[]) =>
+    feelsAs(felt, act, want);
+  const selection = { type: "selection_change" };
+  const error = { type: "notification", notification_type: "error" };
+  const pressMain = (): Promise<void> =>
+    page.evaluate(() => {
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          data: JSON.stringify({ eventType: "main_button_pressed" }),
+          source: window.parent,
+        }),
+      );
+    });
+  await openAs(page, petro, undefined, "8.0");
+  await openStore(page, /^Ринок MARKET/);
+  await section(page, "Постачальникам");
+  await page
+    .locator(".screen-title")
+    .getByRole("button", { name: "Повернути товар постачальнику" })
+    .click();
+  const places = page.getByRole("group", { name: "Склад", exact: true });
+  const shared = places.getByRole("button", { name: "Склад мережі" });
+  const market = places.getByRole("button", { name: "Склад ринку" });
+  await expect(shared).toBeVisible();
+  // A warehouse chosen: felt; the one chosen tapped again, nothing; another,
+  // felt.
+  await feels(() => shared.click(), [selection]);
+  await feels(() => shared.click(), []);
+  await feels(() => market.click(), [selection]);
+  await feels(() => shared.click(), [selection]);
+  // Typed: nothing; a model found and taken: felt.
+  const search = page.getByRole("searchbox", { name: "Пошук моделі" });
+  await feels(() => search.fill(coat.model), []);
+  const model = page
+    .getByRole("list", { name: "Товар на складі" })
+    .getByRole("button", { name: new RegExp(`^${coat.model}`) });
+  await feels(() => model.click(), [selection]);
+  // Put away: nothing; the same model taken again, felt (review).
+  await feels(
+    () =>
+      page
+        .getByRole("button", { name: `Змінити модель ${coat.model}` })
+        .click(),
+    [],
+  );
+  await feels(() => search.fill(coat.model), []);
+  await feels(() => model.click(), [selection]);
+  await tapMore(page, "M", 1);
+  // No supplier at the press: said under the list, felt as an error.
+  await feels(pressMain, [error]);
+  await expect(page.getByRole("alert")).toHaveText("Оберіть постачальника.");
+  // The same line twice: said at «Додати ще модель», felt as an error.
+  await page.getByRole("button", { name: "Додати ще модель" }).click();
+  await feels(() => search.fill(coat.model), []);
+  await feels(() => model.click(), [selection]);
+  await tapMore(page, "M", 1);
+  await feels(
+    () => page.getByRole("button", { name: "Додати ще модель" }).click(),
+    [error],
+  );
+  await expect(page.getByRole("alert")).toHaveText(
+    "Такий рядок уже в списку. Приберіть його, щоб змінити кількість.",
+  );
+});
+
+test("outside Telegram a long return's result keeps «Готово» in its dock at the menu's top, the menu back under it, at 360 × 640 and 390 × 844, and there while its stub scrolls under it at 360 × 640 and 390 × 700 (audit 2026-11-18, money P2-2; review)", async ({
+  page,
+}) => {
+  const coat = await received(page, hanna, fixture.network_centre_store_id, 1);
+  const supplier = `Довгий ${randomUUID().slice(0, 6)}`;
+  await aSupplier(page, supplier);
+  // The server records its one line; its answer is drawn as ten, so the
+  // stub is as long as a return of ten.
+  await page.route("**/api/v1/supplier-returns", async (route) => {
+    if (route.request().method() !== "POST") {
+      await route.fallback();
+      return;
+    }
+    const response = await route.fetch();
+    const body = (await response.json()) as {
+      lines: Record<string, unknown>[];
+    };
+    const [line] = body.lines;
+    body.lines = Array.from({ length: 10 }, () => ({
+      ...line,
+      product_variant_id: randomUUID(),
+      size_id: randomUUID(),
+    }));
+    await route.fulfill({ response, json: body });
+  });
+  await page.setViewportSize({ width: 360, height: 640 });
+  await newReturn(page);
+  await pickSupplier(page, supplier, { of: returnForm(page) });
+  await chooseModel(page, coat);
+  await tapMore(page, "M", 1);
+  await sendBack(page, 1).click();
+  await expect(
+    page.getByRole("heading", {
+      name: `Повернено постачальнику «${supplier}»: 10 шт.`,
+    }),
+  ).toBeFocused();
+  await expect(page.locator(".stub-recorded .stub-line")).toHaveCount(10);
+  // Only the result's dock is kept clear where the page scrolls to: the
+  // form's let go with the form, as «Прийшов товар»'s (mutant).
+  await expect
+    .poll(() =>
+      page.evaluate(() => [
+        document.documentElement.style.getPropertyValue("--pay-panel-h"),
+        document.documentElement.style.getPropertyValue("--result-dock-h") !==
+          "",
+      ]),
+    )
+    .toEqual(["", true]);
+  // At 390 × 844 ten lines fit over the dock; at 640 and 700 they scroll
+  // under it (review).
+  for (const [width, height, scrolls] of [
+    [360, 640, true],
+    [390, 844, false],
+    [390, 700, true],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    await page.evaluate(() => {
+      window.scrollTo(0, 0);
+    });
+    await expect(page.locator("nav.tab-bar")).toBeVisible();
+    const dock = await dockOnMenu(page, { scrolls });
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollHeight > window.innerHeight,
+      ),
+    ).toBe(scrolls);
+    const before = await dock.boundingBox();
+    await page.evaluate(() => {
+      window.scrollTo(0, document.documentElement.scrollHeight);
+    });
+    await expect(dock).toBeInViewport({ ratio: 1 });
+    const after = await dock.boundingBox();
+    const last = await page
+      .locator(".stub-recorded .stub-line")
+      .last()
+      .boundingBox();
+    if (!before || !after || !last) throw new Error("not laid out");
+    // It stands where it stood; the stub's last line over it.
+    expect(Math.abs(after.y - before.y)).toBeLessThanOrEqual(1);
+    expect(last.y + last.height).toBeLessThanOrEqual(after.y + 0.5);
+    await page.screenshot({
+      path: `test-results/return-long-result-${String(width)}x${String(height)}.png`,
+    });
+  }
+  await page.getByRole("button", { name: "Готово", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Постачальникам", exact: true }),
+  ).toBeVisible();
+});
+
+test("a return refused as more than is free marks the line the server named with what is free, keeps the list, and the model found again says what is free now; another line taken out keeps the mark, its own takes it for good, and the model again goes back in four taps — five when added to the list first (audit 2026-11-15, money P1-3); at 360 in both themes «У поверненні» rows on a white block as «У поставці», the mark in its own row, «Менше» held at none drawn as a secondary taking no tap (audit 2026-11-18, money P2-1 (а), P2-4 (а))", async ({
   page,
 }) => {
   const coat = await received(page, hanna, fixture.network_centre_store_id, 3, [
@@ -1104,9 +1318,29 @@ test("a return refused as more than is free marks the line the server named with
     "S",
   ]);
   const sent = posts(page, "/api/v1/supplier-returns");
+  await page.setViewportSize({ width: 360, height: 740 });
   await newReturn(page);
   await addOne(page, `Менше ${randomUUID().slice(0, 6)}`, returnForm(page));
   await chooseModel(page, coat);
+  // «Менше» at none, held (aria-disabled, the cursor kept on it): a
+  // secondary taking no tap — the fold, a dashed edge, pencil at 4.5:1 —
+  // never faded, in both themes; «Прийшов товар»'s the same rule (audit
+  // 2026-11-18, money P2-4 (а)).
+  const fewer = page
+    .getByRole("group", { name: /^Розмір M, вільно / })
+    .getByRole("button", { name: "Менше" });
+  await expect(fewer).toHaveAttribute("aria-disabled", "true");
+  for (const scheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    await expectHeldLook(fewer, "stepped");
+    expect(await contrast(fewer)).toBeGreaterThanOrEqual(4.5);
+  }
+  await page.emulateMedia({ colorScheme: "light" });
+  // Pressed held, the cursor stays on it and nothing changes (review).
+  await fewer.focus();
+  await fewer.click({ force: true });
+  await expect(fewer).toBeFocused();
+  await expect(fewer).toHaveAttribute("aria-disabled", "true");
   await tapMore(page, "M", 3);
   await tapMore(page, "L", 1);
   await tapMore(page, "S", 1);
@@ -1137,7 +1371,7 @@ test("a return refused as more than is free marks the line the server named with
   await expect(
     page.getByRole("alert").filter({ hasText: /^Вільного товару вже менше/ }),
   ).toBeVisible();
-  await expect(list.locator(".line")).toHaveCount(3);
+  await expect(list.locator(".receive-line")).toHaveCount(3);
   await expect(list.locator(".return-short")).toHaveCount(0);
   // The model open again, nothing counted on it, as the return is sent.
   await chooseModel(page, coat);
@@ -1167,8 +1401,10 @@ test("a return refused as more than is free marks the line the server named with
   // The list stays; the line the server named says what is free, on a
   // warning's sticker with its triangle, heard with its «Прибрати».
   const size = (code: string): Locator =>
-    list.locator(".line").filter({ hasText: `${coat.model} беж · ${code}` });
-  await expect(list.locator(".line")).toHaveCount(3);
+    list
+      .locator(".receive-line")
+      .filter({ hasText: `${coat.model} беж · ${code}` });
+  await expect(list.locator(".receive-line")).toHaveCount(3);
   // Its sizes said what was free before: it is put away (review).
   await expect(
     page.getByRole("group", { name: /^Розмір M, вільно/ }),
@@ -1177,6 +1413,43 @@ test("a return refused as more than is free marks the line the server named with
   await expect(mark).toHaveText("вільно 1");
   await expect(mark).toHaveClass(/\btone-warn\b/);
   await expect(mark.locator("svg")).toHaveCount(1);
+  // Rows on a white block, as «У поставці»: the model and its size 17/600
+  // in ink, how many under them in the meta's 14, the mark under that in
+  // its own row only, «Прибрати» under them (audit 2026-11-18, money P2-1
+  // (а)).
+  const rows = list.getByRole("listitem");
+  await expect(rows).toHaveCount(3);
+  for (const scheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    for (const row of await rows.all()) {
+      await blockRow(row);
+      await rowTitle(row.locator(".receive-line-what"));
+      const count = row.locator(".sale-meta");
+      await expect(count).toHaveCSS("font-size", "14px");
+      await expect(count).toHaveText(/^\d+ шт\.$/);
+      const [words, meta, remove] = await Promise.all([
+        row.locator(".receive-line-what").boundingBox(),
+        count.boundingBox(),
+        row.getByRole("button").boundingBox(),
+      ]);
+      if (!words || !meta || !remove) throw new Error("not laid out");
+      expect(meta.y).toBeGreaterThanOrEqual(words.y + words.height - 0.5);
+      expect(remove.y).toBeGreaterThanOrEqual(meta.y + meta.height - 0.5);
+    }
+    const marked = await size("M").locator(".return-short").boundingBox();
+    const counted = await size("M").locator(".sale-meta").boundingBox();
+    if (!marked || !counted) throw new Error("not laid out");
+    expect(marked.y).toBeGreaterThanOrEqual(counted.y + counted.height - 0.5);
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth > innerWidth,
+      ),
+    ).toBe(false);
+    await list.screenshot({
+      path: `test-results/return-lines-360-${scheme}.png`,
+    });
+  }
+  await page.emulateMedia({ colorScheme: "light" });
   const takeOut = size("M").getByRole("button", {
     name: `Прибрати ${coat.model} беж · M`,
   });
@@ -1189,7 +1462,7 @@ test("a return refused as more than is free marks the line the server named with
   await size("S")
     .getByRole("button", { name: `Прибрати ${coat.model} беж · S` })
     .click();
-  await expect(list.locator(".line")).toHaveCount(2);
+  await expect(list.locator(".receive-line")).toHaveCount(2);
   await expect(mark).toHaveText("вільно 1");
   await expect(takeOut).toHaveAccessibleDescription("вільно 1");
   // Taken out, the model found again says what is free now, never what it
@@ -1205,7 +1478,7 @@ test("a return refused as more than is free marks the line the server named with
   // Added to the list first: the same size again, its old mark never back
   // on it (review).
   await page.getByRole("button", { name: "Додати ще модель" }).click();
-  await expect(list.locator(".line")).toHaveCount(2);
+  await expect(list.locator(".receive-line")).toHaveCount(2);
   await expect(list.locator(".return-short")).toHaveCount(0);
   await sendBack(page, 2).click();
   await expect.poll(() => sent.bodies.length).toBe(3);
@@ -1321,6 +1594,17 @@ test("the returns are narrowed to a supplier from its sheet: «Усі поста
   await expect(sheet.getByRole("status")).toHaveText(
     `Нічого не знайшли за «${supplier} нікого»`,
   );
+  // A choice in a sheet, so a line: `meta` 14 in pencil, in both themes
+  // (audit 2026-11-18, money P2-4 (в); review).
+  for (const scheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    await expect(sheet.getByRole("status")).toHaveCSS("font-size", "14px");
+    await expect(sheet.getByRole("status")).toHaveCSS(
+      "color",
+      await tokenColour(page, "--pencil"),
+    );
+  }
+  await page.emulateMedia({ colorScheme: "light" });
   // Every word typed, of a name or a phone.
   await sheet
     .getByRole("searchbox", { name: "Пошук постачальника" })

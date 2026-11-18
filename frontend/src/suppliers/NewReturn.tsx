@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type { JSX } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ApiError, isConflict } from "@/shared/api";
@@ -7,6 +7,7 @@ import { Empty } from "@/shared/Empty";
 import { Eyelet, RecordedMark } from "@/shared/Eyelet";
 import { Unread } from "@/shared/Unread";
 import { Placeholder } from "@/shared/Placeholder";
+import { ResultScreen } from "@/shared/ResultScreen";
 import { SearchField } from "@/shared/SearchField";
 import { ScreenHeader } from "@/shared/ScreenHeader";
 import { Sticker } from "@/shared/Sticker";
@@ -105,7 +106,8 @@ function modelsOf(items: StockOption[]): Model[] {
  * records it: a return moves goods, never money. Refused, the words say
  * why over it and what was counted stays; recorded, its stub, and «Готово»
  * goes back to «Постачальникам», as its «←» and Telegram's «Назад» still
- * do. The menu is aside meanwhile.
+ * do. The menu is aside meanwhile, and back under the result's dock
+ * (audit 2026-11-18, money P2-2; review).
  */
 export function NewReturn({
   store,
@@ -114,6 +116,7 @@ export function NewReturn({
   blocked,
   back,
   done,
+  recorded,
 }: {
   store: Store;
   token: string;
@@ -124,6 +127,9 @@ export function NewReturn({
   back: () => void;
   /** «Готово» on the stub: «Постачальникам» again. */
   done: () => void;
+  /** Told while the result stands: the menu is back under its dock, as on
+   * «Прийшов товар»'s and a payment's on «Борги». */
+  recorded?: (shown: boolean) => void;
 }): JSX.Element {
   const cache = useQueryClient();
   const { busy, pending, firstSend } = useReturnToSupplier();
@@ -163,6 +169,17 @@ export function NewReturn({
   const [short, setShort] = useState<Short | null>(null);
   const shortId = useId();
   const [returned, setReturned] = useState<SupplierReturn | null>(null);
+  // Before the result is painted: its dock on the menu from the first frame
+  // (audit 2026-11-13, sale P1-2; audit 2026-11-18, money P2-2, review).
+  useLayoutEffect(() => {
+    recorded?.(returned !== null);
+  }, [recorded, returned]);
+  useLayoutEffect(
+    () => () => {
+      recorded?.(false);
+    },
+    [recorded],
+  );
 
   // Where the cursor goes once the model changes: its name once chosen,
   // the search once cleared.
@@ -177,6 +194,9 @@ export function NewReturn({
   }, [model]);
 
   function chooseModel(next: Model | null): void {
+    // A model found and taken, felt as «Прийшов товар»'s choices; put away,
+    // nothing (audit 2026-11-18, money P2-1 (б)).
+    if (next && next.variantId !== model?.variantId) buzz("selection");
     focusNext.current = next ? "model" : "search";
     setModel(next);
     setCounts({});
@@ -186,6 +206,9 @@ export function NewReturn({
   /** Another warehouse is another return: what was counted goes. */
   function choosePlace(id: string): void {
     if (id === locationId) return;
+    // Another warehouse chosen, felt, as «Прийшов товар»'s chip (audit
+    // 2026-11-18, money P2-1 (б)); the same one again, nothing.
+    buzz("selection");
     setChosenPlace(id);
     setModel(null);
     setCounts({});
@@ -211,6 +234,14 @@ export function NewReturn({
     setValidation("");
   }
 
+  /** Why what was pressed may not go in, said under the list and felt, as
+   * «Прийшов товар»'s (audit 2026-11-18, money P2-1 (б)): an error said as
+   * it is typed is not. */
+  function refuse(text: string): void {
+    setValidation(text);
+    buzz("error");
+  }
+
   /** The counted sizes as the return's lines; null, with the reason said,
    * when they may not go in. */
   function take(): Listed[] | null {
@@ -234,13 +265,13 @@ export function NewReturn({
         ),
       )
     ) {
-      setValidation(
+      refuse(
         "Такий рядок уже в списку. Приберіть його, щоб змінити кількість.",
       );
       return null;
     }
     if (list.length + lines.length > LINES) {
-      setValidation(
+      refuse(
         `В одному поверненні — до ${String(LINES)} рядків. Поверніть ці, а решту — окремим поверненням.`,
       );
       return null;
@@ -262,7 +293,7 @@ export function NewReturn({
     setShort(null);
     if (!warehouse) return;
     if (!supplierId) {
-      setValidation("Оберіть постачальника.");
+      refuse("Оберіть постачальника.");
       return;
     }
     const lines = take();
@@ -339,7 +370,8 @@ export function NewReturn({
     active: returned !== null || ready,
   });
   const dock = useRef<HTMLDivElement>(null);
-  usePanelRoom(dock, !main);
+  // The form's dock; the result's is its screen's own (money P2-2).
+  usePanelRoom(dock, returned === null && !main);
   // Anything counted and not yet returned: Telegram asks before Бірка
   // closes (spec §4.4).
   useAskBeforeClosing(returned === null && units > 0);
@@ -355,7 +387,7 @@ export function NewReturn({
       <button
         type="button"
         className="main-mimic"
-        disabled={returned === null && !ready && !sending}
+        disabled={!ready && !sending}
         aria-disabled={sending || undefined}
         onClick={press}
       >
@@ -373,7 +405,19 @@ export function NewReturn({
 
   if (returned)
     return (
-      <section className="receipt receive-done">
+      // A result's screen, as «Прийшов товар»'s and an invoice's: outside
+      // Telegram «Готово» in its dock at the menu's top, its MainButton's
+      // place; inside it, the MainButton (audit 2026-11-18, money P2-2).
+      <ResultScreen
+        className="receipt receive-done"
+        dock={
+          !main && (
+            <button type="button" className="main-mimic" onClick={press}>
+              Готово
+            </button>
+          )
+        }
+      >
         {/* «← Постачальникам» and Telegram's «Назад» stay, as the form's
             and an invoice's result's (audit 2026-11-13, money P2-2 (б)):
             «Готово» is not the one way out. */}
@@ -411,8 +455,7 @@ export function NewReturn({
           ))}
           <p className="t-meta">{placeText(returned)}</p>
         </Stub>
-        {dockButton}
-      </section>
+      </ResultScreen>
     );
 
   return (
@@ -615,9 +658,10 @@ export function NewReturn({
                     }}
                   />
                 ) : found.length === 0 ? (
-                  // Said to a reader too, as «Список постачальників»'s
-                  // «Нічого не знайшли» (audit 2026-11-13, money P2-1).
-                  <p className="t-meta" role="status">
+                  // Said to a reader too (audit 2026-11-13, money P2-1); a
+                  // block among others, so a line — `meta` in pencil, as
+                  // an empty search's (audit 2026-11-18, money P2-4 (в)).
+                  <p className="t-meta nothing-yet" role="status">
                     {query
                       ? `За «${visible(query)}» на складі «${visible(warehouse.name)}» вільного товару немає.`
                       : `На складі «${visible(warehouse.name)}» немає вільного товару.`}
@@ -668,49 +712,61 @@ export function NewReturn({
           {list.length > 0 && (
             <section className="receive-list" aria-label="У поверненні">
               <h2 className="t-label">У поверненні</h2>
-              {list.map((one, index) => {
-                // The line the server named short: what is free, on a
-                // warning's sticker, heard with its «Прибрати».
-                const marked =
-                  short !== null &&
-                  short.place === warehouse?.id &&
-                  one.line.product_variant_id === short.variant &&
-                  one.line.size_id === short.size
-                    ? short
-                    : null;
-                return (
-                  <div
-                    className="line"
-                    key={`${one.line.product_variant_id}:${one.line.size_id}`}
-                  >
-                    <strong>
-                      {visible(one.name)} · {visible(one.size)}
-                    </strong>
-                    <span>{one.line.quantity} шт.</span>
-                    {marked && (
-                      <p className="t-meta return-short" id={shortId}>
-                        <Sticker tone="warn">вільно {marked.available}</Sticker>
-                      </p>
-                    )}
-                    <button
-                      type="button"
-                      className="quiet"
-                      aria-label={`Прибрати ${visible(one.name)} · ${visible(one.size)}`}
-                      {...(marked ? { "aria-describedby": shortId } : {})}
-                      onClick={() => {
-                        setList(list.filter((_, at) => at !== index));
-                        setValidation("");
-                        setRefusal(null);
-                        // Only its own mark goes with it: another line
-                        // still short keeps what is free (review).
-                        if (marked) setShort(null);
-                      }}
+              {/* Rows on a white block, as its twin «У поставці»: the model
+                  and its size, how many under them, «Прибрати» under that
+                  (audit 2026-11-18, money P2-1 (а)). */}
+              <ul className="receive-lines list-block">
+                {list.map((one, index) => {
+                  // The line the server named short: what is free, on a
+                  // warning's sticker under its count, heard with its
+                  // «Прибрати».
+                  const marked =
+                    short !== null &&
+                    short.place === warehouse?.id &&
+                    one.line.product_variant_id === short.variant &&
+                    one.line.size_id === short.size
+                      ? short
+                      : null;
+                  return (
+                    <li
+                      className="sale-row receive-line"
+                      key={`${one.line.product_variant_id}:${one.line.size_id}`}
                     >
-                      Прибрати {visible(one.name)}
-                    </button>
-                  </div>
-                );
-              })}
+                      <span className="sale-main">
+                        <span className="receive-line-what">
+                          {visible(one.name)} · {visible(one.size)}
+                        </span>
+                        <span className="sale-meta">
+                          {one.line.quantity} шт.
+                        </span>
+                        {marked && (
+                          <span className="return-short" id={shortId}>
+                            <Sticker tone="warn">
+                              вільно {marked.available}
+                            </Sticker>
+                          </span>
+                        )}
+                      </span>
+                      <button
+                        type="button"
+                        className="quiet"
+                        aria-label={`Прибрати ${visible(one.name)} · ${visible(one.size)}`}
+                        {...(marked ? { "aria-describedby": shortId } : {})}
+                        onClick={() => {
+                          setList(list.filter((_, at) => at !== index));
+                          setValidation("");
+                          setRefusal(null);
+                          // Only its own mark goes with it: another line
+                          // still short keeps what is free (review).
+                          if (marked) setShort(null);
+                        }}
+                      >
+                        Прибрати {visible(one.name)}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
             </section>
           )}
           <label>

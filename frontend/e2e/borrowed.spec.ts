@@ -2,6 +2,8 @@ import {
   test,
   expect,
   countTaps,
+  dockOnMenu,
+  expectHeldLook,
   more,
   openStore,
   pickSupplier,
@@ -451,6 +453,20 @@ test("unsold borrowed jackets go back to their supplier for nothing", async ({
   await expect(
     page.getByRole("button", { name: "Відкрити накладну" }),
   ).toHaveCount(0);
+  // «Готово» in the result's dock at the menu's top, outside Telegram, at
+  // 360 × 640 and 390 × 844 (audit 2026-11-18, money P2-2).
+  const seen = page.viewportSize();
+  for (const [width, height] of [
+    [360, 640],
+    [390, 844],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    await expect(page.locator("nav.tab-bar")).toBeVisible();
+    await expect(
+      (await dockOnMenu(page)).getByRole("button", { name: "Готово" }),
+    ).toHaveClass("main-mimic");
+  }
+  if (seen) await page.setViewportSize(seen);
   await page.getByRole("button", { name: "Готово", exact: true }).click();
   // None in hand: gone from «На руках», a knot under «Усе», nothing to
   // press.
@@ -830,7 +846,7 @@ test("one borrowed jacket is marked sold in four taps from «Ще», nothing scr
   expect(await taps()).toBe(4);
 });
 
-test("inside Telegram ±1 of a lot's count is felt both ways, «Менше» held at one is not (money task list after stage 2, P2-4)", async ({
+test("inside Telegram ±1 of a lot's count is felt both ways, «Менше» held at one is not (money task list after stage 2, P2-4); its result a result's screen, «Готово» Telegram's MainButton, no dock of its own (audit 2026-11-18, money P2-2)", async ({
   page,
 }) => {
   const coat = await aModel(page);
@@ -864,13 +880,36 @@ test("inside Telegram ±1 of a lot's count is felt both ways, «Менше» hel
   await sheet.getByRole("button", { name: "Більше" }).click();
   await expect(count).toHaveText("2");
   await expect.poll(impacts).toEqual([light, light, light]);
+  // Its result inside Telegram: a result's screen, «Готово» the MainButton,
+  // no dock of its own (audit 2026-11-18, money P2-2).
+  await sheet
+    .getByRole("button", { name: "Повернути постачальнику · 2 шт." })
+    .click();
+  await expect(
+    page.getByText(`Повернено постачальнику «${supplier.name}»: 2 шт.`, {
+      exact: true,
+    }),
+  ).toBeFocused();
+  await expect(page.locator(".result-screen")).toHaveCount(1);
+  await expect(page.locator(".result-dock")).toHaveCount(0);
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as unknown as { told: [string, unknown][] }).told
+            .filter(([event]) => event === "web_app_setup_main_button")
+            .map(([, data]) => data)
+            .at(-1) ?? null,
+      ),
+    )
+    .toMatchObject({ is_visible: true, text: "Готово" });
 });
 
 for (const [name, theme] of [
   ["light", { bg_color: "#ffffff", text_color: "#000000" }],
   ["dark", { bg_color: "#17212b", text_color: "#f5f5f5" }],
 ] as const)
-  test(`in the ${name} theme at 360 × 640 «Позичене»'s tags, a lot's sheet and «Продано»'s stub read at 4.5:1, nothing wider than the phone; a forty-letter name wraps, the sum whole`, async ({
+  test(`in the ${name} theme at 360 × 640 «Позичене»'s tags, a lot's sheet and «Продано»'s stub read at 4.5:1, nothing wider than the phone; a forty-letter name wraps, the sum whole; «Менше» held at one drawn as a secondary taking no tap, never faded; «Готово» in the result's dock at the menu's top at 360 × 640 and 390 × 844 (audit 2026-11-18, money P2-2, P2-4 (а))`, async ({
     page,
   }) => {
     const coat = await aModel(page);
@@ -910,6 +949,13 @@ for (const [name, theme] of [
       sheet.getByRole("button", { name: "Повернути постачальнику · 1 шт." }),
     ])
       expect(await contrast(part)).toBeGreaterThanOrEqual(4.5);
+    // «Менше» at one, held (aria-disabled, the cursor kept on it): a
+    // secondary taking no tap — the fold, a dashed edge, pencil at 4.5:1 —
+    // never faded (audit 2026-11-18, money P2-4 (а)).
+    const fewer = sheet.getByRole("button", { name: "Менше" });
+    await expect(fewer).toHaveAttribute("aria-disabled", "true");
+    await expectHeldLook(fewer, "stepped");
+    expect(await contrast(fewer)).toBeGreaterThanOrEqual(4.5);
     await expect(page.locator("html")).toHaveJSProperty("scrollWidth", 360);
     await page.screenshot({ path: `test-results/borrowed-lot-${name}.png` });
 
@@ -941,7 +987,23 @@ for (const [name, theme] of [
     ])
       expect(await contrast(part)).toBeGreaterThanOrEqual(4.5);
     await expect(page.locator("html")).toHaveJSProperty("scrollWidth", 360);
+    // «Готово» outside Telegram: the MainButton's place in the result's
+    // dock at the menu's top, as every result's (audit 2026-11-18, money
+    // P2-2) — at 360 × 640, where the forty letters' stub is longer than
+    // the phone and scrolls under it, and at 390 × 844, where it is not.
+    await expect(page.locator("nav.tab-bar")).toBeVisible();
+    const ready = (await dockOnMenu(page, { scrolls: true })).getByRole(
+      "button",
+      { name: "Готово" },
+    );
+    await expect(ready).toHaveClass("main-mimic");
+    await expect(page.locator(".pay-panel, .order-dock")).toHaveCount(0);
     await page.screenshot({ path: `test-results/borrowed-sold-${name}.png` });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await dockOnMenu(page);
+    await expect(
+      page.getByRole("heading", { name: "Позичене й під реалізацію" }),
+    ).toBeVisible();
   });
 
 test("in «Як надійшов» «Додати постачальника» in place, on its way: the eyelet's ring on it, never faded, «Ще надсилаємо…» right over it past 3 s; it and «Скасувати» under it never move; written once (audit 2026-11-15, money P2-6 (б); review)", async ({
