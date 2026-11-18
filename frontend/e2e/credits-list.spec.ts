@@ -7,6 +7,7 @@ import {
   expectOneSticker,
   expectEmpty,
   tillWays,
+  tokenColour,
 } from "./fixtures";
 import type { Locator, Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
@@ -254,7 +255,8 @@ interface MeStore {
 /**
  * «Покупці» opened in «Основний». Оля's stores as `/me` gives them, only
  * those of `ids` — «Основний» alone unless more are named: one block, a
- * store's own words — each as `edit` leaves it.
+ * store's own words — each as `edit` leaves it. `third`: a third store of
+ * hers, as «Другий» is, its debts stubbed as every store's.
  */
 async function credits(
   page: Page,
@@ -262,16 +264,24 @@ async function credits(
     theme,
     ids = [fixture.store_id],
     edit,
+    third,
   }: {
     theme?: Record<string, string>;
     ids?: readonly string[];
     edit?: (store: MeStore) => void;
+    third?: { id: string; name: string };
   } = {},
 ): Promise<void> {
   await page.route("**/api/v1/me", async (route) => {
     const response = await route.fetch();
     const body = (await response.json()) as { stores: MeStore[] };
-    body.stores = body.stores.filter((store) => ids.includes(store.id));
+    const like = body.stores.find(
+      (store) => store.id === fixture.second_store_id,
+    );
+    if (third && like) body.stores.push({ ...like, ...third });
+    body.stores = body.stores.filter(
+      (store) => ids.includes(store.id) || store.id === third?.id,
+    );
     if (edit) for (const store of body.stores) edit(store);
     await route.fulfill({ response, json: body });
   });
@@ -673,6 +683,12 @@ test("an empty «Покупці» says where a debt begins, «Сплачені»
   await expect(
     page.getByText("Сплачених боргів тут немає.", { exact: true }),
   ).toBeVisible();
+  // One store, the whole list: its short pencil line, as before — never a
+  // block's lines (audit 2026-11-15, sale P2-6).
+  await expect(
+    page.getByText("Сплачених боргів тут немає.", { exact: true }),
+  ).toHaveClass("hint");
+  await expect(page.locator(".block-empty")).toHaveCount(0);
   await expect(statusWay(page, "Сплачені")).toHaveAttribute(
     "aria-pressed",
     "true",
@@ -887,12 +903,92 @@ test("in a network's «Покупці» a store nobody owes keeps its lines in i
   });
   await credits(page, { ids: both });
   const here = page.locator(".credits-block").first();
-  await expect(here.locator(".empty p")).toHaveText(`${beginsAt} ${beginsHow}`);
+  // A sentence a line: the fact, then the step (audit 2026-11-15, sale P2-6).
+  await expect(here.locator(".empty p")).toHaveText([beginsAt, beginsHow]);
   await expect(
     here.getByRole("button", { name: "Новий продаж" }),
   ).toBeVisible();
   await expect(page.locator(".orders-empty")).toHaveCount(0);
 });
+
+for (const theme of ["light", "dark"] as const)
+  test(`in the ${theme} theme a network of three stores draws its empty blocks one look whatever the reason — meta in pencil, a sentence a line, the fact first — and «Новий продаж» stays under its store's lines (audit 2026-11-15, sale P2-6)`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 360, height: 640 });
+    await page.emulateMedia({ colorScheme: theme });
+    // «Другий» is owed; «Основний» and «Третій» are not.
+    await summary(page, "0.00", 0, 0, {
+      [fixture.second_store_id]: { owed: "2000.00", customers: 1, debts: 1 },
+    });
+    await customers(page, [], undefined, {
+      [fixture.second_store_id]: [
+        customer("Вікторія Савчук", "066 000 24 68", [
+          second("Лагуна персик · L", "2000.00"),
+        ]),
+      ],
+    });
+    await credits(page, {
+      ids: both,
+      third: { id: randomUUID(), name: "Третій" },
+    });
+    const lines = page.locator(".credits-block .block-empty p");
+    const looks: string[] = [];
+    const look = async (): Promise<void> => {
+      looks.push(
+        ...(await lines.evaluateAll((all) =>
+          all.map((line) => {
+            const style = getComputedStyle(line);
+            return `${style.fontSize} ${style.fontWeight} ${style.lineHeight} ${style.color}`;
+          }),
+        )),
+      );
+    };
+    // Nobody owes: the open store's two lines and its button; «Третій»'s
+    // one; «Другий»'s rows.
+    const here = page.getByRole("region", {
+      name: "Магазину «Основний» винні",
+    });
+    const third = page.getByRole("region", {
+      name: "Магазину «Третій» винні",
+    });
+    await expect(here.locator(".block-empty p")).toHaveText([
+      beginsAt,
+      beginsHow,
+    ]);
+    await expect(third.locator(".block-empty p")).toHaveText([
+      "Зараз ніхто не винен цьому магазину.",
+    ]);
+    await expect(rows(page, "Хто винен магазину «Другий»")).toHaveCount(1);
+    const sell = here.getByRole("button", { name: "Новий продаж" });
+    const step = await here.locator(".block-empty p").last().boundingBox();
+    const button = await sell.boundingBox();
+    if (!step || !button) throw new Error("not laid out");
+    expect(step.y + step.height).toBeLessThanOrEqual(button.y);
+    await look();
+    // A search that finds nobody, in every block.
+    await field(page).fill("Оксана");
+    await expect(lines).toHaveText(Array(3).fill("Нікого не знайдено."));
+    await look();
+    await field(page).fill("");
+    await statusWay(page, "Сплачені").click();
+    await expect(lines).toHaveText(
+      Array(3).fill("Сплачених боргів тут немає."),
+    );
+    await look();
+    await statusWay(page, "Списані").click();
+    await expect(lines).toHaveText(Array(3).fill("Списаних боргів тут немає."));
+    await look();
+    expect(looks).toHaveLength(12);
+    expect(new Set(looks)).toEqual(
+      new Set([`14px 500 19px ${await tokenColour(page, "--pencil")}`]),
+    );
+    await expect(page.locator(".orders-empty")).toHaveCount(0);
+    await page.screenshot({
+      path: `test-results/customers-empty-blocks-${theme}.png`,
+      fullPage: true,
+    });
+  });
 
 /** Forty-five customers, a debt each, the newest first. */
 function many(): StubCustomer[] {

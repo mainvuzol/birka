@@ -1,6 +1,7 @@
-import { useRef } from "react";
+import { useContext, useRef } from "react";
 import type { JSX, ReactNode } from "react";
 import { usePanelRoom } from "./panel";
+import { UnderHeaderContext } from "./ScreenHeader";
 
 /**
  * A result's screen (spec §5 «Док дій», §6.5; audit 2026-11-13, frame P2-9,
@@ -11,6 +12,12 @@ import { usePanelRoom } from "./panel";
  * banner over the screen moves it down: the page scrolls by the banner.
  * `on` false: a screen that is a result only sometimes — an order's card,
  * once collected — keeps its shape and is drawn as before.
+ *
+ * A result, or a screen kept hidden under another, gives a kept operation's
+ * stub no place under its title (audit 2026-11-15, frame P2-9; review): a
+ * result's title is followed by what it says, never by another
+ * operation's stub, which stands over it as before; a hidden one's would
+ * hide the stub.
  */
 export function ResultScreen({
   as: Tag = "section",
@@ -29,6 +36,7 @@ export function ResultScreen({
   children: ReactNode;
 }): JSX.Element {
   const docked = useRef<HTMLDivElement>(null);
+  const under = useContext(UnderHeaderContext);
   const classes = [on ? "result-screen" : "", className ?? ""]
     .filter(Boolean)
     .join(" ");
@@ -39,7 +47,13 @@ export function ResultScreen({
   );
   return (
     <Tag className={classes || undefined} hidden={hidden}>
-      <div className="result-body">{children}</div>
+      <div className="result-body">
+        <UnderHeaderContext.Provider
+          value={on || hidden === true ? null : under}
+        >
+          {children}
+        </UnderHeaderContext.Provider>
+      </div>
       {dock ? (
         <div className="result-dock" ref={docked}>
           {dock}

@@ -1,4 +1,10 @@
-import { createContext, forwardRef, useContext, useLayoutEffect } from "react";
+import {
+  createContext,
+  forwardRef,
+  useContext,
+  useLayoutEffect,
+  useRef,
+} from "react";
 import type { ReactNode } from "react";
 import { visible } from "./visible";
 
@@ -16,6 +22,17 @@ export interface WorkspaceLine {
 
 /** None before a store opens: the app's own name heads those screens. */
 export const WorkspaceLineContext = createContext<WorkspaceLine | null>(null);
+
+/**
+ * The place under a screen's title and line, where a kept operation's stub
+ * stands on its own screen (spec S12: the paper's plate, then the title and
+ * the line, then the stub; audit 2026-11-15, frame P2-9). Given only while a
+ * stub is to stand there: each header then draws its place and hands it
+ * over, and takes it back as it goes; none, nothing is drawn.
+ */
+export const UnderHeaderContext = createContext<
+  ((place: HTMLElement) => () => void) | null
+>(null);
 
 /** The screen the page was last put at the top for, where its header said
  * which (`screen`): drawn again for the same one — an order's card read
@@ -109,6 +126,12 @@ export const ScreenHeader = forwardRef<
 ) {
   const workspace = useContext(WorkspaceLineContext);
   const line = bare ? null : workspace;
+  const under = useContext(UnderHeaderContext);
+  const place = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    if (under === null || place.current === null) return;
+    return under(place.current);
+  }, [under]);
   // A title drawn of parts — a mark beside it, a button in it — says no
   // screen of its own: its header's coming does.
   const opened = screen ?? (typeof title === "string" ? title : undefined);
@@ -118,51 +141,54 @@ export const ScreenHeader = forwardRef<
     window.scrollTo(0, 0);
   }, [opened, screen]);
   return (
-    <header className="screen-header">
-      {back}
-      <div className={wraps ? "screen-title wraps" : "screen-title"}>
-        {title !== undefined ? (
-          <h1
-            ref={ref}
-            tabIndex={focusable ? -1 : undefined}
-            aria-describedby={describedBy}
-            className={
-              [pushed ? "t-title-l" : "", className ?? ""]
-                .filter(Boolean)
-                .join(" ") || undefined
-            }
-          >
-            {title}
-          </h1>
-        ) : (
-          waiting && (
-            <span className="skeleton skeleton-title" aria-hidden="true" />
-          )
-        )}
-        {aside}
-      </div>
-      {line && (
-        <div className="store-line">
-          <p className="t-meta">
-            {context ?? (
-              <>
-                {lead ?? visible(line.store)} · {visible(line.person)}
-                {after !== undefined && <> · {after}</>}
-              </>
-            )}
-          </p>
-          {line.changeStore && (
-            <button
-              type="button"
-              className="quiet"
-              disabled={line.changeHeld}
-              onClick={line.changeStore}
+    <>
+      <header className="screen-header">
+        {back}
+        <div className={wraps ? "screen-title wraps" : "screen-title"}>
+          {title !== undefined ? (
+            <h1
+              ref={ref}
+              tabIndex={focusable ? -1 : undefined}
+              aria-describedby={describedBy}
+              className={
+                [pushed ? "t-title-l" : "", className ?? ""]
+                  .filter(Boolean)
+                  .join(" ") || undefined
+              }
             >
-              Змінити магазин
-            </button>
+              {title}
+            </h1>
+          ) : (
+            waiting && (
+              <span className="skeleton skeleton-title" aria-hidden="true" />
+            )
           )}
+          {aside}
         </div>
-      )}
-    </header>
+        {line && (
+          <div className="store-line">
+            <p className="t-meta">
+              {context ?? (
+                <>
+                  {lead ?? visible(line.store)} · {visible(line.person)}
+                  {after !== undefined && <> · {after}</>}
+                </>
+              )}
+            </p>
+            {line.changeStore && (
+              <button
+                type="button"
+                className="quiet"
+                disabled={line.changeHeld}
+                onClick={line.changeStore}
+              >
+                Змінити магазин
+              </button>
+            )}
+          </div>
+        )}
+      </header>
+      {under !== null && <div className="under-header" ref={place} />}
+    </>
   );
 });

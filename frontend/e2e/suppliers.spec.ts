@@ -8,6 +8,7 @@ import {
   expectResultHeading,
   more,
   openStore,
+  ownStub,
   pickSupplier,
   readsOf,
   refuseOnce,
@@ -1505,6 +1506,12 @@ test("a return whose answer is lost is resent unchanged, and takes the goods onc
       name: "Повернення постачальнику ще не підтверджено",
     }),
   ).toBeVisible();
+  // Under its title and line (audit 2026-11-15, frame P2-9).
+  await ownStub(
+    page,
+    "Повернути постачальнику",
+    "Повернення постачальнику ще не підтверджено",
+  );
   await expect(kept).toContainText(
     "Невідомо, чи записано повернення постачальнику. Перевірте результат — те саме повернення не запишеться двічі.",
   );

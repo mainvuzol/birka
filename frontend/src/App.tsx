@@ -30,7 +30,13 @@ import { Opening } from "@/shared/Placeholder";
 import { Icon } from "@/shared/Icon";
 import { Toast } from "@/shared/Toast";
 import { Banner } from "@/shared/Banner";
-import { CheckLine, Kept, Settled } from "@/shared/Kept";
+import {
+  CheckLine,
+  Kept,
+  Settled,
+  StubPlaceContext,
+  UnderStub,
+} from "@/shared/Kept";
 import {
   askingBeforeClosing,
   buzz,
@@ -77,7 +83,11 @@ import { Stocktaking } from "@/inventory/Stocktaking";
 import { DamagedMeta } from "@/inventory/Goods";
 import { TabBar } from "@/shared/TabBar";
 import { Back } from "@/shared/Back";
-import { ScreenHeader, WorkspaceLineContext } from "@/shared/ScreenHeader";
+import {
+  ScreenHeader,
+  UnderHeaderContext,
+  WorkspaceLineContext,
+} from "@/shared/ScreenHeader";
 import type { WorkspaceLine } from "@/shared/ScreenHeader";
 import type { TabItem } from "@/shared/TabBar";
 import { More } from "@/shared/More";
@@ -1332,6 +1342,15 @@ function Workspace({
   const catalogKept = catalogCommand.pending !== null;
   const saleCommand = useSaleCommand();
   const [settled, setSettled] = useState<SaleReceipt | null>(null);
+  // The places the screens' headers give a stub, while one is asked for
+  // (audit 2026-11-15, frame P2-9).
+  const [underPlaces, setUnderPlaces] = useState<HTMLElement[]>([]);
+  const placeUnder = useCallback((place: HTMLElement) => {
+    setUnderPlaces((known) => [...known, place]);
+    return () => {
+      setUnderPlaces((known) => known.filter((other) => other !== place));
+    };
+  }, []);
   // A basket that turned out to have been recorded as an empty shelf.
   const [shelfSettled, setShelfSettled] = useState(false);
   // Bumped to remount the till after a settled sale, so its basket and its
@@ -3048,9 +3067,50 @@ function Workspace({
     countStorageError &&
       "Не вдалося прочитати збережений підрахунок інвентаризації. Не очищайте дані застосунку; зверніться до менеджера.",
   ].filter((said): said is string => said !== false);
+  // Each journal's own screens, where its stub stands; a banner over any
+  // other («Усе на бірці» task list, P0-2).
+  const saleOwn = tab === "sale";
+  const receiptOwn = tab === "receive";
+  const returnsOwn = tab === "returns";
+  const creditOwn = (kind: string): boolean =>
+    tab === "credits" || (tab === "deposit" && kind === "payment");
+  const countOwn = tab === "stocktaking";
+  const stepOwn = tab === "list" || tab === "new";
+  const stepRecorded = pending && !firstSend && pending.acknowledged;
+  // On its own screen a stub stands under the screen's title and line, as
+  // S12 draws it: the paper's plate over everything, then the title, then
+  // the stub (audit 2026-11-15, frame P2-9). Asked of the headers only
+  // while one is to stand there; the first header on the page gives its
+  // place. A screen with no header: the stub stands over it, as before.
+  const stubUnder = Boolean(
+    ((keptSale || settled) && saleOwn) ||
+      ((keptReceipt || receiptSettled) && receiptOwn) ||
+      ((keptReturn || returnSettled) && returnsOwn) ||
+      (keptCredit && creditOwn(keptCredit.body.kind)) ||
+      (creditSettled && creditOwn(creditSettled.kind)) ||
+      ((adjustmentCommand.pending || adjustmentSettled) && correcting) ||
+      ((countCommand.pending || countSettled) && countOwn) ||
+      (keptInvoice && invoiceOwn(keptInvoice.body)) ||
+      (invoiceSettled && invoiceOwn(invoiceSettled.body)) ||
+      (keptSupplierReturn &&
+        returnOwn(keptSupplierReturn.body.stock_lot_id)) ||
+      (supplierSettled && returnOwn(supplierSettled.stock_lot_id)) ||
+      ((keptStep || stepRecorded) && stepOwn),
+  );
+  const stubPlace = underPlaces.reduce<HTMLElement | null>(
+    (first, place) =>
+      first === null ||
+      (first.compareDocumentPosition(place) &
+        Node.DOCUMENT_POSITION_PRECEDING) !==
+        0
+        ? place
+        : first,
+    null,
+  );
   setScreen(tab);
   return (
     <WorkspaceLineContext.Provider value={line}>
+    <UnderHeaderContext.Provider value={stubUnder ? placeUnder : null}>
       {/* While the server does not answer, the owner's words once, over
           every screen of the store: each place not read says only «Сервер
           не відповідає.» and «Спробувати ще раз» (G13; stage 2, orders task
@@ -3106,11 +3166,12 @@ function Workspace({
           ))}
         </div>
       )}
+      <StubPlaceContext.Provider value={stubPlace}>
       {/* Kept and confirmed: the stub on the till, a banner over any other
           screen («Усе на бірці» task list, P0-2). */}
       {keptSale && (
         <Kept
-          own={tab === "sale"}
+          own={saleOwn}
           title={
             keptSale.emptyShelf
               ? "Запис нестачі ще не підтверджено"
@@ -3126,7 +3187,7 @@ function Workspace({
         </Kept>
       )}
       {settled && (
-        <Settled own={tab === "sale"}>
+        <Settled own={saleOwn}>
           <h3>Продаж записано один раз</h3>
           <SettledSale sale={settled} />
           {settled.credit && (
@@ -3176,20 +3237,22 @@ function Workspace({
         </Banner>
       )}
       {saleCommand.error !== null && !onStub(keptSale, saleCommand.error) && (
-        <p role="alert">
-          {saleErrorText(
-            saleCommand.error,
-            saleCommand.misses,
-            saleCommand.pending?.acknowledged === true,
-          )}
-        </p>
+        <UnderStub on={Boolean(keptSale) && saleOwn}>
+          <p role="alert">
+            {saleErrorText(
+              saleCommand.error,
+              saleCommand.misses,
+              saleCommand.pending?.acknowledged === true,
+            )}
+          </p>
+        </UnderStub>
       )}
       {/* The journals' kept operations as the sale's: the stub on their
           own screen, a banner over any other, the title the same while
           checked (stage 2, orders task list, P0-1; В-ЗП2 (а)). */}
       {keptReceipt && (
         <Kept
-          own={tab === "receive"}
+          own={receiptOwn}
           title="Приймання ще не підтверджено"
           busy={receiptCommand.busy}
           check={{ label: "Перевірити результат приймання", run: checkReceipt }}
@@ -3203,7 +3266,7 @@ function Workspace({
         </Kept>
       )}
       {receiptSettled && (
-        <Settled own={tab === "receive"}>
+        <Settled own={receiptOwn}>
           <h3>Приймання записано один раз</h3>
           <button
             onClick={() => {
@@ -3216,13 +3279,15 @@ function Workspace({
       )}
       {receiptCommand.error !== null &&
         !onStub(keptReceipt, receiptCommand.error) && (
-          <p role="alert">
-            {receiptErrorText(receiptCommand.error, receiptCommand.misses)}
-          </p>
+          <UnderStub on={Boolean(keptReceipt) && receiptOwn}>
+            <p role="alert">
+              {receiptErrorText(receiptCommand.error, receiptCommand.misses)}
+            </p>
+          </UnderStub>
         )}
       {keptReturn && (
         <Kept
-          own={tab === "returns"}
+          own={returnsOwn}
           title="Повернення ще не підтверджено"
           busy={returnCommand.busy}
           check={{ label: "Перевірити результат повернення", run: checkReturn }}
@@ -3234,7 +3299,7 @@ function Workspace({
         </Kept>
       )}
       {returnSettled && (
-        <Settled own={tab === "returns"}>
+        <Settled own={returnsOwn}>
           <ReturnResult
             store={store}
             token={token}
@@ -3253,16 +3318,15 @@ function Workspace({
       )}
       {returnCommand.error !== null &&
         !onStub(keptReturn, returnCommand.error) && (
-          <p role="alert">
-            {returnErrorText(returnCommand.error, returnCommand.misses)}
-          </p>
+          <UnderStub on={Boolean(keptReturn) && returnsOwn}>
+            <p role="alert">
+              {returnErrorText(returnCommand.error, returnCommand.misses)}
+            </p>
+          </UnderStub>
         )}
       {keptCredit && (
         <Kept
-          own={
-            tab === "credits" ||
-            (tab === "deposit" && keptCredit.body.kind === "payment")
-          }
+          own={creditOwn(keptCredit.body.kind)}
           title={
             keptCredit.body.kind === "payment"
               ? "Внесок ще не підтверджено"
@@ -3284,12 +3348,7 @@ function Workspace({
         </Kept>
       )}
       {creditSettled && (
-        <Settled
-          own={
-            tab === "credits" ||
-            (tab === "deposit" && creditSettled.kind === "payment")
-          }
-        >
+        <Settled own={creditOwn(creditSettled.kind)}>
           {/* The payment's result, compact (credits task list, P1-2): a card
               is charged only if nobody did while the server did not answer
               (owner decision, 2026-10-07). */}
@@ -3334,15 +3393,19 @@ function Workspace({
       )}
       {creditCommand.error !== null &&
         !onStub(keptCredit, creditCommand.error) && (
-          <p role="alert">
-            {creditErrorText(
-              creditCommand.error,
-              // Still kept: its own kind; settled as refused: the one it was.
-              creditCommand.pending?.body.kind ?? creditRefused.kind,
-              creditRefused.way,
-              creditCommand.misses,
-            )}
-          </p>
+          <UnderStub
+            on={keptCredit !== null && creditOwn(keptCredit.body.kind)}
+          >
+            <p role="alert">
+              {creditErrorText(
+                creditCommand.error,
+                // Still kept: its own kind; settled as refused: the one it was.
+                creditCommand.pending?.body.kind ?? creditRefused.kind,
+                creditRefused.way,
+                creditCommand.misses,
+              )}
+            </p>
+          </UnderStub>
         )}
       {adjustmentCommand.pending && (
         <Kept
@@ -3380,16 +3443,18 @@ function Workspace({
       )}
       {adjustmentCommand.error !== null &&
         !onStub(adjustmentCommand.pending, adjustmentCommand.error) && (
-          <p role="alert">
-            {adjustmentErrorText(
-              adjustmentCommand.error,
-              adjustmentCommand.misses,
-            )}
-          </p>
+          <UnderStub on={Boolean(adjustmentCommand.pending) && correcting}>
+            <p role="alert">
+              {adjustmentErrorText(
+                adjustmentCommand.error,
+                adjustmentCommand.misses,
+              )}
+            </p>
+          </UnderStub>
         )}
       {countCommand.pending && (
         <Kept
-          own={tab === "stocktaking"}
+          own={countOwn}
           title="Підрахунок ще не підтверджено"
           busy={countCommand.busy}
           check={{ label: "Перевірити результат підрахунку", run: checkCount }}
@@ -3403,7 +3468,7 @@ function Workspace({
         </Kept>
       )}
       {countSettled && (
-        <Settled own={tab === "stocktaking"}>
+        <Settled own={countOwn}>
           <h3>Підрахунок записано один раз</h3>
           <p>
             {countSettled.quantity_delta === 0
@@ -3421,9 +3486,11 @@ function Workspace({
       )}
       {countCommand.error !== null &&
         !onStub(countCommand.pending, countCommand.error) && (
-          <p role="alert">
-            {countErrorText(countCommand.error, countCommand.misses)}
-          </p>
+          <UnderStub on={Boolean(countCommand.pending) && countOwn}>
+            <p role="alert">
+              {countErrorText(countCommand.error, countCommand.misses)}
+            </p>
+          </UnderStub>
         )}
       {/* The invoices' and the suppliers' kept operations, as the sale's —
           checked by their button alone, so nothing says the phone checks
@@ -3456,7 +3523,13 @@ function Workspace({
           </button>
         </Settled>
       )}
-      {invoiceSaid !== null && <p role="alert">{invoiceSaid}</p>}
+      {invoiceSaid !== null && (
+        <UnderStub
+          on={keptInvoice !== null && invoiceOwn(keptInvoice.body)}
+        >
+          <p role="alert">{invoiceSaid}</p>
+        </UnderStub>
+      )}
       {keptSupplierReturn && (
         <Kept
           own={returnOwn(keptSupplierReturn.body.stock_lot_id)}
@@ -3487,7 +3560,16 @@ function Workspace({
           </button>
         </Settled>
       )}
-      {supplierSaid !== null && <p role="alert">{supplierSaid}</p>}
+      {supplierSaid !== null && (
+        <UnderStub
+          on={
+            keptSupplierReturn !== null &&
+            returnOwn(keptSupplierReturn.body.stock_lot_id)
+          }
+        >
+          <p role="alert">{supplierSaid}</p>
+        </UnderStub>
+      )}
       {/* Which step and which order (orders task list, P1-1), named as the
           order's refusals name it (owner decision, 2026-10-20): the stub on
           «Замовлення» and «Нове замовлення», a banner over any other
@@ -3495,7 +3577,7 @@ function Workspace({
           order waits to be shown (stage 2, orders task list, P0-1). */}
       {keptStep && (
         <Kept
-          own={tab === "list" || tab === "new"}
+          own={stepOwn}
           title={`Операцію «${visible(keptStep.label)}» ще не підтверджено`}
           busy={busy}
           check={{ label: "Перевірити результат замовлення", run: checkOrder }}
@@ -3507,14 +3589,14 @@ function Workspace({
           <p>{keptCashText(keptStep.since)}</p>
         </Kept>
       )}
-      {pending && !firstSend && pending.acknowledged && (
-        <Settled own={tab === "list" || tab === "new"}>
+      {stepRecorded && (
+        <Settled own={stepOwn}>
           <h3>{`Операцію «${visible(pending.label)}» записано`}</h3>
           <p>{keptStepText(pending)}</p>
           <CheckLine busy={busy} />
           <button
             type="button"
-            className={tab === "list" || tab === "new" ? "quiet" : undefined}
+            className={stepOwn ? "quiet" : undefined}
             disabled={busy}
             onClick={() => {
               noteChecked();
@@ -3535,20 +3617,23 @@ function Workspace({
         // Pressed on its row, card or return: said there while it is on
         // the screen (audit 2026-11-13, orders P1-1).
         !stepInSight && (
-          <p role="alert" ref={orderAlert} tabIndex={-1}>
-            {orderErrorText(
-              error,
-              orderResent,
-              // Unconfirmed only while its outcome is unknown: answered, the
-              // step is recorded, and only reading the order failed.
-              pending !== null && !pending.acknowledged,
-              orderMisses,
-              pending?.label ?? null,
-              // Answered: the step is recorded (owner decision, 2026-10-21).
-              pending?.acknowledged === true,
-            )}
-          </p>
+          <UnderStub on={Boolean(keptStep || stepRecorded) && stepOwn}>
+            <p role="alert" ref={orderAlert} tabIndex={-1}>
+              {orderErrorText(
+                error,
+                orderResent,
+                // Unconfirmed only while its outcome is unknown: answered, the
+                // step is recorded, and only reading the order failed.
+                pending !== null && !pending.acknowledged,
+                orderMisses,
+                pending?.label ?? null,
+                // Answered: the step is recorded (owner decision, 2026-10-21).
+                pending?.acknowledged === true,
+              )}
+            </p>
+          </UnderStub>
         )}
+      </StubPlaceContext.Provider>
       {tab === "today" ? (
         canSeeReport ? (
           <Today
@@ -4420,6 +4505,7 @@ function Workspace({
         />
       )}
       {stepSheet()}
+    </UnderHeaderContext.Provider>
     </WorkspaceLineContext.Provider>
   );
 }

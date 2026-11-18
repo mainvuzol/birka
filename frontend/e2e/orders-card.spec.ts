@@ -10,6 +10,7 @@ import {
   expectOwed,
   expectStub,
   openStore,
+  ownStub,
   section,
   tokenColour,
 } from "./fixtures";
@@ -3180,6 +3181,13 @@ test("a return whose answer never came names its step and its order; checked aga
     name: "Перевірити результат замовлення",
   });
   await expect(again).toBeEnabled();
+  // On its own screen, under its title and line — never in the card kept
+  // hidden under it (audit 2026-11-15, frame P2-9; review).
+  await ownStub(
+    page,
+    "Товар повернувся на склад",
+    "Операцію «Прийняти повернення» ще не підтверджено",
+  );
   await expect(
     page.locator("section.notice", {
       has: page.getByRole("heading", {

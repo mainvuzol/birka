@@ -2499,6 +2499,11 @@ section.credits.customer-card {
   margin: 0;
   color: var(--pencil);
 }
+/* A store's block with nothing in it, among several: its lines of meta in
+   pencil, whatever the reason (audit 2026-11-15, sale P2-6). */
+.block-empty p {
+  color: var(--pencil);
+}
 .block-owed {
   display: flex;
   flex-wrap: wrap;
@@ -5476,6 +5481,15 @@ span.cash-difference > .difference-sign {
   padding: 0;
   border: 0;
   background: none;
+}
+/* Its place under the screen's title and line (spec S12; audit 2026-11-15,
+   frame P2-9): no box of its own, the stub laid out as the screen's next
+   block. Drawn again under another header of its screens, it keeps still. */
+.under-header {
+  display: contents;
+}
+.stub.stub-still {
+  animation: none;
 }
 /* The phone checking what it keeps (spec S12): the ring and the line. */
 .check-line {

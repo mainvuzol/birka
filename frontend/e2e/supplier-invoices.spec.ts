@@ -14,6 +14,7 @@ import {
   menu,
   more,
   openStore,
+  ownStub,
   pickSupplier,
   readsOf,
   refuseOnce,
@@ -1498,6 +1499,8 @@ test("a payment whose answer is lost is resent unchanged, and paid once", async 
   await expect(
     kept.getByRole("heading", { name: "Оплату ще не підтверджено" }),
   ).toBeVisible();
+  // Under the supplier's name and its line (audit 2026-11-15, frame P2-9).
+  await ownStub(page, supplier, "Оплату ще не підтверджено");
   await expect(kept).toContainText(
     "Невідомо, чи записано оплату. Перевірте результат — та сама операція не запишеться двічі.",
   );

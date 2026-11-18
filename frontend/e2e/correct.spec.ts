@@ -9,6 +9,7 @@ import {
   newModelSheet,
   openModel,
   openStore,
+  ownStub,
   refuseOnce,
   section,
   sizeCell,
@@ -748,6 +749,15 @@ test("a correction whose outcome is unknown blocks the app until it is resent un
   await expect(
     kept.getByRole("heading", { name: "Коригування ще не підтверджено" }),
   ).toBeVisible();
+  // Under «← Продаж» and the line, over the model's tag with its name
+  // (audit 2026-11-15, frame P2-9).
+  const stub = await ownStub(page, null, "Коригування ще не підтверджено");
+  const tagName = await page
+    .getByRole("heading", { level: 1, name: /Лоран/ })
+    .boundingBox();
+  const stubBox = await stub.boundingBox();
+  if (!tagName || !stubBox) throw new Error("not laid out");
+  expect(stubBox.y + stubBox.height).toBeLessThanOrEqual(tagName.y);
   // The model's ways that would wait for it wait too, under the notice
   // (review, 2026-11-01).
   for (const name of ["Виправити залишок", "Прийшов товар"])

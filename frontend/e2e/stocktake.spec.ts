@@ -12,6 +12,7 @@ import {
   newModelSheet,
   openModel,
   openStore,
+  ownStub,
   readsOf,
   refuseOnce,
   rowTitle,
@@ -746,6 +747,8 @@ test("a count whose outcome is unknown blocks the app until it is resent unchang
   await expect(
     kept.getByRole("heading", { name: "Підрахунок ще не підтверджено" }),
   ).toBeVisible();
+  // Under the count's title and line (audit 2026-11-15, frame P2-9).
+  await ownStub(page, /^Інвентаризація/, "Підрахунок ще не підтверджено");
   // Nothing else happens until this is settled, and no sums are frozen
   // without it: the finish waits, and so do the cells; the menu is aside.
   await expect(

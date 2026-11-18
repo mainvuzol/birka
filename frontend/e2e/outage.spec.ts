@@ -17,6 +17,7 @@ import {
   menu,
   more,
   openStore,
+  ownStub,
   section,
   tapSize,
   waitsFor,
@@ -3158,6 +3159,7 @@ test.describe("10. a kept operation the phone settles says what became of it", (
       },
       said: "Приймання ще не підтверджено: сервер не зміг відповісти. Перевірте результат ще раз — двічі воно не запишеться. Номер запиту: 5a6b7c8d.",
       check: "Перевірити результат приймання",
+      own: true,
     },
     {
       name: "stocktake's count",
@@ -3172,6 +3174,7 @@ test.describe("10. a kept operation the phone settles says what became of it", (
       },
       said: "Підрахунок ще не підтверджено: сервер не зміг відповісти. Перевірте результат ще раз — двічі він не запишеться. Номер запиту: 5a6b7c8d.",
       check: "Перевірити результат підрахунку",
+      own: false,
     },
   ])
     test(`a kept ${kept.name} a server fails to answer is still unconfirmed, by its own name (owner decision, 2026-10-19)`, async ({
@@ -3209,6 +3212,18 @@ test.describe("10. a kept operation the phone settles says what became of it", (
       await expect(
         page.getByRole("alert").filter({ hasText: kept.said }),
       ).toHaveText(kept.said);
+      // Right under its stub: on its own screen under the title, a
+      // delivery's «Прийшов товар»; a count, whose list is not open, over
+      // «Продаж» as a banner — never apart from it (audit 2026-11-15, frame
+      // P2-9; review).
+      await expect(
+        page.locator(
+          kept.own
+            ? ".under-header > .stub-notice + [role=alert]"
+            : "main .banner-kept + [role=alert]",
+        ),
+      ).toHaveText(kept.said);
+      await expect(page.locator(".under-header")).toHaveCount(kept.own ? 1 : 0);
       expect(
         await page.evaluate((stored) => localStorage.getItem(stored), key),
       ).not.toBeNull();
@@ -5664,6 +5679,108 @@ test.describe("11. the stub «Корінець»: every press says what became o
     expect(server.sales).toHaveLength(3);
     for (const sale of server.sales)
       expect(sale.key).toBe(server.sales[0]?.key);
+  });
+
+  test("on the till a kept sale's stub stands under «Продаж» and its line, the paper's plate over both; over «Ще» a banner over its title; recorded, it stays under the title; over a sale's receipt it stands over the result, still (audit 2026-11-15, frame P2-9; review)", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 360, height: 640 });
+    const server = await serve(page);
+    await withReport(page);
+    await openTill(page);
+    await basket(page);
+    await soldWithNoAnswer(page, server);
+    // S12: the paper's plate, then the title and the line, then the stub —
+    // before the till's own blocks; it sways as it comes.
+    const kept = await ownStub(page, "Продаж", "Продаж ще не підтверджено");
+    const paper = page.locator("section.banner-paper");
+    await expect(paper).toBeVisible();
+    const plate = await paper.boundingBox();
+    const title = await page
+      .getByRole("heading", { level: 1, name: "Продаж", exact: true })
+      .boundingBox();
+    const segment = await page
+      .locator(".under-header ~ section")
+      .first()
+      .boundingBox();
+    const stub = await kept.boundingBox();
+    if (!plate || !title || !segment || !stub) throw new Error("not laid out");
+    expect(plate.y + plate.height).toBeLessThanOrEqual(title.y);
+    expect(stub.y + stub.height).toBeLessThanOrEqual(segment.y);
+    await expect(kept.locator(".stub")).toHaveCSS(
+      "animation-name",
+      "stub-sway",
+    );
+    await expect(kept.locator(".stub")).not.toHaveClass(/\bstub-still\b/);
+    for (const theme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme: theme });
+      await page.screenshot({
+        path: `test-results/kept-sale-under-title-${theme}.png`,
+      });
+    }
+    await page.emulateMedia({ colorScheme: "light" });
+
+    // Over another screen, a banner over its title, as before; no place
+    // under the title asked.
+    await on(page, "/credits/summary", async (route) => {
+      if (server.ready === "ok")
+        await route.fulfill({ json: { owed: "0.00", customers: 0, debts: 0 } });
+      else await route.abort("connectionreset");
+    });
+    await more(page);
+    const banner = page.locator("section.banner-kept");
+    await expect(
+      banner.getByRole("heading", { name: "Продаж ще не підтверджено" }),
+    ).toBeVisible();
+    await expect(page.locator(".under-header")).toHaveCount(0);
+    const over = await banner.boundingBox();
+    const moreTitle = await page
+      .getByRole("heading", { level: 1, name: "Ще", exact: true })
+      .boundingBox();
+    if (!over || !moreTitle) throw new Error("not laid out");
+    expect(over.y + over.height).toBeLessThanOrEqual(moreTitle.y);
+
+    // Checked with the server back: the till opens on its stub, torn off,
+    // under the title still.
+    server.ready = "ok";
+    server.sale = async (route, body) => {
+      await route.fulfill({ status: 201, json: receiptOf(body) });
+    };
+    await banner
+      .getByRole("button", { name: "Перевірити результат продажу" })
+      .click();
+    const recorded = await ownStub(page, "Продаж", "Продаж записано один раз");
+    await expect(recorded.locator(".stub")).toHaveClass(/\bstub-recorded\b/);
+    await expect(recorded.locator(".stub")).not.toHaveClass(/\bstub-still\b/);
+    await expect(recorded.locator(".stub")).toHaveCSS(
+      "animation-name",
+      "stub-tear",
+    );
+
+    // A sale made meanwhile: its receipt is a result, its title followed by
+    // what it says — the stub stands over it, as before, and does not tear
+    // again; «Новий продаж», and it is under «Продаж» again, still (review).
+    await basket(page);
+    await pay(page, "Готівка").click();
+    const receipt = page.getByRole("heading", {
+      level: 1,
+      name: "Продаж записано",
+      exact: true,
+    });
+    await expect(receipt).toBeVisible();
+    await expect(page.locator(".under-header")).toHaveCount(0);
+    const torn = page.locator(".stub-notice").filter({
+      has: page.getByRole("heading", { name: "Продаж записано один раз" }),
+    });
+    await expect(torn.locator(".stub")).toHaveClass(/\bstub-still\b/);
+    await expect(torn.locator(".stub")).toHaveCSS("animation-name", "none");
+    const stubBox = await torn.boundingBox();
+    const receiptBox = await receipt.boundingBox();
+    if (!stubBox || !receiptBox) throw new Error("not laid out");
+    expect(stubBox.y + stubBox.height).toBeLessThanOrEqual(receiptBox.y);
+    await page.getByRole("button", { name: "Новий продаж" }).click();
+    const again = await ownStub(page, "Продаж", "Продаж записано один раз");
+    await expect(again.locator(".stub")).toHaveClass(/\bstub-still\b/);
   });
 
   test("where motion is reduced nothing turns or tears: the pressed way's ring stands still beside «Чекаємо на сервер», and the receipt comes as it is (spec §4)", async ({
