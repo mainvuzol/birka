@@ -1916,6 +1916,25 @@ for (const [name, theme, scheme] of [
     expect(hairline).not.toBe(await token(page, "--edge"));
     for (const row of await page.locator(".money-table tbody tr").all())
       await expect(row).toHaveCSS("border-top-color", hairline);
+    // Its rows' names and «грн» `meta` 14/19 500 in pencil, as the report's
+    // table — no text 15 that is not a button (audit 2026-11-18, money P2-4
+    // (б)); «Разом» the total's 700 in ink.
+    const pencil = await token(page, "--pencil");
+    for (const cell of [
+      ...(await page
+        .locator(".money-table tbody tr:not(.money-total) th")
+        .all()),
+      page.locator(".money-table .money-unit"),
+    ]) {
+      await expect(cell).toHaveCSS("font-size", "14px");
+      await expect(cell).toHaveCSS("line-height", "19px");
+      await expect(cell).toHaveCSS("font-weight", "500");
+      expect(await colour(cell)).toBe(pencil);
+    }
+    const total = page.locator(".money-total th");
+    await expect(total).toHaveCSS("font-size", "14px");
+    await expect(total).toHaveCSS("font-weight", "700");
+    expect(await colour(total)).toBe(await token(page, "--ink"));
     await page.screenshot({
       path: `test-results/money-${name}.png`,
       fullPage: true,

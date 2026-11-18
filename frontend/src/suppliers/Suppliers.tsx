@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type { JSX } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { api } from "@/shared/api";
@@ -123,8 +123,11 @@ export function Suppliers({
         .map((item) => [item.id, item]),
     ).values(),
   ];
-  const making = view.screen === "new";
-  useEffect(() => {
+  // The menu is back once the return's result stands, before it is painted
+  // (audit 2026-11-18, money P2-2; review).
+  const [returnRecorded, setReturnRecorded] = useState(false);
+  const making = view.screen === "new" && !returnRecorded;
+  useLayoutEffect(() => {
     task?.(making);
   }, [task, making]);
   useEffect(
@@ -160,6 +163,7 @@ export function Suppliers({
         blocked={blocked}
         back={toList}
         done={toList}
+        recorded={setReturnRecorded}
       />
     );
 

@@ -90,40 +90,51 @@ export function SupplierList({
           />
         ) : (
           <>
-            {/* Rows 64 on a white block, as «Гроші»'s (audit 2026-11-13,
-                money P2-4). */}
-            <ul className="supplier-rows list-block" aria-label="Постачальники">
-              {found.map((supplier) => (
-                <li key={supplier.id}>
-                  <button
-                    type="button"
-                    className="supplier-row"
-                    aria-haspopup="dialog"
-                    onClick={() => {
-                      setEditing(supplier);
-                    }}
-                  >
-                    <span className="supplier-row-main">
-                      <span className="t-row">{visible(supplier.name)}</span>
-                      {supplier.phone && (
-                        <span className="t-meta">
-                          {visible(supplier.phone)}
-                        </span>
-                      )}
-                    </span>
-                    <Icon
-                      name="chevron-right"
-                      size={16}
-                      className="sale-open"
-                    />
-                  </button>
-                </li>
-              ))}
-            </ul>
+            {found.length > 0 && (
+              // Rows 64 on a white block, as «Гроші»'s (audit 2026-11-13,
+              // money P2-4); none drawn when nothing is found.
+              <ul
+                className="supplier-rows list-block"
+                aria-label="Постачальники"
+              >
+                {found.map((supplier) => (
+                  <li key={supplier.id}>
+                    <button
+                      type="button"
+                      className="supplier-row"
+                      aria-haspopup="dialog"
+                      onClick={() => {
+                        setEditing(supplier);
+                      }}
+                    >
+                      <span className="supplier-row-main">
+                        <span className="t-row">{visible(supplier.name)}</span>
+                        {supplier.phone && (
+                          <span className="t-meta">
+                            {visible(supplier.phone)}
+                          </span>
+                        )}
+                      </span>
+                      <Icon
+                        name="chevron-right"
+                        size={16}
+                        className="sale-open"
+                      />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
             {query.trim() !== "" && found.length === 0 && (
-              <p className="t-meta" role="status">
-                Нічого не знайшли за «{visible(query.trim())}»
-              </p>
+              // The whole list found nothing: the shared empty place, as
+              // «Сьогодні»'s and the till's searches — no empty list under
+              // it, the words as they were, said to a reader as before
+              // (spec §6.28; audit 2026-11-18, money P2-4 (в)).
+              <div role="status">
+                <Empty
+                  title={`Нічого не знайшли за «${visible(query.trim())}»`}
+                />
+              </div>
             )}
           </>
         )}
