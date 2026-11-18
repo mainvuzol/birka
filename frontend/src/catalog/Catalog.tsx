@@ -234,12 +234,6 @@ export function Catalog({
   };
   return (
     <>
-      {/* A sheet over the screen says a kept operation itself: one place
-          checks it. */}
-      {!creating && !making && <KeptCatalog loaded={loaded} run={run} />}
-      {error !== null && !creating && !making && (
-        <p role="alert">{catalogRefusal(error, kept, pending !== null)}</p>
-      )}
       <ScreenHeader
         title={selected ? "Пропозиція" : "Перевірка каталогу"}
         back={
@@ -277,6 +271,14 @@ export function Catalog({
           )
         }
       />
+      {/* A kept operation's stub under the title and its line, the
+          refusal under it, then the screen — as every own screen's (spec
+          S12; audit 2026-11-18, goods P2-1), as «Моделі»'s. A sheet over
+          the screen says a kept operation itself: one place checks it. */}
+      {!creating && !making && <KeptCatalog loaded={loaded} run={run} />}
+      {error !== null && !creating && !making && (
+        <p role="alert">{catalogRefusal(error, kept, pending !== null)}</p>
+      )}
       {success && (
         <div className="notice stub-notice">
           <Stub state="recorded">

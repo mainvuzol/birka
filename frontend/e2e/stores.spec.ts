@@ -505,9 +505,17 @@ test("the owner blocks a store; its seller sees only that, and the owner reads i
       .locator(".screen-title")
       .getByRole("button", { name: "Нове замовлення" }),
   ).toHaveCount(0);
-  // «Брак» is shown as it stands, with nothing to press.
+  // «Брак» is shown as it stands, with nothing to press. The frame's plate
+  // says the shop does not trade, over it as over every screen; no line of
+  // «Брак»'s repeats it (audit 2026-11-18, goods P2-6).
   await section(page, "Брак");
-  await expect(page.getByText(/тут лише перегляд/)).toBeVisible();
+  await expect(
+    page.getByRole("status").filter({
+      hasText:
+        "Лише перегляд: продажі, приймання, повернення й оплати в цьому магазині зупинено.",
+    }),
+  ).toBeVisible();
+  await expect(page.getByText(/тут лише перегляд/)).toHaveCount(0);
   await expect(
     page.locator(".damaged-unit[data-status=AWAITING]").first(),
   ).toBeVisible();

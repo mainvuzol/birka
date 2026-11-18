@@ -38,7 +38,8 @@ export function CheckLine({ busy }: { busy: boolean }): JSX.Element | null {
  * place the screen's header gave (`UnderHeaderContext`). None — the screen
  * draws no header — it stands where it is drawn, over the screen, as
  * before. Given to the journals' stubs the app draws; a screen's own stubs
- * stand where the screen draws them.
+ * stand where the screen draws them — «Моделі»'s and «Перевірка
+ * каталогу»'s right under its header too (audit 2026-11-18, goods P2-1).
  */
 export const StubPlaceContext = createContext<HTMLElement | null>(null);
 

@@ -5,6 +5,7 @@ import {
   blockRow,
   gridCell,
   countTaps,
+  dockOnMenu,
   expectFieldLine,
   expectSheetCancel,
   feels,
@@ -636,10 +637,35 @@ test("a warehouse is counted cell by cell, each difference applied at once, and 
   await expect(differences).toContainText(" — −2 шт. (пораховано");
   await expect(differences).toContainText(" — +1 шт. (пораховано 1, Оля)");
   await noUnits(page);
+  // A result's screen, as «Прийшло … шт.»'s (audit 2026-11-18, goods
+  // P2-2): outside Telegram «До інвентаризації» the MainButton's place in
+  // its dock at the menu's top, the menu back under it — never the form's
+  // dock under the stub mid-screen — at 390 × 844 and 360 × 640, in both
+  // themes.
+  await expect(page.locator(".result-screen")).toHaveCount(1);
+  await expect(page.locator(".pay-panel, .order-dock")).toHaveCount(0);
+  const seen = page.viewportSize();
+  for (const scheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    for (const [width, height, scrolls] of [
+      [390, 844, false],
+      [360, 640, true],
+    ] as const) {
+      await page.setViewportSize({ width, height });
+      await expect(menu(page)).toBeVisible();
+      await expect(
+        (await dockOnMenu(page, { scrolls })).getByRole("button", {
+          name: "До інвентаризації",
+        }),
+      ).toHaveClass("main-mimic");
+    }
+  }
+  await page.emulateMedia({ colorScheme: "light" });
+  if (seen) await page.setViewportSize(seen);
   // A tap sooner than 0.7 s after the result came was the finish's second
   // half, and is let go: waited out.
   await page.waitForTimeout(700);
-  await done.getByRole("button", { name: "До інвентаризації" }).click();
+  await page.getByRole("button", { name: "До інвентаризації" }).click();
 
   // The entry: no open stocktake, «Почати інвентаризацію» again, and the
   // finished one first in «Попередні».
@@ -776,7 +802,94 @@ test("a count whose outcome is unknown blocks the app until it is resent unchang
   await expect(
     page.getByRole("button", { name: "Завершити", exact: true }),
   ).toBeEnabled();
-  await page.getByRole("button", { name: "Назад до інвентаризації" }).click();
+  // Finished, its stub not let go by «Зрозуміло»: a result's screen gives
+  // it no place under its title — it stands over «Інвентаризацію
+  // завершено», never between it and the result (audit 2026-11-18, goods
+  // P2-2). Its differences are drawn as five, so at 360 × 640 the result
+  // is longer than the phone: «До інвентаризації» stays at the menu's top
+  // while it scrolls under it.
+  await page.route(
+    (url) =>
+      url.pathname.endsWith("/positions") &&
+      url.searchParams.get("state") === "differences",
+    async (route) => {
+      const response = await route.fetch();
+      const body = (await response.json()) as {
+        items: { product_variant_id: string }[];
+      };
+      const [first] = body.items;
+      if (first)
+        body.items = Array.from({ length: 5 }, () => ({
+          ...first,
+          product_variant_id: randomUUID(),
+        }));
+      await route.fulfill({ response, json: body });
+    },
+  );
+  await page.getByRole("button", { name: "Завершити", exact: true }).click();
+  const end = page.getByRole("dialog", {
+    name: /^Завершити інвентаризацію складу «.+»\?$/,
+  });
+  await expect(end).toHaveAttribute("data-ready", "");
+  await end.getByRole("button", { name: "Так, завершити" }).click();
+  const title = page.getByRole("heading", {
+    level: 1,
+    name: "Інвентаризацію завершено",
+  });
+  await expect(title).toBeFocused();
+  const recorded = page.locator(".stub-notice").filter({
+    has: page.getByRole("heading", { name: "Підрахунок записано один раз" }),
+  });
+  await expect(recorded).toHaveCount(1);
+  await expect(page.locator(".result-screen")).toHaveCount(1);
+  await expect(page.locator(".result-screen .under-header")).toHaveCount(0);
+  await expect(page.locator(".result-screen .stub-notice")).toHaveCount(0);
+  await recorded
+    .locator(":scope > .stub")
+    .evaluate((node) =>
+      Promise.all(
+        node
+          .getAnimations()
+          .map((each) => each.finished.catch(() => undefined)),
+      ),
+    );
+  const over = await recorded.boundingBox();
+  const head = await title.boundingBox();
+  if (!over || !head) throw new Error("not laid out");
+  expect(over.y + over.height).toBeLessThanOrEqual(head.y + 0.5);
+  const differences = page.getByRole("list", { name: "Розбіжності" });
+  await expect(differences.getByRole("listitem")).toHaveCount(5);
+  for (const scheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    await page.setViewportSize({ width: 360, height: 640 });
+    await page.evaluate(() => {
+      window.scrollTo(0, 0);
+    });
+    await expect(menu(page)).toBeVisible();
+    const dock = await dockOnMenu(page, { scrolls: true });
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollHeight > window.innerHeight,
+      ),
+    ).toBe(true);
+    const before = await dock.boundingBox();
+    await page.evaluate(() => {
+      window.scrollTo(0, document.documentElement.scrollHeight);
+    });
+    await expect(dock).toBeInViewport({ ratio: 1 });
+    const after = await dock.boundingBox();
+    const last = await differences.getByRole("listitem").last().boundingBox();
+    if (!before || !after || !last) throw new Error("not laid out");
+    // It stands where it stood; the last difference over it.
+    expect(Math.abs(after.y - before.y)).toBeLessThanOrEqual(1);
+    expect(last.y + last.height).toBeLessThanOrEqual(after.y + 0.5);
+    await page.screenshot({
+      path: `test-results/stocktake-done-long-360-${scheme}.png`,
+    });
+  }
+  await page.emulateMedia({ colorScheme: "light" });
+  await page.getByRole("button", { name: "До інвентаризації" }).click();
+  await expect(menu(page)).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Продаж", exact: true }),
   ).toBeEnabled();
@@ -1679,6 +1792,11 @@ test("a long count inside Telegram: «Показати ще» waits while the li
     done.getByText("Не перевірено позицій: 48 — їхні залишки не змінювались."),
   ).toBeVisible();
   await expect(result).toBeVisible();
+  // A result's screen; inside Telegram «До інвентаризації» is Telegram's,
+  // no dock (audit 2026-11-18, goods P2-2) — checked once the carried tap
+  // is let go, never within its 0.7 s (review).
+  await expect(page.locator(".result-screen")).toHaveCount(1);
+  await expect(page.locator(".result-dock")).toHaveCount(0);
   // Pressed again after it, the entry: the finished one first in
   // «Попередні» at once, from what the finish answered — never «Продовжити»
   // while the list is read again (held here) — and «Почати інвентаризацію»
