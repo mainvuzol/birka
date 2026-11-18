@@ -74,6 +74,52 @@ const loran = "Лоран шоколад 70 см";
 function itIs(where: Page | Locator, name = loran): Locator {
   return where.getByRole("button", { name: `Це вона: ${name}`, exact: true });
 }
+/** Each part's top and bottom, read in one frame (review). */
+async function edges(
+  where: Page,
+  parts: Locator[],
+): Promise<{ top: number; bottom: number }[]> {
+  const nodes = await Promise.all(parts.map((part) => part.elementHandle()));
+  return where.evaluate(
+    (all) =>
+      all.map((node) => {
+        const box = (node as Element).getBoundingClientRect();
+        return { top: box.top, bottom: box.bottom };
+      }),
+    nodes,
+  );
+}
+
+/**
+ * A kept catalogue operation's stub under its screen's title and line, as
+ * every own screen's (spec S12; audit 2026-11-18, goods P2-1): measured once
+ * it has come to rest.
+ */
+async function stubUnder(where: Page, title: string): Promise<Locator> {
+  const header = where.locator("header.screen-header").filter({
+    has: where.getByRole("heading", { level: 1, name: title, exact: true }),
+  });
+  const stub = where.locator(".stub-notice").filter({
+    has: where.getByRole("heading", {
+      name: "Операцію каталогу ще не підтверджено",
+    }),
+  });
+  await expect(header).toHaveCount(1);
+  await expect(stub).toHaveCount(1);
+  await stub
+    .locator(":scope > .stub")
+    .evaluate((node) =>
+      Promise.all(
+        node
+          .getAnimations()
+          .map((each) => each.finished.catch(() => undefined)),
+      ),
+    );
+  const [top, box] = await edges(where, [header, stub]);
+  if (!top || !box) throw new Error("not laid out");
+  expect(top.bottom).toBeLessThanOrEqual(box.top + 0.5);
+  return stub;
+}
 /** «Підтвердити: …», the one button once a model is chosen. */
 function confirmAs(where: Page | Locator, name = loran): Locator {
   return where.getByRole("button", {
@@ -621,6 +667,9 @@ test("lost alias-feedback response reuses the same evidence UUID after reopening
   await expect(
     page.getByRole("button", { name: "Перевірити результат операції" }),
   ).toBeEnabled();
+  // On the proposal, under «← Перевірка каталогу» and «Пропозиція» (audit
+  // 2026-11-18, goods P2-1).
+  await stubUnder(page, "Пропозиція");
   await page.close();
   const reopened = await context.newPage();
   // Read from the phone's storage, it is checked at once, with no tap
@@ -774,6 +823,103 @@ test("a catalogue operation kept when its right goes opens its screen, is checke
     reopened.getByRole("button", { name: "Перевірка каталогу", exact: true }),
   ).toHaveCount(0);
   expect(posts).toBeGreaterThanOrEqual(2);
+});
+
+test("a catalogue operation kept on its own screen stands under «Перевірка каталогу» and its line, a server's refusal under it, the queue under them, at 360 × 640 in both themes (audit 2026-11-18, goods P2-1)", async ({
+  page,
+  context,
+}) => {
+  await enter(page);
+  const sheet = await draft(
+    page,
+    `Корешок під заголовком ${randomUUID().slice(0, 8)}`,
+  );
+  let posts = 0;
+  let answer: "lose" | "refuse" | "pass" = "lose";
+  await context.route("**/api/v1/catalog/match-decisions", async (route) => {
+    if (route.request().method() !== "POST") {
+      await route.continue();
+      return;
+    }
+    posts += 1;
+    if (posts === 1) {
+      await route.fetch();
+      await route.abort("failed");
+    } else if (answer === "lose") await route.abort("failed");
+    else if (answer === "refuse")
+      await route.fulfill({
+        status: 500,
+        json: {
+          code: "INTERNAL_ERROR",
+          message: "Внутрішня помилка сервера.",
+          details: {},
+        },
+      });
+    else await route.continue();
+  });
+  // A check's look at the proposal is lost too, until it may pass.
+  await context.route("**/api/v1/catalog/match-decisions/*", async (route) => {
+    if (answer !== "pass" && route.request().method() === "GET")
+      await route.abort("failed");
+    else await route.continue();
+  });
+  await sheet.getByRole("button", { name: "Далі", exact: true }).click();
+  await expect(
+    sheet.getByRole("button", { name: "Перевірити результат операції" }),
+  ).toBeEnabled();
+  await page.close();
+  const reopened = await context.newPage();
+  await reopened.setViewportSize({ width: 360, height: 640 });
+  await reopened.goto(launch());
+  await openStore(reopened, "Основний MAIN");
+  // Its own screen, checked at once and lost again: kept, under the title.
+  const stub = await stubUnder(reopened, "Перевірка каталогу");
+  const retry = stub.getByRole("button", {
+    name: "Перевірити результат операції",
+  });
+  await expect(retry).toBeEnabled();
+  // The queue under it. At 360 × 640 one scroll down: the title and the
+  // stub, its paper words with it, fill the phone (found while proving).
+  const queue = reopened.getByRole("list", { name: "Пропозиції" });
+  for (const scheme of ["light", "dark"] as const) {
+    await reopened.emulateMedia({ colorScheme: scheme });
+    await stubUnder(reopened, "Перевірка каталогу");
+    const [kept, rows] = await edges(reopened, [stub, queue]);
+    if (!kept || !rows) throw new Error("not laid out");
+    expect(kept.bottom).toBeLessThanOrEqual(rows.top + 0.5);
+    await reopened.screenshot({
+      path: `test-results/catalog-kept-360-${scheme}.png`,
+      fullPage: true,
+    });
+  }
+  await reopened.emulateMedia({ colorScheme: "light" });
+  // A server's answer that settles nothing: said under the stub, over the
+  // queue.
+  answer = "refuse";
+  await retry.click();
+  // The screen's next block after the stub (review).
+  const refusal = reopened.locator(".stub-notice + p[role='alert']");
+  await expect(refusal).toBeVisible();
+  for (const scheme of ["light", "dark"] as const) {
+    await reopened.emulateMedia({ colorScheme: scheme });
+    await stubUnder(reopened, "Перевірка каталогу");
+    const [box, said, first] = await edges(reopened, [stub, refusal, queue]);
+    if (!box || !said || !first) throw new Error("not laid out");
+    expect(box.bottom).toBeLessThanOrEqual(said.top + 0.5);
+    expect(said.bottom).toBeLessThanOrEqual(first.top + 0.5);
+  }
+  await reopened.emulateMedia({ colorScheme: "light" });
+  // Answered: settled, its proposal's own screen.
+  answer = "pass";
+  await retry.click();
+  await expect(
+    reopened.getByRole("heading", { name: "Пропозиція" }),
+  ).toBeVisible();
+  await expect(
+    reopened.getByRole("heading", {
+      name: "Операцію каталогу ще не підтверджено",
+    }),
+  ).toHaveCount(0);
 });
 
 test("create a reviewed product and recover a lost response without duplication", async ({

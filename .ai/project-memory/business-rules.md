@@ -11081,3 +11081,71 @@ right or word changes.
     supplier's sheet's «Нічого не знайшли за «…»» stay lines — a block
     among others, a choice in a sheet — `meta` 14 in pencil. Decided here:
     the class `.nothing-yet` of money P2-6 (в), one rule.
+
+## Chosen in chat — 2026-11-18 (audit 2026-11-18, batch 5: «Перевірка каталогу»'s kept operation and its refusal under the title and line; «Інвентаризацію завершено» a result's screen, the menu back under it; «Брак» with no line repeating the frame's plate; goods P2-1, P2-2, P2-6)
+
+Picked by «merged, go next» after #228: the goods task list's batch «Верх
+экрана и итог» (P2-1 + P2-2) and P2-6 of «Слова и углы», XS. Left of the
+goods list: P2-5, and P2-3 + P2-4. Nothing recorded, sent or counted
+changes. No request, check, journal or right changes. One line is gone
+(P2-6), and «Змінити магазин» shows on the count's result (below).
+
+- **«Перевірка каталогу»'s kept operation under the title and line**
+  (goods P2-1; spec S12; frame P2-9 of 2026-11-15):
+  - `KeptCatalog` and the refusal of its answer (`catalogRefusal`) stand
+    right after `ScreenHeader`, over the switch «Чекають · Підтверджені ·
+    Відхилені» and the proposal — as «Моделі»'s `keptStub`.
+  - The order: the frame's paper plate → «Перевірка каталогу» / «← Перевірка
+    каталогу» «Пропозиція» and the line → the stub → the refusal → the
+    screen.
+  - This revisits batch 9's «a screen's own stubs stand where the screen
+    draws them» for the catalogue only: that was the bound of the
+    mechanism (the place under the header is given to the app's
+    journals), not a choice. The stub's form and words (stage 2, goods
+    P1-4) as before; its sway and tear as every stub's. «Нова модель»'s
+    sheet keeps its stub first in the sheet.
+  - Found while proving: at 360 × 640 the queue's first proposal is not in
+    sight under the stub, as the task list's criterion said. The title
+    and the stub with its paper words («Чекає відповіді сервера з …
+    Запишіть цю операцію на папері…», 488 high) fill the phone; the
+    queue is one scroll down, as it was over the title. The stub's form
+    is not this point's to change. An owner reading.
+  - Found while proving, not changed: a 500 answered to its check is said
+    under the stub in the unreachable server's words, the paper plate's
+    own, so the two say the same, one red under the other.
+- **«Інвентаризацію завершено» a result's screen** (goods P2-2; spec §5
+  «Док дій», §6.5):
+  - The count's result is a `ResultScreen`, as «Прийшло … шт.»'s: its
+    title, «Склад «…» · {хто}», the settled stub and «Розбіжності» as
+    before.
+  - Outside Telegram «До інвентаризації» is the MainButton's place in its
+    dock at the menu's top, sticking there on a long result; inside
+    Telegram, Telegram's MainButton, no dock — as before. The 0.7 s after
+    the result that lets the finish's second tap go, as before.
+  - The form's own dock (`pay-panel order-dock`) and its room are gone.
+  - Another operation's stub — «Підрахунок записано один раз», not let go
+    by «Зрозуміло» — stands over the result, never between its title and
+    what it says.
+  - Decided here (by P2-2's criterion «над меню»): the menu is back under
+    the result before it is painted, as on «Прийшов товар»'s, «Борги»'s and,
+    since batch 4, the return to a supplier's. The count keeps it aside, as
+    before. Inside Telegram the menu is back too.
+  - With it, by the same rule (found by the review): «Змінити магазин»
+    beside «Склад «…» · {хто}» for whoever has two stores or more — the
+    app hides it only on a task's screen, as on the twins' results.
+  - By the review: the stock is read again when the count is finished,
+    not only at «До інвентаризації», so leaving the result by the menu
+    shows it as counted.
+  - Found by the review, not changed: the 0.7 s that lets the finish's
+    second tap go holds for «До інвентаризації»; the menu, back under the
+    result, has no such guard — as on «Борги»'s and the return's results.
+    «Так, завершити» stands over the menu's height, so a carried tap meets
+    the dock. The next audit's.
+- **«Брак» with no line repeating the frame's plate** (goods P2-6):
+  - «Магазин не торгує: тут лише перегляд.» is gone. Where the shop does
+    not trade, the frame's plate «{стан}. Лише перегляд: продажі,
+    приймання, повернення й оплати в цьому магазині зупинено.» says it over
+    «Брак», as over every screen; its rows have no verbs, as before.
+  - Д4 checked: «Брак»'s `readOnly` is always `!trading`, the plate's own
+    condition. This revisits «decided here» of 2026-11-07 by the later rule
+    of one line where a shop does not trade («Накладні», 2026-11-09).

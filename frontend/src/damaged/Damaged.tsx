@@ -356,10 +356,10 @@ export function Damaged({
         focusable
         back={back && <BackToMore back={back} />}
       />
+      {/* Where the shop does not trade, the frame's plate says so over
+          every screen: no line here repeats it (audit 2026-11-18, goods
+          P2-6). */}
       <section className="goods-part damaged">
-        {readOnly && (
-          <p className="hint">Магазин не торгує: тут лише перегляд.</p>
-        )}
         {problem && sheetUnit === undefined && <p role="alert">{problem}</p>}
         {units.data === undefined ? (
           units.isPending ? (

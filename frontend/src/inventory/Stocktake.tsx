@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type { JSX, RefObject } from "react";
 import {
   useInfiniteQuery,
@@ -27,6 +27,7 @@ import { Keypad } from "@/shared/Keypad";
 import { ModeSwitch } from "@/shared/ModeSwitch";
 import { CARRIED_TAP, usePanelRoom } from "@/shared/panel";
 import { Placeholder } from "@/shared/Placeholder";
+import { ResultScreen } from "@/shared/ResultScreen";
 import { Empty } from "@/shared/Empty";
 import { ScreenHeader } from "@/shared/ScreenHeader";
 import { Sheet } from "@/shared/Sheet";
@@ -1008,12 +1009,19 @@ export function Stocktake({
   const doneAt = useRef(-Infinity);
   const late = (at: number): boolean => at - doneAt.current < CARRIED_TAP;
 
-  useEffect(() => {
-    task?.(true);
-    return () => {
+  // The menu steps aside while the count stands, and is back before its
+  // result is painted: «До інвентаризації» on the menu from the first frame
+  // (audit 2026-11-18, goods P2-2; as a payment's on «Борги»).
+  const aside = done === null;
+  useLayoutEffect(() => {
+    task?.(aside);
+  }, [task, aside]);
+  useLayoutEffect(
+    () => () => {
       task?.(false);
-    };
-  }, [task]);
+    },
+    [task],
+  );
   useLockPortrait(done === null);
   // Opened from the entry: the count begins at its top, and a reader at its
   // title — the tag or the button that opened it is gone.
@@ -1041,8 +1049,6 @@ export function Stocktake({
     },
     { shown: done !== null },
   );
-  const dock = useRef<HTMLDivElement>(null);
-  usePanelRoom(dock, done !== null && !leave);
 
   function reread(): void {
     void current.refetch();
@@ -1071,6 +1077,10 @@ export function Stocktake({
           },
       );
       void cache.invalidateQueries({ queryKey: ["stocktakes"] });
+      // The differences applied: the stock read again however the result is
+      // left — «До інвентаризації», or the menu, back under it (audit
+      // 2026-11-18, goods P2-2; review).
+      void cache.invalidateQueries({ queryKey: ["inventory-stock"] });
       buzz("success");
       doneAt.current = performance.now();
       setAsked(false);
@@ -1101,7 +1111,29 @@ export function Stocktake({
 
   if (done) {
     return (
-      <>
+      // A result's screen, as «Прийшло … шт.»'s (spec §5 «Док дій», §6.5;
+      // audit 2026-11-18, goods P2-2): outside Telegram «До інвентаризації»
+      // in its dock at the menu's top; another operation's stub over it,
+      // never under its title.
+      <ResultScreen
+        as="div"
+        dock={
+          !leave && (
+            // Outside Telegram, its MainButton as the dock's one button.
+            <button
+              type="button"
+              className="main-mimic"
+              onClick={(event) => {
+                // A key's press is never one.
+                if (event.detail !== 0 && late(event.timeStamp)) return;
+                onLeave();
+              }}
+            >
+              До інвентаризації
+            </button>
+          )
+        }
+      >
         <ScreenHeader
           ref={result}
           focusable
@@ -1155,24 +1187,8 @@ export function Stocktake({
               />
             )}
           </Stub>
-          {!leave && (
-            // Outside Telegram, its MainButton as the dock's one button.
-            <div className="pay-panel order-dock" ref={dock}>
-              <button
-                type="button"
-                className="main-mimic"
-                onClick={(event) => {
-                  // A key's press is never one.
-                  if (event.detail !== 0 && late(event.timeStamp)) return;
-                  onLeave();
-                }}
-              >
-                До інвентаризації
-              </button>
-            </div>
-          )}
         </section>
-      </>
+      </ResultScreen>
     );
   }
 
