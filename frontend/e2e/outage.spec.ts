@@ -2268,9 +2268,7 @@ test.describe("9. what to do with money after the outage", () => {
    * keyed in. */
   async function payOnCard(page: Page, sum: string): Promise<void> {
     await section(page, "Покупці");
-    await page
-      .getByRole("button", { name: /^Відкрити борг: Оксана Петренко,/ })
-      .click();
+    await page.getByRole("button", { name: /^Оксана Петренко,/ }).click();
     await page.getByRole("button", { name: "Внесок", exact: true }).click();
     for (const one of sum)
       await page

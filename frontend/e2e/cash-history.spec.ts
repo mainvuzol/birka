@@ -389,6 +389,12 @@ test("a close tapped shows all of it as its result did — the figures, the slip
   const figures = page.getByRole("group", { name: "Закриття каси" });
   await expect(figures.locator(".cash-sum").nth(0)).toHaveText("2 000,00 грн");
   await expect(figures.locator(".cash-sum").nth(1)).toHaveText("2 350,00 грн");
+  // Read later, its figures money-l as on the close's stub (audit
+  // 2026-11-18, orders-cash P2-1).
+  for (const sum of await figures.locator(".cash-sum .sum").all()) {
+    await expect(sum).toHaveCSS("font-size", "32px");
+    await expect(sum).toHaveCSS("line-height", "34px");
+  }
   await expect(figures.locator(".cash-difference")).toHaveText(
     "Надлишок 350,00 грн",
   );

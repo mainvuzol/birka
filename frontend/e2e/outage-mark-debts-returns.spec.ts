@@ -46,7 +46,8 @@ const fixture = JSON.parse(
 async function payOnCard(page: Page, name: string): Promise<void> {
   await section(page, "Покупці");
   await page.getByLabel("Ім’я або телефон").fill(name);
-  await page.getByRole("button", { name: `Відкрити борг: ${name},` }).click();
+  // Her card's row, named by who (audit 2026-11-18, sale P2-3).
+  await page.getByRole("button", { name: new RegExp(`^${name},`) }).click();
   await page.getByRole("button", { name: "Внесок", exact: true }).click();
   await expect(page.getByLabel("Сума, грн")).toBeVisible();
 }

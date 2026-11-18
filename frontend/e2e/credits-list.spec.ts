@@ -348,10 +348,8 @@ test("«Покупці» says who they are, the store's block what it is owed, l
   await expect(owed.locator(".owed-sum svg")).toHaveCount(1);
   await expect(owed).toContainText("8 покупців · 11 боргів");
 
-  const one = page.getByRole("button", { name: /^Відкрити борг: Оксана/ });
-  await expect(one).toHaveAccessibleName(
-    "Відкрити борг: Оксана Петренко, винні 2 000,00 грн",
-  );
+  const one = page.getByRole("button", { name: /^Оксана/ });
+  await expect(one).toHaveAccessibleName("Оксана Петренко, винні 2 000,00 грн");
   // Two letters (spec §6.26).
   await expect(one.locator(".debt-mark")).toHaveText("ОП");
   // A list's row by §6.8, its hairline from its text's edge past the two
@@ -360,10 +358,8 @@ test("«Покупці» says who they are, the store's block what it is owed, l
   await expect(one).toContainText("067 123 45 67 · Лоран шоколад · M");
   await expect(one).not.toContainText("3 000,00");
   await expect(one).not.toContainText(/готівк|картк|переказ/i);
-  const two = page.getByRole("button", { name: /^Відкрити борг: Ірина/ });
-  await expect(two).toHaveAccessibleName(
-    "Відкрити борг: Ірина Коваль, винні 4 000,00 грн",
-  );
+  const two = page.getByRole("button", { name: /^Ірина/ });
+  await expect(two).toHaveAccessibleName("Ірина Коваль, винні 4 000,00 грн");
   await expect(two).toContainText("050 765 43 21 · 2 борги");
   await expect(two).not.toContainText("Альпака");
   // What they owe in all, as the server summed it.
@@ -553,9 +549,10 @@ test("while «Покупці» is read, the store's sum and three rows keep thei
     "aria-hidden",
     "true",
   );
-  // Grey lines, what sizes them never seen (review, 2026-10-21).
+  // Grey lines, what sizes them never seen (review, 2026-10-21): the sum's
+  // figures, «,00» and «грн», and the count.
   const sizing = list.locator(".owed-place .skeleton-line > span");
-  await expect(sizing).toHaveCount(2);
+  await expect(sizing).toHaveCount(4);
   for (const each of await sizing.all()) await expect(each).toBeHidden();
   await expect(list.getByRole("status")).toHaveText("Завантажуємо борги…");
   await expect(page.getByLabel("Скільки винні магазину")).toHaveCount(0);
@@ -578,6 +575,64 @@ test("while «Покупці» is read, the store's sum and three rows keep thei
   // Nothing moves: the field, nor where the first row comes.
   expect(after.y).toBe(before.y);
   expect(Math.abs(first.y - place.y)).toBeLessThanOrEqual(2);
+});
+
+test("a store's owed is money-l — 32 at any width, «1 250 000,00 грн» at 360 too, its count under it when the line is full, nothing sideways — and its place while read the same height (audit 2026-11-18, sale P2-2)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  await customers(page, [oksana(), iryna()]);
+  let release: () => void = () => undefined;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/api/v1/credits/summary?**", async (route) => {
+    await held;
+    await route.fulfill({
+      json: { owed: "1250000.00", customers: 128, debts: 1024 },
+    });
+  });
+  await credits(page);
+  const placed = page.locator("section.credits .owed-place .owed-sum");
+  await expect(placed).toBeVisible();
+  const place = await placed.boundingBox();
+  release();
+  const owed = page.getByRole("group", {
+    name: "Скільки винні магазину «Основний»",
+  });
+  const sum = owed.locator(".owed-sum");
+  await expect(sum).toHaveText("1 250 000,00 грн");
+  const figures = sum.locator(".sum");
+  await expect(figures).toHaveCSS("font-size", "32px");
+  await expect(figures).toHaveCSS("line-height", "34px");
+  await expect(figures).toHaveCSS("font-weight", "800");
+  // The display face, as every sum (spec §6.17).
+  expect(
+    await figures.evaluate((node) => {
+      const probe = document.createElement("span");
+      probe.style.fontFamily = "var(--font-display)";
+      document.body.append(probe);
+      const display = getComputedStyle(probe).fontFamily;
+      probe.remove();
+      return getComputedStyle(node).fontFamily === display;
+    }),
+  ).toBe(true);
+  await expect(sum).toHaveCSS("color", await token(page, "--debt"));
+  expect((await sum.locator("svg").boundingBox())?.width).toBe(20);
+  const read = await sum.boundingBox();
+  const count = await owed.locator(".owed-count").boundingBox();
+  if (!place || !read || !count) throw new Error("not laid out");
+  // Its place the read line's height: nothing jumps when it comes.
+  expect(Math.abs(read.height - place.height)).toBeLessThanOrEqual(1);
+  // Whole on the screen: within its sides, nothing sideways; the count
+  // under the sum, never over it.
+  expect(read.x + read.width).toBeLessThanOrEqual(360 - 16 + 0.5);
+  expect(count.x + count.width).toBeLessThanOrEqual(360 - 16 + 0.5);
+  expect(count.y).toBeGreaterThanOrEqual(read.y + read.height - 1);
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(360);
+  await page.screenshot({ path: "test-results/credits-owed-million-360.png" });
 });
 
 for (const [name, theme] of [
@@ -1088,7 +1143,7 @@ test("a row opens the customer's card: one debt is the store's block, with what 
   );
   await credits(page);
 
-  await page.getByRole("button", { name: /^Відкрити борг: Оксана/ }).click();
+  await page.getByRole("button", { name: /^Оксана/ }).click();
   await expect(
     page.getByRole("heading", { name: "Оксана Петренко", level: 1 }),
   ).toBeVisible();
@@ -1116,7 +1171,7 @@ test("a row opens the customer's card: one debt is the store's block, with what 
   await page.getByRole("button", { name: "Покупці", exact: true }).click();
   await expect(rows(page)).toHaveCount(2);
 
-  await page.getByRole("button", { name: /^Відкрити борг: Ірина/ }).click();
+  await page.getByRole("button", { name: /^Ірина/ }).click();
   await expect(
     page.getByRole("heading", { name: "Ірина Коваль", level: 1 }),
   ).toBeVisible();
@@ -1190,7 +1245,7 @@ test("a phone owing two stores: a block each, its sum from its own read and none
   });
   await credits(page, { ids: both });
   await rows(page, "Хто винен магазину «Другий»")
-    .getByRole("button", { name: /^Відкрити борг: Дарина/ })
+    .getByRole("button", { name: /^Дарина/ })
     .click();
   await expect(
     page.getByRole("heading", { name: "Дарина Мельник", level: 1 }),
@@ -1265,7 +1320,7 @@ test("one debt: «Внесок» opens S21 on it at once; «Скопіювати
   await summary(page);
   await customers(page, [oksana(), iryna()]);
   await credits(page);
-  await page.getByRole("button", { name: /^Відкрити борг: Оксана/ }).click();
+  await page.getByRole("button", { name: /^Оксана/ }).click();
   const phone = page.locator(".customer-phone");
   await expect(phone).toHaveText("067 123 45 67");
   await expect(phone).toHaveAttribute("href", "tel:0671234567");
@@ -1308,7 +1363,7 @@ test("a phone with nothing to pay here shows no «Внесок»: paid off", asy
   ]);
   await credits(page);
   await statusWay(page, "Сплачені").click();
-  await page.getByRole("button", { name: /^Відкрити борг: Марта/ }).click();
+  await page.getByRole("button", { name: /^Марта/ }).click();
   await expect(
     page.getByRole("heading", { name: "Марта Бойко", level: 1 }),
   ).toBeVisible();
@@ -1338,7 +1393,7 @@ test("a phone owing only another store shows no «Внесок» here: where it 
   });
   await credits(page, { ids: both });
   await rows(page, "Хто винен магазину «Другий»")
-    .getByRole("button", { name: /^Відкрити борг: Вікторія/ })
+    .getByRole("button", { name: /^Вікторія/ })
     .click();
   await expect(
     page.getByRole("heading", { name: "Вікторія Савчук", level: 1 }),
@@ -1368,7 +1423,7 @@ test("a customer who no longer owes, read by their phone, leaves for the list, n
     const params = new URL(request.url()).searchParams;
     return params.get("query") === "0507654321" && params.get("limit") === "5";
   });
-  await page.getByRole("button", { name: /^Відкрити борг: Ірина/ }).click();
+  await page.getByRole("button", { name: /^Ірина/ }).click();
   // The card asked by her phone; with nothing under it, back on the list.
   await read;
   await expect(rows(page)).toHaveCount(2);
@@ -1416,7 +1471,7 @@ test("paid off on S21 opened from her card, back on it nothing read before shows
     });
   });
   await credits(page);
-  await page.getByRole("button", { name: /^Відкрити борг: Оксана/ }).click();
+  await page.getByRole("button", { name: /^Оксана/ }).click();
   const card = page.locator(".customer-card");
   await expect(card.locator(".customer-owed")).toHaveText("2 000,00 грн");
   await page.getByRole("button", { name: "Внесок", exact: true }).click();
@@ -1470,10 +1525,8 @@ test("«Сплачені» and «Списані» each ask their own status, eac
   await statusWay(page, "Сплачені").click();
   await expect(rows(page)).toHaveCount(1);
   expect(asked.at(-1)?.get("status")).toBe("SETTLED");
-  const settled = page.getByRole("button", { name: /^Відкрити борг: Марта/ });
-  await expect(settled).toHaveAccessibleName(
-    "Відкрити борг: Марта Бойко, сплачено",
-  );
+  const settled = page.getByRole("button", { name: /^Марта/ });
+  await expect(settled).toHaveAccessibleName("Марта Бойко, сплачено");
   await expect(settled.getByText("Сплачено", { exact: true })).toHaveClass(
     "sticker tone-paid",
   );
@@ -1487,7 +1540,7 @@ test("«Сплачені» and «Списані» each ask their own status, eac
   expect(asked.at(-1)?.get("status")).toBe("WRITTEN_OFF");
   await expect(
     page
-      .getByRole("button", { name: /^Відкрити борг: Петро/ })
+      .getByRole("button", { name: /^Петро/ })
       .getByText("Списано", { exact: true }),
   ).toHaveClass(/\btone-offline\b/);
   await expectOneSticker(rows(page));
@@ -1548,8 +1601,10 @@ test("a row in «Покупці» says when they last paid, since when they owe,
     ]),
   ]);
   await credits(page);
+  // «Покупці»'s row opens the card: named by who, no verb (audit
+  // 2026-11-18, sale P2-3).
   const row = (name: string): Locator =>
-    page.getByRole("button", { name: new RegExp(`^Відкрити борг: ${name}`) });
+    page.getByRole("button", { name: new RegExp(`^${name}`) });
   // The latest payment among the row's debts, not the debt's own opening.
   await expect(row("Ірина").locator(".sale-meta")).toHaveText(
     "050 765 43 21 · 2 борги · останній внесок 19.10",
@@ -1602,7 +1657,13 @@ test("a row in «Покупці» says when they last paid, since when they owe,
   await tillWays(page)
     .getByRole("button", { name: "Внесок", exact: true })
     .click();
-  await expect(row("Ірина").locator(".sale-meta")).toHaveText(
+  // The till's row opens a debt, or the choice among them: «Відкрити борг»
+  // as before (audit 2026-11-18, sale P2-3).
+  const atTill = page.getByRole("button", { name: /^Відкрити борг: Ірина/ });
+  await expect(atTill).toHaveAccessibleName(
+    "Відкрити борг: Ірина Коваль, винні 4 000,00 грн",
+  );
+  await expect(atTill.locator(".sale-meta")).toHaveText(
     "050 765 43 21 · 2 борги",
   );
   await expect(page.locator(".debt-when")).toHaveCount(0);
@@ -1620,14 +1681,12 @@ test("under «Сплачені» a customer of two paid debts says «Сплач�
     ]),
   ]);
   await credits(page);
-  const daryna = page.getByRole("button", { name: /^Відкрити борг: Дарина/ });
+  const daryna = page.getByRole("button", { name: /^Дарина/ });
   await expect(daryna).toHaveAccessibleName(
-    /^Відкрити борг: Дарина Мельник, винні 5\s000,00\sгрн$/,
+    /^Дарина Мельник, винні 5\s000,00\sгрн$/,
   );
   await statusWay(page, "Сплачені").click();
-  await expect(daryna).toHaveAccessibleName(
-    "Відкрити борг: Дарина Мельник, сплачено",
-  );
+  await expect(daryna).toHaveAccessibleName("Дарина Мельник, сплачено");
   await expect(daryna).toContainText("2 борги");
   await expect(daryna.getByText("Сплачено", { exact: true })).toHaveClass(
     "sticker tone-paid",
@@ -1771,7 +1830,7 @@ test("a closed store's customer is read among the closed stores: a row a debt wi
     3,
   );
   release();
-  await page.getByRole("button", { name: /^Відкрити борг: Ірина/ }).click();
+  await page.getByRole("button", { name: /^Ірина/ }).click();
   await expect(
     page.getByRole("heading", { name: "Ірина Коваль", level: 1 }),
   ).toBeVisible();
@@ -1891,7 +1950,7 @@ test("the card's history: every debt's lines, the newest first, a debt opened «
     ]),
   ]);
   await credits(page);
-  await page.getByRole("button", { name: /^Відкрити борг: Оксана/ }).click();
+  await page.getByRole("button", { name: /^Оксана/ }).click();
   const lines = page
     .getByRole("list", { name: "Історія покупця" })
     .getByRole("listitem");
@@ -2021,10 +2080,15 @@ for (const [name, theme, scheme] of [
     await expect(
       page.getByRole("searchbox", { name: "Ім’я або телефон" }),
     ).toHaveCSS("background-color", await token(page, "--card"));
-    // The owed in the debt's colour (spec §6.17).
+    // The owed in the debt's colour (spec §6.17), money-l (audit
+    // 2026-11-18, sale P2-2).
     await expect(page.locator(".block-owed .owed-sum").first()).toHaveCSS(
       "color",
       await token(page, "--debt"),
+    );
+    await expect(page.locator(".block-owed .owed-sum .sum").first()).toHaveCSS(
+      "font-size",
+      "32px",
     );
     await page.screenshot({ path: `test-results/credits-list-${name}.png` });
     await page.screenshot({
@@ -2032,7 +2096,7 @@ for (const [name, theme, scheme] of [
       fullPage: true,
     });
 
-    await page.getByRole("button", { name: /^Відкрити борг: Ірина/ }).click();
+    await page.getByRole("button", { name: /^Ірина/ }).click();
     const block = page.getByRole("region", {
       name: "Магазину «Основний» винні",
     });
@@ -2193,7 +2257,7 @@ for (const [name, theme, scheme] of [
     expect(await contrast(written)).toBeGreaterThanOrEqual(4.5);
     await statusWay(page, "Винні зараз").click();
 
-    await page.getByRole("button", { name: /^Відкрити борг: Оксана/ }).click();
+    await page.getByRole("button", { name: /^Оксана/ }).click();
     await expect(page.locator(".customer-owed")).toHaveText("2 000,00 грн");
     // From paper, a warning's colour, its words as they were; the paper's
     // time in the phone's own zone, as the app writes it.

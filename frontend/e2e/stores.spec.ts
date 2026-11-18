@@ -631,7 +631,8 @@ test("a debt of a blocked store is found by the whole phone and paid at a store 
     await expect(
       page.getByRole("group", { name: "Які борги показати" }),
     ).toHaveCount(0);
-    const found = page.getByRole("button", { name: `Відкрити борг: ${name},` });
+    // Its card's row, named by who (audit 2026-11-18, sale P2-3).
+    const found = page.getByRole("button", { name: new RegExp(`^${name},`) });
     await expect(found).toContainText("Магазин «Ринок»");
     const asked = searches.filter((url) => url.includes("elsewhere=true"));
     expect(asked.length).toBeGreaterThan(0);
@@ -734,7 +735,7 @@ test("a debt of a blocked store is found by the whole phone and paid at a store 
     await page.getByLabel("Ім’я або телефон").fill(phone);
     await answered;
     await expect(
-      market.getByRole("button", { name: `Відкрити борг: ${name},` }),
+      market.getByRole("button", { name: new RegExp(`^${name},`) }),
     ).toBeVisible();
     await page.waitForTimeout(300);
     expect(
@@ -748,9 +749,7 @@ test("a debt of a blocked store is found by the whole phone and paid at a store 
     await page.getByLabel("Ім’я або телефон").fill(`099${phone.slice(3)}`);
     await expect(market.getByText("Нікого не знайдено.")).toBeVisible();
     await page.getByLabel("Ім’я або телефон").fill(name);
-    await market
-      .getByRole("button", { name: `Відкрити борг: ${name},` })
-      .click();
+    await market.getByRole("button", { name: new RegExp(`^${name},`) }).click();
     // Her card: what is owed here, no «Внесок», and the owner's ⋯ with its
     // write-off (spec S20).
     const owed = page.getByRole("region", { name: "Магазину «Ринок» винні" });

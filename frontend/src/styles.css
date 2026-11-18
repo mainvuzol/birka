@@ -1311,17 +1311,28 @@ html {
   color: var(--text-2);
   overflow-wrap: anywhere;
 }
+/* «Разом» and its sum (spec §6.15: «Total / Разом» `meta` left, `money-l`
+   32 right; audit 2026-11-18, frame P2-5): the word — «Разом», «Зараз»,
+   «винен», a return's — quiet in pencil, so the eye goes to the figures;
+   the sum money-l in ink, wherever it stands — the till's tray, «У
+   замовленні», the return's dock, «Клієнт забрав». */
 .pay-total {
   margin: 0 0 10px;
-  font-size: 18px;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 19px;
+  color: var(--pencil);
 }
 .pay-total .sum {
-  font-size: 26px;
+  font-size: 32px;
   font-weight: 800;
+  line-height: 34px;
+  color: var(--ink);
 }
 /* The till's tray (spec §6.15; «Усе на бірці» task list, P0-5): the
    perforation along its top, the basket in one row that opens its sheet,
-   «Разом» at 32, the three ways; over the search where they meet. */
+   «Разом» as every `.pay-total`, the three ways; over the search where
+   they meet. */
 .till-tray {
   z-index: var(--z-tray);
   padding-top: 14px;
@@ -1377,10 +1388,6 @@ html {
 .tray-open {
   flex: none;
   color: var(--pencil);
-}
-.till-tray .pay-total .sum {
-  font-size: 32px;
-  line-height: 34px;
 }
 /* Its three ways at 56, as the till's dock's (spec §6.15); dimmed while a
    line waits, a press taking the seller to it. */
@@ -2521,8 +2528,13 @@ section.credits.customer-card {
   align-items: center;
   gap: 4px;
 }
+/* A store's owed money-l, as its sum on «Гроші» and «Сьогодні» (audit
+   2026-11-18, sale P2-2): 32 at any width — the block is the screen's, not
+   a column; its count goes under it when the line is full. Its place
+   while read, and kept unread, the same 34. */
 .block-owed .owed-sum .sum {
-  font-size: 24px;
+  font-size: 32px;
+  line-height: 34px;
   letter-spacing: 0;
 }
 .block-owed .owed-count {
@@ -3052,12 +3064,9 @@ section.credits.customer-card {
   text-overflow: ellipsis;
 }
 /* The return's dock at the till's scale (spec §6.15; audit 2026-11-13,
-   sale P2-1): what comes back in money-l, its button 56 — the button that
-   hands money back never smaller than the one that takes it. */
-.return-panel .pay-total .sum {
-  font-size: 32px;
-  line-height: 34px;
-}
+   sale P2-1): what comes back in money-l, as every `.pay-total`, its
+   button 56 — the button that hands money back never smaller than the one
+   that takes it. */
 .return-go {
   width: 100%;
   min-height: var(--h-pay);
@@ -3479,9 +3488,14 @@ section.stores {
    under the thumb; the result's three figures large. The card stays dark in
    either theme (owner decision, 2026-10-21); in the dark one its edge, at
    3:1 on the section and the page, sets it off. */
+/* Where the drawer stands, the `meta` role as the screen's line over it
+   (spec S25 №3; audit 2026-11-18, orders-cash P2-1); its place while read
+   the same. */
 .cash-context {
   margin: -4px 0 14px;
   font-size: 14px;
+  font-weight: 500;
+  line-height: 19px;
   color: var(--text-2);
 }
 /* «Каса» (spec S25; «Усе на бірці» sections task list, P1-1) on the page
@@ -3765,10 +3779,14 @@ section.cash-count {
   line-height: 1.15;
   overflow-wrap: anywhere;
 }
+/* «Мало бути» and «Порахували» money-l wherever they stand — the close's
+   stub, an old close's card, their places while read (spec S28 №2–3;
+   audit 2026-11-18, orders-cash P2-1). */
 .cash-sum .sum {
-  font-size: 34px;
+  font-size: 32px;
   font-weight: 800;
-  letter-spacing: -0.6px;
+  line-height: 34px;
+  letter-spacing: 0;
 }
 /* Said in a line — an old close's card, «Каса»'s own of today — its sign
    before its words, the triangle or the knot, never its colour alone
@@ -3803,19 +3821,44 @@ span.cash-difference > .difference-sign {
    P1-3): «Мало бути» and «Порахували» in money-l, the difference a sticker
    — the warning's with its triangle, to the kopeck the accent's with its
    knot — then the perforation and the slip. The eyelet keeps its corner. */
-.stub .cash-figures {
+.stub .cash-figures,
+.close-stub-place .cash-figures {
   margin-right: 32px;
-}
-.stub .cash-sum .sum {
-  font-size: 32px;
-  line-height: 34px;
-  letter-spacing: 0;
 }
 .cash-sticker {
   margin: 10px 0 0;
 }
-.stub .cash-slip {
+.stub .cash-slip,
+.close-stub-place .cash-slip {
   margin: 0;
+}
+/* The close's place while it is read, a reason owed (audit 2026-11-18,
+   orders-cash P2-2): the stub's own shape — its torn top, two figures of
+   32, the sticker's place, the perforation, the slip's two rows — in grey,
+   so the reason's field under it does not move when the stub comes. It
+   neither tears nor sways: nothing has come yet. */
+.close-stub-place {
+  margin: 16px 0;
+  padding: 20px 16px 16px;
+  background-color: var(--card);
+}
+.close-stub-place .sticker {
+  background: var(--skeleton);
+  animation: skeleton-breathe 1.2s ease-in-out infinite;
+}
+/* Still where motion is reduced, as every grey line: after the rule it
+   stills, which a media query outranks by order alone (review). */
+@media (prefers-reduced-motion: reduce) {
+  .close-stub-place .sticker {
+    animation: none;
+  }
+}
+.close-stub-place .sticker > span {
+  visibility: hidden;
+}
+.sticker-glyph-place {
+  width: 16px;
+  height: 16px;
 }
 .cash-today p {
   margin: 0;
@@ -3940,9 +3983,12 @@ span.cash-difference > .difference-sign {
   margin: 0 0 8px;
   line-height: 1.15;
 }
+/* An operation's sum money-l, as every sum of a place (audit 2026-11-18,
+   orders-cash P2-1); its place while read the same. */
 .fix-sum .sum {
-  font-size: 34px;
+  font-size: 32px;
   font-weight: 800;
+  line-height: 34px;
 }
 .fix-ways {
   margin: 0 0 14px;
@@ -4254,17 +4300,25 @@ span.cash-difference > .difference-sign {
 .order-line .history-sum {
   white-space: nowrap;
 }
+/* The card's «Разом» as every total's (audit 2026-11-18, frame P2-5,
+   orders-cash P2-1): the word `meta` in pencil, the sum money-l in ink —
+   the parcel's sum the same 32 on the card, in «Клієнт забрав» and at the
+   till. */
 .order-total {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   margin: 6px 0;
-  line-height: 1.1;
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 19px;
+  color: var(--pencil);
 }
 .order-total .sum {
-  font-size: 34px;
+  font-size: 32px;
   font-weight: 800;
+  line-height: 34px;
+  color: var(--ink);
 }
 .order-rare {
   display: block;
@@ -5337,7 +5391,8 @@ span.cash-difference > .difference-sign {
   right: -6px;
 }
 .stub-recorded,
-.stub-settled {
+.stub-settled,
+.close-stub-place {
   clip-path: polygon(
     0% 4px,
     2.273% 0,
@@ -5387,6 +5442,9 @@ span.cash-difference > .difference-sign {
     100% 100%,
     0 100%
   );
+}
+.stub-recorded,
+.stub-settled {
   animation: stub-tear var(--dur-tear) var(--ease-standard);
 }
 @keyframes stub-tear {

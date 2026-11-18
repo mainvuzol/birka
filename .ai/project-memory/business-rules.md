@@ -10828,3 +10828,88 @@ sent or counted changes. No request, check, journal or right changes.
   - Left as before (review): a check found «sold» and another found
     «nothing sold», one after the other, stand as two stubs in the app's
     order; this was a stub and a banner before.
+
+## Chosen in chat — 2026-11-18 (audit 2026-11-18, batch 2: one money scale — «Разом» a quiet word over a 32 sum, every sum's place 32, «Каса»'s line the screen's meta, «Касу закрито» a result's 24 over a place in the stub's shape, «Покупці»'s block 32; a customer's row named by where it goes; frame P2-5, P2-6, orders-cash P2-1, P2-2, sale P2-2, P2-3)
+
+Picked by «merged, go next» after #225. Nothing recorded, sent or counted
+changes. No request, check, journal or right changes; every figure is the
+server's, through `Sum` / `money()`, as before.
+
+- **«Разом» one rule** (frame P2-5; spec §6.15, `money-l`):
+  - `.pay-total`'s word («Разом», «Зараз», «винен») is meta 14/500/19
+    `pencil`; its sum `money-l` 32/34, 800. The till's and the return's
+    own 32 rules go: the base says it. The till's tray, «У замовленні», the
+    return's panel and «Клієнт забрав» draw it alike.
+  - `.order-total` (the order's card): the same word and sum.
+  - Decided here: the sum is ink — the word went `pencil`, and the sum
+    would have taken it.
+  - Decided here: one shared check (`expectTotal`, e2e fixtures) where each
+    total stands — the till's tray, «У замовленні», the return, the order's
+    card and «Клієнт забрав», in both themes where the journey is themed —
+    not in `design-system.spec.ts`, which draws no total.
+  - At 360 «Зараз … · винен …» on the till's tray and on «Клієнт забрав»
+    keeps every way in view, with no sideways scroll.
+- **One scale for «Каса»'s and the order's sums** (orders-cash P2-1; spec
+  §6.17, S25 №3, S28 №2–3; revises the orders TZ 2026-10-23's 34 and 26):
+  - `money-l` 32/34, 800: the order card's «Разом»; «Разом» and «Зараз … ·
+    винен …» on «Клієнт забрав» (by the base above); one operation's card
+    (`.fix-sum`); «Мало бути» and «Порахували» off the stub as on it (the
+    stub's own rule goes).
+  - «Каса»'s line «Каса відкрита · останнє закриття …» (`.cash-context`)
+    is the meta under the title: 14/500/19, `pencil` as before. Decided
+    here: by the values on its own class, not by a `t-meta` class.
+  - Places while read stand the height of what comes. Decided here: a real
+    32 sum's line is 40, not 34 — `Sum`'s «,00» and «грн» keep the 34 line
+    at their smaller sizes (the till's tray has been 40 since P0-5). The
+    places carry the same «,00» and «грн», unseen, so they are 40 too; real
+    sums are not changed.
+  - The close's stub, its recount at 56 and its taps are as before.
+- **«Касу закрито» a result's title, its place the stub's shape**
+  (orders-cash P2-2; spec S28 №1, §6.30):
+  - «Касу закрито» and «Перший підрахунок записано» are `result-title
+    t-sheet` 24/26, 800, the check-in-eyelet before the words, `pushed`
+    off — as every result's. «← Каса» still stands over it while a reason
+    is owed; the focus, the line and `describedBy` are as before.
+  - At 360 «Касу закрито» is one line, «Перший підрахунок записано» at most
+    two, the eyelet beside the first.
+  - A close that opened by itself and owes a reason, while it is read: its
+    place is the stub's shape — the white card cut as the stub is, with no
+    tear; two figures' places at 32; a sticker's place that breathes (still
+    under reduced motion); the perforation; the slip's two rows, Картка
+    (with «звірте з чеком терміналу») and Переказ. The status words
+    «Завантажуємо закриття…» are as before; the place is never read.
+  - The reason field's top moves no more than 8 px when the stub comes.
+  - Decided here: the place draws the commonest close — a shortage and both
+    ways.
+  - Left as before (review): the 8 px holds for a seller's close of one
+    day. A line of days not closed, an owner's period details or a longer
+    card line come with the answer and are not kept a place.
+- **«Покупці»'s block sum 32** (sale P2-2; design direction §4, S19 п. 5):
+  - The block's owed is `money-l` 32/34 at any width, letter-spacing 0,
+    `--debt`, the arrow 20, as before; the count goes under it by the
+    block's wrap when it does not fit beside it.
+  - Its place while read carries «,00» and «грн» unseen, as «Каса»'s places
+    do, and stands the read sum's height (±1).
+  - «1 250 000,00 грн» at 360 sits within the block's sides, with no
+    sideways scroll.
+  - The sections' P0-4 deviations kept: the label «Магазину «Центр»
+    винні»; the sum under it.
+- **A customer's row named by where it goes** (sale P2-3, frame P2-6; spec
+  §6.8; revises the reading of 2026-11-01 that a row opening the card
+  still begins «Відкрити борг: …»):
+  - `CustomerRow` has `opens`: "card" or "debt". A row that opens the
+    customer's card is named «{ім’я}, {винні …}» with no verb; its meta
+    still describes it.
+  - «Покупці»'s rows with a phone, in one store and in several, and
+    «Сьогодні»'s search's rows (always with a phone) open the card and are
+    named so.
+  - An erased customer's row (its one debt) and the till's «Внесок» rows (a
+    debt, or «На який борг вносить?») keep «Відкрити борг: …».
+  - Decided here: `opens` is "debt" unless said — a new caller keeps the
+    old words until it says where its row goes.
+  - Nothing is seen differently.
+- **Found, not changed:** opening a customer's card from a row does not
+  move the focus to the card's title; the title takes it only back from a
+  written-off debt's result (`frontend/src/credits/Customer.tsx:165-172`).
+  The TZ's sale P2-3 said the focus was there as now; it was not. The
+  journeys check the title is shown.

@@ -412,7 +412,7 @@ test("under the title's line, the field; from two letters the open store's «Т�
     group(page, "Товар").getByRole("button", { name: "Лоран шоколад" }),
   ).toHaveAccessibleDescription("S 2 · M 2");
   await expect(group(page, "Покупці").getByRole("button")).toHaveAccessibleName(
-    "Відкрити борг: Ірина Лоранська, винні 1 500,00 грн",
+    "Ірина Лоранська, винні 1 500,00 грн",
   );
   // No date in the row: «Покупці»'s own say when (audit 2026-11-15, sale
   // P1-1).
@@ -735,9 +735,7 @@ test("a customer: «Покупці»'s row, their card with «← Сьогодн
   await expect(groups(page)).toHaveText(["Покупці"]);
   const rows = group(page, "Покупці").getByRole("button");
   await expect(rows).toHaveCount(1);
-  await expect(rows).toHaveAccessibleName(
-    "Відкрити борг: Дарина Коваль, винні 2 000,00 грн",
-  );
+  await expect(rows).toHaveAccessibleName("Дарина Коваль, винні 2 000,00 грн");
   await rows.click();
   await expect(
     page.getByRole("heading", { level: 1, name: "Дарина Коваль" }),
@@ -764,7 +762,7 @@ test("a customer: «Покупці»'s row, their card with «← Сьогодн
   await expect(group(page, "Покупці").getByRole("button")).toHaveCount(0);
   release();
   await expect(group(page, "Покупці").getByRole("button")).toHaveAccessibleName(
-    "Відкрити борг: Дарина Коваль, винні 1 500,00 грн",
+    "Дарина Коваль, винні 1 500,00 грн",
   );
 
   // From «Ще», «Покупці» is its list, «← Ще» over it; the search forgotten.
@@ -845,7 +843,7 @@ test("a customer owing nothing says how their debts closed: «Сплачено»
   await search(page, "олена");
   const pill = (name: string): Locator =>
     group(page, "Покупці")
-      .getByRole("button", { name: new RegExp(`^Відкрити борг: ${name},`) })
+      .getByRole("button", { name: new RegExp(`^${name},`) })
       .locator(".sticker");
   await expect(pill("Олена Сплачена")).toHaveText("Сплачено");
   await expect(pill("Олена Сплачена")).toHaveClass("sticker tone-paid");

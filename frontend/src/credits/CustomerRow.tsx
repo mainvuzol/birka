@@ -30,6 +30,12 @@ export function debtsCount(count: number): string {
  * In «Покупці», `dated`: when they last paid, since when they owe, or when
  * it closed, after the goods (spec S19; audit 2026-11-15, sale P1-1). Not at
  * the till's «Внесок», nor on «Сьогодні»'s search.
+ *
+ * `opens`, what a press opens, names the row to a screen reader: the
+ * customer's card is named by who and what they owe, as every list's row
+ * (spec §6.8); a debt, or the choice among a customer's debts, «Відкрити
+ * борг: …» (audit 2026-11-18, sale P2-3, frame P2-6). Said by the caller,
+ * never told from `dated`: a date and where a row goes are not one thing.
  */
 export function CustomerRow({
   customer,
@@ -37,6 +43,7 @@ export function CustomerRow({
   open,
   held = false,
   dated = false,
+  opens = "debt",
 }: {
   customer: Customer;
   /** This store: another's debt is named by its store. */
@@ -47,6 +54,9 @@ export function CustomerRow({
   held?: boolean;
   /** «Покупці»'s own row: its date said. */
   dated?: boolean;
+  /** What a press opens: the customer's card, or a debt (the till's, an
+   * erased customer's). */
+  opens?: "card" | "debt";
 }): JSX.Element {
   const meta = useId();
   const name = visible(customer.customer_name ?? erasedCustomer);
@@ -142,7 +152,11 @@ export function CustomerRow({
     <button
       type="button"
       className="sale-row debt-row"
-      aria-label={`Відкрити борг: ${name}, ${said}`}
+      aria-label={
+        opens === "card"
+          ? `${name}, ${said}`
+          : `Відкрити борг: ${name}, ${said}`
+      }
       aria-describedby={meta}
       disabled={held}
       onClick={open}

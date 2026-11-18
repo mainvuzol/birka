@@ -7,6 +7,7 @@ import {
   expectOwed,
   expectPlate,
   expectStub,
+  expectTotal,
   fromPaper,
   menu,
   openStore,
@@ -747,12 +748,10 @@ test("before a tap: nine things to see, nothing to type and nothing to press; a 
     }),
   ).toBeVisible();
   // At the till's scale (audit 2026-11-13, sale P2-1): what comes back in
-  // money-l, as the tray's «Разом»; the button that hands it back 56, its
-  // name two lines at most at 360, the longest way chosen.
-  const large = panel.locator(".pay-total .sum");
-  await expect(large).toHaveCSS("font-size", "32px");
-  await expect(large).toHaveCSS("line-height", "34px");
-  await expect(large).toHaveCSS("font-weight", "800");
+  // money-l, as the tray's «Разом», its word quiet (audit 2026-11-18, frame
+  // P2-5); the button that hands it back 56, its name two lines at most at
+  // 360, the longest way chosen.
+  await expectTotal(page, panel.locator(".pay-total"));
   await panel.getByRole("radio", { name: "На картку" }).check();
   const card = panel.getByRole("button", {
     name: "Повернути покупцю 6 000,00 грн на картку",
