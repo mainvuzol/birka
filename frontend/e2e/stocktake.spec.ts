@@ -1,9 +1,11 @@
 import {
   test,
   expect,
+  expectListMore,
   blockRow,
   gridCell,
   countTaps,
+  expectFieldLine,
   expectSheetCancel,
   feels,
   leaveNewModel,
@@ -1403,6 +1405,9 @@ test("inside Telegram a model of four sizes is one tag, its cells in the sizes' 
   await expect(unknown.getByRole("alert")).toHaveText(
     "Облік товару з невідомим розміром можна лише зменшити.",
   );
+  // A field's line under it, never a refusal's plate (audit 2026-11-18,
+  // frame P2-2).
+  await expectFieldLine(unknown.getByRole("alert"));
   await expect.poll(main).toMatchObject({ is_active: false });
   // Telegram's «Назад» closes the sheet only — and the last sheet's toast
   // does not come back with it (review, 2026-11-07).
@@ -1906,6 +1911,12 @@ test("a finished stocktake's «Розбіжності», a next page refused: th
   const shown = history.getByRole("list", { name: "Розбіжності" });
   await page.getByRole("button", { name: "+ ще 50", exact: true }).click();
   await expect(shown.getByRole("listitem")).toHaveCount(50);
+  // Its next page under the same list the look «+ ще N» had: one look
+  // (audit 2026-11-18, frame P2-4; review).
+  await expectListMore(
+    page.getByRole("button", { name: "Показати ще" }),
+    shown.locator(".."),
+  );
   await page.getByRole("button", { name: "Показати ще" }).click();
   const foot = history.locator(".read-failure");
   await expect(foot).toBeVisible();
@@ -2000,7 +2011,12 @@ test("«Попередні»: the last three and «+ ще N»; a finished one's 
     rows.nth(1).getByRole("button", { name: "Показати розбіжності" }),
   ).toHaveCount(0);
   // «+ ще N», as everywhere, gone once pressed; the cursor on the first
-  // that was folded (audit 2026-11-13, frame P2-3).
+  // that was folded (audit 2026-11-13, frame P2-3) — the list's width, one
+  // look (audit 2026-11-18, frame P2-4).
+  await expectListMore(
+    page.getByRole("button", { name: "+ ще 2", exact: true }),
+    history,
+  );
   await page.getByRole("button", { name: "+ ще 2", exact: true }).click();
   await expect(rows).toHaveCount(5);
   await expect(rows.nth(3)).toBeFocused();
@@ -2015,6 +2031,13 @@ test("«Попередні»: the last three and «+ ще N»; a finished one's 
   await expect(shown.getByRole("listitem")).toHaveCount(5);
   await expect(shown.getByRole("listitem").first()).toHaveText(
     "Модель 1 · M — −1 шт. (пораховано 1, Оля)",
+  );
+  // Its differences' «+ ще N» the same: their block's width — the list
+  // itself shrinks to its longest line in the row — never a quiet button
+  // of its words' (audit 2026-11-18, frame P2-4).
+  await expectListMore(
+    page.getByRole("button", { name: "+ ще 2", exact: true }),
+    shown.locator(".."),
   );
   await page.getByRole("button", { name: "+ ще 2", exact: true }).click();
   await expect(shown.getByRole("listitem")).toHaveCount(7);

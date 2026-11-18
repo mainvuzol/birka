@@ -1,6 +1,7 @@
 import {
   test,
   expect,
+  expectTextLink,
   basketDone,
   basketSheet,
   dockOnMenu,
@@ -567,6 +568,11 @@ test("a sale made by mistake is returned from its own receipt, by the usual rule
   await expect(page.getByText("Помилилися з товаром чи ціною?")).toBeVisible();
   // No «Продати | Повернути» on the receipt (navigation task list, P0-1).
   await expect(tillWays(page)).toHaveCount(0);
+  // A link of its sentence, never a button's edge (spec S11 №9; audit
+  // 2026-11-18, frame P2-1 (б)).
+  await expectTextLink(
+    page.getByRole("button", { name: "Оформити повернення" }),
+  );
   // One tap, and the return of this very sale is open: no search.
   await page.getByRole("button", { name: "Оформити повернення" }).click();
   await expect(page.getByRole("heading", { name: "Повернення" })).toBeVisible();

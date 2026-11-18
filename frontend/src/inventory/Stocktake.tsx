@@ -707,7 +707,7 @@ function History({
       {!all && finished.length > HISTORY && (
         <button
           type="button"
-          className="today-more"
+          className="list-more"
           onClick={() => {
             setAll(true);
           }}
@@ -815,7 +815,7 @@ function Differences({
       {folded && total > FOLDED ? (
         <button
           type="button"
-          className="quiet"
+          className="list-more"
           onClick={() => {
             setFolded(false);
           }}
@@ -833,9 +833,11 @@ function Differences({
         />
       ) : (
         pages.hasNextPage && (
+          // Its next page under the same list, as «+ ще N» stood: one look,
+          // the list's width (audit 2026-11-18, frame P2-4; review).
           <button
             type="button"
-            className="quiet"
+            className="list-more"
             disabled={pages.isFetching || readAgainFailed}
             onClick={() => {
               void pages.fetchNextPage();
@@ -1843,7 +1845,7 @@ function CountSheet({
         describedBy={lineId}
       />
       {invalid !== "" ? (
-        <p id={lineId} role="alert">
+        <p id={lineId} className="field-wrong" role="alert">
           {invalid}
         </p>
       ) : (

@@ -3,6 +3,7 @@ import {
   expect,
   addModel,
   countTaps,
+  expectFieldLine,
   gridCell,
   menu,
   more,
@@ -874,6 +875,11 @@ test("a reserved balance's cell is held, and a size not known is only reduced", 
   await expect(
     page.getByText("Облік товару з невідомим розміром можна лише зменшити."),
   ).toBeVisible();
+  // A field's line under it, never a refusal's plate (audit 2026-11-18,
+  // frame P2-2).
+  await expectFieldLine(
+    page.getByText("Облік товару з невідомим розміром можна лише зменшити."),
+  );
   await expect(record(page, "+2")).toBeDisabled();
   // Only taken away: the way is not asked, the sign says it.
   await reason(page, "Помилка обліку").click();

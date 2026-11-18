@@ -10,6 +10,10 @@ import {
   tillWays,
   expectHeldLook,
   expectWarningPlate,
+  expectTextLink,
+  expectSignedLink,
+  expectFieldLine,
+  chevronTurn,
 } from "./fixtures";
 import type { Page } from "@playwright/test";
 import { createHmac } from "node:crypto";
@@ -1679,4 +1683,187 @@ for (const scheme of ["light", "dark"] as const)
     await page
       .locator("#plate-probe")
       .screenshot({ path: `test-results/warning-plates-${scheme}.png` });
+  });
+
+/** Every text button, every field's line and every «+ ще N» under a list,
+ * under the app's own styles, as each is drawn wherever it stands (audit
+ * 2026-11-18, frame P2-1, P2-2, P2-4). */
+const hands = `
+  <button type="button" class="text-button" data-link="text">Спробувати ще раз</button>
+  <button type="button" class="sheet-cancel" data-link="cancel">Скасувати</button>
+  <div class="store-line">
+    <p class="t-meta">Центр · Оля</p>
+    <button type="button" class="quiet" data-link="line">Змінити магазин</button>
+  </div>
+  <button type="button" class="quiet report-days" data-link="days">Інші дні</button>
+  <p class="hint return-offer">Помилилися з товаром чи ціною?
+    <button type="button" class="text-button" data-link="offer">Оформити повернення</button>
+  </p>
+  <p class="hint elsewhere-offer"><span>Купили в іншому магазині мережі?</span>
+    <button type="button" class="text-button" data-link="there">Шукати там</button>
+  </p>
+  <section class="notice banner banner-back" aria-label="Сервер знову відповідає">
+    <span class="banner-glyph"></span>
+    <div class="banner-body">
+      <p>Сервер знову відповідає: продажі з паперу можна вносити.</p>
+      <div class="actions">
+        <button type="button" class="text-button" data-link="paper">Вношу продаж з паперу</button>
+        <button type="button" class="text-button later" data-later="later">Пізніше</button>
+      </div>
+    </div>
+  </section>
+  <p class="debt-goods" data-goods="line">Лоран шоколад · M
+    <button type="button" class="more-goods" data-goods="more">+ ще 2</button>
+  </p>
+  <p class="hint"><a href="tel:+380501234567" data-goods="phone">+380 50 123 45 67</a></p>
+  <div class="screen-title wraps">
+    <h1>Постачальники</h1>
+    <button type="button" class="head-add" data-sign="add">+ Новий</button>
+  </div>
+  <div class="screen-header">
+    <button type="button" class="quiet back" data-sign="back">← Ще</button>
+  </div>
+  <div class="search-field">
+    <input type="search" aria-label="Пошук" />
+    <button type="button" class="search-clear" data-sign="clear">×</button>
+  </div>
+  <button type="button" class="quiet cash-first" data-sign="first">ⓘ Спершу запишіть видане з каси ›</button>
+  <p class="field-wrong" role="alert" data-field="wrong">Оберіть період від одного дня до року.</p>
+  <p class="pay-over" role="alert" data-field="over">Це більше, ніж винні: 2 000,00 грн.</p>
+  <p role="alert" data-field="plate">Список не збережено.</p>
+  <ul class="history" data-list="list"><li>Один</li><li>Два</li></ul>
+  <button type="button" class="list-more" data-list="more">+ ще 3</button>
+  <div class="pick-field">
+    <button type="button" class="pick-value" aria-expanded="true" data-pick="open">
+      <span class="pick-shown">Постачальник 1</span>
+      <svg class="icon fold-chevron" viewBox="0 0 24 24" width="16" height="16"></svg>
+    </button>
+  </div>
+`;
+
+for (const scheme of ["light", "dark"] as const)
+  test(`in the ${scheme} theme a text button is one look — the link's colour, underlined 1 at 3 in its own colour, on nothing, «Пізніше» in pencil, a banner's two side by side; one with a sign never underlined; taking no tap, its words and line in pencil; a field said wrong is a line under it, its circle 16 and no plate, a refusal still the plate; «+ ще N» under a list the list's width, 44, its edge; the in-place picker's chevron in pencil, turned a quarter while open (audit 2026-11-18, frame P2-1, P2-2, P2-4)`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ colorScheme: scheme });
+    await page.setViewportSize({ width: 360, height: 844 });
+    await page.goto(
+      `/#${new URLSearchParams({ tgWebAppData: initData(fixture.network_owner_telegram_user_id) }).toString()}`,
+    );
+    await openStore(page, "Центр CENTRE");
+    await page.evaluate((html) => {
+      // Over the screen, so nothing read under it moves it.
+      const probe = document.createElement("section");
+      probe.id = "hand-probe";
+      probe.style.cssText =
+        "position:fixed;inset:0;z-index:1000;overflow:auto;padding:16px;background:var(--paper)";
+      probe.innerHTML = html;
+      document.body.append(probe);
+    }, hands);
+    const probe = page.locator("#hand-probe");
+    // P2-1: one look, in both themes, at 4.5:1 to its ground.
+    for (const kind of [
+      "text",
+      "cancel",
+      "line",
+      "days",
+      "offer",
+      "there",
+      "paper",
+    ]) {
+      const button = probe.locator(`[data-link="${kind}"]`);
+      await expectTextLink(button);
+      expect(
+        ratio(...(await wordsAndGround(button))),
+        `${kind}: its words`,
+      ).toBeGreaterThanOrEqual(4.5);
+    }
+    const later = probe.locator('[data-later="later"]');
+    await expectTextLink(later, { pencil: true });
+    // «+ ще N» in a line of goods keeps the line's face; a phone its own.
+    const goods = probe.locator('[data-goods="more"]');
+    await expectTextLink(goods, { size: null });
+    await expect(goods).toHaveCSS(
+      "font-size",
+      await probe
+        .locator('[data-goods="line"]')
+        .evaluate((node) => getComputedStyle(node).fontSize),
+    );
+    await expectTextLink(probe.locator('[data-goods="phone"]'), {
+      size: null,
+    });
+    // A banner's two side by side at their words' width, at 360 too.
+    const paper = probe.locator('[data-link="paper"]');
+    const [one, two, body] = await Promise.all([
+      paper.boundingBox(),
+      later.boundingBox(),
+      probe.locator(".banner-body").boundingBox(),
+    ]);
+    if (!one || !two || !body) throw new Error("the banner not laid out");
+    expect(Math.abs(one.y - two.y)).toBeLessThanOrEqual(1);
+    expect(two.x).toBeGreaterThan(one.x + one.width);
+    expect(two.x + two.width).toBeLessThanOrEqual(body.x + body.width + 1);
+    // With a sign, never underlined.
+    for (const kind of ["add", "back", "clear", "first"])
+      await expectSignedLink(probe.locator(`[data-sign="${kind}"]`));
+    // Taking no tap: its words and its line in pencil, nothing round them.
+    for (const kind of ["text", "cancel", "line", "paper"]) {
+      const button = probe.locator(`[data-link="${kind}"]`);
+      await button.evaluate((node) => {
+        (node as HTMLButtonElement).disabled = true;
+      });
+      await expectHeldLook(button, "text");
+      await expect(button).toHaveCSS("text-decoration-line", "underline");
+      await expect(button).toHaveCSS(
+        "text-decoration-color",
+        await token(page, "--pencil"),
+      );
+    }
+    // P2-2: a field's line, never the plate; a refusal still the plate.
+    await expectFieldLine(probe.locator('[data-field="wrong"]'));
+    await expectFieldLine(probe.locator('[data-field="over"]'));
+    const plate = probe.locator('[data-field="plate"]');
+    const danger = await page.evaluate(() => {
+      const each = document.createElement("span");
+      each.style.backgroundColor = "var(--danger-bg)";
+      document.body.append(each);
+      const fill = getComputedStyle(each).backgroundColor;
+      each.remove();
+      return fill;
+    });
+    await expect(plate).toHaveCSS("background-color", danger);
+    await expect(plate).toHaveCSS("padding", "12px 12px 12px 42px");
+    expect(
+      await plate.evaluate((node) => getComputedStyle(node, "::before").width),
+    ).toBe("20px");
+    // P2-4: «+ ще N» under a list, the list's width, 44 high, its edge, ink
+    // 15/600 on nothing.
+    const listMore = probe.locator('[data-list="more"]');
+    const [list, more] = await Promise.all([
+      probe.locator('[data-list="list"]').boundingBox(),
+      listMore.boundingBox(),
+    ]);
+    if (!list || !more) throw new Error("the list not laid out");
+    expect(Math.abs(more.width - list.width)).toBeLessThanOrEqual(1);
+    expect(more.height).toBeGreaterThanOrEqual(44);
+    await expect(listMore).toHaveCSS("border-top-width", "1px");
+    await expect(listMore).toHaveCSS(
+      "border-top-color",
+      await token(page, "--edge"),
+    );
+    await expect(listMore).toHaveCSS("color", await token(page, "--ink"));
+    await expect(listMore).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+    await expect(listMore).toHaveCSS("font-size", "15px");
+    await expect(listMore).toHaveCSS("font-weight", "600");
+    // P2-4 (б): the in-place picker's chevron, a fold's, in both themes.
+    const pick = probe.locator('[data-pick="open"]');
+    await expect(pick.locator("svg")).toHaveCSS(
+      "color",
+      await token(page, "--pencil"),
+    );
+    await expect.poll(() => chevronTurn(pick)).toBe(90);
+    await probe.evaluate((node) => {
+      node.scrollTop = 0;
+    });
+    await probe.screenshot({ path: `test-results/one-hand-${scheme}.png` });
   });

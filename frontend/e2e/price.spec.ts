@@ -1,6 +1,7 @@
 import {
   test,
   expect,
+  expectFieldLine,
   basketDone,
   basketSheet,
   countTaps,
@@ -201,6 +202,9 @@ test("a store's price set on a model's detail is what its till suggests", async 
   // A sum of nothing is said so as it is typed, and saves nothing.
   await sheet.getByLabel("Нова ціна, грн").fill("0");
   await expect(sheet.getByRole("alert")).toContainText("більше нуля");
+  // A field's line under it, never a refusal's plate (audit 2026-11-18,
+  // frame P2-2).
+  await expectFieldLine(sheet.getByRole("alert"));
   await expect(save(sheet)).toBeDisabled();
   // While it is saved, the sheet stays, though asked to close: its answer
   // is the sheet's to say (review, 2026-11-01).

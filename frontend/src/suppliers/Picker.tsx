@@ -115,10 +115,14 @@ function PickField({
         <span id={shownId} className="pick-shown">
           {shown}
         </span>
-        <Icon
-          name={inPlace && open ? "chevron-up" : "chevron-right"}
-          size={20}
-        />
+        {/* In place, what opens in place says so: the set's chevron 16 in
+            pencil, turned a quarter while open; in a sheet, the way's 20
+            (audit 2026-11-18, frame P2-4 (б)). */}
+        {inPlace ? (
+          <Icon name="chevron-right" size={16} className="fold-chevron" />
+        ) : (
+          <Icon name="chevron-right" size={20} />
+        )}
       </button>
     </div>
   );

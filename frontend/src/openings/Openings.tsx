@@ -1794,7 +1794,7 @@ function ListView({
               lines.hasNextPage && (
                 <button
                   type="button"
-                  className="quiet today-more"
+                  className="list-more"
                   disabled={lines.isFetching || linesReadAgainFailed}
                   onClick={() => {
                     void lines.fetchNextPage();

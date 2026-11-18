@@ -4,6 +4,7 @@ import {
   countTaps,
   expectStub,
   expectSheetCancel,
+  expectTextLink,
   menu,
   more,
   openStore,
@@ -1421,6 +1422,8 @@ test("no store to choose: one blank tag, the owner the one to ask, never an admi
   // after stage 2, frame P1-1).
   const again = tag.getByRole("button", { name: "Спробувати ще раз" });
   await expect(again).toHaveClass(/\btext-button\b/);
+  // The link underlined (audit 2026-11-18, frame P2-1).
+  await expectTextLink(again);
   await expect(page.locator("button.primary")).toHaveCount(0);
   // Added to a store meanwhile: read again, and in.
   none = false;

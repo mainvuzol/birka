@@ -1061,8 +1061,12 @@ export function Sale({
               Сервер знову відповідає: продажі з паперу можна вносити. Внесіть їх
               до закриття каси.
             </p>
+            {/* Its two text buttons, the link and «Пізніше» in pencil (spec
+                S12 «Recovered», §6.23; audit 2026-11-18, frame P2-1 (б)). */}
             <div className="actions">
               <button
+                type="button"
+                className="text-button"
                 disabled={blocked || working}
                 onClick={() => {
                   // The paper of an outage the phone saw: said so, and still
@@ -1072,7 +1076,11 @@ export function Sale({
               >
                 Вношу продаж з паперу
               </button>
-              <button className="quiet" onClick={backNoted}>
+              <button
+                type="button"
+                className="text-button later"
+                onClick={backNoted}
+              >
                 Пізніше
               </button>
             </div>
@@ -2064,9 +2072,11 @@ function Receipt({
         // (I8; redesign P1-2).
         <p className="hint return-offer">
           Помилилися з товаром чи ціною?{" "}
+          {/* A link of its sentence, never a button's edge (spec S11 №9;
+              audit 2026-11-18, frame P2-1 (б)). */}
           <button
             type="button"
-            className="quiet"
+            className="text-button"
             onClick={() => {
               returnSale(receipt);
             }}

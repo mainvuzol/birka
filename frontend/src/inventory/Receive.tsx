@@ -871,7 +871,7 @@ export function Receive({
               />
             </label>
             {costWrong && (
-              <p role="alert">
+              <p className="field-wrong" role="alert">
                 Закупівельну ціну вкажіть у гривнях, до копійок, наприклад
                 1850,50.
               </p>

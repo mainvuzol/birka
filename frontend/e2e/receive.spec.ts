@@ -1,6 +1,7 @@
 import {
   test,
   expect,
+  expectFieldLine,
   expectNoticeLead,
   addModel,
   feels as feelsAs,
@@ -301,6 +302,9 @@ test("a delivery carries what the shop paid, and shows back what was stored", as
   await expect(sheet.getByRole("alert")).toHaveText(
     "Закупівельну ціну вкажіть у гривнях, до копійок, наприклад 1850,50.",
   );
+  // A field's line under it, never a refusal's plate (audit 2026-11-18,
+  // frame P2-2).
+  await expectFieldLine(sheet.getByRole("alert"));
   await page.locator(".sheet-scrim").click({ position: { x: 10, y: 10 } });
   await expect(sheet).toHaveCount(0);
   await expect(

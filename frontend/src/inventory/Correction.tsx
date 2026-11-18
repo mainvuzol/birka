@@ -299,7 +299,7 @@ export function Correction({
         />
       )}
       {invalid && (
-        <p role="alert" id={invalidId}>
+        <p className="field-wrong" role="alert" id={invalidId}>
           {invalid}
         </p>
       )}

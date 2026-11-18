@@ -1,6 +1,7 @@
 import {
   test,
   expect,
+  expectTextLink,
   chevronTurn,
   dockOnMenu,
   expectCaption,
@@ -1462,11 +1463,13 @@ test("«Клієнт забрав»: its sheet of five ways in two rows, each th
   await expect(dock.getByRole("button")).toHaveText("До замовлень");
   await expect(dock.getByRole("button")).toHaveClass(/\bprimary\b/);
   await expect(page.locator("main button.primary:visible")).toHaveCount(1);
-  await expect(
+  // A link of its sentence, as the till's receipt's (audit 2026-11-18,
+  // frame P2-1 (б)).
+  await expectTextLink(
     page
       .locator(".order-collected > .return-offer")
       .getByRole("button", { name: "Оформити повернення" }),
-  ).toHaveClass("quiet");
+  );
   await page.screenshot({ path: "test-results/order-collected-card.png" });
   // «← До замовлень» over the title, and the order seen again: a line.
   await page
