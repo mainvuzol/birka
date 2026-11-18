@@ -621,12 +621,14 @@ function Detail({
           моделлю, що лишилась.
         </p>
       )}
+      {/* Its sizes as the cells say them: the system is the database's
+          (ALPHA, NUMERIC_EU) and tells no size from another — an
+          organization has one size per spelling (owner decision, 2026-10-03;
+          audit 2026-11-18, goods P1-1). */}
       {decision.creation && (
         <p>
           Збережений товар: {visible(decision.creation.display_name)}. Розміри:{" "}
-          {decision.creation.sizes
-            .map((s) => `${visible(s.code)} (${s.system})`)
-            .join(", ")}
+          {decision.creation.sizes.map((s) => visible(s.code)).join(", ")}
         </p>
       )}
       {/* One size, one spelling (owner decision, 2026-10-03): whoever typed

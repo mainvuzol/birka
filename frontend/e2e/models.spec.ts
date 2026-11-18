@@ -939,10 +939,9 @@ test("creating a product with a Latin letter in a known word is warned once", as
   await expect(sheet.getByText("У каталозі вже є схожа назва")).toHaveCount(0);
   await addModel(sheet).click();
   await expect(
-    page.getByText(
-      `Збережений товар: ${name} ${colour.right}. Розміри: S (ALPHA)`,
-      { exact: true },
-    ),
+    page.getByText(`Збережений товар: ${name} ${colour.right}. Розміри: S`, {
+      exact: true,
+    }),
   ).toBeVisible();
 });
 
@@ -1207,10 +1206,9 @@ test("creating a product keeps a similar word once the person says it is another
     .getByRole("button", { name: "Це інша назва — створити як є" })
     .click();
   await expect(
-    page.getByText(
-      `Збережений товар: ${name} ${colour.typo}. Розміри: S (ALPHA)`,
-      { exact: true },
-    ),
+    page.getByText(`Збережений товар: ${name} ${colour.typo}. Розміри: S`, {
+      exact: true,
+    }),
   ).toBeVisible();
 });
 
@@ -1361,10 +1359,9 @@ test("words changed after a similar-name warning are checked, not confirmed", as
   // The words warned about may be confirmed as another.
   await another.click();
   await expect(
-    page.getByText(
-      `Збережений товар: ${name} ${second.typo}. Розміри: S (ALPHA)`,
-      { exact: true },
-    ),
+    page.getByText(`Збережений товар: ${name} ${second.typo}. Розміри: S`, {
+      exact: true,
+    }),
   ).toBeVisible();
   expect(sent[2]).toMatchObject({
     similar_confirmed: true,
@@ -1816,10 +1813,9 @@ test("a catalogue operation refused for a reason it does not name says it was no
   );
   await addModel(sheet).click();
   await expect(
-    page.getByText(
-      `Збережений товар: ${name} ${colour.typo}. Розміри: S (ALPHA)`,
-      { exact: true },
-    ),
+    page.getByText(`Збережений товар: ${name} ${colour.typo}. Розміри: S`, {
+      exact: true,
+    }),
   ).toBeVisible();
 });
 
@@ -1871,10 +1867,9 @@ test("a catalogue operation the server failed stays kept, said unconfirmed — n
     .getByRole("button", { name: "Перевірити результат операції" })
     .click();
   await expect(
-    page.getByText(
-      `Збережений товар: ${name} ${colour.typo}. Розміри: S (ALPHA)`,
-      { exact: true },
-    ),
+    page.getByText(`Збережений товар: ${name} ${colour.typo}. Розміри: S`, {
+      exact: true,
+    }),
   ).toBeVisible();
   expect(calls).toBe(2);
 });

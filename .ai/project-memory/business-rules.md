@@ -10796,3 +10796,35 @@ banner's words.
     at the full stop.
   - One store alone (the whole list) is as before: the blank tag. Its «none
     paid» and «none written off» stay the short pencil line.
+
+## Chosen in chat — 2026-11-18 (audit 2026-11-18, batch 1: a product created says its sizes as the cells do; «Продажу не було» the sale's torn stub under «Продаж»; goods P1-1, frame P2-3)
+
+Picked by «P1 + batch-9 miss» after the audit 2026-11-18. Nothing recorded,
+sent or counted changes. No request, check, journal or right changes.
+
+- **A product created says its sizes as the cells do** (goods P1-1; design
+  direction §7, the shop's words):
+  - On a proposal a new model settled, «Збережений товар: {назва}.
+    Розміри: …» names its sizes by their spelling only, comma by comma:
+    «Розміри: M, L». The size system's code from the database (ALPHA,
+    NUMERIC_EU, UNSPECIFIED) is never shown.
+  - Why it may go: an organization has one size per spelling whatever its
+    system (owner decision, 2026-10-03; ADR-0009, `uq_size_org_spelling`).
+    A creation drops a spelling given twice, and «UNKNOWN» cannot be named
+    there, so no two sizes of one creation are told apart by their system
+    alone (checked, Д1).
+  - The system still orders the cells and is still sent as chosen in «Нова
+    модель»; «Набрано «м» — це розмір «M».» stays.
+- **«Продажу не було» the sale's torn stub** (frame P2-3; spec S12, the
+  recovered state; the audit 2026-11-15 batch 9's rule):
+  - A kept empty-shelf record, checked and found recorded with nothing
+    sold, is said by the same torn stub as «Продаж записано один раз»:
+    under «Продаж» and its line on the till; over any other screen a
+    banner over its title, as before.
+  - Its words, «Зрозуміло» and what it does are as before; nothing is sent
+    again.
+  - Decided here: it tears where it first stands, as the sold one does, and
+    keeps still when drawn again elsewhere on its tab.
+  - Left as before (review): a check found «sold» and another found
+    «nothing sold», one after the other, stand as two stubs in the app's
+    order; this was a stub and a banner before.
