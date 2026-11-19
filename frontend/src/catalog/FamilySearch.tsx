@@ -193,13 +193,13 @@ export function FamilySearch({
               />
             )}
             {found.length === 0 && (
-              <div className="catalog-none">
-                <p role="status">
-                  {asked === ""
-                    ? "Моделей не знайдено."
-                    : `Нічого не знайшли за «${visible(asked)}»`}
-                </p>
-              </div>
+              // A choice in a sheet, so a line: `meta` in pencil, as the
+              // suppliers' sheet's (audit 2026-11-18, goods P2-4).
+              <p className="t-meta nothing-yet catalog-nothing" role="status">
+                {asked === ""
+                  ? "Моделей не знайдено."
+                  : `Нічого не знайшли за «${visible(asked)}»`}
+              </p>
             )}
             {found.length > 0 && (
               <div

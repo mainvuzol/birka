@@ -651,8 +651,13 @@ test("a receipt's result keeps the form's «←» and Telegram's «Назад»:
   await expect.poll(() => lastBack(page)).toBe(true);
   const stock = await holdReads(page, "catalog/stock-options");
   await pressBack(page);
-  // Never the count before the delivery: the grid's place, not «1».
-  await expect(page.locator(".placeholder .model-tag")).toHaveCount(1);
+  // Never the count before the delivery: the grid's place, not «1» — the
+  // model's hero tag in grey, never the till's tile (audit 2026-11-18,
+  // goods P2-3).
+  await expect(
+    page.locator(".model-screen.placeholder .tag-hero .size-grid"),
+  ).toHaveCount(1);
+  await expect(page.locator(".model-tag")).toHaveCount(0);
   await expect(page.getByRole("heading", { level: 1, name })).toHaveCount(0);
   stock();
   await expect(page.getByRole("heading", { level: 1, name })).toBeVisible();

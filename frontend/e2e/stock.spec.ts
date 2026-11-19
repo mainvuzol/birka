@@ -8,6 +8,7 @@ import {
   more,
   openStore,
   section,
+  expectGoneWarehouse,
 } from "./fixtures";
 import type { Locator, Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
@@ -626,9 +627,7 @@ test("revoked warehouse clears its visible stock and selection", async ({
     });
   });
   await comeBack(page);
-  await expect(
-    page.getByText("Обраний склад більше не доступний. Оберіть інший склад."),
-  ).toBeVisible();
+  await expectGoneWarehouse(page);
   await expect(chip(page, "Основний склад")).toHaveCount(0);
   await expect(
     page

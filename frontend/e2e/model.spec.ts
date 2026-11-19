@@ -824,3 +824,100 @@ test("«Прийшов товар» opens receiving with the model chosen, and �
     page.getByRole("button", { name: "Назад до «Ще»" }),
   ).toBeVisible();
 });
+
+test("a model read slowly waits as its hero tag — the eyelet, the name's line, ⋯'s and «Змінити ціну»'s places, the price's line, the grid's sizes, one warehouse and «Можна продати» in grey — never the till's tile, heard only; the tag's top where the answer's stands, in both themes at 360 (audit 2026-11-18, goods P2-3)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  await shelves(page, {
+    locations: [place(MAIN, "Основний"), place(OWN, "Свій")],
+    selling: [[row(MAIN, "M", 3, 1), row(OWN, "L", 1)]],
+  });
+  await enter(page);
+  await toTill(page);
+  const answered = page.waitForResponse(
+    (response) =>
+      response.url().includes("/catalog/stock-options?") &&
+      new URL(response.url()).searchParams.get("query") === "кокон",
+  );
+  await page.getByRole("searchbox", { name: "Знайти модель" }).fill("кокон");
+  await answered;
+  // The detail's own reads held until the wait is looked at.
+  let release = (): void => undefined;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let held = 0;
+  await page.route("**/api/v1/catalog/stock-options?**", async (route) => {
+    held += 1;
+    await gate;
+    await route.fallback();
+  });
+  await page
+    .getByRole("group", { name: MODEL, exact: true })
+    .locator("button.model-open")
+    .first()
+    .click();
+  await expect.poll(() => held).toBeGreaterThan(0);
+  const grey = page.locator(".model-screen.placeholder");
+  await expect(grey.locator(".tag-hero .hero-eyelet")).toBeVisible();
+  // Never the till's tile and its cells.
+  await expect(page.locator(".model-tag")).toHaveCount(0);
+  await expect(page.locator(".size-cell")).toHaveCount(0);
+  const title = grey.locator(".model-hero-head > .skeleton-title");
+  expect(Math.round((await title.boundingBox())?.height ?? 0)).toBe(42);
+  // ⋯ and «Змінити ціну» where they will stand, for whoever has them.
+  await expect(grey.locator(".model-hero-head > .debt-more")).toHaveCount(1);
+  await expect(
+    grey.locator(".model-price-row > p .skeleton-line"),
+  ).toBeVisible();
+  const change = grey.locator(".model-price-row > .skeleton-change");
+  expect(Math.round((await change.boundingBox())?.height ?? 0)).toBe(44);
+  // The button's own corner, never the grey's (review).
+  await expect(change).toHaveCSS("border-top-left-radius", "8px");
+  // The grid's rows every answer has: the sizes and «Разом», one
+  // warehouse, «Можна продати» — each a grey line of its words.
+  const table = grey.locator("table.size-grid");
+  await expect(table.locator("thead th")).toHaveCount(4);
+  await expect(table.locator("tbody tr")).toHaveCount(1);
+  await expect(table.locator("tfoot tr.grid-free")).toHaveCount(1);
+  await expect(
+    table.locator("th .skeleton-line, td .skeleton-line"),
+  ).toHaveCount(14);
+  // Heard, never read on the screen; nothing of the grey for a reader.
+  const said = page.getByText("Завантажуємо залишки моделі…", { exact: true });
+  await expect(said).toHaveAttribute("role", "status");
+  await expect(said).toHaveClass(/\bvisually-hidden\b/);
+  await expect(grey).toHaveAttribute("aria-hidden", "true");
+  await expect(grid(page)).toHaveCount(0);
+  for (const scheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth > innerWidth,
+      ),
+    ).toBe(false);
+    await page.screenshot({
+      path: `test-results/model-wait-${scheme}.png`,
+      fullPage: true,
+    });
+  }
+  await page.emulateMedia({ colorScheme: "light" });
+  const waited = await grey.locator(".tag-hero").boundingBox();
+  release();
+  await expect(
+    page.getByRole("heading", { level: 1, name: MODEL }),
+  ).toBeVisible();
+  await expect(grey).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Дії з моделлю" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Змінити ціну" }),
+  ).toBeVisible();
+  const came = await page.locator(".model-screen .tag-hero").boundingBox();
+  if (!waited || !came) throw new Error("not laid out");
+  expect(Math.abs(came.y - waited.y)).toBeLessThanOrEqual(1);
+  expect(Math.abs(came.x - waited.x)).toBeLessThanOrEqual(1);
+  expect(Math.abs(came.width - waited.width)).toBeLessThanOrEqual(1);
+});

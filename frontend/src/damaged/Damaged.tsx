@@ -868,7 +868,9 @@ function UnitSheet({
                       aria-pressed={location.id === place}
                       disabled={sending}
                       onClick={() => {
-                        buzz("selection");
+                        // Felt only as the choice changes (spec §4.4; audit
+                        // 2026-11-18, goods P2-5 (в)).
+                        if (location.id !== place) buzz("selection");
                         setPlace(location.id);
                       }}
                     >

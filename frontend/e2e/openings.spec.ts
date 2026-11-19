@@ -19,6 +19,7 @@ import {
   recordReceipt,
   section,
   sizeCell,
+  nothingFound,
 } from "./fixtures";
 import type { Locator, Page } from "@playwright/test";
 import { createHmac, randomBytes, randomUUID } from "node:crypto";
@@ -536,7 +537,13 @@ test("inside Telegram a line's answer is its MainButton, naming what is recorded
   ).toBeVisible();
   // Lines wait: no approval yet.
   await expect.poll(main).toMatchObject({ is_visible: false });
+  // A filter chosen is felt; the one shown, chosen again, closes the sheet
+  // with nothing felt (audit 2026-11-18, goods P2-5 (в)).
+  const chosen = (await felt()).length;
   await showLines(page, "Усі");
+  expect((await felt()).slice(chosen)).toEqual([{ type: "selection_change" }]);
+  await showLines(page, "Усі");
+  expect((await felt()).slice(chosen)).toEqual([{ type: "selection_change" }]);
 
   // «Пропустити»: the next line, nothing sent.
   let editor = await answer(page, 1);
@@ -1555,10 +1562,10 @@ test("a line's model the catalogue has not is added from its empty search, in th
   const editor = await answer(page, 1);
   await expect(editor.getByLabel("Як у списку: 2 шт.")).toBeChecked();
   await editor.getByLabel("Пошук у каталозі").fill(coat);
-  await expect(
-    editor.getByText(`Нічого не знайшли за «${coat}»`),
-  ).toBeVisible();
-  await editor
+  // The blank tag, the way to add it its one button (audit 2026-11-18,
+  // goods P2-4).
+  const none = await nothingFound(editor, `Нічого не знайшли за «${coat}»`);
+  await none
     .getByRole("button", { name: `Додати нову модель «${coat}»` })
     .click();
   const sheet = await newModelSheet(page);

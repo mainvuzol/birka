@@ -672,6 +672,9 @@ export function NewModel({
                         aria-pressed={typedSystem === one.system}
                         disabled={blocked}
                         onClick={() => {
+                          // A choice changed, felt (spec §4.4; audit
+                          // 2026-11-18, goods P2-5 (в)).
+                          if (typedSystem !== one.system) buzz("selection");
                           setTypedSystem(one.system);
                         }}
                       >

@@ -16,6 +16,7 @@ export function Empty({
   className,
   heading,
   hidden,
+  status = false,
 }: {
   /** The one line. */
   title: ReactNode;
@@ -30,6 +31,9 @@ export function Empty({
   heading?: { id: string; ref?: Ref<HTMLHeadingElement> } | undefined;
   /** Its section kept, not shown — while a search answers instead. */
   hidden?: boolean | undefined;
+  /** The line heard as it is drawn — a search's answer (audit 2026-11-18,
+   * goods P2-4). */
+  status?: boolean;
 }): JSX.Element {
   const shared =
     className === undefined ? "orders-empty" : `orders-empty ${className}`;
@@ -37,7 +41,9 @@ export function Empty({
     <>
       <Icon name="mark-lg" className="orders-empty-mark" />
       {heading === undefined ? (
-        <p className="t-row">{title}</p>
+        <p className="t-row" role={status ? "status" : undefined}>
+          {title}
+        </p>
       ) : (
         <h2 ref={heading.ref} id={heading.id} className="t-row" tabIndex={-1}>
           {title}

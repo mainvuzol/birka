@@ -10,7 +10,7 @@ export interface WaitRow {
 }
 
 /** A word's place: the word unseen, a grey line its width. */
-function Grey({ words }: { words: string }): JSX.Element {
+export function Grey({ words }: { words: string }): JSX.Element {
   return (
     <span className="skeleton-line">
       <span>{words}</span>

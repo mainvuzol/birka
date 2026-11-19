@@ -857,15 +857,17 @@ nav:not(.tab-bar, .more-list) {
 .list-block .catalog-row[aria-checked="true"]:active {
   background-color: var(--chosen);
 }
-.catalog-none {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
-  margin: 8px 0;
+/* Found nothing: on a screen the shared empty place, its long typed word
+   wrapped; in a sheet a line of `meta` (audit 2026-11-18, goods P2-4). */
+.catalog-empty p,
+.catalog-empty button {
+  overflow-wrap: anywhere;
 }
-.catalog-none p {
-  margin: 0;
+.catalog-empty button {
+  max-width: 100%;
+}
+.catalog-nothing {
+  margin: 8px 0;
   overflow-wrap: anywhere;
 }
 /* «Нова модель»: one column, the fields a touch high; the candidates rows
@@ -1034,17 +1036,10 @@ nav:not(.tab-bar, .more-list) {
   gap: 8px;
   width: 100%;
 }
-.catalog-name-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  overflow-wrap: anywhere;
-}
-.catalog-name-row span {
-  flex: 1;
-  min-width: 0;
+/* The models it may name, a list's rows on its white block the fold's
+   width (audit 2026-11-18, goods P2-5 (б)). */
+.catalog-name-fold > .list-block {
+  align-self: stretch;
 }
 
 /* A correction's reasons sit two to a row, so all five fit in one glance on a
@@ -2932,6 +2927,15 @@ section.credits.customer-card {
 .model-hero-head > .skeleton-title {
   flex: 1;
   height: 42px;
+}
+/* «Змінити ціну»'s place on a model's hero while it is read (audit
+   2026-11-18, goods P2-3): the button's height and corner — over
+   `.skeleton`'s own corner, drawn later (review). */
+.model-price-row > .skeleton-change {
+  flex-shrink: 0;
+  width: 8em;
+  height: 44px;
+  border-radius: var(--r-l);
 }
 /* «Борги»'s places while read (credits task list, P2-3): what is owed on a
    row's right, and the store's card in its own lines' heights, grey lines
@@ -6971,6 +6975,11 @@ button.money-line-open:disabled {
 .stocktaking > .chips,
 .stocktaking-place {
   margin: 0 0 16px;
+}
+/* A warehouse taken away: the warning's plate over the choices, 12 between
+   (audit 2026-11-18, goods P2-5 (а); review). */
+:is(.stocktaking, .stock-screen) > .warning-plate {
+  margin: 0 0 12px;
 }
 /* «Прийшов товар» (spec S24; sections task list, P1-4) on the page
    itself: the warehouse as chips or said in a line, the chosen model with

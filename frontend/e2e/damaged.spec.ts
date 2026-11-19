@@ -866,6 +866,11 @@ test("inside Telegram a decision's yes is its MainButton — for a unit sold fro
   await expect(
     places.getByRole("button", { name: "Брак", exact: true }),
   ).toHaveCount(0);
+  const selections = async (): Promise<number> =>
+    (await buzzes()).filter(
+      (one) => (one as { type?: string }).type === "selection_change",
+    ).length;
+  const before = await selections();
   await places
     .getByRole("button", { name: "Склад повернень", exact: true })
     .click();
@@ -877,6 +882,16 @@ test("inside Telegram a decision's yes is its MainButton — for a unit sold fro
     is_active: true,
     text: "Так, повернути на «Склад повернень»",
   });
+  // Felt as the choice changes, never on the one chosen (audit 2026-11-18,
+  // goods P2-5 (в)).
+  expect(await selections()).toBe(before + 1);
+  await places
+    .getByRole("button", { name: "Склад повернень", exact: true })
+    .click();
+  await expect(
+    places.getByRole("button", { name: "Склад повернень", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  expect(await selections()).toBe(before + 1);
   await pressMain();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   expect(sent).toEqual([

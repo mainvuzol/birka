@@ -183,9 +183,12 @@ export function Stock({
       <ScreenHeader title="Залишки" back={back && <BackToMore back={back} />} />
       <section className="stock-screen">
         {selectionLost && (
-          <p role="status">
-            Обраний склад більше не доступний. Оберіть інший склад.
-          </p>
+          // A warning's plate said after an answer, led by its line (audit
+          // 2026-11-18, goods P2-5 (а); the rule of 2026-11-15, goods P2-1).
+          <div className="notice warning-plate" role="status">
+            <p className="notice-lead">Обраний склад більше не доступний.</p>
+            <p>Оберіть інший склад.</p>
+          </div>
         )}
         {locations.isPending ? (
           // The warehouses' choices in grey, where they come (goods task

@@ -1247,6 +1247,47 @@ export async function expectWarningPlate(
 }
 
 /**
+ * «Обраний склад більше не доступний.», said after an answer (audit
+ * 2026-11-18, goods P2-5 (а)): a warning's plate led by its line, what to
+ * do under it — at 360, in both themes, the viewport given back.
+ */
+export async function expectGoneWarehouse(page: Page): Promise<void> {
+  const plate = page
+    .getByRole("status")
+    .filter({ hasText: "Обраний склад більше не доступний." });
+  await expect(plate).toHaveClass(/(?:^|\s)warning-plate(?:\s|$)/);
+  await expect(plate.locator(":scope > p")).toHaveText([
+    "Обраний склад більше не доступний.",
+    "Оберіть інший склад.",
+  ]);
+  await expect(plate.locator(":scope > .notice-lead")).toHaveText(
+    "Обраний склад більше не доступний.",
+  );
+  // 12 between it and what follows, never flush on the choices (review).
+  expect(
+    await plate.evaluate((node) => {
+      const next = node.nextElementSibling;
+      return next
+        ? next.getBoundingClientRect().top - node.getBoundingClientRect().bottom
+        : null;
+    }),
+  ).toBeGreaterThanOrEqual(11.5);
+  const size = page.viewportSize();
+  await page.setViewportSize({ width: 360, height: 640 });
+  for (const scheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    await expectWarningPlate(plate, scheme);
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth > innerWidth,
+      ),
+    ).toBe(false);
+  }
+  await page.emulateMedia({ colorScheme: "light" });
+  if (size) await page.setViewportSize(size);
+}
+
+/**
  * A row taking no tap (audit 2026-11-13, frame P2-4): nothing faded over
  * it, its title in pencil — whatever the title's class.
  */
@@ -1858,6 +1899,20 @@ export async function expectEmpty(
   await expect(title).toHaveCSS("font-size", "17px");
   await expect(title).toHaveCSS("font-weight", "600");
   await expect(title).toHaveCSS("color", said.ink);
+}
+
+/** Found nothing on a screen (audit 2026-11-18, goods P2-4): the shared
+ * empty place, its line heard as it comes. */
+export async function nothingFound(
+  where: Page | Locator,
+  line: string,
+): Promise<Locator> {
+  const none = where.locator(".orders-empty").filter({ hasText: line });
+  await expectEmpty(none, line);
+  await expect(
+    where.getByRole("status").filter({ hasText: "Нічого не знайшли" }),
+  ).toHaveText(line);
+  return none;
 }
 
 /* «Початкові залишки»' list (goods task list after stage 2, P0-1). */

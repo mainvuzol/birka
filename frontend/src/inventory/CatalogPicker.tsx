@@ -8,6 +8,7 @@ import { buzz, hideKeyboard } from "@/shared/telegram";
 import { Stub } from "@/shared/Stub";
 import { visible } from "@/shared/visible";
 import { Unread } from "@/shared/Unread";
+import { Empty } from "@/shared/Empty";
 import { Placeholder } from "@/shared/Placeholder";
 import { useNextPageFailed } from "@/shared/nextPage";
 import { NewModel } from "@/catalog/NewModel";
@@ -219,8 +220,14 @@ export function CatalogPicker({
               />
             )}
             {found.length === 0 && asked !== addedFor && (
-              <div className="catalog-none">
-                <p>Нічого не знайшли за «{visible(asked)}»</p>
+              // The shared empty place, as the till's search (spec §6.28;
+              // audit 2026-11-18, goods P2-4): the line heard as it comes,
+              // the way to add the model its one button.
+              <Empty
+                className="catalog-empty"
+                status
+                title={`Нічого не знайшли за «${visible(asked)}»`}
+              >
                 {mayAdd && (
                   <button
                     type="button"
@@ -235,7 +242,7 @@ export function CatalogPicker({
                     Додати нову модель «{visible(asked)}»
                   </button>
                 )}
-              </div>
+              </Empty>
             )}
             {found.length > 0 && (
               // Rows 64 on a white block, the one chosen filled, as before

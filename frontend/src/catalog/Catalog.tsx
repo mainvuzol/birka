@@ -561,6 +561,18 @@ function Detail({
   const reasons = [
     ...new Set(decision.preview.review_reasons.map(reviewText)),
   ].join(" ");
+  // What «Цей опис — назва товару?» asks of, once decided: the model
+  // chosen, and the other models offered.
+  const named =
+    decision.status === "APPLIED" && decision.resolved_variant_id
+      ? (decision.creation?.display_name ??
+        candidates.find((c) => c.variant_id === decision.resolved_variant_id)
+          ?.display_name ??
+        "Підтверджений товар")
+      : null;
+  const others = candidates.filter(
+    (c) => c.variant_id !== decision.resolved_variant_id,
+  );
   function action(suffix: string, body: Record<string, unknown>): void {
     void run({
       path: `${base}/${decision.decision_id}/${suffix}`,
@@ -826,64 +838,62 @@ function Detail({
                 Зберігайте зв’язок лише коли весь початковий опис справді є
                 назвою цього товару. Це не робить назву автоматично перевіреною.
               </p>
-              {decision.status === "APPLIED" &&
-                decision.resolved_variant_id && (
-                  <div className="catalog-name-row">
-                    <span>
-                      Обраний товар:{" "}
-                      <strong>
-                        {visible(
-                          decision.creation?.display_name ??
-                            candidates.find(
-                              (c) =>
-                                c.variant_id === decision.resolved_variant_id,
-                            )?.display_name ??
-                            "Підтверджений товар",
+              {/* The models it may name as a list's rows on its white
+                  block, as the open proposal's (audit 2026-11-18, goods
+                  P2-5 (б)): the name 17/600, its answer on the right. */}
+              {(named !== null || others.length > 0) && (
+                <ul className="new-model-candidates list-block">
+                  {named !== null && (
+                    <li className="sale-row">
+                      <span className="new-model-name">
+                        <span className="t-meta">Обраний товар:</span>{" "}
+                        <strong>{visible(named)}</strong>
+                      </span>
+                      <button
+                        type="button"
+                        disabled={blocked || aliasTooLong}
+                        onClick={() => {
+                          action("alias-feedback", {
+                            feedback_id: crypto.randomUUID(),
+                            variant_id: decision.resolved_variant_id,
+                            event: "CONFIRM",
+                          });
+                        }}
+                      >
+                        Так, це його назва
+                      </button>
+                    </li>
+                  )}
+                  {others.map((c) => (
+                    <li className="sale-row" key={c.variant_id}>
+                      <span className="new-model-name">
+                        <strong>{visible(c.display_name)}</strong>
+                        {c.distinction_note && (
+                          // As the open proposal's rows say it (review).
+                          <span className="t-meta">
+                            Відмінність моделі: {visible(c.distinction_note)}
+                          </span>
                         )}
-                      </strong>
-                    </span>
-                    <button
-                      type="button"
-                      disabled={blocked || aliasTooLong}
-                      onClick={() => {
-                        action("alias-feedback", {
-                          feedback_id: crypto.randomUUID(),
-                          variant_id: decision.resolved_variant_id,
-                          event: "CONFIRM",
-                        });
-                      }}
-                    >
-                      Так, це його назва
-                    </button>
-                  </div>
-                )}
-              {candidates
-                .filter((c) => c.variant_id !== decision.resolved_variant_id)
-                .map((c) => (
-                  <div className="catalog-name-row" key={c.variant_id}>
-                    <span>
-                      {visible(c.display_name)}
-                      {c.distinction_note
-                        ? ` — ${visible(c.distinction_note)}`
-                        : ""}
-                    </span>
-                    <button
-                      type="button"
-                      className="quiet"
-                      aria-label={`Ні, не про нього: ${visible(c.display_name)}`}
-                      disabled={blocked || aliasTooLong}
-                      onClick={() => {
-                        action("alias-feedback", {
-                          feedback_id: crypto.randomUUID(),
-                          variant_id: c.variant_id,
-                          event: "REJECT",
-                        });
-                      }}
-                    >
-                      Ні, не про нього
-                    </button>
-                  </div>
-                ))}
+                      </span>
+                      <button
+                        type="button"
+                        className="quiet"
+                        aria-label={`Ні, не про нього: ${visible(c.display_name)}`}
+                        disabled={blocked || aliasTooLong}
+                        onClick={() => {
+                          action("alias-feedback", {
+                            feedback_id: crypto.randomUUID(),
+                            variant_id: c.variant_id,
+                            event: "REJECT",
+                          });
+                        }}
+                      >
+                        Ні, не про нього
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           )}
         </div>
