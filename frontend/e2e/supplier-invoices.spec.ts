@@ -26,7 +26,7 @@ import {
   holdReads,
   under14,
 } from "./fixtures";
-import type { Locator, Page, Request } from "@playwright/test";
+import type { Locator, Page, Request, Route } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { icons } from "../src/shared/icons";
@@ -1098,7 +1098,8 @@ test("«Зарахувати повернення» reads past the fifty newest:
   // The page read on by itself, and the one «Показати ще» asks: each fails
   // once.
   const failed = new Set<number>();
-  await page.route(/\/api\/v1\/supplier-returns\?/, async (route) => {
+  const paged = /\/api\/v1\/supplier-returns\?/;
+  const pages = async (route: Route): Promise<void> => {
     const url = new URL(route.request().url());
     const params = url.searchParams;
     if (params.get("supplier_id") !== supplierId) {
@@ -1139,7 +1140,8 @@ test("«Зарахувати повернення» reads past the fifty newest:
         has_more: offset + limit < all.length,
       },
     });
-  });
+  };
+  await page.route(paged, pages);
   const counted = posts(page, /\/set-offs$/);
 
   await invoicesAt(page, hanna);
@@ -1211,6 +1213,10 @@ test("«Зарахувати повернення» reads past the fifty newest:
     "100",
     "150",
   ]);
+  // Every page read: the set-off's answer reads the returns again, twice
+  // at once, from the server itself — never answered here as the journey
+  // ends (CI: «Route is already handled»).
+  await page.unroute(paged, pages);
   await returns.nth(1).click();
   await expect(returns.nth(1)).toBeChecked();
   await setOff.getByLabel("Скільки зарахував постачальник, грн").fill("1200");

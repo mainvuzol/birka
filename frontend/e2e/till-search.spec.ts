@@ -618,7 +618,12 @@ for (const scheme of ["light", "dark"] as const)
     await expect(price).toHaveValue("1850,");
     await expect(basket.locator(".price-error")).toHaveCount(0);
     await expect(hint).toBeVisible();
-    expect((await hint.boundingBox())?.height).toBe(before?.height);
+    // Its height as before, within 0.05 px: CI's font draws a line a
+    // breath taller now and then (48.00003).
+    expect((await hint.boundingBox())?.height).toBeCloseTo(
+      before?.height ?? 0,
+      1,
+    );
     await expect(page.getByText("Разом 1 850,00 грн")).toBeVisible();
     await expect(pay(page, "Готівка")).toBeEnabled();
     await page.screenshot({
