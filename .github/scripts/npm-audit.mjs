@@ -13,19 +13,10 @@ import { spawnSync } from "node:child_process";
 
 const FAILING = new Set(["high", "critical"]);
 
-const EXCEPTIONS = [
-  {
-    id: "GHSA-fc5q-39xc-vjpf",
-    package: "picomatch",
-    why:
-      "No release fixes it: on 2026-11-17 the advisory came to cover every " +
-      "picomatch up to 4.0.7, the latest. picomatch is in the tree only " +
-      "under vite and typescript-eslint (through tinyglobby and fdir): " +
-      "tools that build and lint, never in the published bundle, matching " +
-      "patterns from our own config, never from a user.",
-    until: "2026-12-17",
-  },
-];
+// Each one: { id, package, why, until: "YYYY-MM-DD" }. None now: the first,
+// picomatch's GHSA-fc5q-39xc-vjpf (let through on 2026-11-17), was
+// withdrawn by GitHub on 2026-11-18 and removed (ADR-0010 §5).
+const EXCEPTIONS = [];
 
 const run = spawnSync("npm", ["audit", "--json"], {
   encoding: "utf8",
