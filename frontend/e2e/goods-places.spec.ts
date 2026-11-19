@@ -411,6 +411,12 @@ test("a proposal read slowly: its words, its sticker and two models offered in g
         ?.height ?? 0,
     ),
   ).toBe(44);
+  // The button's corner, never the grey's own (audit 2026-11-18, batch 7's
+  // review).
+  await expect(offered.first().locator(".skeleton-choose")).toHaveCSS(
+    "border-radius",
+    "8px",
+  );
   await heardOnly(page, "Завантажуємо пропозицію…");
   const greyAt = await top(grey.locator(".catalog-raw-large"));
   detail.release();

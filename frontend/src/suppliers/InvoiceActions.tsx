@@ -1,8 +1,9 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { JSX, ReactNode, RefObject } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { ApiError, api } from "@/shared/api";
 import { Unread } from "@/shared/Unread";
+import { useNextPageFailed } from "@/shared/nextPage";
 import { Placeholder } from "@/shared/Placeholder";
 import { decimal, kopecks, money, typedKopecks } from "@/orders/types";
 import type { Store } from "@/orders/types";
@@ -365,11 +366,22 @@ export function InvoiceActions({
   );
 }
 
+/** The returns read a page at a time: the most the server gives. */
+const setOffPage = 50;
+/** The furthest a page may begin, as the server takes it. */
+const LAST_OFFSET = 10000;
+
 /**
  * «Зарахувати повернення» (stage 2, money task list, P0-2): the returns of
  * this store to the invoice's supplier still standing, each a choice and
  * none chosen beforehand, what the supplier counted, and «Зарахувати 300,00
  * грн». Never more than is owed.
+ *
+ * Read page by page, fifty at a time, newest first: «Показати ще» under them
+ * brings the older ones, so a return past the fifty newest is set off too —
+ * it was read no further, and said nothing (audit 2026-11-18, the set-off's
+ * find). None standing among those read, the next page is read at once:
+ * «нічого не повертав» is said only once every page is.
  */
 function SetOff({
   store,
@@ -394,19 +406,72 @@ function SetOff({
   const [chosen, setChosen] = useState("");
   const [amount, setAmount] = useState("");
   const [problem, setProblem] = useState<string | null>(null);
-  const returns = useQuery({
+  const returns = useInfiniteQuery({
     queryKey: ["supplier-returns", store.id, invoice.supplier.id, "set-off"],
-    queryFn: () =>
+    queryFn: ({ pageParam }) =>
       api<ReturnPage>(
-        `/supplier-returns?store_id=${store.id}&supplier_id=${invoice.supplier.id}&limit=50`,
+        `/supplier-returns?store_id=${store.id}&supplier_id=${invoice.supplier.id}&limit=${String(setOffPage)}&offset=${String(pageParam)}`,
         token,
       ),
+    initialPageParam: 0,
+    getNextPageParam: (last: ReturnPage, pages: ReturnPage[]) =>
+      last.has_more && pages.length * setOffPage <= LAST_OFFSET
+        ? pages.length * setOffPage
+        : undefined,
     retry: false,
   });
-  // Only what still stands: a cancelled return's goods came back.
-  const standing = (returns.data?.items ?? []).filter(
-    (item) => item.cancelled === null,
-  );
+  // Only what still stands: a cancelled return's goods came back. A return
+  // made between two pages moves the older ones down by one: each is shown
+  // once.
+  const standing = [
+    ...new Map(
+      (returns.data?.pages ?? [])
+        .flatMap((page) => page.items)
+        .map((item) => [item.id, item]),
+    ).values(),
+  ].filter((item) => item.cancelled === null);
+  const nextFailed = useNextPageFailed(returns);
+  // «Показати ще» pressed: the cursor goes to the first return it brings.
+  const [focusAt, setFocusAt] = useState<number | null>(null);
+  // Every return read cancelled, and more to read: read on, as the waiting
+  // stands, never «нічого не повертав» over returns not yet read. A page
+  // «Показати ще» brought with none standing: read on too, the list as it
+  // is, never a press answered by nothing (review).
+  const seeking = focusAt !== null && standing.length <= focusAt;
+  const readingOn = standing.length === 0 && returns.hasNextPage && !nextFailed;
+  const fetching = returns.isFetching;
+  const { fetchNextPage } = returns;
+  useEffect(() => {
+    if (
+      (readingOn || seeking) &&
+      returns.hasNextPage &&
+      !nextFailed &&
+      !fetching
+    )
+      void fetchNextPage();
+  }, [
+    readingOn,
+    seeking,
+    returns.hasNextPage,
+    nextFailed,
+    fetching,
+    fetchNextPage,
+  ]);
+  const shelf = useRef<HTMLUListElement>(null);
+  useEffect(() => {
+    if (focusAt === null) return;
+    const rows =
+      shelf.current?.querySelectorAll<HTMLElement>(".set-off-return") ?? [];
+    // Every page read and none more standing: the last of the list, the
+    // cursor kept in the sheet (review).
+    const next =
+      rows[focusAt] ??
+      (returns.hasNextPage || fetching ? undefined : rows[rows.length - 1]);
+    if (next) {
+      next.focus();
+      setFocusAt(null);
+    }
+  });
   // «4500,» is a sum still being typed: said on as 4500 (review), and its
   // button says and sends it, as the payment's (audit 2026-11-18, sale
   // P2-1).
@@ -420,12 +485,20 @@ function SetOff({
   const overLine = useId();
   // Where Tab enters the returns: the one chosen while it stands, else the
   // first.
+  // None chosen: the one the cursor was on, as «Показати ще» leaves it
+  // (review).
+  const [entry, setEntry] = useState("");
   const stop = standing.some((item) => item.id === chosen)
     ? chosen
-    : standing[0]?.id;
+    : standing.some((item) => item.id === entry)
+      ? entry
+      : standing[0]?.id;
 
   function submit(): void {
     setProblem(null);
+    // Gone on to the sum: a page still read takes no cursor from it, and a
+    // refusal's reading again none either (review).
+    setFocusAt(null);
     // A return cancelled meanwhile is chosen no more.
     if (!standing.some((item) => item.id === chosen)) {
       setProblem("Оберіть повернення.");
@@ -476,7 +549,7 @@ function SetOff({
         Повернення постачальнику «{visible(invoice.supplier.name)}» з цього
         магазину
       </p>
-      {returns.isPending ? (
+      {returns.isPending || readingOn ? (
         // Three returns' cards in their places (money task list after
         // stage 2, P1-3).
         <Placeholder
@@ -485,7 +558,7 @@ function SetOff({
           day={false}
           rowShape={{ list: "set-off-returns", row: "set-off-return" }}
         />
-      ) : returns.error ? (
+      ) : returns.error && !nextFailed ? (
         <Unread
           error={returns.error}
           retry={() => {
@@ -493,12 +566,23 @@ function SetOff({
           }}
         />
       ) : standing.length === 0 ? (
-        // Nothing to choose: a `meta` line in pencil (audit 2026-11-15,
-        // money P2-6 (в)).
-        <p className="t-meta nothing-yet">
-          Цей магазин нічого не повертав постачальнику «
-          {visible(invoice.supplier.name)}».
-        </p>
+        nextFailed ? (
+          // The page read on failed: its retry alone.
+          <Unread
+            error={returns.error}
+            held={held || pressing || fetching}
+            retry={() => {
+              void fetchNextPage();
+            }}
+          />
+        ) : (
+          // Nothing to choose: a `meta` line in pencil (audit 2026-11-15,
+          // money P2-6 (в)).
+          <p className="t-meta nothing-yet">
+            Цей магазин нічого не повертав постачальнику «
+            {visible(invoice.supplier.name)}».
+          </p>
+        )
       ) : (
         <>
           {/* One return chosen: a radio each, the arrows going through
@@ -506,6 +590,7 @@ function SetOff({
               chosen colours, as before. One stop for Tab: the chosen, or
               the first. */}
           <ul
+            ref={shelf}
             className="set-off-returns"
             role="radiogroup"
             aria-label="Повернення"
@@ -525,6 +610,9 @@ function SetOff({
                     aria-checked={chosen === item.id}
                     tabIndex={item.id === stop ? 0 : -1}
                     disabled={held || pressing}
+                    onFocus={() => {
+                      setEntry(item.id);
+                    }}
                     onClick={() => {
                       setChosen(item.id);
                       setProblem(null);
@@ -548,6 +636,32 @@ function SetOff({
               );
             })}
           </ul>
+          {/* Older returns, under the newest; a page that failed, its
+              retry alone where «Показати ще» stood. */}
+          {nextFailed ? (
+            <Unread
+              error={returns.error}
+              held={held || pressing || fetching}
+              retry={() => {
+                void fetchNextPage();
+              }}
+            />
+          ) : (
+            returns.hasNextPage && (
+              <button
+                type="button"
+                className="quiet"
+                disabled={held || pressing || fetching}
+                onClick={() => {
+                  // Kept until the page is read: after its retry too.
+                  setFocusAt(standing.length);
+                  void fetchNextPage();
+                }}
+              >
+                Показати ще
+              </button>
+            )
+          )}
           <label>
             Скільки зарахував постачальник, грн
             <input

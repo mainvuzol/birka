@@ -11294,3 +11294,42 @@ check, journal, right or word changes; what «Так, це його назва»
     one chosen (it was never felt); «Інші рядки» in «Початкові залишки» —
     the filter shown chosen again closes the sheet, as before, with nothing
     felt.
+
+## Chosen in chat — 2026-11-19 (audit 2026-11-18, the set-off's find: «Зарахувати повернення» reads past the fifty newest returns; and the choose place's corner)
+
+Taken as the next after «merged go next»: the one find of audit 2026-11-18
+outside the redesign (money TZ, «Находки вне редизайна»; the owner's
+reading said it goes to development as a fix of its own). No request,
+check, journal, right or word changes; what a set-off records, and the
+server's checks of it, are as before.
+
+- **«Зарахувати повернення» reads every return still standing**:
+  - It read this store's returns to the invoice's supplier once, the fifty
+    newest (`limit=50`, the most the server gives), and left out the
+    cancelled. An older return still standing could not be set off, and
+    nothing said so; fifty newest all cancelled, it said «Цей магазин нічого
+    не повертав постачальнику …» over returns it had not read.
+  - Now page by page, fifty a page, newest first, each after those read (as
+    «Постачальникам» reads its list): «Показати ще» under the returns brings
+    the older; the cursor goes to the first return it brings (as the
+    catalogue's search sheet). A page that fails: its retry alone where
+    «Показати ще» stood, the returns read kept; a return read twice, as a
+    page's edge moves, is shown once.
+  - Decided here: none standing among those read and more to read, the next
+    page is read at once, the returns' places in grey meanwhile; «нічого не
+    повертав» is said only once every page is read. A page «Показати ще»
+    brought with none standing is read past too, the list as it is, until
+    one standing comes or every page is read — then the cursor goes to the
+    last return, kept in the sheet (review). None chosen, Tab's stop is the
+    return the cursor was on (review). Pressing «Зарахувати» ends a page's
+    claim on the cursor; a page's retry is held as «Показати ще» is.
+  - Known, not changed: past the server's furthest page (10 000 returns to
+    one supplier, all cancelled) «нічого не повертав» is said with older ones
+    unread; a whole reading again that fails puts its plate in the list's
+    place, as before.
+  - Not changed: a return's own screen reads its supplier's fifty newest to
+    show a set-off cancelled meanwhile, and keeps the row's or its cancel's
+    answer past them (`ReturnDetail.tsx`), as before.
+- **«Перевірка каталогу»'s offered models, read slowly**: the place of
+  their «Обрати» takes the button's corner (8), never the grey's own — the
+  batch 7 review's find, `.skeleton` being drawn later.

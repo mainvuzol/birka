@@ -2917,7 +2917,9 @@ section.credits.customer-card {
   border-radius: var(--r-l);
 }
 /* A proposal's candidate held: «Це вона»'s place, a button 44 high. */
-.skeleton-choose {
+/* The button's corner, never the grey's own: `.skeleton` is drawn later
+   (audit 2026-11-18, batch 7's review). */
+.new-model-candidates .skeleton-choose {
   flex-shrink: 0;
   width: 88px;
   height: 44px;

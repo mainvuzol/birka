@@ -26,7 +26,7 @@ import {
   holdReads,
   under14,
 } from "./fixtures";
-import type { Locator, Page, Request } from "@playwright/test";
+import type { Locator, Page, Request, Route } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { icons } from "../src/shared/icons";
@@ -1007,6 +1007,238 @@ test("goods returned are set off against an invoice, and their return waits for 
   await expect(
     page.getByRole("list", { name: "Повернення постачальникам" }),
   ).toBeVisible();
+});
+
+test("«Зарахувати повернення» reads past the fifty newest: a page all cancelled read on at once, «Показати ще» bringing the older and reading on past a page with none standing, a failed page its retry alone, and the oldest set off (audit 2026-11-18, the set-off's find)", async ({
+  page,
+}) => {
+  const supplier = `Давній ${randomUUID().slice(0, 6)}`;
+  const supplierId = await aSupplier(page, supplier);
+  const headers = await headersOf(page, hanna);
+  const created = await page.request.post("/api/v1/catalog/products", {
+    headers: { ...headers, "Idempotency-Key": randomUUID() },
+    data: {
+      store_id: centre,
+      concept: `Давнє ${randomUUID().slice(0, 8)}`,
+      variant: { color: "сірий" },
+      sizes: [{ system: "ALPHA", code: "L" }],
+    },
+  });
+  const product = (await created.json()) as {
+    product_variant_id: string;
+    sizes: { size_id: string }[];
+  };
+  const goods = {
+    product_variant_id: product.product_variant_id,
+    size_id: product.sizes[0]?.size_id ?? "",
+  };
+  const receipt = await page.request.post("/api/v1/inventory/receipts", {
+    headers: { ...headers, "Idempotency-Key": randomUUID() },
+    data: {
+      store_id: centre,
+      location_id: fixture.network_shared_location_id,
+      command_id: randomUUID(),
+      lines: [{ ...goods, quantity: 2, acquisition_type: "PURCHASE" }],
+      notes: null,
+    },
+  });
+  expect(receipt.status()).toBe(201);
+  const returned = await page.request.post("/api/v1/supplier-returns", {
+    headers,
+    data: {
+      command_id: randomUUID(),
+      store_id: centre,
+      location_id: fixture.network_shared_location_id,
+      supplier_id: supplierId,
+      lines: [{ ...goods, quantity: 2 }],
+      note: null,
+    },
+  });
+  expect(returned.status()).toBe(201);
+  const returnId = ((await returned.json()) as { id: string }).id;
+  await anInvoice(page, supplierId, "4000.00");
+  // A hundred and fifty returns to that supplier listed over the real one,
+  // as the server pages them, fifty a page: the first page all cancelled,
+  // the second all but its first, the third all cancelled, the real one the
+  // fourth's.
+  const listedOver = Array.from({ length: 150 }, (_, n) => ({
+    id: randomUUID(),
+    store_id: centre,
+    location_id: randomUUID(),
+    location_name: "Основний",
+    supplier: { id: supplierId, name: supplier, phone: null },
+    damaged_unit_id: null,
+    note: null,
+    by: "Ганна",
+    at: new Date(Date.now() - (n + 1) * 3_600_000).toISOString(),
+    lines: [
+      {
+        product_variant_id: goods.product_variant_id,
+        size_id: goods.size_id,
+        quantity: 1,
+        display_name: "Давнє",
+        size: "L",
+      },
+    ],
+    cancelled:
+      n === 50
+        ? null
+        : {
+            reason: "постачальник не взяв",
+            by: "Ганна",
+            at: new Date().toISOString(),
+          },
+    set_offs: [],
+  }));
+  const asked: URLSearchParams[] = [];
+  let second = (): void => {};
+  const secondHeld = new Promise<void>((resolve) => {
+    second = resolve;
+  });
+  // The page read on by itself, and the one «Показати ще» asks: each fails
+  // once.
+  const failed = new Set<number>();
+  const paged = /\/api\/v1\/supplier-returns\?/;
+  const pages = async (route: Route): Promise<void> => {
+    const url = new URL(route.request().url());
+    const params = url.searchParams;
+    if (params.get("supplier_id") !== supplierId) {
+      await route.continue();
+      return;
+    }
+    // As asked: the real one is fetched below by these params changed.
+    asked.push(new URLSearchParams(params));
+    const limit = Number(params.get("limit") ?? "20");
+    const offset = Number(params.get("offset") ?? "0");
+    if (limit > 50) {
+      await route.fulfill({
+        status: 422,
+        json: { code: "VALIDATION_ERROR", message: "Invalid request" },
+      });
+      return;
+    }
+    if (offset === 50) await secondHeld;
+    if ((offset === 50 || offset === 100) && !failed.has(offset)) {
+      failed.add(offset);
+      await route.fulfill({
+        status: 500,
+        json: { code: "INTERNAL_ERROR", message: "Internal error" },
+      });
+      return;
+    }
+    url.searchParams.set("offset", "0");
+    url.searchParams.set("limit", "50");
+    const real = (await (
+      await route.fetch({ url: url.toString() })
+    ).json()) as {
+      items: unknown[];
+    };
+    const all = [...listedOver, ...real.items];
+    await route.fulfill({
+      json: {
+        items: all.slice(offset, offset + limit),
+        has_more: offset + limit < all.length,
+      },
+    });
+  };
+  await page.route(paged, pages);
+  const counted = posts(page, /\/set-offs$/);
+
+  await invoicesAt(page, hanna);
+  await open(page, supplier);
+  await act(page, "Зарахувати повернення");
+  const setOff = await sheet(page, "Зарахувати повернення");
+  const returns = setOff
+    .getByRole("radiogroup", { name: "Повернення" })
+    .getByRole("radio");
+  const nothing = setOff.getByText(/нічого не повертав/);
+  const more = setOff.getByRole("button", { name: "Показати ще", exact: true });
+  // The fifty newest all cancelled: the next fifty read at once, the
+  // returns' places held meanwhile — never «нічого не повертав» over
+  // returns not yet read.
+  await expect
+    .poll(() => asked.map((params) => params.get("offset")))
+    .toEqual(["0", "50"]);
+  await expect(
+    setOff.locator(".placeholder .set-off-returns > .set-off-return"),
+  ).toHaveCount(3);
+  await expect(nothing).toHaveCount(0);
+  await expect(returns).toHaveCount(0);
+  second();
+  // The page read on fails: its retry alone, never «нічого не повертав».
+  const failure = setOff.getByRole("alert");
+  await expect(failure.getByRole("button")).toHaveText(["Спробувати ще раз"]);
+  await expect(nothing).toHaveCount(0);
+  await expect(returns).toHaveCount(0);
+  await expect(more).toHaveCount(0);
+  await failure.getByRole("button", { name: "Спробувати ще раз" }).click();
+  // The one standing of those, and «Показати ще» for the older. Its date
+  // may carry its year in the first days of January.
+  await expect(returns).toHaveCount(1);
+  await expect(returns).toHaveText(
+    /^\d\d\.\d\d(?:\.\d\d)? · 1 шт\. · склад «Основний»$/,
+  );
+  await expect(failure).toHaveCount(0);
+  await expect(more).toBeVisible();
+  await expect(nothing).toHaveCount(0);
+  // Read again by its own retry alone, never the pages read before it.
+  expect(asked.map((params) => params.get("offset"))).toEqual([
+    "0",
+    "50",
+    "50",
+  ]);
+  // The page after them fails: its retry alone where «Показати ще» stood,
+  // the return read kept.
+  await more.click();
+  await expect(failure).toBeVisible();
+  await expect(failure.getByRole("button")).toHaveText(["Спробувати ще раз"]);
+  await expect(more).toHaveCount(0);
+  await expect(returns).toHaveCount(1);
+  await failure.getByRole("button", { name: "Спробувати ще раз" }).click();
+  // That page none standing: read on by itself (review). The real one, past
+  // the hundred and fifty: its own card, the cursor on it and Tab's stop
+  // with it, nothing more to read.
+  await expect(returns).toHaveCount(2);
+  await expect(returns.nth(1)).toHaveText(/^\d\d\.\d\d · 2 шт\. · склад «.+»$/);
+  await expect(returns.nth(1)).toBeFocused();
+  await expect(returns.nth(1)).toHaveAttribute("tabindex", "0");
+  await expect(returns.nth(0)).toHaveAttribute("tabindex", "-1");
+  await expect(failure).toHaveCount(0);
+  await expect(more).toHaveCount(0);
+  expect(asked.map((params) => params.get("offset"))).toEqual([
+    "0",
+    "50",
+    "50",
+    "100",
+    "100",
+    "150",
+  ]);
+  // Every page read: the set-off's answer reads the returns again, twice
+  // at once, from the server itself — never answered here as the journey
+  // ends (CI: «Route is already handled»).
+  await page.unroute(paged, pages);
+  await returns.nth(1).click();
+  await expect(returns.nth(1)).toBeChecked();
+  await setOff.getByLabel("Скільки зарахував постачальник, грн").fill("1200");
+  await setOff
+    .getByRole("button", { name: "Зарахувати 1 200,00 грн", exact: true })
+    .click();
+  await expect(setOff).toHaveCount(0);
+  await expect(page.locator(".invoice-done")).toHaveText(
+    "Залік 1 200,00 грн записано. Залишок 2 800,00 грн.",
+  );
+  expect(counted.bodies).toEqual([
+    {
+      command_id: expect.any(String),
+      supplier_return_id: returnId,
+      amount: "1200.00",
+    },
+  ]);
+  // Fifty a page, the most the server takes, each after those read.
+  expect(asked.every((params) => params.get("limit") === "50")).toBe(true);
+  expect(asked.map((params) => params.get("offset"))).toEqual(
+    expect.arrayContaining(["0", "50", "100", "150"]),
+  );
 });
 
 test("read slowly, «Зарахувати повернення» holds three returns' cards in grey, and an invoice opened from its return its card's places — the title's, what is owed, two rows of its history; the words to a reader alone; nothing there under 14 (money task list after stage 2, P1-3, P2-4)", async ({
