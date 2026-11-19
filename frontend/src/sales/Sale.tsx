@@ -10,7 +10,7 @@ import {
 } from "@/shared/api";
 import type { ApiError } from "@/shared/api";
 import { Icon } from "@/shared/Icon";
-import { decimal, kopecks, money } from "@/orders/types";
+import { decimal, kopecks, money, typedKopecks } from "@/orders/types";
 import type { Location, StockOption, Store } from "@/orders/types";
 import type { SizeOption } from "@/inventory/receiptTypes";
 import type { Opened } from "@/inventory/Model";
@@ -74,9 +74,10 @@ const paperGone =
 const paperReserved =
   "Частина цих одиниць у резерві замовлення — продаж з паперу не записано. Менеджер має вирішити із замовленням, потім внесіть цей продаж ще раз. Кошик збережено — нічого не продано.";
 
-/** A price as sent: the one typed, once it reads as money; else none. */
+/** A price as sent: the one typed, once it reads as money — «1850,» as
+ * 1850, still being typed (audit 2026-11-18, sale P2-1); else none. */
 function asPrice(typed: string): string {
-  const cents = kopecks(typed);
+  const cents = typedKopecks(typed);
   return cents === null ? "" : decimal(cents);
 }
 
@@ -927,7 +928,8 @@ export function Sale({
   const labelledOnPaper = paper && draft.some((d) => d.fromUnknown);
   // Paid in parts: what is paid now and what is left, as typed so far. The
   // receipt's figures are the server's.
-  const paidNow = mayCredit && credit.inParts ? kopecks(credit.paid) : null;
+  const paidNow =
+    mayCredit && credit.inParts ? typedKopecks(credit.paid) : null;
   const owing =
     paidNow !== null && paidNow > 0n && paidNow < total
       ? { now: paidNow, left: total - paidNow }

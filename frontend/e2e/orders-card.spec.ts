@@ -1689,7 +1689,11 @@ test("«Клієнт забрав» in parts: terms not taken said over the ways
   const first = await taking.locator(".collect-ways").boundingBox();
   expect(box && first && box.y + box.height <= first.y + 1).toBe(true);
   expect(server.sent).toEqual([]);
-  await taking.getByLabel("Сплачує зараз, грн").fill("500");
+  // Its comma last, a sum still being typed: what is left owed is said, the
+  // dock says what is paid now, and it is sent as it stands — «500.00»
+  // below (audit 2026-11-18, sale P2-1).
+  await taking.getByLabel("Сплачує зараз, грн").fill("500,");
+  await expect(taking.getByText("Лишиться винен 2 500,00 грн")).toBeVisible();
   await expect(taking.locator(".pay-total")).toHaveText(
     /^Зараз 500,00\sгрн · винен 2\s500,00\sгрн$/,
   );
@@ -2533,6 +2537,97 @@ test("a save refused for its waybill keeps where it goes and what was typed; the
   await expect(again).toHaveCount(0);
   expect(server.sent.map((each) => each.step)).toEqual(["shipping"]);
 });
+
+/** The failed read's plate under a screen's title and line: its top below
+ * the line's foot, the title the page's first heading; read in one frame. */
+async function plateUnder(page: Page, title: Locator): Promise<void> {
+  const plate = page.locator(".read-failure");
+  await expect(plate).toBeVisible();
+  await expect(page.getByRole("heading").first()).toHaveText(
+    (await title.textContent()) ?? "",
+  );
+  const [heading, line, box] = await Promise.all(
+    [title, title.locator("xpath=ancestor::header[1]"), plate].map(
+      async (each) =>
+        each.evaluate(
+          (node) => node.getBoundingClientRect().toJSON() as DOMRect,
+        ),
+    ),
+  );
+  if (!heading || !line || !box) throw new Error("not laid out");
+  expect(box.top).toBeGreaterThanOrEqual(heading.bottom);
+  expect(box.top).toBeGreaterThanOrEqual(line.bottom - 1);
+}
+
+for (const scheme of ["light", "dark"] as const)
+  test(`in the ${scheme} theme at 360 the card read again and failed says so under its title and line, over «У посилці»; under «Товар повернувся на склад»'s while it stands, never hidden with the card, what was typed kept (audit 2026-11-18, orders-cash P2-4)`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ colorScheme: scheme });
+    await page.setViewportSize({ width: 360, height: 640 });
+    const server: Server = { order: order({ status: "DISPATCHED" }), sent: [] };
+    await open(page, server);
+    const card = page.locator("h1.order-title");
+    await expect(card).toBeVisible();
+    // The phone back from the carrier's app, its read lost.
+    server.loseRead = true;
+    const again = page.getByRole("button", { name: "Спробувати ще раз" });
+    await expect(async () => {
+      await page.evaluate(() => {
+        window.dispatchEvent(new Event("visibilitychange"));
+      });
+      await expect(again).toBeVisible({ timeout: 1_000 });
+    }).toPass();
+    await plateUnder(page, card);
+    const [plate, parcel] = await Promise.all(
+      [
+        page.locator(".read-failure"),
+        page.locator(".order-section").first(),
+      ].map((each) =>
+        each.evaluate(
+          (node) => node.getBoundingClientRect().toJSON() as DOMRect,
+        ),
+      ),
+    );
+    expect(plate?.bottom).toBeLessThanOrEqual(parcel?.top ?? 0);
+    await page.screenshot({
+      path: `test-results/order-card-unread-${scheme}.png`,
+    });
+    // «Товар повернувся на склад» over the card: the plate under its title,
+    // the card's hidden with it.
+    await page
+      .getByRole("button", { name: "Товар повернувся на склад" })
+      .click();
+    const returned = page.getByRole("heading", {
+      name: "Товар повернувся на склад",
+    });
+    await expect(returned).toBeFocused();
+    await expect(page.locator(".read-failure")).toHaveCount(1);
+    await plateUnder(page, returned);
+    await page.getByLabel("Причина повернення").fill("Не підійшов розмір");
+    await page.screenshot({
+      path: `test-results/order-returned-unread-${scheme}.png`,
+    });
+    // Read again: the plate gone, what was typed kept.
+    await again.click();
+    await expect(page.locator(".read-failure")).toHaveCount(0);
+    await expect(page.getByLabel("Причина повернення")).toHaveValue(
+      "Не підійшов розмір",
+    );
+    // Lost again while it stands: said under its title once more.
+    server.loseRead = true;
+    await expect(async () => {
+      await page.evaluate(() => {
+        window.dispatchEvent(new Event("visibilitychange"));
+      });
+      await expect(again).toBeVisible({ timeout: 1_000 });
+    }).toPass();
+    await plateUnder(page, returned);
+    await expect(page.getByLabel("Причина повернення")).toHaveValue(
+      "Не підійшов розмір",
+    );
+    expect(server.sent).toEqual([]);
+  });
 
 test("a tap carried from «Змінити доставку» onto «Зберегти доставку» is let go, the sheet's own or Telegram's MainButton (review, 2026-10-25; stage 2, orders task list, P1-1)", async ({
   page,

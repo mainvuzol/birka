@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ApiError, api } from "@/shared/api";
 import { Unread } from "@/shared/Unread";
 import { Placeholder } from "@/shared/Placeholder";
-import { decimal, kopecks, money } from "@/orders/types";
+import { decimal, kopecks, money, typedKopecks } from "@/orders/types";
 import type { Store } from "@/orders/types";
 import { visible } from "@/shared/visible";
 import { Eyelet } from "@/shared/Eyelet";
@@ -407,14 +407,15 @@ function SetOff({
   const standing = (returns.data?.items ?? []).filter(
     (item) => item.cancelled === null,
   );
-  const cents = kopecks(amount);
+  // «4500,» is a sum still being typed: said on as 4500 (review), and its
+  // button says and sends it, as the payment's (audit 2026-11-18, sale
+  // P2-1).
+  const cents = typedKopecks(amount);
   // More than is owed is said as it is typed, and the button holds, as the
   // payment's (audit 2026-11-13, money P2-5 (а)); the server checks it as
-  // before. «4500,» is a sum still being typed: said on as 4500 (review). A
-  // refusal of the sum pressed says it all: the line waits until the sum is
-  // changed, which clears the refusal.
-  const typing = kopecks(amount.replace(/[.,]$/, ""));
-  const over = typing !== null && typing > (kopecks(invoice.owed) ?? 0n);
+  // before. A refusal of the sum pressed says it all: the line waits until
+  // the sum is changed, which clears the refusal.
+  const over = cents !== null && cents > (kopecks(invoice.owed) ?? 0n);
   const overSaid = over && problem === null;
   const overLine = useId();
   // Where Tab enters the returns: the one chosen while it stands, else the

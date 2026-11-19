@@ -4380,17 +4380,20 @@ function Workspace({
           // way back (orders task list, P1-3). Read again and failed — the
           // phone back from the carrier's app, a refusal's re-read — the
           // card as last read stays, what was typed with it, and why over
-          // it (review, 2026-10-25).
+          // it (review, 2026-10-25), under its title and line (audit
+          // 2026-11-18, orders-cash P2-4).
           <>
-            {detail.error && (
-              <Unread
-                error={detail.error}
-                retry={() => {
-                  void detail.refetch();
-                }}
-              />
-            )}
             <OrderDetail
+              unread={
+                detail.error ? (
+                  <Unread
+                    error={detail.error}
+                    retry={() => {
+                      void detail.refetch();
+                    }}
+                  />
+                ) : null
+              }
               // Afresh once it moves on or says where it goes otherwise, so
               // no form keeps what it showed before — and after every step
               // it took, so a tap carried from it is let go.

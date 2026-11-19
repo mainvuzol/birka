@@ -1,6 +1,6 @@
 import { useId, useRef, useState } from "react";
 import type { JSX } from "react";
-import { decimal, kopecks, money } from "@/orders/types";
+import { decimal, kopecks, money, typedKopecks } from "@/orders/types";
 import type { Store } from "@/orders/types";
 import { asInput } from "@/prices/SuggestedPrice";
 import { visible } from "@/shared/visible";
@@ -73,7 +73,7 @@ export function InvoicePay({
   // «1500,» is a sum still being typed: read as 1500, so the button and the
   // line over the keys never blink under the finger, as the set-off's
   // (audit 2026-11-15, money P2-2 (в)); what is sent is the sum shown.
-  const cents = kopecks(amount.replace(/[.,]$/, ""));
+  const cents = typedKopecks(amount);
   const typed = cents !== null && cents > 0n;
   const over = cents !== null && cents > owed;
   // A refusal of the sum pressed says it all: the line waits until the sum

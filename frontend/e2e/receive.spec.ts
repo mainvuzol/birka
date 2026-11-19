@@ -315,6 +315,18 @@ test("a delivery carries what the shop paid, and shows back what was stored", as
   ).toBeVisible();
   await page.getByRole("button", { name: "Додати ще модель" }).click();
   await expect(page.getByText(/до копійок, наприклад 1850,50/)).toBeVisible();
+  // A price still being typed, its comma last, is the price as it stands:
+  // «Готово» takes it, the row says it (audit 2026-11-18, sale P2-1).
+  sheet = await receiveWay(page);
+  await sheet
+    .getByLabel("Закупівельна ціна за шт., грн (необов’язково)")
+    .fill("1850,");
+  await receiveWayDone(sheet);
+  await expect(
+    page.getByRole("button", {
+      name: "Як надійшов: Закупівля · 1 850,00 грн за шт.",
+    }),
+  ).toBeVisible();
   sheet = await receiveWay(page);
   await sheet
     .getByLabel("Закупівельна ціна за шт., грн (необов’язково)")

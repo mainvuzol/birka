@@ -594,6 +594,53 @@ test("a model with no price: its field takes the cursor, and the ways wait for a
 });
 
 for (const scheme of ["light", "dark"] as const)
+  test(`in the ${scheme} theme at 360 a price ending in its comma is a price still being typed: «1850,» no error, the hint as before, «Разом 1 850,00 грн», the ways ready, and «1850.00» sent (audit 2026-11-18, sale P2-1)`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ colorScheme: scheme });
+    await page.setViewportSize({ width: 360, height: 640 });
+    await stubList(page, [{ ...laurent, suggested_price: null }]);
+    const sent = await stubSale(page);
+    await onTheTill(page);
+    await chip(page, "Лоран шоколад", "M, вільно 2").click();
+    const basket = page.getByRole("dialog", { name: "Кошик" });
+    const price = basket.locator(".line").getByLabel("Ціна, грн");
+    await expect(price).toBeFocused();
+    const hint = basket.getByText(
+      "Ціни продажу ще немає — впишіть домовлену. Ціну для всіх задає менеджер: «Продаж» › назва моделі › «Змінити ціну».",
+    );
+    await price.pressSequentially("1850");
+    await expect(hint).toBeVisible();
+    const before = await hint.boundingBox();
+    // The comma, as the hint asks for «1850,50»: nothing red under it,
+    // nothing blinks, nothing written in for it.
+    await price.press(",");
+    await expect(price).toHaveValue("1850,");
+    await expect(basket.locator(".price-error")).toHaveCount(0);
+    await expect(hint).toBeVisible();
+    expect((await hint.boundingBox())?.height).toBe(before?.height);
+    await expect(page.getByText("Разом 1 850,00 грн")).toBeVisible();
+    await expect(pay(page, "Готівка")).toBeEnabled();
+    await page.screenshot({
+      path: `test-results/till-price-comma-${scheme}.png`,
+    });
+    // What is no price is said, as before — and what no figure more makes
+    // one (review).
+    await price.fill("15,5,5");
+    await expect(basket.locator(".price-error")).toBeVisible();
+    await price.fill("15,5,");
+    await expect(basket.locator(".price-error")).toBeVisible();
+    await expect(pay(page, "Готівка")).toBeDisabled();
+    await price.fill("1850,");
+    await basketDone(page);
+    await pay(page, "Готівка").click();
+    await expect(
+      page.getByRole("heading", { name: "Продаж записано" }),
+    ).toBeVisible();
+    expect(sent[0]?.lines[0]?.unit_price).toBe("1850.00");
+  });
+
+for (const scheme of ["light", "dark"] as const)
   test(`in the ${scheme} theme a price that is no price is said in danger's colour with its sign, at 4.5:1 (audit after stage 2, sale P2-2)`, async ({
     page,
   }) => {

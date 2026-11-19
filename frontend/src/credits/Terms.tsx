@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { JSX, KeyboardEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { decimal, kopecks, money } from "@/orders/types";
+import { decimal, kopecks, money, typedKopecks } from "@/orders/types";
 import { useSettled } from "@/sales/StockSearch";
 import type { CreditTerms } from "@/sales/types";
 import { api } from "@/shared/api";
@@ -38,7 +38,9 @@ export function checkTerms(
 ): CreditTerms | string {
   const name = input.name.trim();
   const phone = input.phone.trim();
-  const paid = kopecks(input.paid);
+  // «1000,» still being typed: 1000, as the line and the tray say it
+  // (audit 2026-11-18, sale P2-1).
+  const paid = typedKopecks(input.paid);
   if (name === "") return "Вкажіть ім’я покупця, який платить частинами.";
   if (phoneDigits(phone) < 10 || phoneDigits(phone) > 15)
     return "Телефон покупця має містити від 10 до 15 цифр.";
@@ -231,7 +233,7 @@ export function TermsFields({
   storeId: string;
   token: string;
 }): JSX.Element {
-  const paid = kopecks(value.paid);
+  const paid = typedKopecks(value.paid);
   const numberDebt = useId();
   // Turned on, the cursor goes to the customer's name: one tap fewer with
   // the customer waiting (redesign P1-9).

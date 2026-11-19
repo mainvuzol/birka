@@ -812,14 +812,18 @@ test("goods returned are set off against an invoice, and their return waits for 
   await field.fill("4000,01");
   await expect(over).toBeVisible();
   // A sum still being typed, its comma last, is said on as it stands
-  // (review).
+  // (review) — its button too, held (audit 2026-11-18, sale P2-1).
   await field.fill("4001,");
   await expect(over).toBeVisible();
   await expect(
-    setOff.getByRole("button", { name: "Зарахувати", exact: true }),
+    setOff.getByRole("button", {
+      name: "Зарахувати 4 001,00 грн",
+      exact: true,
+    }),
   ).toBeDisabled();
-  // The sum changed: the line gone.
-  await field.fill("1200");
+  // The sum changed: the line gone. Its comma last, it is the sum pressed
+  // and sent (audit 2026-11-18, sale P2-1).
+  await field.fill("1200,");
   await expect(over).toHaveCount(0);
   await expect(field).not.toHaveAttribute("aria-describedby", /.+/);
   expect(counted.bodies).toHaveLength(0);
@@ -835,7 +839,7 @@ test("goods returned are set off against an invoice, and their return waits for 
   await expect(returns).toBeChecked();
   await expect(
     setOff.getByLabel("Скільки зарахував постачальник, грн"),
-  ).toHaveValue("1200");
+  ).toHaveValue("1200,");
   await setOff
     .getByRole("button", { name: "Зарахувати 1 200,00 грн", exact: true })
     .click();

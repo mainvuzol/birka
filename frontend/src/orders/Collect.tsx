@@ -9,7 +9,14 @@ import { Sum } from "@/shared/Sum";
 import { TermsFields, checkTerms, noTerms } from "@/credits/Terms";
 import type { TermsInput } from "@/credits/Terms";
 import { titleOf } from "./Orders";
-import { carrierLabels, collectHint, decimal, kopecks, money } from "./types";
+import {
+  carrierLabels,
+  collectHint,
+  decimal,
+  kopecks,
+  money,
+  typedKopecks,
+} from "./types";
 import type { Order, Store } from "./types";
 
 /**
@@ -104,7 +111,7 @@ export function Collect({
   const total = kopecks(order.total) ?? 0n;
   // In parts, what is paid now and what is left, once the part is a sum
   // under the whole, as the till's panel says it.
-  const paidNow = credit.inParts ? kopecks(credit.paid) : null;
+  const paidNow = credit.inParts ? typedKopecks(credit.paid) : null;
   const owing =
     paidNow !== null && paidNow > 0n && paidNow < total
       ? { now: paidNow, left: total - paidNow }

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { JSX, ReactNode, RefObject } from "react";
-import { decimal, kopecks, money } from "@/orders/types";
+import { decimal, money, typedKopecks } from "@/orders/types";
 import { Eyelet } from "@/shared/Eyelet";
 import { Icon } from "@/shared/Icon";
 import { Keypad } from "@/shared/Keypad";
@@ -72,7 +72,7 @@ export function Count({
   useAskBeforeClosing(typed !== "");
   // Nothing typed is no sum; 0 is one: an empty drawer. «2000,» is a sum
   // still being typed (review, 2026-10-21).
-  const cents = typed === "" ? null : kopecks(typed.replace(/,$/, ""));
+  const cents = typed === "" ? null : typedKopecks(typed);
   const [asking, setAsking] = useState<string | null>(null);
   // Opened from «Каса»: the count begins at its top, and a reader at its
   // title — the tag that opened it is gone (review, 2026-11-03).

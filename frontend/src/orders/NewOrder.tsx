@@ -23,7 +23,7 @@ import { PriceHint } from "@/sales/PriceHint";
 import { StockSearch, useSettled, useStock } from "@/sales/StockSearch";
 import { shortfallOf, stockKey } from "@/sales/types";
 import type { Shortfall } from "@/sales/types";
-import { carrierLabels, decimal, kopecks, money } from "./types";
+import { carrierLabels, decimal, kopecks, money, typedKopecks } from "./types";
 import type {
   Carrier,
   Destination,
@@ -51,9 +51,11 @@ interface DraftLine {
   available: number;
 }
 
-/** A price as sent: the one typed, once it reads as money; else none. */
+/** A price as sent: the one typed, once it reads as money — «1850,» as
+ * 1850, as the till's basket reads it (audit 2026-11-18, sale P2-1); else
+ * none. */
 function asPrice(typed: string): string {
-  const cents = kopecks(typed);
+  const cents = typedKopecks(typed);
   return cents === null ? "" : decimal(cents);
 }
 

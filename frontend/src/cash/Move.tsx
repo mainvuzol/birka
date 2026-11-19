@@ -1,6 +1,6 @@
 import { useId, useRef, useState } from "react";
 import type { JSX, ReactNode, RefObject } from "react";
-import { decimal, kopecks, money } from "@/orders/types";
+import { decimal, money, typedKopecks } from "@/orders/types";
 import type { Store } from "@/orders/types";
 import { Eyelet } from "@/shared/Eyelet";
 import { Keypad } from "@/shared/Keypad";
@@ -85,8 +85,7 @@ export function Move({
   // comma at most — so «Вкажіть суму з точністю до копійок.» stays only as
   // the guard the task list keeps (audit 2026-11-15, orders-cash P1-1
   // p. 6; review).
-  const cents =
-    amount.trim() === "" ? null : kopecks(amount.trim().replace(/[.,]$/, ""));
+  const cents = amount.trim() === "" ? null : typedKopecks(amount);
   const unread = amount.trim() !== "" && cents === null;
   const sum = cents !== null && cents > 0n ? cents : null;
 
