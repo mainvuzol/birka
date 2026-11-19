@@ -925,7 +925,11 @@ test("short of stock: the sheet opens on the line the server names, marked with 
   ]);
   await page.screenshot({ path: "test-results/order-new-short.png" });
   // Another line's price changed: the short one still short, still said.
-  await lines.nth(0).getByLabel("Ціна, грн").fill("1750");
+  // Its comma last, it is a price still being typed, as the till's basket
+  // reads it: no error under it, sent as it stands (audit 2026-11-18, sale
+  // P2-1).
+  await lines.nth(0).getByLabel("Ціна, грн").fill("1750,");
+  await expect(lines.nth(0).locator(".price-error")).toHaveCount(0);
   await expect(note).toBeVisible();
   // One fewer: the mark gone, and it is reserved.
   await lines.nth(1).getByRole("button", { name: "Менше" }).click();
@@ -940,6 +944,9 @@ test("short of stock: the sheet opens on the line the server names, marked with 
       (each) => each.quantity,
     ),
   ).toEqual([1, 1]);
+  expect(
+    (stubbed.made[1]?.lines as Record<string, unknown>[])[0]?.unit_price,
+  ).toBe("1750.00");
 });
 
 test("short of stock with none free: said so in the sheet, and to take the line out (orders task list, P0-5)", async ({

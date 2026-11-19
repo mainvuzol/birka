@@ -448,6 +448,107 @@ test("today's operation is changed in six taps — «Каса» under «Ще» f
   expect(await taps()).toBe(6);
 });
 
+test("at 360 × 400 a long day's last operation opens its card at its top, its line and sum in view; «Інша операція» brings the day back where it was left, that row in hand (audit 2026-11-18, orders-cash P2-3)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 400 });
+  const server = await stub(page);
+  // A long day: eight operations, the last the largest.
+  const long = Array.from({ length: 8 }, (_, i) =>
+    event({
+      at: momentOf(0, `${String(10 + i)}:05`),
+      label: `Пальто Ірис ${String(i + 1)} · L`,
+      amount: `${String((i + 1) * 100)}.00`,
+    }),
+  );
+  let reads = 0;
+  await page.route("**/api/v1/cash/events?**", async (route) => {
+    reads += 1;
+    await route.fulfill({ json: { items: long } });
+  });
+  await open(page);
+  await correct(page);
+  await expect(rows(page).getByRole("button")).toHaveCount(8);
+  await page.evaluate(() => {
+    window.scrollTo(0, document.documentElement.scrollHeight);
+  });
+  const left = await page.evaluate(() => window.scrollY);
+  expect(left).toBeGreaterThan(0);
+  await rows(page).getByRole("button").last().click();
+  // Its own screen, at its top: what it is and its sum in view.
+  await expect(page.locator(".fix-sum")).toHaveText("800,00 грн");
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
+  await expect(page.locator(".fix-what")).toContainText("Пальто Ірис 8 · L");
+  await expect(page.locator(".fix-what")).toBeInViewport();
+  await expect(page.locator(".fix-sum")).toBeInViewport();
+  await page.getByRole("button", { name: "Інша операція" }).click();
+  // The same day, where it was left, the row tapped in hand: put there by
+  // the first frame, before it is painted — the menu's room comes back
+  // after the list, in the same frame.
+  await expect(rows(page).getByRole("button")).toHaveCount(8);
+  const back = await page.evaluate(
+    () =>
+      new Promise<number>((done) => {
+        requestAnimationFrame(() => {
+          done(window.scrollY);
+        });
+      }),
+  );
+  expect(Math.abs(back - left)).toBeLessThanOrEqual(1);
+  await expect(rows(page).getByRole("button").last()).toBeFocused();
+  // The day read once: brought back, never read again for it.
+  expect(reads).toBe(1);
+  // Read again while the card stands — the phone back from the terminal —
+  // and the row tapped gone from the day: back, the title in hand, never
+  // the page's body (review).
+  await rows(page).getByRole("button").last().click();
+  await expect(page.locator(".fix-sum")).toHaveText("800,00 грн");
+  long.pop();
+  await expect(async () => {
+    await page.evaluate(() => {
+      window.dispatchEvent(new Event("visibilitychange"));
+    });
+    expect(reads).toBeGreaterThan(1);
+  }).toPass();
+  await page.getByRole("button", { name: "Інша операція" }).click();
+  await expect(rows(page).getByRole("button")).toHaveCount(7);
+  await expect(
+    page.getByRole("heading", { name: "Змінити спосіб оплати", level: 1 }),
+  ).toBeFocused();
+  // A change refused: the list read again at its top, the refusal over it
+  // in view — no place kept (decided here).
+  const refusedBodies: Record<string, unknown>[] = [];
+  await page.route("**/api/v1/cash/corrections", async (route, request) => {
+    refusedBodies.push(request.postDataJSON() as Record<string, unknown>);
+    await route.fulfill({
+      status: 409,
+      json: { code: "CONFLICT", message: "Conflict", details: {} },
+    });
+  });
+  await rows(page).getByRole("button").last().click();
+  await page
+    .getByRole("group", { name: "Новий спосіб оплати" })
+    .getByRole("button", { name: "Готівка", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Змінити на «Готівка»" }).click();
+  const refused = page.getByRole("alert");
+  await expect(refused).toHaveText(
+    "Не записано: дані каси змінилися, поки ви працювали. Спробуйте ще раз.",
+  );
+  await expect(rows(page).getByRole("button")).toHaveCount(7);
+  await expect(refused).toBeInViewport();
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
+  // The one asked, of the row tapped; none recorded.
+  expect(refusedBodies).toEqual([
+    expect.objectContaining({
+      target_id: long[6]?.target_id,
+      from_method: "CARD",
+      to_method: "CASH",
+    }),
+  ]);
+  expect(server.sent).toHaveLength(0);
+});
+
 test("another day is chosen on the calendar: nothing is read until one is, and a day long ago names its own close (cash task list, P2-4)", async ({
   page,
 }) => {

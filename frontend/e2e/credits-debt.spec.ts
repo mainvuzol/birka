@@ -2545,6 +2545,59 @@ test.describe("«Продаж» › «Внесок»: a payment on a debt from t
     expect(sent).toHaveLength(0);
   });
 
+  for (const scheme of ["light", "dark"] as const)
+    test(`in the ${scheme} theme at 360 a sum ending in its comma is still being typed: «0,» no sum, the ways wait; over the debt «Це більше…» stands on the comma and its figure; «1500,» the ways ready, «1500.00» sent (audit 2026-11-18, sale P2-1)`, async ({
+      page,
+    }) => {
+      await page.emulateMedia({ colorScheme: scheme });
+      await page.setViewportSize({ width: 360, height: 640 });
+      const sent = await serve(
+        page,
+        coat({ amount: "5000.00", paid: "1500.00", owed: "3500.00" }),
+      );
+      await atTheTill(page);
+      await page.getByRole("button", { name: /^Відкрити борг: / }).click();
+      const sum = page.getByLabel("Сума, грн");
+      const card = panel(page).getByRole("button", { name: "Картка" });
+      // «0,» is nothing: the ways wait.
+      await keyIn(page, ",");
+      await expect(sum).toHaveValue("0,");
+      await expect(card).toBeDisabled();
+      await key(page, "Стерти").click();
+      await key(page, "Стерти").click();
+      await expect(sum).toHaveValue("");
+      // More than is owed: said, and it stays on the comma and on the
+      // figure after it — never blinks under the finger.
+      await keyIn(page, "4000");
+      const over = page.getByRole("alert");
+      const words = "Це більше, ніж винні: залишок боргу 3 500,00 грн.";
+      await expect(over).toHaveText(words);
+      await keyIn(page, ",");
+      await expect(sum).toHaveValue(/^4\s000,$/);
+      await expect(over).toHaveText(words);
+      await expect(card).toBeDisabled();
+      await keyIn(page, "5");
+      await expect(sum).toHaveValue(/^4\s000,5$/);
+      await expect(over).toHaveText(words);
+      for (let i = 0; i < 6; i += 1) await key(page, "Стерти").click();
+      await expect(sum).toHaveValue("");
+      // Under it, its comma last: the ways ready at once.
+      await keyIn(page, "1500,");
+      await expect(sum).toHaveValue(/^1\s500,$/);
+      await expect(page.getByRole("alert")).toHaveCount(0);
+      await expect(card).toBeEnabled();
+      await page.screenshot({
+        path: `test-results/credits-debt-comma-${scheme}.png`,
+      });
+      await card.click();
+      await expect(
+        page.getByRole("heading", { name: "Внесок записано" }),
+      ).toBeVisible();
+      expect(sent).toEqual([
+        expect.objectContaining({ amount: "1500.00", payment_method: "CARD" }),
+      ]);
+    });
+
   test("a debt lowered on another phone meanwhile: the server's refusal in the debt's words, and the debt read again", async ({
     page,
   }) => {

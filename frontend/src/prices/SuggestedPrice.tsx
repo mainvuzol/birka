@@ -18,7 +18,7 @@ import { Toast } from "@/shared/Toast";
 import { Unread } from "@/shared/Unread";
 import { buzz, useMainButton } from "@/shared/telegram";
 import { visible } from "@/shared/visible";
-import { decimal, kopecks, money } from "@/orders/types";
+import { decimal, kopecks, money, typedKopecks } from "@/orders/types";
 import type { Store } from "@/orders/types";
 import type { AppliesTo, Prices } from "./types";
 
@@ -344,7 +344,7 @@ function Form({
 
   const zeroId = useId();
   // The sum on the keypad: «1850,5», «1850,» on its way to kopecks, or "".
-  const cents = text === "" ? null : kopecks(text.replace(/,$/, ""));
+  const cents = text === "" ? null : typedKopecks(text);
   const held = blocked || busy;
   const ready = cents !== null && cents > 0n && !held;
   const words =

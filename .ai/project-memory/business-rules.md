@@ -11149,3 +11149,81 @@ changes. No request, check, journal or right changes. One line is gone
   - Д4 checked: «Брак»'s `readOnly` is always `!trading`, the plate's own
     condition. This revisits «decided here» of 2026-11-07 by the later rule
     of one line where a shop does not trade («Накладні», 2026-11-09).
+
+## Chosen in chat — 2026-11-19 (audit 2026-11-18, batch 6: a typed sum ending in its comma read as the sum it is, one rule wherever a sum is typed; «Операції дня»'s card at its top, the day brought back where it was left; the order card's failed read under its title and line; sale P2-1, orders-cash P2-3, P2-4)
+
+Picked in chat («Sale + orders-cash»): the sale task list's P2-1 and the
+orders-cash task list's P2-3 and P2-4. What is sent is the sum shown; the
+server checks prices, `paid_now`, payments, set-offs and costs as before.
+No request, check, journal, right or word changes.
+
+- **«1500,» is a sum still being typed, wherever a sum is typed** (sale
+  P2-1; spec S10 pp. 5–6, 11–12, S21 pp. 7, 10; direction §2 P7; the rule of
+  money P2-2 (в) of 2026-11-15):
+  - One function, `typedKopecks` beside `kopecks`
+    (`frontend/src/orders/types.ts`): whole hryvnias ending in «,» or «.»
+    read without it — «1500,» as 1500. Anything else reads as `kopecks`
+    reads it: «0,» as «0»; «15,5,», which no figure more makes a sum, as
+    «15,5,5» — no sum (review). Nothing is written into the field.
+  - The till's basket: «1850,» is a price — no red line under it, the hint
+    («Ціна продажу …» or «Ціни продажу ще немає…») as before the comma, the
+    tray «Разом 1 850,00 грн», the ways ready; `unit_price` «1850.00» sent.
+  - «Сплачує зараз», at the till and in «Клієнт забрав» (the shared
+    `TermsFields` and `checkTerms`, and each screen's own `paidNow`): «1000,»
+    — «Лишиться винен …» stands, the tray or the dock «Зараз 1 000,00 грн ·
+    винен …»; `paid_now` «1000.00» sent.
+  - S21: «1500,» — the ways ready, «1500.00» sent; over the debt «Це більше,
+    ніж винні…» stands on the comma and on the figure after it. «0,» is no
+    sum: the ways wait.
+  - Decided here — the rule's other fields, read by the same function: a new
+    order's line price (its `asPrice` and `PriceHint` are the basket's
+    twins); the set-off's sum — its button now says and sends «4500,» as
+    4500, as its over-line already read it (review of 2026-11-13); «Прийшов
+    товар»'s purchase price — «1850,» taken by «Готово», the row «Закупівля ·
+    1 850,00 грн за шт.», `unit_cost` «1850.00» sent. The five places that
+    had their own copy (an invoice's payment, its sum and «Сплачено одразу»,
+    the set-off's over-line, a cash movement) and the two that read only a
+    comma (the cash count, the price change, their keypads type no point)
+    now call it.
+  - With it, by the same rule (said by the review): the set-off's «4500,»
+    under what is owed is pressed and sent as 4500 — before, refused «Вкажіть
+    суму заліку з точністю до копійок.»; «0,» as a price in the basket or a
+    new order reads as «0» does — «Ціна 0,00 грн. Це справді подарунок?…»,
+    the ways ready — where it was the red «Впишіть ціну…»; a second
+    separator with a figure between («15,5,», «1850,5.») is no sum in an
+    invoice's fields and a cash movement too, where the old copies read it
+    as 15,50.
+- **«Операції дня»'s card opens at its top; the day comes back where it was
+  left** (orders-cash P2-3; spec §6.2; frame P1-3):
+  - The day's list and an operation's card stay under one title, «Змінити
+    спосіб оплати», each its own screen (`screen` «day-operations» /
+    «day-operation»), as «Ваші операції»'s: a row tapped low on a long day
+    opens its card at its top, what it is and its sum in view.
+  - «Інша операція» brings the same day back where it was read to, the row
+    tapped in focus, put there before it is painted — as «Закриття»'s list.
+    Decided here: a day's list may be long, as the closes'. The day, «Інший
+    день» and the list read are as before; nothing is read again for it.
+  - Decided here: a correction refused brings the list back at its top, its
+    refusal over it in view — no place kept — as before.
+  - By the review: read again while the card stood — the phone back from the
+    terminal — and the row tapped gone from the day, «Інша операція» puts
+    the title in hand, never the page's body.
+  - The menu steps aside and comes back in layout effects here, the place
+    put once more in the first frame, once the menu's room is back, before
+    the paint (found while proving: 90 short otherwise). «Ваші операції»
+    keeps its passive step aside: for a tap the same; not changed.
+  - The sum, the ways, «Змінити на …», the note, the refusal, the kept
+    operation and the command's body are as before. Taps 7 and 6 as before.
+- **The order card's failed read under its title and line** (orders-cash
+  P2-4; spec §6.2, S12; batch 9 of 2026-11-15):
+  - The card read again and failed — the phone back from the carrier's app,
+    a refusal's re-read — says so under its title and line, and under the
+    kept stub when it stands there, over «У посилці» and all the card says;
+    never over its title. This revisits the review of 2026-10-25 («why …
+    over them») in place only: still over all the card says and what was
+    typed.
+  - While «Товар повернувся на склад» stands over the card, the same plate
+    stands under its title and line; it never hides with the card. What was
+    typed there (the reason) stays when it is read again.
+  - The words, «Спробувати ще раз» reading it again, and what was typed on
+    the card and the screen over it are as before.

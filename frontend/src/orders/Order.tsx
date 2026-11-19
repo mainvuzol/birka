@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
-import type { JSX } from "react";
+import type { JSX, ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Fold } from "@/shared/Fold";
 import { api } from "@/shared/api";
@@ -154,6 +154,11 @@ interface CardProps {
   refusal?: StepRefusal | null | undefined;
   /** What was refused there forgotten: the return's left for the card. */
   forget?: (() => void) | undefined;
+  /** The card read again and failed — the phone back from the carrier's
+   * app, a refusal's re-read: why, and «Спробувати ще раз», under its
+   * title and line, over what was last read (audit 2026-11-18, orders-cash
+   * P2-4); under «Товар повернувся на склад»'s while it stands. */
+  unread?: ReactNode;
 }
 /**
  * An order's place while it is read (orders task list, P2-2): its string of
@@ -271,6 +276,9 @@ export function OrderDetail({
     <>
       <Card
         {...props}
+        // The card hidden under the return, its plate is the return's: it
+        // never hides with the card.
+        unread={returning ? null : props.unread}
         refusal={onReturn ? null : refusal}
         away={returning}
         takeBack={() => {
@@ -286,6 +294,7 @@ export function OrderDetail({
           blocked={props.blocked}
           waiting={props.waiting}
           refusal={onReturn ? refusal : null}
+          unread={props.unread}
           back={back}
           take={(body) => {
             props.action("return", body);
@@ -326,6 +335,7 @@ function Card({
   away,
   takeBack,
   refusal,
+  unread,
 }: CardProps & {
   /** The goods coming back are taken over it: hidden, its panel with it. */
   away: boolean;
@@ -508,6 +518,10 @@ function Card({
         }
       />
       <section className="order">
+        {/* Under the title and its line — and the kept stub, when it stands
+            here —, over the string of knots and all the card says (audit
+            2026-11-18, orders-cash P2-4; S12). */}
+        {unread}
         {done && (
           // A reserve torn off as recorded over the thread, the coat held
           // for its customer; any other step a line, its eyelet filled in

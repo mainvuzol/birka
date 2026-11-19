@@ -21,7 +21,7 @@ import {
 import { Fold } from "@/shared/Fold";
 import { NoCustomerData } from "@/shared/NoCustomerData";
 import { visible } from "@/shared/visible";
-import { decimal, kopecks, money } from "@/orders/types";
+import { decimal, kopecks, money, typedKopecks } from "@/orders/types";
 import type { Store } from "@/orders/types";
 import { asInput } from "@/prices/SuggestedPrice";
 import { number } from "@/openings/types";
@@ -336,7 +336,10 @@ export function Debt({
   useEffect(() => {
     if (allGoods) goodsList.current?.focus();
   }, [allGoods]);
-  const cents = kopecks(amount);
+  // «1500,» is a sum still being typed: read as 1500, so the ways and the
+  // line over the keys never blink under the finger, as an invoice's
+  // payment (audit 2026-11-18, sale P2-1); what is sent is the sum shown.
+  const cents = typedKopecks(amount);
   const typed = cents !== null && cents > 0n;
   // A sum typed and not yet taken: Telegram asks before Бірка closes (spec
   // §4.4; «Усе на бірці» task list, P1-2).

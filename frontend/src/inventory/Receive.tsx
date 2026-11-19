@@ -17,7 +17,7 @@ import { enterGoes } from "@/shared/enter";
 import { ScreenHeader } from "@/shared/ScreenHeader";
 import { ResultScreen } from "@/shared/ResultScreen";
 import { buzz, useAskBeforeClosing, useMainButton } from "@/shared/telegram";
-import { decimal, kopecks, money } from "@/orders/types";
+import { decimal, kopecks, money, typedKopecks } from "@/orders/types";
 import type { Location, Store } from "@/orders/types";
 import { SuggestedPrice } from "@/prices/SuggestedPrice";
 import {
@@ -258,7 +258,9 @@ export function Receive({
   function take(): Draft[] | null {
     if (!variant || counted.length === 0) return [];
     const stated = cost.trim();
-    const cents = stated ? kopecks(stated) : null;
+    // «1850,» is a price still being typed: 1850 (audit 2026-11-18, sale
+    // P2-1), as the row says it.
+    const cents = stated ? typedKopecks(stated) : null;
     if (stated && cents === null) {
       refuse(
         "Закупівельну ціну вкажіть у гривнях, до копійок, наприклад 1850,50.",
@@ -488,7 +490,7 @@ export function Receive({
   const owing =
     paidWhenSold(acquisition) ||
     draft.some((d) => paidWhenSold(d.line.acquisition_type));
-  const stated = kopecks(cost.trim());
+  const stated = typedKopecks(cost);
   const supplier = owing
     ? suppliers.data?.find((one) => one.id === supplierId)
     : undefined;
@@ -820,7 +822,7 @@ export function Receive({
               onClick={() => {
                 // A price typed that is not money is said here, where it
                 // is mended.
-                if (cost.trim() && kopecks(cost.trim()) === null) {
+                if (cost.trim() && typedKopecks(cost) === null) {
                   setCostWrong(true);
                   buzz("error");
                 } else setDetails(false);

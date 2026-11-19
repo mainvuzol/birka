@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type { JSX, ReactNode } from "react";
 import { BackToMore } from "@/shared/More";
 import { Empty } from "@/shared/Empty";
@@ -20,7 +20,7 @@ import { Back } from "@/shared/Back";
 import { ScreenHeader } from "@/shared/ScreenHeader";
 import { Closed, CloseSummary } from "./Closed";
 import { Count } from "./Count";
-import { FixStep, useTaskWhile, WayCard } from "./Fix";
+import { FixStep, WayCard } from "./Fix";
 import { History } from "./History";
 import { Kept } from "./Kept";
 import { Move } from "./Move";
@@ -992,7 +992,17 @@ function CorrectStep({
   const day =
     which === "today" ? cashDay(0) : which === "yesterday" ? cashDay(1) : other;
   const [chosen, setChosen] = useState<DayEvent | null>(null);
-  useTaskWhile(chosen !== null, task);
+  // The menu steps aside while a card stands, and is back before the day's
+  // list is painted — its room is the page's, wanted by the place put back
+  // below (audit 2026-11-18, orders-cash P2-3).
+  const open = chosen !== null;
+  useLayoutEffect(() => {
+    if (!open) return;
+    task(true);
+    return () => {
+      task(false);
+    };
+  }, [open, task]);
   // A change on its way: no way out, nor to another operation, until it is
   // answered (review, 2026-11-09).
   const [sending, setSending] = useState(false);
@@ -1000,6 +1010,35 @@ function CorrectStep({
   // where the operation is chosen anew (review, 2026-10-22).
   const [problem, setProblem] = useState<string | null>(null);
   const valid = /^\d{4}-\d{2}-\d{2}$/.test(day);
+  // Where the day's list was read to, and the row tapped, kept while its
+  // card stands: «Інша операція» brings the same place back, the same row
+  // in hand, as «Закриття»'s list — put there before it is painted, after
+  // the header's reset (audit 2026-11-18, orders-cash P2-3). Decided here:
+  // a day's list may be long, as the closes'.
+  const place = useRef(0);
+  const row = useRef<string | null>(null);
+  const heading = useRef<HTMLHeadingElement>(null);
+  useLayoutEffect(() => {
+    if (open) return;
+    const put = (): void => {
+      window.scrollTo(0, place.current);
+    };
+    put();
+    if (row.current !== null) {
+      const tapped = document.querySelector<HTMLButtonElement>(
+        `[data-event="${CSS.escape(row.current)}"]`,
+      );
+      // Read again while its card stood, and gone from the day: the title
+      // in hand, never the page's body (review).
+      (tapped ?? heading.current)?.focus({ preventScroll: true });
+    }
+    // The menu's room comes back after this, in the same frame: the place
+    // put again once it is there, still before the paint.
+    const frame = requestAnimationFrame(put);
+    return () => {
+      cancelAnimationFrame(frame);
+    };
+  }, [open]);
   const events = useQuery({
     queryKey: ["cash-events", store.id, day],
     queryFn: () =>
@@ -1009,8 +1048,15 @@ function CorrectStep({
   });
   return (
     <>
+      {/* The day's list and an operation's card under one title, each its
+          own screen: a row tapped low on a long day opens its card at its
+          top (audit 2026-11-18, orders-cash P2-3; frame P1-3), as «Ваші
+          операції»'s. */}
       <ScreenHeader
+        ref={heading}
+        focusable
         title="Змінити спосіб оплати"
+        screen={chosen ? "day-operation" : "day-operations"}
         back={
           <Back
             go={() => {
@@ -1071,6 +1117,10 @@ function CorrectStep({
                   back(correctionDone(outcome.result as Correction));
                 } else if (outcome.kind === "refused") {
                   buzz("error");
+                  // Said over the list read again, at its top: no place
+                  // kept (decided here).
+                  place.current = 0;
+                  row.current = null;
                   setChosen(null);
                   setProblem(cashErrorText(outcome.error, false, "correction"));
                   void events.refetch();
@@ -1145,8 +1195,11 @@ function CorrectStep({
                     <button
                       type="button"
                       className="sale-row correct-row"
+                      data-event={`${event.target}:${event.target_id}`}
                       disabled={!event.may_change}
                       onClick={() => {
+                        place.current = window.scrollY;
+                        row.current = `${event.target}:${event.target_id}`;
                         setProblem(null);
                         setChosen(event);
                       }}

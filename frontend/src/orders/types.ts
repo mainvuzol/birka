@@ -214,6 +214,19 @@ export function kopecks(value: string): bigint | null {
   const [whole = "0", fraction = ""] = normalized.split(".");
   return BigInt(whole) * 100n + BigInt(fraction.padEnd(2, "0"));
 }
+/**
+ * A sum still being typed: «1500,» — whole hryvnias and the comma (or
+ * point) the keys put in one tap — reads as 1500, so nothing under the
+ * finger blinks between the comma and the next figure (audit 2026-11-15,
+ * money P2-2 (в); audit 2026-11-18, sale P2-1). What is sent is the sum
+ * read, the one shown. Anything else reads as `kopecks()` reads it: «0,»
+ * as «0»; «15,5,», which no figure more makes a sum, as «15,5,5» — no sum
+ * (review).
+ */
+export function typedKopecks(value: string): bigint | null {
+  const typed = value.trim();
+  return kopecks(/^\d+[.,]$/.test(typed) ? typed.slice(0, -1) : typed);
+}
 export function decimal(value: bigint): string {
   return `${(value / 100n).toString()}.${(value % 100n).toString().padStart(2, "0")}`;
 }

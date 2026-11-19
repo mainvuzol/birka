@@ -2804,6 +2804,7 @@ test("the report unread: «не вдалося прочитати» in the total
     await route.fallback();
   });
   const urls = asked(page);
+  const settled = answered(page);
   await onToday(page);
   const tag = dayTag(page);
   await expect(column(page, "Центр")).toContainText(
@@ -2854,6 +2855,9 @@ test("the report unread: «не вдалося прочитати» in the total
       /^\/api\/v1\/(cash\/drawer|credits\/summary|orders)\?/.test(url),
     ),
   ).toEqual([]);
+  // Ended once every read asked is answered: one still on its route as the
+  // page lets go of it holds the teardown (CI, #230; as #176, #177).
+  await expect.poll(() => unanswered(urls, settled)).toEqual([]);
 });
 
 test("the stamp says how old the figures are, and when the server is silent", async ({

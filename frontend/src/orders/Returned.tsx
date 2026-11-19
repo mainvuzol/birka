@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
-import type { JSX } from "react";
+import type { JSX, ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 import { api } from "@/shared/api";
@@ -61,6 +61,7 @@ export function Returned({
   blocked,
   waiting,
   refusal,
+  unread,
   back,
   take,
 }: {
@@ -75,6 +76,9 @@ export function Returned({
   /** The return refused: under the tick, over the dock — the reason and
    * the tick as they were (audit 2026-11-13, orders P1-1). */
   refusal?: StepRefusal | null | undefined;
+  /** The card under it read again and failed: said under this title, as
+   * on the card (audit 2026-11-18, orders-cash P2-4). */
+  unread?: ReactNode;
   /** «← Замовлення». */
   back: () => void;
   take: (body: Record<string, unknown>) => void;
@@ -137,6 +141,7 @@ export function Returned({
         }
       />
       <section className="order-returned">
+        {unread}
         {places.isPending ? (
           <Placeholder
             said="Завантажуємо склади…"

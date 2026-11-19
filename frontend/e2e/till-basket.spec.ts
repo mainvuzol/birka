@@ -543,6 +543,43 @@ test("paying in parts comes back with the basket: the customer, the number and t
   await expect(page.getByLabel("Сплачує зараз, грн")).toHaveValue("1000");
 });
 
+for (const scheme of ["light", "dark"] as const)
+  test(`in the ${scheme} theme at 360 «Сплачує зараз» ending in its comma is a sum still being typed: «1000,» says what is left owed, the tray what is paid now, and «1000.00» is sent (audit 2026-11-18, sale P2-1)`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ colorScheme: scheme });
+    await page.setViewportSize({ width: 360, height: 640 });
+    await stubList(page);
+    // Refused by the server: only what was sent is read here.
+    const sent = await serveSales(page, ["refused"]);
+    await onTheTill(page);
+    await twoCoats(page);
+    await basketSheet(page);
+    await page.getByLabel("Оплата частинами").check();
+    await page.getByLabel("Ім’я покупця").fill("Марія Кошикова");
+    await page.getByLabel("Телефон покупця").fill("067 123 45 67");
+    const paid = page.getByLabel("Сплачує зараз, грн");
+    await paid.fill("1000,");
+    // Nothing written in for it: the comma stays where it was typed.
+    await expect(paid).toHaveValue("1000,");
+    await expect(page.getByText("Лишиться винен 2 400,00 грн")).toBeVisible();
+    await basketDone(page);
+    await expect(page.locator(".pay-total")).toHaveText(
+      /^Зараз 1\s000,00\sгрн · винен 2\s400,00\sгрн$/,
+    );
+    await expect(pay(page, "Готівка")).toBeEnabled();
+    await page.screenshot({
+      path: `test-results/till-parts-comma-${scheme}.png`,
+    });
+    await pay(page, "Готівка").click();
+    await expect.poll(() => sent.length).toBe(1);
+    expect((sent[0] as { credit?: unknown }).credit).toEqual({
+      customer_name: "Марія Кошикова",
+      customer_phone: "067 123 45 67",
+      paid_now: "1000.00",
+    });
+  });
+
 test("an answer about the shelf already given comes back with the basket, and is sent with it under the same command (navigation task list, P0-5)", async ({
   page,
 }) => {

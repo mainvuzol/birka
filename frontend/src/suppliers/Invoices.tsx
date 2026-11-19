@@ -7,7 +7,7 @@ import {
 } from "@tanstack/react-query";
 import { api } from "@/shared/api";
 import { Unread } from "@/shared/Unread";
-import { decimal, kopecks, money } from "@/orders/types";
+import { decimal, money, typedKopecks } from "@/orders/types";
 import type { Store } from "@/orders/types";
 import { plural } from "@/openings/types";
 import { visible } from "@/shared/visible";
@@ -783,9 +783,8 @@ function NewInvoice({
   // «1500,» is a sum still being typed: read as 1500, as the payment's — on
   // sending too (audit 2026-11-15, money P2-3 (б)). Nothing paid at once is a
   // choice too (owner decision, 2026-10-01).
-  const total = kopecks(amount.replace(/[.,]$/, ""));
-  const paid =
-    paidNow.trim() === "" ? 0n : kopecks(paidNow.replace(/[.,]$/, ""));
+  const total = typedKopecks(amount);
+  const paid = paidNow.trim() === "" ? 0n : typedKopecks(paidNow);
   // More paid at once than the invoice's sum is said under the field as it
   // is typed, and «Записати накладну» holds; the server checks it as before.
   const paidOver = total !== null && paid !== null && paid > total;
