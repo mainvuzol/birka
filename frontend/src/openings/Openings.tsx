@@ -1896,7 +1896,9 @@ function ListView({
                 className="sheet-way"
                 aria-pressed={filter === status}
                 onClick={() => {
-                  buzz("selection");
+                  // Felt only as the filter changes; the sheet closes all
+                  // the same (audit 2026-11-18, goods P2-5 (в)).
+                  if (filter !== status) buzz("selection");
                   setSheet(null);
                   show(status);
                 }}

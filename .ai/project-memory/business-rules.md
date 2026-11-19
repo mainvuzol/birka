@@ -11227,3 +11227,70 @@ No request, check, journal, right or word changes.
     typed there (the reason) stays when it is read again.
   - The words, «Спробувати ще раз» reading it again, and what was typed on
     the card and the screen over it are as before.
+
+## Chosen in chat — 2026-11-19 (audit 2026-11-18, batch 7: a model's detail waits as its hero tag; «Нічого не знайшли» of the catalogue one look and heard; the warning's plate, the list's block and the choice felt only as it changes in «Товар»'s last places; goods P2-3, P2-4, P2-5)
+
+Picked in chat («Goods batch»): the goods task list's P2-3, P2-4 and P2-5,
+the last of the audit 2026-11-18 that wait for no owner. No request,
+check, journal, right or word changes; what «Так, це його назва» and «Ні,
+не про нього» record (`.ai/ADAPTIVE_CATALOG_LEARNING.md`) is as before.
+
+- **A model's detail waits as its hero tag** (goods P2-3; direction P7,
+  §5 «Скелетон»; frame P1-4 after stage 2):
+  - While S23 is read: the hero tag in its own form, as «Моделі»'s — the
+    eyelet, the name's line 42 in grey, ⋯'s place where it will stand,
+    the price's line and «Змінити ціну»'s place (44, the button's corner 8,
+    never the grey's own) for whoever may change it, then the grid's rows every answer has: the
+    sizes and «Разом», one warehouse's row and «Можна продати», each a grey
+    line of its own words. Never the till's tile and its cells. The tag's
+    top is where the answer's stands (±1).
+  - Decided here: three sizes' places — how many, only the answer says, as
+    the till's tile draws three cells; one warehouse's row, as the report's
+    one store's column (2026-11-13, money P2-1). A model with no rows, or a
+    name over two lines, may still move what is under the tag's head when
+    it comes.
+  - «Завантажуємо залишки моделі…» is heard only, as before; the grey is
+    hidden from a reader. «Моделі»'s model waits in the same shared form
+    (`HeroWait`), its look as before.
+- **«Нічого не знайшли» of the catalogue one look, and heard** (goods
+  P2-4; direction §5 «Поиск», «Пустое состояние»; frame P2-3 of
+  2026-11-15):
+  - On a screen — the catalogue's search on «Прийшов товар», «Знайшли
+    товар…», a line of «Початкові залишки», the till's «з каталогу», and
+    «Моделі»'s search, on its list and on «Об’єднати моделі» — the shared
+    empty place: the blank tag 64, «Нічого
+    не знайшли за «…»» its line, and «Додати нову модель «…»» its one
+    button where a model may be added (quiet, as before). No meta. The
+    till's «з каталогу» stands on its screen and offers no adding, as
+    before: the tag and its line. A long word typed wraps, the button's
+    too, nothing past a 360 phone (review).
+  - In «Нова модель»'s sheet («Інший колір нашої моделі») a line of `meta`
+    in pencil, as the suppliers' sheet's; «Моделей не знайдено.» the same
+    line.
+  - Everywhere the line is heard as it is drawn (`status`), its region
+    drawn with it, as «Моделі»'s and the sheet's line were (review: a
+    region always there, as «Сьогодні»'s, is the firmer way, not taken
+    here). The words, and the old line never standing under new words, are
+    as before.
+- **«Товар»'s last places of the rules of batches 3 and 8** (goods P2-5;
+  direction §4, §5 «Строка списка», §6 rule 9):
+  - (а) «Обраний склад більше не доступний.» in «Залишки» and on
+    «Інвентаризація»'s way in: a warning's plate said after an answer
+    (`status`), led by that line, «Оберіть інший склад.» under it — the rule
+    of 2026-11-15 (a plate of two sentences split at the first); 12 between
+    it and the choices under it (review).
+  - (б) «Цей опис — назва товару?»: the models it may name as a list's rows
+    on its white block, the fold's width — the name 17/600 in ink, «Так, це
+    його назва» or «Ні, не про нього» on its right; their names, look and
+    `aria-label`s as before. The two notes stay over the block.
+    Decided here: «Обраний товар:» a line of `meta` over the chosen model's
+    name (a space between, for a reader); another model's distinction a
+    line of `meta` under its name, «Відмінність моделі: …» as the open
+    proposal's rows say it on the same screen — where it was «{модель} —
+    {відмінність}» on one line (review).
+  - (в) A choice felt only as it changes: «Склад вашого магазину» in
+    «Брак»'s sheet — the one chosen tapped again, nothing; «Система
+    розміру» in «Нова модель» — `selection` as it changes, nothing on the
+    one chosen (it was never felt); «Інші рядки» in «Початкові залишки» —
+    the filter shown chosen again closes the sheet, as before, with nothing
+    felt.

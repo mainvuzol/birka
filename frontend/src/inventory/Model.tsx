@@ -6,7 +6,8 @@ import { Unread } from "@/shared/Unread";
 import { Icon } from "@/shared/Icon";
 import { BackToMore } from "@/shared/More";
 import type { MoreBack } from "@/shared/More";
-import { Placeholder } from "@/shared/Placeholder";
+import { HeroWait } from "@/shared/HeroWait";
+import { Grey } from "@/shared/TableWait";
 import { ScreenHeader } from "@/shared/ScreenHeader";
 import { Sheet } from "@/shared/Sheet";
 import { Stub } from "@/shared/Stub";
@@ -61,6 +62,87 @@ async function modelRows(
     )
       return [...rows.values()];
   }
+}
+
+/** The sizes' places while the grid is read: how many, only the answer
+ * says — three, as the till's tile draws its cells. */
+const waitSizes = ["S", "M", "L"];
+
+/**
+ * A model's detail while it is read (audit 2026-11-18, goods P2-3): its
+ * hero tag in its own form, as «Моделі»'s — the eyelet, the name's line,
+ * ⋯'s place where it will stand, the price's line and «Змінити ціну»'s
+ * place, then the grid's rows every answer has: the sizes, one
+ * warehouse's row and «Можна продати», each a grey line of its own words.
+ * How many warehouses, only the answer says, as the report's one store's
+ * column. A screen reader hears that it is read, as before.
+ */
+function ModelWait({
+  more,
+  change,
+}: {
+  more: boolean;
+  change: boolean;
+}): JSX.Element {
+  const counts = (
+    <>
+      {waitSizes.map((size) => (
+        <td key={size}>
+          <Grey words="0" />
+        </td>
+      ))}
+      <td>
+        <Grey words="0" />
+      </td>
+    </>
+  );
+  return (
+    <HeroWait said="Завантажуємо залишки моделі…" more={more}>
+      <div className="model-price-row">
+        <p className="t-row">
+          <span className="skeleton-line">
+            <span>
+              Ціна продажу <span className="model-price">0 000,00 грн</span>
+            </span>
+          </span>
+        </p>
+        {change && <span className="skeleton skeleton-change" />}
+      </div>
+      <div className="size-grid-wrap">
+        <table className="size-grid">
+          <thead>
+            <tr>
+              <td />
+              {waitSizes.map((size) => (
+                <th key={size}>
+                  <Grey words={size} />
+                </th>
+              ))}
+              <th className="grid-total">
+                <Grey words="Разом" />
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">
+                <Grey words="Основний" />
+              </th>
+              {counts}
+            </tr>
+          </tbody>
+          <tfoot>
+            <tr className="grid-free">
+              <th scope="row">
+                <Grey words="Можна продати" />
+              </th>
+              {counts}
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </HeroWait>
+  );
 }
 
 interface Size {
@@ -295,7 +377,7 @@ export function Model({
     return (
       <>
         <ScreenHeader back={<BackToMore back={back} />} />
-        <Placeholder said="Завантажуємо залишки моделі…" tags={1} />
+        <ModelWait more={canAdjust} change={canPrice} />
       </>
     );
 

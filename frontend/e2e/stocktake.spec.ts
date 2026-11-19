@@ -20,6 +20,7 @@ import {
   refuseOnce,
   rowTitle,
   section,
+  expectGoneWarehouse,
 } from "./fixtures";
 import type { Locator, Page, Request, Route } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
@@ -240,11 +241,7 @@ test("a warehouse chosen for a stocktake and taken away is said in «Залиш�
   await page.evaluate(() => {
     window.dispatchEvent(new Event("visibilitychange"));
   });
-  await expect(
-    page.getByText("Обраний склад більше не доступний. Оберіть інший склад.", {
-      exact: true,
-    }),
-  ).toBeVisible();
+  await expectGoneWarehouse(page);
   await expect(page.getByText(/зі списку/)).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "Основний склад", exact: true }),

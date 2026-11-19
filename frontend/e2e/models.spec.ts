@@ -28,6 +28,7 @@ import {
   sellsFrom,
   propose,
   typeSize,
+  nothingFound,
 } from "./fixtures";
 import type { Locator, Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
@@ -2031,9 +2032,9 @@ test("a retirement an opening list stops says so", async ({ page }) => {
   await enter(page, "Моделі");
   // Words no model has: said so.
   await page.getByLabel("Знайти модель").fill(`${name} немає`);
-  await expect(
-    page.getByText(`Нічого не знайшли за «${name} немає»`, { exact: true }),
-  ).toBeVisible();
+  // The blank tag, nothing under its line (audit 2026-11-18, goods P2-4).
+  const none = await nothingFound(page, `Нічого не знайшли за «${name} немає»`);
+  await expect(none.getByRole("button")).toHaveCount(0);
   await open(page, name, /графіт/);
   await way(page, "Прибрати модель");
   await expect(

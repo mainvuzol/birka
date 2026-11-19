@@ -49,6 +49,8 @@ import { ScreenHeader } from "@/shared/ScreenHeader";
 import { SearchField } from "@/shared/SearchField";
 import { Sheet } from "@/shared/Sheet";
 import { Stub } from "@/shared/Stub";
+import { Empty } from "@/shared/Empty";
+import { HeroWait } from "@/shared/HeroWait";
 import { Placeholder } from "@/shared/Placeholder";
 import { usePanelRoom } from "@/shared/panel";
 import { askPopup, buzz, popupHere, useMainButton } from "@/shared/telegram";
@@ -250,9 +252,13 @@ function ModelSearch({
         found.data &&
         !found.isPlaceholderData &&
         items.length === 0 && (
-          <p className="t-meta" role="status">
-            Нічого не знайшли за «{visible(asked)}»
-          </p>
+          // The shared empty place, as the catalogue's search on a screen
+          // (spec §6.28; audit 2026-11-18, goods P2-4), heard as it comes.
+          <Empty
+            className="catalog-empty"
+            status
+            title={`Нічого не знайшли за «${visible(asked)}»`}
+          />
         )}
       {items.length > 0 && (
         // Rows 64 on a white block, each opening its model (spec §6.8;
@@ -298,35 +304,6 @@ function ModelSearch({
         </button>
       )}
     </section>
-  );
-}
-
-/**
- * A model being read (goods task list after stage 2, P2-2): its hero tag in
- * its place — the eyelet, the name's line 42 in grey, ⋯'s place beside it —
- * under «← Моделі», which stands already. A screen reader hears that it is
- * read.
- */
-function ModelPlaceholder(): JSX.Element {
-  return (
-    <>
-      <p role="status" className="visually-hidden">
-        Завантажуємо модель…
-      </p>
-      <section className="model-screen placeholder" aria-hidden="true">
-        <div className="model-hang">
-          <div className="tag-hero tag-outline">
-            <div className="model-hero">
-              <span className="hero-eyelet" />
-              <div className="model-hero-head">
-                <span className="skeleton skeleton-title" />
-                <span className="debt-more" />
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-    </>
   );
 }
 
@@ -1454,7 +1431,11 @@ export function Models({
           }}
         />
       </div>
-      {selected && card.isPending && <ModelPlaceholder />}
+      {selected && card.isPending && (
+        // Its hero tag in its place under «← Моделі», which stands already
+        // (goods task list after stage 2, P2-2).
+        <HeroWait said="Завантажуємо модель…" more />
+      )}
       {selected && card.isError && (
         <Unread
           error={card.error}

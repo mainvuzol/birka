@@ -26,6 +26,7 @@ import {
   section,
   sheetRow,
   sizeCell,
+  nothingFound,
 } from "./fixtures";
 import type { Page, Request } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
@@ -1157,10 +1158,35 @@ test("a coat the catalogue has not is added from the empty search, in the sheet 
   await enter(page);
   await firstLine(page);
   const name = `Новинка ${randomUUID().slice(0, 8)}`;
+  // A long word typed with no space: the line and its button wrap, nothing
+  // past a 360 phone's width, in both themes (audit 2026-11-18, goods P2-4;
+  // review).
+  const long = `Новинкабезпробілу${randomUUID().replaceAll("-", "")}`;
+  const size = page.viewportSize();
+  await page.setViewportSize({ width: 360, height: 640 });
+  await find(page, long);
+  const wide = await nothingFound(page, `Нічого не знайшли за «${long}»`);
+  await expect(
+    wide.getByRole("button", { name: `Додати нову модель «${long}»` }),
+  ).toBeVisible();
+  for (const scheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth > innerWidth,
+      ),
+    ).toBe(false);
+  }
+  await page.emulateMedia({ colorScheme: "light" });
+  if (size) await page.setViewportSize(size);
   await find(page, name);
-  // Nothing found is said, and the model added from there.
-  await expect(page.getByText(`Нічого не знайшли за «${name}»`)).toBeVisible();
-  await page
+  // Nothing found is said — the blank tag, heard — and the model added
+  // from its one button (audit 2026-11-18, goods P2-4).
+  const none = await nothingFound(page, `Нічого не знайшли за «${name}»`);
+  await expect(none.getByRole("button")).toHaveText([
+    `Додати нову модель «${name}»`,
+  ]);
+  await none
     .getByRole("button", { name: `Додати нову модель «${name}»` })
     .click();
   const sheet = await newModelSheet(page);

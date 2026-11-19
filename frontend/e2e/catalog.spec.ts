@@ -186,6 +186,37 @@ test("explicit catalog choice and opt-in alias feedback through real API", async
     "Цей опис — назва товару?",
     page.locator(".catalog-name-fold"),
   );
+  // The models it may name as a list's rows on its white block, each named
+  // 17/600, its answer on its right (audit 2026-11-18, goods P2-5 (б)).
+  const named = page.locator(".catalog-name-fold > .list-block > li");
+  await expect(named.first()).toContainText(
+    new RegExp(`^Обраний товар:\\s${loran}`),
+  );
+  for (const item of await named.all()) {
+    await blockRow(item);
+    const title = item.locator(".new-model-name strong");
+    await rowTitle(title);
+    const [name, answer] = await Promise.all([
+      title.boundingBox(),
+      item.getByRole("button").boundingBox(),
+    ]);
+    if (!name || !answer) throw new Error("not laid out");
+    expect(answer.x).toBeGreaterThanOrEqual(name.x + name.width);
+  }
+  await page.setViewportSize({ width: 360, height: 640 });
+  for (const scheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth > innerWidth,
+      ),
+    ).toBe(false);
+    await page.screenshot({
+      path: `test-results/catalog-name-rows-${scheme}.png`,
+      fullPage: true,
+    });
+  }
+  await page.emulateMedia({ colorScheme: "light" });
   expect(feedbackCount).toBe(0);
   const response = page.waitForResponse(
     (r) => r.url().endsWith("/alias-feedback") && r.status() === 200,
@@ -449,7 +480,7 @@ test("a proposal kept on the phone is felt once, a warning; its later checks, lo
   expect(await buzzes()).toEqual(warned);
 });
 
-test("inside Telegram a model offered, chosen, is felt as a choice — never the one chosen tapped again — in «Нова модель»'s sheet and on «Пропозиція»'s screen; for «Інший колір нашої моделі» a similar model's chip and a model found felt too (audit 2026-11-15, goods P2-3)", async ({
+test("inside Telegram a model offered, chosen, is felt as a choice — never the one chosen tapped again — in «Нова модель»'s sheet and on «Пропозиція»'s screen; for «Інший колір нашої моделі» a similar model's chip and a model found felt too (audit 2026-11-15, goods P2-3); a typed size's system felt as it changes (audit 2026-11-18, goods P2-5 (в))", async ({
   page,
 }) => {
   const felt = await haptics(page);
@@ -477,6 +508,21 @@ test("inside Telegram a model offered, chosen, is felt as a choice — never the
   // model's chip, then a model found, each felt.
   await page.getByRole("button", { name: "Створити нову" }).click();
   const making = await newModelSheet(page);
+  // A size typed by hand asks its system: a system chosen is felt, the one
+  // chosen tapped again nothing (audit 2026-11-18, goods P2-5 (в)).
+  await making
+    .getByLabel("Іншого розміру немає — впишіть")
+    .fill(`Q${randomUUID().slice(0, 6)}`);
+  const systems = making.getByRole("group", { name: "Система розміру" });
+  const letters = systems.getByRole("button", { name: "Літерна", exact: true });
+  await feels(felt, () => letters.click(), [selection]);
+  await expect(letters).toHaveAttribute("aria-pressed", "true");
+  await feels(felt, () => letters.click(), []);
+  await feels(
+    felt,
+    () => systems.getByRole("button", { name: "Числова EU" }).click(),
+    [selection],
+  );
   await making
     .getByRole("group", { name: "Яка модель" })
     .getByRole("button", { name: "Інший колір нашої моделі" })
@@ -1405,6 +1451,24 @@ test("family search empty and failure states keep the manual draft", async ({
   await expect(
     sheet.getByText(`Нічого не знайшли за «${nothing}»`, { exact: true }),
   ).toBeVisible();
+  // In a sheet a line of `meta` in pencil, never the blank tag; heard as
+  // it comes (audit 2026-11-18, goods P2-4).
+  const line = sheet
+    .getByRole("status")
+    .filter({ hasText: "Нічого не знайшли" });
+  await expect(line).toHaveText(`Нічого не знайшли за «${nothing}»`);
+  await expect(line).toHaveClass(/\bt-meta\b/);
+  await expect(line).toHaveCSS("font-size", "14px");
+  const pencil = await line.evaluate(() => {
+    const probe = document.createElement("span");
+    probe.style.color = "var(--pencil)";
+    document.body.append(probe);
+    const colour = getComputedStyle(probe).color;
+    probe.remove();
+    return colour;
+  });
+  await expect(line).toHaveCSS("color", pencil);
+  await expect(sheet.locator(".orders-empty")).toHaveCount(0);
   await page.route("**/api/v1/catalog/families?**", async (route) => {
     await route.fulfill({ status: 403, json: { code: "PERMISSION_DENIED" } });
   });
