@@ -1476,6 +1476,10 @@ function Workspace({
   const [collected, setCollected] = useState<{
     id: string;
     kept: boolean;
+    /** In parts: what this attempt paid, as the till's kept sale says its
+     * own (audit 2026-11-20, orders-cash Н2) — the server's `paid` is every
+     * payment so far, a later «Внесок» included. */
+    paidNow: string | undefined;
   } | null>(null);
   // Each step that came back with its order: its card mounted afresh.
   const [orderEpoch, setOrderEpoch] = useState(0);
@@ -1639,7 +1643,18 @@ function Workspace({
       // P0-3).
       if (step === "collect") {
         buzz("success");
-        setCollected({ id: order.id, kept: resent });
+        // Kept on the phone, read back as a sum of the server's form, or
+        // the server's own (review).
+        const terms = command.body.credit;
+        const paidNow =
+          typeof terms === "object" &&
+          terms !== null &&
+          "paid_now" in terms &&
+          typeof terms.paid_now === "string" &&
+          /^\d{1,10}\.\d{2}$/.test(terms.paid_now)
+            ? terms.paid_now
+            : undefined;
+        setCollected({ id: order.id, kept: resent, paidNow });
       }
       cache.setQueryData(["order", store.id, order.id], order);
       if (!stay) {
@@ -3880,6 +3895,10 @@ function Workspace({
               adjustmentUnsettled ||
               creditUnsettled ||
               cashUnsettled ||
+              // Its own journal unread, as the till's own sale holds the
+              // till: the plate at the top says it, and a press would send
+              // nothing (audit 2026-11-20, sale's find 1).
+              returnStorageError ||
               // As «Продати» and «Внесок»: whatever holds every other tab
               // holds a return too — a kept return confirmed while another
               // operation is kept leaves it held (audit 2026-11-13, Д4).
@@ -3929,6 +3948,9 @@ function Workspace({
               adjustmentUnsettled ||
               returnUnsettled ||
               cashUnsettled ||
+              // Its own journal unread, as the till's own sale holds the
+              // till (audit 2026-11-20, sale's find 1).
+              creditStorageError ||
               // At the till, as «Продати»: whatever holds every other tab
               // holds it too.
               storesUnsettled ||
@@ -3986,6 +4008,9 @@ function Workspace({
               adjustmentUnsettled ||
               returnUnsettled ||
               cashUnsettled ||
+              // Its own journal unread, as «Внесок» (audit 2026-11-20,
+              // sale's find 1).
+              creditStorageError ||
               // As «Внесок»: whatever holds every other tab holds «Покупці»
               // too (audit 2026-11-13, Д4; review).
               storesUnsettled ||
@@ -4409,6 +4434,11 @@ function Workspace({
                     ? "kept"
                     : "now"
                   : null
+              }
+              paidNow={
+                collected?.id === detail.data.id
+                  ? collected.paidNow
+                  : undefined
               }
               store={store}
               token={token}

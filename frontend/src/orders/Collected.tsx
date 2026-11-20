@@ -130,12 +130,19 @@ export function SaleLinks({
 export function Collected({
   order,
   kept,
+  paidNow,
   fixWay,
   fixHeld = false,
   returnSale,
 }: {
   order: Order;
   kept: boolean;
+  /** In parts: what the attempt itself paid. Kept and confirmed after a
+   * «Внесок» on another phone, the server's `paid` holds that one too —
+   * «Сплачено зараз» and the terminal's sum are this sale's own, as the
+   * till's kept sale says its `paid_now` (audit 2026-11-20, orders-cash
+   * Н2). What is owed stays the server's. */
+  paidNow?: string | undefined;
   fixWay?: (() => void) | undefined;
   fixHeld?: boolean;
   returnSale?: (() => void) | undefined;
@@ -148,7 +155,7 @@ export function Collected({
     heading.current?.scrollIntoView({ block: "nearest" });
   }, [kept]);
   const way = order.payment_method ?? null;
-  const taken = order.credit ? order.credit.paid : order.total;
+  const taken = order.credit ? (paidNow ?? order.credit.paid) : order.total;
   const owed = owedText(order);
   // Confirmed later, the way alone: a card may have been charged meanwhile.
   const say = !kept && way ? (waySays[way] ?? null) : null;

@@ -1663,6 +1663,64 @@ test("a card's «Клієнт забрав» whose answer never came, confirmed 
   expect(server.sent[1]).toEqual(server.sent[0]);
 });
 
+test("«Клієнт забрав» in parts by card whose answer never came, confirmed after a «Внесок» on another phone: «Сплачено зараз» and the terminal's sum are this sale's own, what is owed the server's (audit 2026-11-20, orders-cash Н2)", async ({
+  page,
+}) => {
+  const server: Server = {
+    order: order({ status: "ARRIVED", total: "3000.00" }),
+    sent: [],
+    lose: true,
+  };
+  await open(page, server);
+  const taking = await ways(page);
+  await taking.getByLabel("Оплата частинами").check();
+  await taking.getByLabel("Ім’я покупця").fill("Оксана");
+  await taking.getByLabel("Телефон покупця").fill("0501234567");
+  await taking.getByLabel("Сплачує зараз, грн").fill("1000");
+  await taking
+    .getByRole("group", { name: "Зараз, у магазині" })
+    .getByRole("button", { name: "Картка", exact: true })
+    .click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  // Recorded all the same, and a «Внесок» of 500,00 taken on another phone
+  // before this one checks: the server's `paid` holds both.
+  await page.route("**/api/v1/orders/*/collect", async (route, request) => {
+    server.sent.push({ step: "collect", body: request.postDataJSON() });
+    server.order = {
+      ...server.order,
+      status: "COLLECTED",
+      sale_id: randomUUID(),
+      payment_method: "CARD",
+      credit: { credit_id: randomUUID(), paid: "1500.00", owed: "1500.00" },
+    };
+    await route.fulfill({ json: server.order });
+  });
+  await page
+    .getByRole("button", { name: "Перевірити результат замовлення" })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Продаж записано один раз" }),
+  ).toBeVisible();
+  await expect(page.locator(".order-collected .stub-sum")).toHaveText(
+    /^Сплачено зараз 1\s000,00\sгрн$/,
+  );
+  await expect(
+    page.getByText(
+      "Якщо картку ще не провели — проведіть на терміналі 1 000,00 грн. Якщо вже провели, поки сервер не відповідав, — не проводьте вдруге.",
+    ),
+  ).toBeVisible();
+  await expect(page.locator(".order-collected .stub-line").first()).toHaveText(
+    /^Покупець винен 1\s500,00\sгрн$/,
+  );
+  await expect(
+    page.getByRole("heading", { name: "Продаж записано один раз" }),
+  ).toHaveAccessibleDescription(
+    /^Сплачено зараз 1\s000,00\sгрн карткою\. Покупець винен 1\s500,00\sгрн\. Наступні внески — у «Продажі» › «Внесок»\.$/,
+  );
+  expect(server.sent).toHaveLength(2);
+  expect(server.sent[1]).toEqual(server.sent[0]);
+});
+
 test("«Клієнт забрав» in parts: terms not taken said over the ways, nothing sent; the part paid now large, alone, and what is owed (orders task list, P0-3; «Усе на бірці» sections task list, P0-2)", async ({
   page,
 }) => {

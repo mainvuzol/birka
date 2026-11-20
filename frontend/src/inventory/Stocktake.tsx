@@ -1004,11 +1004,6 @@ export function Stocktake({
     if (next) next.focus();
     else heading.current?.focus({ preventScroll: true });
   });
-  // «До інвентаризації» stands where «Так, завершити» was pressed: the
-  // press's second tap, landing on it, is let go (review, 2026-11-07).
-  const doneAt = useRef(-Infinity);
-  const late = (at: number): boolean => at - doneAt.current < CARRIED_TAP;
-
   // The menu steps aside while the count stands, and is back before its
   // result is painted: «До інвентаризації» on the menu from the first frame
   // (audit 2026-11-18, goods P2-2; as a payment's on «Борги»).
@@ -1041,14 +1036,13 @@ export function Stocktake({
     if (wasFinding.current && !finding) finder.current?.focus();
     wasFinding.current = finding;
   }, [finding]);
-  // Finished: the stub's one way on, Telegram's.
-  const leave = useMainButton(
-    "До інвентаризації",
-    () => {
-      if (!late(performance.now())) onLeave();
-    },
-    { shown: done !== null },
-  );
+  // Finished: the stub's one way on, Telegram's. It stands where «Так,
+  // завершити» was pressed: the press's second tap, landing on it, is let
+  // go (review, 2026-11-07) — by every result's guard now (`ResultScreen`,
+  // `carried`; audit 2026-11-20, frame P1-1).
+  const leave = useMainButton("До інвентаризації", onLeave, {
+    shown: done !== null,
+  });
 
   function reread(): void {
     void current.refetch();
@@ -1082,7 +1076,6 @@ export function Stocktake({
       // 2026-11-18, goods P2-2; review).
       void cache.invalidateQueries({ queryKey: ["inventory-stock"] });
       buzz("success");
-      doneAt.current = performance.now();
       setAsked(false);
       setDone(finished);
     } catch (error) {
@@ -1120,15 +1113,7 @@ export function Stocktake({
         dock={
           !leave && (
             // Outside Telegram, its MainButton as the dock's one button.
-            <button
-              type="button"
-              className="main-mimic"
-              onClick={(event) => {
-                // A key's press is never one.
-                if (event.detail !== 0 && late(event.timeStamp)) return;
-                onLeave();
-              }}
-            >
+            <button type="button" className="main-mimic" onClick={onLeave}>
               До інвентаризації
             </button>
           )

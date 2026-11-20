@@ -14,6 +14,8 @@ import {
   section,
   expectOneSticker,
   expectHeldLook,
+  resultJustStood,
+  resultTakesPresses,
 } from "./fixtures";
 import type { Locator, Page, Request } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
@@ -631,6 +633,56 @@ test("a reason owed that comes while «Видати з каси» is open waits 
   ).toBeVisible();
 });
 
+test("«Мало бути» below nothing — cash given back from the seller's own purse — is said with its minus, large and in the day's line: the server's figure, never «—» (audit 2026-11-20, orders-cash Н1)", async ({
+  page,
+}) => {
+  const below = closeOf({
+    counted: "0.00",
+    expected: "-1850.00",
+    difference: "1850.00",
+    reason_required: true,
+  });
+  const state: { now: Drawer; answer: Record<string, unknown> | number } = {
+    now: drawer(),
+    answer: below,
+  };
+  await stubDrawer(page, state);
+  await cash(page);
+  await card(page).click();
+  await field(page).fill("0");
+  await page.getByRole("button", { name: "Закрити касу", exact: true }).click();
+  await confirmClose(page);
+  await expect(
+    page.getByRole("heading", { name: "Касу закрито" }),
+  ).toBeVisible();
+  const figures = page.getByRole("group", { name: "Закриття каси" });
+  await expect(figures.locator(".cash-sum")).toHaveText([
+    "−1 850,00 грн",
+    "0,00 грн",
+  ]);
+  await expect(figures.locator(".cash-difference")).toHaveText(
+    "Надлишок 1 850,00 грн",
+  );
+  // Its reason given, the day's close on «Каса» in one line, the same.
+  state.now = drawer({
+    last_close: {
+      ...lastClose,
+      ...below,
+      reason: "Повернули покупцю з гаманця",
+      reason_by: "Оля",
+      mine: true,
+    },
+    closed_today: true,
+    reason_owed: null,
+  });
+  await cash(page);
+  await expect(
+    page.getByRole("group", { name: "Закриття каси" }),
+  ).toContainText(
+    "Мало бути −1 850,00 грн · Порахували 0,00 грн · Надлишок 1 850,00 грн",
+  );
+});
+
 test("the close's figures are the server's: «Мало бути» and «Порахували» large, a shortage or a surplus a warning, to the kopeck the accent", async ({
   page,
 }) => {
@@ -903,6 +955,62 @@ test("a difference owes its reason under the thumb, the figures read first, and 
   );
 });
 
+test("«Записати причину» tapped twice, the server quick: «Причину записано» stays where «Готово» comes, «Готово» taking taps a moment on (audit 2026-11-20, frame P1-1; review)", async ({
+  page,
+}) => {
+  const owed = closeOf({
+    expected: "2050.00",
+    difference: "-50.00",
+    reason_required: true,
+  });
+  const state: { now: Drawer; answer: Record<string, unknown> | number } = {
+    now: drawer(),
+    answer: owed,
+  };
+  await stubDrawer(page, state);
+  const reasons: string[] = [];
+  await page.route("**/api/v1/cash/closes/*/reason", async (route, request) => {
+    const { reason } = request.postDataJSON() as { reason: string };
+    reasons.push(reason);
+    const written = { ...owed, reason, reason_by: "Оля" };
+    state.answer = written;
+    state.now = drawer({
+      last_close: { ...lastClose, ...written, mine: true },
+      closed_today: true,
+    });
+    await route.fulfill({ json: written });
+  });
+  await cash(page);
+  await card(page).click();
+  await field(page).fill("2000");
+  await page.getByRole("button", { name: "Закрити касу", exact: true }).click();
+  await confirmClose(page);
+  await page.getByRole("button", { name: "Продаж під час збою" }).click();
+  const write = page.getByRole("button", { name: "Записати причину" });
+  await expect(write).toBeEnabled();
+  // Past the close's own 0.7 s: the press is the reason's.
+  await resultTakesPresses(page);
+  const box = await write.boundingBox();
+  if (box === null) throw new Error("no «Записати причину»");
+  const x = box.x + box.width / 2;
+  const y = box.y + box.height / 2;
+  await page.mouse.click(x, y);
+  // «Готово» comes where «Записати причину» was: the second half lands on
+  // its dock.
+  await resultJustStood(page, { x, y });
+  await page.mouse.click(x, y);
+  await expect(page.locator("html")).not.toHaveAttribute("data-carried");
+  await expect(
+    page.getByText("Причину записано. Власник отримає повідомлення."),
+  ).toBeVisible();
+  expect(reasons).toEqual(["Продаж під час збою"]);
+  // A moment on, «Готово» as ever.
+  await page.getByRole("button", { name: "Готово" }).click();
+  await expect(page.locator(".cash-context")).toHaveText(
+    /^Сьогодні закрито о \d{2}:\d{2} · Оля$/,
+  );
+});
+
 test("a close owed a reason, opened by itself while it is read: its place the stub's shape — torn top, two figures of 32, the sticker's place, the perforation, the slip — and the reason's field under it moves no more than 8 px when the stub comes (audit 2026-11-18, orders-cash P2-2)", async ({
   page,
 }) => {
@@ -1155,6 +1263,9 @@ test("inside Telegram the count is a task's screen — kept upright, closing ask
   await expect
     .poll(main)
     .toMatchObject({ is_active: true, text: "Записати причину" });
+  // The close's result stands where «Так, закрити» was: a press within its
+  // 0.7 s is let go (audit 2026-11-20, frame P1-1).
+  await resultTakesPresses(page);
   await pressMain();
   await expect(
     page.getByText("Причину записано. Власник отримає повідомлення."),

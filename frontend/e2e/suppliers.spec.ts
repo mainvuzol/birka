@@ -26,6 +26,7 @@ import {
   rowTitle,
   tokenColour,
   under14,
+  resultTakesPresses,
 } from "./fixtures";
 import type { Locator, Page, Request } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
@@ -368,8 +369,10 @@ test("a return's result keeps «← Постачальникам» and Telegram'
   await arrow.click();
   await expect(list).toBeVisible();
   await expect(returnRow(page, supplier)).toHaveCount(2);
-  // «Готово»: the same.
+  // «Готово»: the same — past the 0.7 s the result lets the return's press
+  // go (audit 2026-11-20, frame P1-1).
   await returnOne();
+  await resultTakesPresses(page);
   await press("main_button_pressed");
   await expect(list).toBeVisible();
   await expect(returnRow(page, supplier)).toHaveCount(3);

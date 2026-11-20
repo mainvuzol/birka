@@ -14,6 +14,8 @@ import {
   section,
   tillWays,
   expectEmpty,
+  resultJustStood,
+  resultTakesPresses,
 } from "./fixtures";
 import type { Locator, Page, Route } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
@@ -770,6 +772,65 @@ test("«Внесок» on a debt opens S21 on it: the sum keyed in, a way, the r
   await expect(page.getByLabel("Ім’я або телефон")).toHaveValue("Окс");
 });
 
+test("a way on S21 tapped twice, the server quick: «Внесок записано» stays, the menu back under it taking no tap for 0.7 s, then as ever (audit 2026-11-20, frame P1-1)", async ({
+  page,
+}) => {
+  const one = debt();
+  const sent = await serveDebt(page, one, (body) => ({
+    ...one,
+    paid: (Number(one.paid) + Number(body.amount)).toFixed(2),
+    owed: "777.00",
+  }));
+  await page.goto(launch());
+  await openStore(page, "Основний MAIN");
+  await toTill(page);
+  await section(page, "Покупці");
+  await page.getByLabel("Ім’я або телефон").fill("Окс");
+  await page.getByRole("button", { name: /^Оксана/ }).click();
+  await page
+    .getByRole("list", { name: "Борги в магазині «Основний»" })
+    .getByRole("button", { name: /^Відкрити борг: Лоран/ })
+    .click();
+  await deposit(page).click();
+  await keyIn(page, "400");
+  const box = await panel(page)
+    .getByRole("button", { name: "Переказ" })
+    .boundingBox();
+  if (box === null) throw new Error("no «Переказ»");
+  const x = box.x + box.width / 2;
+  const y = box.y + box.height / 2;
+  await page.mouse.click(x, y);
+  // The second half comes while the result has just stood: where the ways
+  // were, its dock — or the menu back under it, on a shorter screen.
+  await resultJustStood(page, { x, y });
+  const tab = await page.evaluate(() => {
+    const named = [...document.querySelectorAll("nav.tab-bar .tab")].find(
+      (node) => node.querySelector(".tab-label")?.textContent === "Продаж",
+    );
+    const box = named?.getBoundingClientRect();
+    return box ? { x: box.x + box.width / 2, y: box.y + box.height / 2 } : null;
+  });
+  if (tab === null) throw new Error("no «Продаж»");
+  await page.mouse.click(x, y);
+  await page.mouse.click(tab.x, tab.y);
+  const heading = page.getByRole("heading", {
+    level: 1,
+    name: "Внесок записано",
+  });
+  await expect(page.locator("html")).not.toHaveAttribute("data-carried");
+  // Let go: the result, and one payment.
+  await expect(heading).toBeVisible();
+  expect(sent).toHaveLength(1);
+  // A moment on, the menu takes a tap as ever.
+  await page.mouse.click(tab.x, tab.y);
+  await expect(heading).toHaveCount(0);
+  await expect(
+    page
+      .getByRole("navigation", { name: "Розділи" })
+      .getByRole("button", { name: "Продаж", exact: true }),
+  ).toHaveAttribute("aria-current", "page");
+});
+
 test("Telegram buzzes once the server has answered a payment: success when recorded, error when refused; a lost answer a warning, its confirmation later nothing", async ({
   page,
 }) => {
@@ -840,6 +901,9 @@ test("Telegram buzzes once the server has answered a payment: success when recor
   expect(await buzzes()).toEqual([
     { type: "notification", notification_type: "success" },
   ]);
+  // S22's MainButton, past the 0.7 s it lets the payment's press go
+  // (audit 2026-11-20, frame P1-1).
+  await resultTakesPresses(page);
   await mainButton();
   refuse = true;
   await keyIn(page, "300");

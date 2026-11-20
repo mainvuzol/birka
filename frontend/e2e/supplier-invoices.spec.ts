@@ -25,6 +25,7 @@ import {
   supplierList,
   holdReads,
   under14,
+  resultTakesPresses,
 } from "./fixtures";
 import type { Locator, Page, Request, Route } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
@@ -2983,6 +2984,9 @@ test("inside Telegram «Сплатити» is its MainButton on the card, never 
   // Never a MainButton that pays.
   for (const setup of await told(page, "web_app_setup_main_button"))
     if (setup.is_visible) expect(["Сплатити", "Готово"]).toContain(setup.text);
+  // Past the 0.7 s the result lets the payment's press go (audit
+  // 2026-11-20, frame P1-1).
+  await resultTakesPresses(page);
   await telegramSays(page, "main_button_pressed");
   // The card, settled: nothing to pay.
   await expect(page.locator(".invoice-closed")).toContainText(

@@ -5,6 +5,7 @@ import {
   openStore,
   toTill,
   sellsFrom,
+  resultJustStood,
 } from "./fixtures";
 import type { Locator, Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
@@ -245,4 +246,49 @@ test("paid in parts, in five taps: the search, its size, the tray's row, «Оп�
   expect(sent[0]?.credit).toEqual(
     expect.objectContaining({ paid_now: "1000.00" }),
   );
+});
+
+test("a way tapped twice, the server quick: the receipt stays where the second tap lands, «Новий продаж» taking taps 0.7 s on and a key at once (audit 2026-11-20, frame P1-1)", async ({
+  page,
+}) => {
+  await goods(page, [own]);
+  await sellsFrom(page, own);
+  const sent = await stubSale(page);
+  await onTheTill(page);
+  await look(page);
+  await cell(page, own).click();
+  const box = await pay(page, "Картка").boundingBox();
+  if (box === null) throw new Error("no «Картка»");
+  const x = box.x + box.width / 2;
+  const y = box.y + box.height / 2;
+  await page.mouse.click(x, y);
+  // The second half comes while the receipt has just stood: where the ways
+  // were, its dock — and on «Новий продаж» itself.
+  await resultJustStood(page, { x, y });
+  const next = await page
+    .getByRole("button", { name: "Новий продаж" })
+    .boundingBox();
+  if (next === null) throw new Error("no «Новий продаж»");
+  await page.mouse.click(x, y);
+  await page.mouse.click(next.x + next.width / 2, next.y + next.height / 2);
+  const receipt = page.getByRole("heading", { name: "Продаж записано" });
+  const root = page.locator("html");
+  await expect(root).not.toHaveAttribute("data-carried");
+  // Let go: the receipt and what to do at the terminal, one sale.
+  await expect(receipt).toBeVisible();
+  await expect(page.locator(".stub-say")).toHaveText("Проведіть на терміналі");
+  expect(sent).toHaveLength(1);
+  // A moment on, «Новий продаж» as ever: the cursor in the search.
+  const search = page.getByRole("searchbox", { name: "Знайти модель" });
+  await page.getByRole("button", { name: "Новий продаж" }).click();
+  await expect(search).toBeFocused();
+
+  // A key is never a second tap: Enter on «Новий продаж» at once.
+  await page.keyboard.type("лор");
+  await cell(page, own).click();
+  await pay(page, "Картка").click();
+  await resultJustStood(page);
+  await page.getByRole("button", { name: "Новий продаж" }).press("Enter");
+  await expect(search).toBeFocused();
+  expect(sent).toHaveLength(2);
 });

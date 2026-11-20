@@ -273,6 +273,31 @@ function row(list: Locator, day: string): Locator {
   return list.getByRole("listitem", { name: `Закриття ${day}` });
 }
 
+test("«Мало бути» below nothing keeps its minus in its row: the server's figure, never «—» (audit 2026-11-20, orders-cash Н1)", async ({
+  page,
+}) => {
+  await stub(page);
+  const below = closeOf({
+    counted: "0.00",
+    expected: "-1850.00",
+    difference: "1850.00",
+    reason: "Повернули покупцю з гаманця",
+    reason_by: "Оля",
+    reason_required: true,
+  });
+  // The closes as the server lists them: this one alone.
+  await page.route("**/api/v1/cash/closes?**", async (route) => {
+    await route.fulfill({ json: { items: [below], has_more: false } });
+  });
+  const list = await history(page);
+  await expect(row(list, "20.10").locator(".sale-meta")).toHaveText(
+    /^\d{2}:\d{2} · порахували 0,00 · мало бути −1\s850,00$/,
+  );
+  await expect(row(list, "20.10").locator(".close-pill")).toHaveText(
+    "Надлишок 1 850,00 грн",
+  );
+});
+
 test("«Закриття»: a row a close — its day and who, what was counted and expected, what it came to as a pill — and a row each day nobody closed (cash task list, P1-4)", async ({
   page,
 }) => {
