@@ -126,6 +126,9 @@ interface CardProps {
   /** «Клієнт забрав» just recorded on it — at its press, or kept and
    * confirmed later: its result, not its line. */
   collected: "now" | "kept" | null;
+  /** Collected in parts: what that attempt paid, said as «Сплачено зараз»
+   * and charged once at the terminal (audit 2026-11-20, orders-cash Н2). */
+  paidNow?: string | undefined;
   store: Store;
   /** Who asks what a number already owes, paying in parts. */
   token: string;
@@ -320,6 +323,7 @@ function Card({
   order,
   done,
   collected,
+  paidNow,
   store,
   token,
   blocked,
@@ -602,6 +606,7 @@ function Card({
             <Collected
               order={order}
               kept={collected === "kept"}
+              paidNow={paidNow}
               fixWay={fixWay}
               fixHeld={fixHeld}
               returnSale={returnSale}

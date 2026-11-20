@@ -86,7 +86,7 @@ function Figures({
       <div className="cash-figure">
         <p className="owed-what">Мало бути</p>
         <p className="cash-sum">
-          <Sum value={money(close.expected ?? "0.00")} />
+          <Sum value={signed(close.expected ?? "0.00")} />
         </p>
       </div>
       <div className="cash-figure">
@@ -346,7 +346,7 @@ export function CloseSummary({ close }: { close: Close }): JSX.Element {
           `Перший підрахунок: ${money(close.counted)}`
         ) : (
           <>
-            Мало бути {money(close.expected ?? "0.00")} · Порахували{" "}
+            Мало бути {signed(close.expected ?? "0.00")} · Порахували{" "}
             {money(close.counted)} ·{" "}
             <span
               className={`cash-difference ${difference.match ? "match" : "warn"}`}

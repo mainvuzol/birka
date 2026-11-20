@@ -12,6 +12,8 @@ import {
   tapSize,
   tillWays,
   toTill,
+  resultJustStood,
+  resultTakesPresses,
 } from "./fixtures";
 import type { Locator, Page, Route } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
@@ -640,7 +642,9 @@ test("S21 and S22: a sum typed asks before closing, wiped or taken lets go; the 
       { ...(shown[1] as object), color: "#c6ef3e", text_color: "#15170f" },
     ]);
 
-  // Pressed: the debt again, the button gone with the result.
+  // Pressed: the debt again, the button gone with the result — past the
+  // 0.7 s it lets the payment's press go (audit 2026-11-20, frame P1-1).
+  await resultTakesPresses(page);
   await page.evaluate(() => {
     window.dispatchEvent(
       new MessageEvent("message", {
@@ -654,6 +658,52 @@ test("S21 and S22: a sum typed asks before closing, wiped or taken lets go; the 
     .poll(async () => (await only(page, "web_app_setup_main_button")).at(-1))
     .toEqual({ is_visible: false });
   expect(await only(page, "web_app_setup_main_button")).toHaveLength(3);
+});
+
+test("S22's «Відкрити борг», Telegram's MainButton, pressed as the result stands — the payment's press's second half — does nothing; a moment on, the debt again (audit 2026-11-20, frame P1-1)", async ({
+  page,
+}) => {
+  await hear(page);
+  await debtAtTheTill(page, async (route, debt) => {
+    await route.fulfill({
+      status: 201,
+      json: { ...debt, paid: "1700.00", owed: "1300.00" },
+    });
+  });
+  await onTheTill(page, "9.1");
+  await tillWays(page)
+    .getByRole("button", { name: "Внесок", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: /^Відкрити борг: Оксана Петренко,/ })
+    .click();
+  await key(page, "700");
+  await page
+    .getByRole("group", { name: "Внесок", exact: true })
+    .getByRole("button", { name: "Готівка" })
+    .click();
+  await resultJustStood(page);
+  const result = page.getByRole("heading", { name: "Внесок записано" });
+  const root = page.locator("html");
+  const press = (): Promise<void> =>
+    page.evaluate(() => {
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          data: JSON.stringify({ eventType: "main_button_pressed" }),
+          source: window.parent,
+        }),
+      );
+    });
+  await press();
+  await expect(root).not.toHaveAttribute("data-carried");
+  // Let go: the result and its button, as they were.
+  await expect(result).toBeVisible();
+  await expect
+    .poll(async () => (await only(page, "web_app_setup_main_button")).at(-1))
+    .toMatchObject({ is_visible: true, text: "Відкрити борг" });
+  // A moment on: the debt again.
+  await press();
+  await expect(owed(page)).toHaveText("1 300,00 грн");
 });
 
 test("where Telegram names no version, it is told none of this: the result's «Відкрити борг» is the screen's own", async ({

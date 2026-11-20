@@ -11333,3 +11333,95 @@ server's checks of it, are as before.
 - **«Перевірка каталогу»'s offered models, read slowly**: the place of
   their «Обрати» takes the button's corner (8), never the grey's own — the
   batch 7 review's find, `.skeleton` being drawn later.
+
+## Chosen in chat — 2026-11-20 (audit 2026-11-20, batch 1: taps and money — a result lets its press's second tap go for 0.7 s, on its dock, the menu back under it and Telegram's MainButton; «Мало бути» below nothing said with its minus; a kept «Клієнт забрав» in parts says its own sum; «Повернути», «Внесок» and «Покупці» held by their own unread journal; frame P1-1, orders-cash Н1, Н2, sale's find 1)
+
+Picked in chat: «Taps and money first» — audit 2026-11-20's one P1 and its
+three finds about money. No request, check, journal, right or word
+changes; what is recorded, and the server's checks of it, are as before.
+
+- **A result lets its press's second tap go** (frame P1-1):
+  - As a result's screen first shows, before it is painted, for 0.7 s
+    (`CARRIED_TAP`, as a sheet's and an order's steps):
+    - a finger's tap on its dock lands on the dock, not its button;
+    - a tap on the menu's tabs, back under it, lands on the menu;
+    - Telegram's MainButton pressed does nothing.
+
+    Nothing is done or felt. A key (Enter, space) presses them as ever.
+    Then all as before.
+  - Every result: the till's receipt and «Продажу немає», a return's,
+    «Прийшло … шт.», «Касу закрито», a collected order's, S22 and «Борг
+    списано», an invoice recorded or paid, a return to a supplier,
+    «Позичене»'s, «Інвентаризацію завершено». Kept hidden under another
+    screen and shown again: not again.
+  - And again as its dock comes on it while shown (review): «Касу закрито»
+    owed a reason, its «Готово» where «Записати причину» was — a double tap
+    on it took «Причину записано…» away.
+  - Why: the till's ways and a result's dock stand at one height. A double
+    tap on «Готівка» against a quick server took the receipt away
+    («Новий продаж»), and S21's second tap opened a tab under «Внесок
+    записано».
+  - Decided here, how: `data-carried` on the page's root while it lasts
+    takes taps off the dock's buttons and the tabs (`pointer-events`), and
+    the MainButton's press asks the time (`shared/panel.ts`). The window is
+    the page's, not one result's: left by a key at once, a tab tapped
+    within it is let go too. «Інвентаризація»'s own guard is this one now:
+    the same 0.7 s, its dock and its MainButton.
+  - Not changed: what each result's main does, where it leads, how it is
+    felt; the quiet ways above the dock; the sheets' and the order card's
+    own guards; how a result looks.
+  - Known, kept (review): a collected order's card is its result again each
+    time it is opened while its sale is the one just collected, so coming
+    back to «Замовлення» on it, the menu takes no tap for 0.7 s — a screen
+    changed under the thumb all the same.
+  - Journeys: a click on a result's dock or a tab waits by itself (its
+    target takes no tap meanwhile), so none needed a wait. Five pressed
+    Telegram's MainButton within the 0.7 s and now wait it out
+    (`resultTakesPresses`): S22's in `credits-debt.spec.ts` (buzzes) and
+    `telegram-rules.spec.ts` (S21 and S22), «Записати причину» after the
+    close in `cash-close.spec.ts`, «Готово» of a payment in
+    `supplier-invoices.spec.ts` and of a return in `suppliers.spec.ts`.
+- **«Мало бути» below nothing** (orders-cash Н1, financial-integrity):
+  - The server's expected sum is said with its minus wherever «Мало бути»
+    is said:
+    - «Касу закрито»'s large figure: «−1 850,00 грн»;
+    - today's close on «Каса»: «Мало бути −1 850,00 грн · …»;
+    - «Гроші» › «Закриття»'s row: «мало бути −1 850,00».
+
+    Before, «—»: `money()` reads nothing below nothing. A close can be
+    below nothing (money given back from the seller's own purse, more
+    taken out than was there); the server checks only «Порахували».
+  - The difference, its sticker, the reason asked and everything the
+    server does: as before.
+  - Revises 2026-10-22 «Not changed: мало бути — … as the close's figures
+    already say it» (`cash-redesign-4-report.md`): the figures said «—»
+    too, so nobody said the sum.
+- **A kept «Клієнт забрав» in parts says its own sum** (orders-cash Н2,
+  (а), no Backend, financial-integrity):
+  - «Сплачено зараз» and the sum in «Якщо картку ще не провели —
+    проведіть на терміналі …» are what the attempt itself paid. That is its
+    `paid_now`, as sent and kept with the command, read back only in the
+    server's form of a sum (`1000.00`), else the server's `paid` (review).
+  - Never the server's `paid`: that is every payment on the debt so far.
+    A «Внесок» taken on another phone before this one checks is in it too,
+    and the terminal was asked for that sum as well.
+  - Unchanged:
+    - what is owed: the server's, as before;
+    - just collected, not kept: the same sum as before;
+    - a command kept before its terms were written: the server's `paid`,
+      as before.
+  - As the till's kept sale says its own `paid_now`.
+- **«Повернути», «Внесок» and «Покупці» held by their own unread journal**
+  (sale's find 1):
+  - Their screens' own lists hold them now while the phone cannot read
+    their own journal, as the till's own unread sale holds the till. The
+    plate at the top says it, as before.
+  - Found while proving: no way reaches these screens while it is so.
+    These are held by the same journal already:
+    - the menu's «Продаж»;
+    - the till's «Продати · Повернути · Внесок»;
+    - «Сьогодні» and «Замовлення»;
+    - «Гроші»'s and «Ще»'s «Покупці».
+
+    No one opens there first. The hold is kept so that each screen's own
+    list says what holds it, as the till's does. No journey reaches it.

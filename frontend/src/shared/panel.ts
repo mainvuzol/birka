@@ -6,6 +6,35 @@ import type { RefObject } from "react";
  * 2026-10-24). */
 export const CARRIED_TAP = 700;
 
+/** When a result last stood where its press was (`ResultScreen`). */
+let resultStoodAt = -Infinity;
+let letGo: number | undefined;
+
+/**
+ * A result stands where it was pressed for — the till's receipt where the
+ * ways were, S22 where «Записати внесок» was, the menu back under it,
+ * Telegram's MainButton the result's own. For `CARRIED_TAP` after, a
+ * finger's tap is that press's second half and is let go, as a sheet and an
+ * order's steps let theirs (audit 2026-11-20, frame P1-1): `data-carried`
+ * on the page's root takes taps off the result's dock and the menu's tabs
+ * (`styles.css`) — a key still presses them — and Telegram's MainButton
+ * asks `carried`.
+ */
+export function resultStood(): void {
+  resultStoodAt = performance.now();
+  const root = document.documentElement;
+  root.setAttribute("data-carried", "");
+  window.clearTimeout(letGo);
+  letGo = window.setTimeout(() => {
+    root.removeAttribute("data-carried");
+  }, CARRIED_TAP);
+}
+
+/** A press now, within `CARRIED_TAP` of a result standing: let go. */
+export function carried(): boolean {
+  return performance.now() - resultStoodAt < CARRIED_TAP;
+}
+
 /** The panels and docks standing now: a toast rises over whichever stands
  * where it would be (spec §6.23; audit 2026-11-13, frame P2-5). */
 const standing = new Set<HTMLElement>();

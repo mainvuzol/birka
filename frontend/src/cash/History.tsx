@@ -16,7 +16,7 @@ import { ScreenHeader } from "@/shared/ScreenHeader";
 import { Sticker } from "@/shared/Sticker";
 import { CloseBody, differenceOf, isOpening } from "./Closed";
 import { dayOf, timeOf } from "./errors";
-import { daysAgo, isoDay, moved, nothing } from "./format";
+import { daysAgo, isoDay, moved, nothing, signed } from "./format";
 import type { Close, ClosePage } from "./types";
 
 /** Closes per page of the history: the server gives at most 100 at once
@@ -73,7 +73,7 @@ function metaOf(close: Close): string {
     `порахували ${bare(money(close.counted))}`,
     ...(isOpening(close)
       ? []
-      : [`мало бути ${bare(money(close.expected ?? "0.00"))}`]),
+      : [`мало бути ${bare(signed(close.expected ?? "0.00"))}`]),
     ...(close.reason_required && close.reason === null
       ? ["причину не вказано"]
       : []),

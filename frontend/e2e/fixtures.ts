@@ -87,6 +87,37 @@ export async function under14(scope: Locator): Promise<string[]> {
   });
 }
 
+/**
+ * A result just shown lets its press's second half go for 0.7 s — a tap on
+ * its dock or the menu, Telegram's MainButton (audit 2026-11-20, frame
+ * P1-1). A click waits it out by itself: its target takes no tap meanwhile.
+ * Telegram's MainButton, pressed by a message, is let go: waited out here.
+ */
+export async function resultTakesPresses(page: Page): Promise<void> {
+  await expect(page.locator("html")).not.toHaveAttribute("data-carried");
+}
+
+/**
+ * The 0.7 s a result lets its press's second half go, caught as it begins,
+ * frame by frame — what follows comes within them, however slow the
+ * machine. `at` given: a tap there lands on the result's dock or the menu.
+ */
+export async function resultJustStood(
+  page: Page,
+  at?: { x: number; y: number },
+): Promise<void> {
+  await page.waitForFunction(
+    (point) =>
+      document.documentElement.hasAttribute("data-carried") &&
+      (point === null ||
+        document
+          .elementFromPoint(point.x, point.y)
+          ?.closest(".result-dock, nav.tab-bar") != null),
+    at ?? null,
+    { polling: "raf" },
+  );
+}
+
 /** The banner of a command kept on the phone, under its `heading`, says
  * what waits for it, as the till's does (sale-slice TZ, P2-2). */
 export async function waitsFor(page: Page, heading: RegExp): Promise<void> {

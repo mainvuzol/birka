@@ -6,6 +6,7 @@ import {
   postEvent,
   supports,
 } from "@telegram-apps/sdk-react";
+import { carried } from "./panel";
 
 /** Launch credentials stay in memory: the SDK launch reader persists them. */
 export function telegramInitData(): string | null {
@@ -540,10 +541,12 @@ function tellMain(repaint: boolean): void {
 }
 
 /** Telegram's MainButton pressed: the shown screen's action, unless the
- * server is still asked for it, or it is held. */
+ * server is still asked for it, or it is held — or a result has just stood
+ * where it was pressed: that press's second half (audit 2026-11-20, frame
+ * P1-1). */
 function pressMain(): void {
   const main = mains.at(-1);
-  if (!main) return;
+  if (!main || carried()) return;
   const { progress, active } = main.read();
   if (active && !progress) main.press();
 }

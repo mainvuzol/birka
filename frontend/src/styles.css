@@ -5890,6 +5890,14 @@ nav.tab-bar {
   bottom: var(--menu-h, 0px);
   padding-bottom: calc(12px + var(--dock-safe, env(safe-area-inset-bottom)));
 }
+/* A result just stood where its press was (audit 2026-11-20, frame P1-1;
+   `resultStood`): for a moment a finger's tap on its dock or the menu's tabs
+   lands on neither — the press's second half, let go, drawn and said as
+   ever. A key still presses them. */
+html[data-carried] .result-dock *,
+html[data-carried] .tab-bar .tab {
+  pointer-events: none;
+}
 /* «Сьогодні» (spec S04–S05, §6.10; «Усе на бірці» task list, P0-6): the
    day-tag hangs from the title by its thread — the hero tag's cut top, its
    eyelet in the middle — the total over the money's line, the stores in two
