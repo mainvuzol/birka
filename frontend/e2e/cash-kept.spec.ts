@@ -516,7 +516,7 @@ for (const kept of [
         ? new RegExp(
             // A moment before the phone's midnight is said with its day
             // (audit 2026-11-20, frame P2-3).
-            `^Чекає відповіді сервера з ${new Date(since).toDateString() === new Date().toDateString() ? "" : "учора о "}\\d{2}:\\d{2}\\. ${checksItself.replace(/\./g, "\\.")}$`,
+            `^Чекає відповіді сервера з ${new Date(since).toDateString() === new Date().toDateString() ? "" : "учора о "}\\d{2}:\\d{2}\\. ${checksItself.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`,
           )
         : checksItself,
     );
