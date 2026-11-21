@@ -480,7 +480,10 @@ test("the owner blocks a store; its seller sees only that, and the owner reads i
   ).toBeVisible();
   await expect(page.getByText(/лише для перегляду/)).toHaveCount(0);
   await expect(
-    page.getByRole("button", { name: /^Борг магазину, що зараз не працює\?/ }),
+    page.getByRole("button", {
+      name: "Шукати за цим номером",
+      exact: true,
+    }),
   ).toHaveCount(0);
   // The server silent over a store that does not trade: no paper banner —
   // nothing is sold here, on paper or not — and the place not read says
@@ -599,7 +602,8 @@ test("a debt of a blocked store is found by the whole phone and paid at a store 
     // store's results for it: never a choice made first (owner decision,
     // 2026-10-18, В2 (а); credits task list, P1-1).
     const ask = page.getByRole("button", {
-      name: "Борг магазину, що зараз не працює? Шукати за цим номером",
+      name: "Шукати за цим номером",
+      exact: true,
     });
     const search = page.getByLabel("Ім’я або телефон");
     await expect(ask).toHaveCount(0);
@@ -749,7 +753,7 @@ test("a debt of a blocked store is found by the whole phone and paid at a store 
     await page.waitForTimeout(300);
     expect(
       await page
-        .getByRole("button", { name: /^Борг магазину, що зараз не працює\?/ })
+        .getByRole("button", { name: "Шукати за цим номером", exact: true })
         .count(),
     ).toBe(0);
     // A whole number owing nothing here: the fact alone, as anyone trading

@@ -599,23 +599,6 @@ textarea:focus-visible {
   color: var(--text);
   border-color: var(--line-strong);
 }
-.order-card {
-  display: flex;
-  width: 100%;
-  text-align: left;
-  flex-direction: column;
-  gap: 9px;
-  margin: 12px 0;
-}
-.order-card {
-  background: transparent;
-  color: inherit;
-  border-color: var(--line);
-  padding: 18px;
-}
-.order-card:hover {
-  border-color: var(--accent);
-}
 /* What is said under a field or a task (spec §5.5 `meta`, the floor for
    reading text; frame P1-1): 14/500 in pencil. */
 small,
@@ -1422,8 +1405,10 @@ html {
 }
 /* A way's refusal in the tray, where «Ще надсилаємо…» stood (audit
    2026-11-13, sale P1-3): the error's colour and its crossed circle 16,
-   14/500 — no plate of its own, the tray is its plate. */
-.till-tray .tray-refused {
+   14/500 — no plate of its own, the tray is its plate. The till's tray
+   and «Клієнт забрав»'s, the same words in one look (audit 2026-11-20,
+   orders-cash P2-3). */
+.tray-refused[role="alert"] {
   margin: 0 0 10px;
   padding: 0 0 0 22px;
   border-radius: 0;
@@ -1432,7 +1417,7 @@ html {
   font-weight: 500;
   line-height: 19px;
 }
-.till-tray .tray-refused::before {
+.tray-refused[role="alert"]::before {
   top: 1.5px;
   left: 0;
   width: 16px;
@@ -1956,10 +1941,6 @@ html {
 .return-offer {
   margin-top: 18px;
 }
-.return-offer button {
-  margin-top: 8px;
-  display: block;
-}
 /* «Змінити спосіб оплати» on a card already drawn, not yet answered whether
    the way may be changed: its place, unseen and out of reach (audit
    2026-11-15, orders-cash P2-3 (а)). */
@@ -2223,13 +2204,13 @@ button.sale-row:disabled .sale-goods {
   color: var(--debt);
 }
 .elsewhere-ask {
-  margin-top: 12px;
+  margin: 12px 0 0;
 }
 /* Under the blank tag, centred with it, as the return's offer (audit after
-   stage 2, sale P1-2; review). */
+   stage 2, sale P1-2; review): its question, and its link under it (the
+   rules by `.elsewhere-offer`). */
 .orders-empty ~ .elsewhere-ask {
-  display: block;
-  margin: 12px auto 0;
+  text-align: center;
 }
 /* One debt (credits task list, P0-3, P0-4): who and what in one line, what
    is owed large with a bar of how much is closed, the payment's sum under it
@@ -2864,18 +2845,31 @@ section.credits.customer-card {
   margin: 0;
   color: var(--pencil);
 }
-/* Nothing found, here or there (spec §6.28): what to do next inside the
-   blank tag, centred with it, as the till's (audit 2026-11-13, sale
-   P2-2). */
-.returns-empty .elsewhere-offer button {
-  margin: 8px auto 0;
-}
 .elsewhere-offer {
   margin-top: 16px;
 }
-.elsewhere-offer button {
+/* A question and the link of its sentence on a line of its own under it
+   (audit 2026-11-18, frame P2-1 (б); audit 2026-11-20, sale P2-1): the
+   receipt's «Оформити повернення», «Шукати там», the till's «Знайти в
+   каталозі» and «Шукати за цим номером» — a link 44 high inside a line of
+   text would break its paragraph. */
+:is(.return-offer, .elsewhere-offer, .catalog-offer, .elsewhere-ask)
+  .text-button {
   display: block;
   margin-top: 8px;
+}
+/* The till's under the tags found, 4 under its question: its paragraph no
+   taller than the line its bordered button stood in, within 4 (audit
+   2026-11-20, sale P2-1). */
+.catalog-offer .text-button {
+  margin-top: 4px;
+}
+/* Nothing found, here or there (spec §6.28): what to do next inside the
+   blank tag, or under it, centred with it (audit 2026-11-13, sale P2-2;
+   audit 2026-11-20, sale P2-1). */
+.orders-empty :is(.elsewhere-offer, .catalog-offer) .text-button,
+.orders-empty ~ .elsewhere-ask .text-button {
+  margin-inline: auto;
 }
 .return-mistake {
   margin-top: 14px;
@@ -2917,6 +2911,19 @@ section.credits.customer-card {
    own. */
 .placeholder :is(.set-off-return, .catalog-proposal) .sale-main {
   align-self: stretch;
+}
+/* Its two grey lines where a return's day and goods stand: each in its
+   line's own height — the day's `t-row` 22, the goods' `meta` 19 — the
+   grey in its middle, 2 between, as the card's: as tall as a return of one
+   line (audit 2026-11-20, money P2-3). */
+.placeholder .set-off-return .sale-main {
+  gap: 2px;
+}
+.placeholder .set-off-return .skeleton-name {
+  margin-block: calc((22px - 1.2em) / 2);
+}
+.placeholder .set-off-return .skeleton-meta {
+  margin-block: calc((19px - 0.9em) / 2);
 }
 /* One grey line where a short answer comes (audit 2026-11-13, goods
    P2-1): whether a warehouse has a list waiting, in a row's line. */
@@ -3410,7 +3417,8 @@ section.credits.customer-card {
 }
 /* A text button (spec §5.5 `button-s`, `link`): «Спробувати ще раз», the
    receipt's «Оформити повернення», «Шукати там» and «Вношу продаж з
-   паперу» (audit 2026-11-18, frame P2-1 (б)). */
+   паперу» (audit 2026-11-18, frame P2-1 (б)); the till's «Знайти в
+   каталозі» and «Шукати за цим номером» (audit 2026-11-20, sale P2-1). */
 .text-button {
   min-height: var(--touch);
   margin: 8px 0 0 -4px;
@@ -3684,41 +3692,6 @@ section.cash {
   color: var(--link);
   font-weight: 600;
   text-align: left;
-}
-.count-label {
-  display: block;
-  margin: 8px 0 8px;
-}
-.count-field {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  padding: 0 16px;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--r-l);
-  background: var(--field);
-}
-.count-field input {
-  min-width: 0;
-  padding: 8px 0;
-  border: 0;
-  background: transparent;
-  font-family: var(--font-display);
-  font-size: 48px;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-}
-.count-field input:focus-visible {
-  outline: none;
-}
-.count-field:focus-within {
-  outline: 2px solid var(--focus);
-  outline-offset: 2px;
-}
-.count-field span {
-  font-size: 20px;
-  font-weight: 700;
-  color: var(--text-2);
 }
 .cash-count .hint,
 .cash-closed .hint,
@@ -4005,6 +3978,25 @@ span.cash-difference > .difference-sign {
 .cash-owed .hint {
   margin: 0 0 10px;
   font-size: 14px;
+}
+/* «Поки причину не записано, інші розділи недоступні.»: what holds the
+   phone, a warning standing, never said (spec S28 №10 `meta` `warning`;
+   design-direction §4) — 14/500/19 in the warning's colour, its triangle
+   16 before the words, no plate; on the reason's form in Telegram and out
+   of it, and on «Каса» (audit 2026-11-20, orders-cash P2-2). Its place
+   and margins its own as before. */
+.reason-held {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  color: var(--warning);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 19px;
+}
+.reason-held .icon {
+  flex: none;
+  margin-top: 1.5px;
 }
 .cash-owed button {
   width: 100%;

@@ -484,7 +484,10 @@ export function SupplierPicker({
       metaOf={(supplier) => (supplier.phone ? visible(supplier.phone) : null)}
       disabled={disabled}
       pick={(supplier) => {
-        buzz("selection");
+        // Felt only as the choice changes, as the filter's and the
+        // return's own choices (audit 2026-11-20, money P2-2 (б)): the same
+        // again closes the sheet, nothing felt.
+        if (supplier.id !== value) buzz("selection");
         take(supplier.id);
       }}
       foot={adder}

@@ -1721,6 +1721,63 @@ test("«Клієнт забрав» in parts by card whose answer never came, co
   expect(server.sent[1]).toEqual(server.sent[0]);
 });
 
+/**
+ * Why «Клієнт забрав» took nothing, over its ways: a line of the tray,
+ * never a plate — the till's look for the same words (audit 2026-11-13,
+ * sale P1-3): the error's colour and crossed circle 16, 14/500/19, nothing
+ * round it, 22 in — the ways 10 under it, the five in the sheet at 360 ×
+ * 640 (audit 2026-11-20, orders-cash P2-3).
+ */
+async function expectTrayLine(
+  page: Page,
+  taking: Locator,
+  why: Locator,
+): Promise<void> {
+  await expect(taking.getByRole("alert")).toHaveCount(1);
+  const danger = await tokenColour(page, "--danger");
+  expect(
+    await why.evaluate((node) => {
+      const style = getComputedStyle(node);
+      const sign = getComputedStyle(node, "::before");
+      return [
+        style.color,
+        style.fontSize,
+        style.fontWeight,
+        style.lineHeight,
+        style.backgroundColor,
+        style.paddingLeft,
+        sign.width,
+        sign.height,
+        sign.maskImage.startsWith("url("),
+        sign.maskSize,
+      ];
+    }),
+  ).toEqual([
+    danger,
+    "14px",
+    "500",
+    "19px",
+    "rgba(0, 0, 0, 0)",
+    "22px",
+    "16px",
+    "16px",
+    true,
+    "16px 16px",
+  ]);
+  const [box, first] = await Promise.all([
+    why.boundingBox(),
+    taking.locator(".collect-ways").boundingBox(),
+  ]);
+  if (!box || !first) throw new Error("not laid out");
+  // Over the ways, never under them, and 10 over the first.
+  expect(box.y + box.height).toBeLessThanOrEqual(first.y + 1);
+  expect(first.y - (box.y + box.height)).toBeLessThanOrEqual(10 + 1);
+  const five = taking.locator(".collect-ways .pay-ways button");
+  await expect(five).toHaveCount(5);
+  for (const way of await five.all())
+    await expect(way).toBeInViewport({ ratio: 1 });
+}
+
 test("«Клієнт забрав» in parts: terms not taken said over the ways, nothing sent; the part paid now large, alone, and what is owed (orders task list, P0-3; «Усе на бірці» sections task list, P0-2)", async ({
   page,
 }) => {
@@ -1743,9 +1800,7 @@ test("«Клієнт забрав» in parts: terms not taken said over the ways
   const why = taking.getByRole("alert");
   await expect(why).toContainText("Покупець сплачує все одразу");
   await expect(why).toBeFocused();
-  const box = await why.boundingBox();
-  const first = await taking.locator(".collect-ways").boundingBox();
-  expect(box && first && box.y + box.height <= first.y + 1).toBe(true);
+  await expectTrayLine(page, taking, why);
   expect(server.sent).toEqual([]);
   // Its comma last, a sum still being typed: what is left owed is said, the
   // dock says what is paid now, and it is sent as it stands — «500.00»
@@ -1803,6 +1858,36 @@ test("«Клієнт забрав» in parts: terms not taken said over the ways
     },
   ]);
   await page.screenshot({ path: "test-results/order-collected-parts.png" });
+});
+
+test("«Клієнт забрав» refused by the server says why as the till's tray does: a line over the ways, never a plate, the cursor on it, the error's buzz; nothing sent again, and the five ways in the sheet at 360 × 640 (audit 2026-11-20, orders-cash P2-3)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  const server: Server = {
+    order: order({ status: "ARRIVED" }),
+    sent: [],
+    refuse: true,
+  };
+  await open(page, server);
+  const taking = await ways(page);
+  await taking
+    .getByRole("group", { name: "Зараз, у магазині" })
+    .getByRole("button", { name: "Готівка", exact: true })
+    .click();
+  const why = taking.getByRole("alert");
+  // The owner's words for a conflict (2026-10-24, after #128), in the
+  // sheet, the cursor on them.
+  await expect(why).toHaveText(
+    "Не записано: дані замовлення змінилися, поки ви працювали. Перевірте замовлення й спробуйте ще раз.",
+  );
+  await expect(why).toBeFocused();
+  expect(await buzzes(page)).toEqual([
+    { type: "notification", notification_type: "error" },
+  ]);
+  await expectTrayLine(page, taking, why);
+  // Sent once, as it was; nothing sent again.
+  expect(server.sent.map((each) => each.step)).toEqual(["collect"]);
 });
 
 test("a collected order in parts seen later: what is owed so far as the receipt shows it, heard as one sentence; nothing owed, nothing in the debt's colour (audit 2026-11-15, orders-cash P2-1)", async ({

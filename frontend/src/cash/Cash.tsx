@@ -719,7 +719,10 @@ export function Cash({
               // way back to it (G12).
               <div className="cash-owed">
                 {close && close.id === owedId && <CloseSummary close={close} />}
-                <p className="hint">
+                {/* A warning standing, never said, as the reason's form
+                    says it (audit 2026-11-20, orders-cash P2-2). */}
+                <p className="hint reason-held">
+                  <Icon name="warning" size={16} />
                   Поки причину не записано, інші розділи недоступні.
                 </p>
                 <button

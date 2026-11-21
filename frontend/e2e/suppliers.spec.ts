@@ -773,6 +773,16 @@ test("a model is found by the server's search over the warehouse chosen, from tw
     .getByRole("button");
   await expect(found).toHaveCount(1);
   await expect(found).toHaveText(new RegExp(`^${coat.model}.*M 2$`));
+  // On a white block, rows 64 from 16, a hairline from the text's edge and
+  // none under the last, as «Прийшов товар»'s found — at 360, in both
+  // themes (audit 2026-11-20, money P2-2 (а)).
+  await page.setViewportSize({ width: 360, height: 640 });
+  const block = page.getByRole("list", { name: "Товар на складі" });
+  for (const scheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    await expectListBlock(block, block.locator(".sale-row"), false);
+  }
+  await page.emulateMedia({ colorScheme: "light" });
   // Another warehouse chosen is another return: what was counted goes.
   await found.click();
   await tapMore(page, "M", 1);
@@ -959,6 +969,11 @@ test("read slowly, the suppliers' sheet and «Список постачальн�
     ".placeholder .return-models > .sale-row.return-model",
   );
   await expect(rows).toHaveCount(3);
+  // On the list's white block, as the rows to come (audit 2026-11-20,
+  // money P2-2 (а)).
+  await expect(
+    page.locator(".placeholder .list-block.return-models > .sale-row"),
+  ).toHaveCount(3);
   for (const row of await rows.all())
     expect((await row.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(64);
   await expect(page.locator(".placeholder .skeleton-day")).toHaveCount(0);
@@ -1157,6 +1172,11 @@ test("inside Telegram «Повернути постачальнику» is felt 
 }) => {
   // «Ринок» takes returns from two warehouses: chips.
   const coat = await received(page, petro, fixture.network_market_store_id, 2);
+  // Two suppliers on the network's list, to choose between.
+  const first = `Перший ${randomUUID().slice(0, 6)}`;
+  const second = `Другий ${randomUUID().slice(0, 6)}`;
+  await aSupplier(page, first);
+  await aSupplier(page, second);
   const felt = await haptics(page);
   const feels = (act: () => Promise<unknown>, want: unknown[]) =>
     feelsAs(felt, act, want);
@@ -1221,6 +1241,11 @@ test("inside Telegram «Повернути постачальнику» is felt 
   await expect(page.getByRole("alert")).toHaveText(
     "Такий рядок уже в списку. Приберіть його, щоб змінити кількість.",
   );
+  // A supplier taken: felt; the same again, nothing — the sheet closes;
+  // another, felt (audit 2026-11-20, money P2-2 (б)).
+  await feels(() => pickSupplier(page, first), [selection]);
+  await feels(() => pickSupplier(page, first), []);
+  await feels(() => pickSupplier(page, second), [selection]);
 });
 
 test("outside Telegram a long return's result keeps «Готово» in its dock at the menu's top, the menu back under it, at 360 × 640 and 390 × 844, and there while its stub scrolls under it at 360 × 640 and 390 × 700 (audit 2026-11-18, money P2-2; review)", async ({

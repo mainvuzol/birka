@@ -854,6 +854,8 @@ export function Sale({
   // The catalogue's warehouse and a label's size, each a row of chips
   // read with its caption.
   const chipsSaid = useId();
+  // The question the catalogue's way answers, read with it.
+  const catalogAsk = useId();
   // Turned on by its row, the paper's fields come into view over the tray:
   // the ways wait for them (screenshots, 2026-10-30).
   const paperRef = useRef<HTMLDivElement>(null);
@@ -1265,11 +1267,17 @@ export function Sale({
                     : {})}
                   offer={
                     mayFindInCatalog ? (
-                      <p className="hint">
-                        Товар у руках, а в списку його немає?{" "}
+                      // A link of its sentence on a line of its own, never
+                      // a button's edge, as «Шукати там» (spec S09 №7;
+                      // audit 2026-11-20, sale P2-1).
+                      <p className="hint catalog-offer">
+                        <span id={catalogAsk}>
+                          Товар у руках, а в списку його немає?
+                        </span>{" "}
                         <button
                           type="button"
-                          className="quiet"
+                          className="text-button"
+                          aria-describedby={catalogAsk}
                           onClick={() => {
                             setCatalogAt("");
                             setFromCatalog(true);

@@ -640,11 +640,13 @@ export function NewReturn({
                 {stock.isPending ||
                 (stock.isPlaceholderData && found.length === 0) ? (
                   // Three rows 64 as the models found come, no day (audit
-                  // 2026-11-13, money P2-1).
+                  // 2026-11-13, money P2-1), on the list's white block
+                  // (audit 2026-11-20, money P2-2 (а)).
                   <Placeholder
                     said="Завантажуємо товари…"
                     rows={3}
                     day={false}
+                    block
                     rowShape={{
                       list: "return-models",
                       row: "sale-row return-model",
@@ -667,7 +669,12 @@ export function NewReturn({
                       : `На складі «${visible(warehouse.name)}» немає вільного товару.`}
                   </p>
                 ) : (
-                  <ul className="return-models" aria-label="Товар на складі">
+                  // Rows 64 on a white block, as «Прийшов товар»'s found
+                  // (spec §6.8; audit 2026-11-20, money P2-2 (а)).
+                  <ul
+                    className="return-models list-block"
+                    aria-label="Товар на складі"
+                  >
                     {found.map((one) => (
                       <li key={one.variantId}>
                         <button

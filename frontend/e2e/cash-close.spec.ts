@@ -14,6 +14,7 @@ import {
   section,
   expectOneSticker,
   expectHeldLook,
+  expectWarningLine,
   resultJustStood,
   resultTakesPresses,
 } from "./fixtures";
@@ -913,6 +914,19 @@ test("a difference owes its reason under the thumb, the figures read first, and 
   await expect(page.locator(".pay-panel")).toContainText(
     "Поки причину не записано, інші розділи недоступні.",
   );
+  // A warning standing, never said: in its colour, its triangle before the
+  // words, no plate — never a field's grey hint (audit 2026-11-20,
+  // orders-cash P2-2); the dock's button 4 under it, as before.
+  const holds = page
+    .locator(".pay-panel")
+    .getByText("Поки причину не записано, інші розділи недоступні.");
+  await expectWarningLine(holds);
+  const [line, under] = await Promise.all([
+    holds.boundingBox(),
+    write.boundingBox(),
+  ]);
+  if (!line || !under) throw new Error("not laid out");
+  expect(Math.abs(under.y - (line.y + line.height) - 4)).toBeLessThanOrEqual(1);
   await expect(page.getByRole("button", { name: "Готово" })).toHaveCount(0);
   // Owed, it holds the other tabs, never «Каса»'s own tasks (G12): back to
   // «Каса», its rows there, the close waiting for its reason.
@@ -929,6 +943,13 @@ test("a difference owes its reason under the thumb, the figures read first, and 
   });
   expect((await fromCash.boundingBox())?.height).toBe(52);
   await expect(fromCash).toHaveCSS("border-top-left-radius", "8px");
+  // Over it the same warning, as the reason's form says it (audit
+  // 2026-11-20, orders-cash P2-2).
+  await expectWarningLine(
+    page
+      .locator(".cash-owed")
+      .getByText("Поки причину не записано, інші розділи недоступні."),
+  );
   await page.getByRole("button", { name: "Записати причину" }).click();
   await expect(reason).toBeVisible();
   const chip = page.getByRole("button", { name: "Продаж під час збою" });
@@ -1248,9 +1269,11 @@ test("inside Telegram the count is a task's screen — kept upright, closing ask
     text: "Записати причину",
   });
   await expect(page.locator(".pay-panel")).toHaveCount(0);
-  await expect(
+  // A warning standing, never said, in Telegram too (audit 2026-11-20,
+  // orders-cash P2-2).
+  await expectWarningLine(
     page.getByText("Поки причину не записано, інші розділи недоступні."),
-  ).toBeVisible();
+  );
   // Its field's key makes a new line (audit 2026-11-13, orders-cash P2-3).
   await expect(page.locator(".cash-reason-form textarea")).toHaveAttribute(
     "enterkeyhint",
