@@ -6565,20 +6565,29 @@ test("a sale pressed after the session ended is kept on the phone, and the app i
 test("a sale kept since another day: its stub names the day — «з учора о 14:20», a week back its date — and one of today its time alone (audit 2026-11-20, frame P2-3)", async ({
   page,
 }) => {
-  // The phone's morning, at 09:05; the sale kept before it.
-  const morning = new Date();
-  morning.setHours(9, 5, 0, 0);
-  const at = (days: number, hours: number, minutes: number): Date => {
-    const moment = new Date(morning);
-    moment.setDate(moment.getDate() - days);
-    moment.setHours(hours, minutes, 0, 0);
-    return moment;
-  };
-  const weekBack = at(7, 14, 20).toLocaleDateString("uk-UA", {
-    day: "2-digit",
-    month: "2-digit",
+  // The phone's morning, at 09:05; the sale kept before it. Moments of the
+  // phone's own zone, Kyiv's, whatever zone runs the journey (CI's is UTC).
+  const moments = await page.evaluate(() => {
+    const morning = new Date();
+    morning.setHours(9, 5, 0, 0);
+    const at = (days: number, hours: number, minutes: number): Date => {
+      const moment = new Date(morning);
+      moment.setDate(moment.getDate() - days);
+      moment.setHours(hours, minutes, 0, 0);
+      return moment;
+    };
+    return {
+      morning: morning.toISOString(),
+      yesterday: at(1, 14, 20).toISOString(),
+      weekBack: at(7, 14, 20).toISOString(),
+      weekBackDate: at(7, 14, 20).toLocaleDateString("uk-UA", {
+        day: "2-digit",
+        month: "2-digit",
+      }),
+      earlier: at(0, 8, 40).toISOString(),
+    };
   });
-  await page.clock.setFixedTime(morning);
+  await page.clock.setFixedTime(new Date(moments.morning));
   const server = await serve(page);
   server.sale = async (route) => {
     await route.abort("connectionreset");
@@ -6587,13 +6596,13 @@ test("a sale kept since another day: its stub names the day — «з учора 
     has: page.getByRole("heading", { name: "Продаж ще не підтверджено" }),
   });
   for (const [since, said] of [
-    [at(1, 14, 20), "з учора о 14:20"],
-    [at(7, 14, 20), `з ${weekBack} о 14:20`],
-    [at(0, 8, 40), "з 08:40"],
+    [moments.yesterday, "з учора о 14:20"],
+    [moments.weekBack, `з ${moments.weekBackDate} о 14:20`],
+    [moments.earlier, "з 08:40"],
   ] as const) {
     const kept = JSON.parse(keptSale("CASH")) as Record<string, unknown>;
     await seed(page, {
-      [saleKey]: JSON.stringify({ ...kept, since: since.toISOString() }),
+      [saleKey]: JSON.stringify({ ...kept, since }),
     });
     await page.goto(launch());
     await openStore(page, /Подільський/);

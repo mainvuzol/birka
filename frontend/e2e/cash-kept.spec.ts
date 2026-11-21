@@ -510,13 +510,20 @@ for (const kept of [
       }, icons["eyelet-dashed"]),
     ).toBe(true);
     await expect(banner.locator("p").first()).toHaveText(kept.line);
+    // A moment before the phone's midnight is said with its day (audit
+    // 2026-11-20, frame P2-3): the phone's own day, in its zone, Kyiv's,
+    // whatever zone runs the journey (CI's is UTC).
+    const ofToday =
+      since === undefined ||
+      (await page.evaluate(
+        (at) => new Date(at).toDateString() === new Date().toDateString(),
+        since,
+      ));
     // Nothing of the drawer on paper: no paper line, no name.
     await expect(banner.locator("p").nth(1)).toHaveText(
       since !== undefined
         ? new RegExp(
-            // A moment before the phone's midnight is said with its day
-            // (audit 2026-11-20, frame P2-3).
-            `^Чекає відповіді сервера з ${new Date(since).toDateString() === new Date().toDateString() ? "" : "учора о "}\\d{2}:\\d{2}\\. ${checksItself.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`,
+            `^Чекає відповіді сервера з ${ofToday ? "" : "учора о "}\\d{2}:\\d{2}\\. ${checksItself.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`,
           )
         : checksItself,
     );
