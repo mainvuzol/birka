@@ -11499,3 +11499,102 @@ before.
   - «Початкові залишки»: a list found past the first page, read again
     whole as the app comes back while another phone begins a list, may be
     read on to once more, its big tag's place meanwhile.
+
+## Chosen in chat — 2026-11-21 (audit 2026-11-20, batch 3: the rules' tails — «Показати ще» one strip under every list, «Ще товари» gone; a field said wrong a line under it in its last six places, and where it stands; a kept operation's stub names its day; frame P2-1, P2-2, P2-3, orders-cash P2-1, money P2-1, goods P2-1)
+
+Taken as the next after «merged go next»: the frame task list's own second
+batch, «Хвосты правил» (its §8), with the tasks of the other passes that
+point to it. No request, check, journal or right changes; no backend
+change. What is recorded, and the server's checks of it, are as before.
+
+- **«Показати ще» one strip under every list** (frame P2-1; orders-cash
+  P2-1 and money P2-1 are its places, built once):
+  - Seventeen next pages that were quiet buttons at their words' width are
+    `.list-more` — the list's whole width (in a sheet, the sheet's), 44
+    high, the edge, 15/600 in ink, on nothing, its own 8 over it: the
+    till's and «Нове замовлення»'s stock search, «Повернення», «Покупці»
+    (and the till's «Внесок», the same list),
+    «Замовлення» (its four places), «Закриття», «Накладні»,
+    «Постачальникам», «Позичене», «Зарахувати повернення»'s sheet,
+    «Моделі» (and «Об’єднати моделі»), «Перевірка каталогу», «Інший колір
+    нашої моделі», a count's positions, «Залишки», the catalogue's search
+    («Прийшов товар», «Знайшли товар…», a line of «Початкові залишки», the
+    till's «з каталогу»), «Повернути постачальнику», and «Початкові
+    залишки»' own lists (2026-11-21, batch 2).
+  - Revises 2026-11-18 (batch 3) «thirteen other «Показати ще» … the next
+    audit's»: none is left.
+  - «Ще товари» → «Показати ще» in the catalogue's search and «Повернути
+    постачальнику»: every list's word (2026-11-11). Revises the batch of
+    2026-11-11 that kept «Ще товари» as those places' own. The owner's
+    reading (frame §11).
+  - A count's own `.stocktake-more` is gone: the strip's own 8 over it,
+    «Знайшли товар, якого немає в списку» 12 under it, as before.
+  - When it shows, what it reads, where the cursor goes, a failed page's
+    plate in its place and, taking no tap, dashed in pencil: as before.
+    «Закриття», «Накладні», «Постачальникам» and «Позичене» say
+    `type="button"` now; no form is round them, so nothing changes.
+- **A field said wrong is a line under it: its last six places** (frame
+  P2-2; goods P2-1):
+  - «Вкажіть додатну довжину до 9999,9 см, з одним знаком після коми.» in
+    «Нова модель» and in «Моделі»' «Перейменувати модель»; «Рядок довший
+    за 500 символів: розділіть його.» and «Рядків: …» / «Рядки разом
+    задовгі…» in «Новий список» and «Додати рядки вручну».
+  - Each is `.field-wrong`, `role="alert"` as before, with its id; its field
+    is `aria-invalid` and read with its lines (`aria-describedby`) while
+    they stand, its edge in the error's colour. A refusal of the server is
+    still the plate.
+  - Where (goods P2-1 (а)): in «Перейменувати модель» the length's line is
+    right under «Довжина, см», inside «Ще ознаки»; it stood after
+    «Категорія», «Тип виробу» and their hint.
+  - Folded with a length wrong (goods P2-1 (а), decided by its pass): the
+    same line under «Ще ознаки», in both forms, so the held way on says
+    why; unfolded, under the field again.
+  - Decided here (the goods pass's Д2): under the fold the line has no
+    `role="alert"` — it was heard as it was typed — and «Ще ознаки» is read
+    with it (`aria-describedby`). Unfolded, the field's line is an alert as
+    it was.
+  - «Той самий товар і розмір двічі: об’єднайте їх.» in a line's answer of
+    «Початкові залишки» (goods P2-1 (б)): `.field-wrong` under the last
+    part, above «Ще розмір чи колір»; it stood under the note, as the
+    note's.
+  - Decided here, between two passes: the frame's §12 kept it a plate, as
+    the answer's make-up rather than a field's; the goods pass put it under
+    the parts. Taken the goods': it is the phone's own check of what is
+    typed, said before sending and holding «Зберегти» — the rule's case.
+  - Words, when each line comes and what it holds: as before.
+- **A kept operation's stub names its day** (frame P2-3):
+  - Of today, «Чекає відповіді сервера з 14:20.», as before. Of yesterday,
+    «з учора о 14:20.»; before that, «з 18.11 о 14:20.» — by the phone's
+    day, as «Сьогодні» says when (`whenText`, moved to `shared/when.ts`).
+  - Every stub that says since when: a sale's, a receipt's, a return's, a
+    debt's, a correction's, a count's, the drawer's, an order's step's, an
+    invoice's, a return to a supplier's, a catalogue's change, a store's.
+  - The rest of its words, «остання перевірка …» and what the phone does:
+    as before. `since` is kept and sent as before; it is in no body.
+  - The owner's reading (frame §11).
+- **Found by the review, fixed:**
+  - Medium: the length's line under a folded «Ще ознаки» took its crossed
+    circle and its indent from `role="alert"`, which it has not: bare red
+    words. `.field-wrong` with no role has the same look now, and both
+    journeys check it.
+  - Medium: «Моделі»'s look check would have passed on the quiet button,
+    which its column already stretched to the list's width. The look check
+    asks for the strip itself (`list-more`) in every place now.
+  - Low: older journeys that keep an operation and read «з 14:20» could
+    meet the phone's midnight; they take «з учора о …» too, and the
+    outage's own reads it again after its clock runs on.
+  - Low: «Сьогодні»'s moment not read says «—» again, as before the move.
+- **Known, kept (review):**
+  - The strip's 8 is its own margin, not collapsed with the list's: where
+    a list has its own margin under it, or a column its gap, it stands
+    further — 16 under «Моделі» and the catalogue's search, 20 under
+    «Пропозиції», 26 under a place of «Замовлення». As the strips built
+    before.
+  - In «Перейменувати модель», unfolding «Ще ознаки» with a length wrong
+    reads its line out again, as «Нова модель» always did; before, its line
+    stood outside the fold.
+  - A stub drawn before the phone's midnight says «з 23:50» until its
+    screen is drawn again; opened the next morning, it says «з учора о
+    23:50».
+  - Under the length's line, 20 in «Нова модель» and 12 in «Перейменувати
+    модель», as their forms space their lines.

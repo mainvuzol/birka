@@ -650,7 +650,7 @@ function SetOff({
             returns.hasNextPage && (
               <button
                 type="button"
-                className="quiet"
+                className="list-more"
                 disabled={held || pressing || fetching}
                 onClick={() => {
                   // Kept until the page is read: after its retry too.

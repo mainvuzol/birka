@@ -1,4 +1,5 @@
 import {
+  expectListMore,
   test,
   expect,
   comeBack,
@@ -527,6 +528,8 @@ test("a paused warehouse, a size all held and one of unknown size stay readable,
   await expect(tagOf(page, first)).toBeVisible();
   await expect(held).toHaveCount(0);
   const showMore = page.getByRole("button", { name: "Показати ще" });
+  // One word and one look under every list (audit 2026-11-20, frame P2-1).
+  await expectListMore(showMore, page.locator(".stock-tags"));
   await showMore.click();
   // Refused: the tags read stand, one «Спробувати ще раз» at their foot
   // where «Показати ще» stood (audit 2026-11-13, goods P1-1).

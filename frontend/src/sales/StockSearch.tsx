@@ -541,7 +541,7 @@ export function StockSearch({
           // top of free counts gone stale (review).
           <button
             type="button"
-            className="quiet"
+            className="list-more"
             disabled={
               stock.isFetching || stock.isPlaceholderData || readAgainFailed
             }

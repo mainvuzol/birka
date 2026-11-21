@@ -896,6 +896,13 @@ export function LineTask({
                   </div>
                 );
               })}
+            {/* The parts said wrong, a line under them, where they are —
+                never under the note (audit 2026-11-20, goods P2-1 (б)). */}
+            {duplicate && (
+              <p className="field-wrong" role="alert">
+                Той самий товар і розмір двічі: об’єднайте їх.
+              </p>
+            )}
             {!bySize && fixed === null && basis !== "" && (
               <button
                 type="button"
@@ -933,9 +940,6 @@ export function LineTask({
                 }}
               />
             </label>
-            {duplicate && (
-              <p role="alert">Той самий товар і розмір двічі: об’єднайте їх.</p>
-            )}
           </>
         )}
         {problem && <p role="alert">{problem}</p>}

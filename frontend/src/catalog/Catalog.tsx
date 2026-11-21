@@ -436,7 +436,7 @@ export function Catalog({
                 list.hasNextPage && (
                   <button
                     type="button"
-                    className="quiet"
+                    className="list-more"
                     disabled={blocked || list.isFetching || readAgainFailed}
                     onClick={() => {
                       // Kept until the page is read: after its retry too.

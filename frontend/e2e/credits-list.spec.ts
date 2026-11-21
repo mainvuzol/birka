@@ -475,6 +475,14 @@ test("two stores are two blocks, the open one first, each owed what its own summ
   // «Показати ще» of «Основний»'s block reads «Основний» alone.
   const more = page.getByRole("button", { name: "Показати ще" });
   await expect(more).toHaveCount(1);
+  // One word and one look under every list (audit 2026-11-20, frame P2-1).
+  await expectListMore(
+    more,
+    page.getByRole("list", {
+      name: "Хто винен магазину «Основний»",
+      exact: true,
+    }),
+  );
   const before = asked.length;
   await more.click();
   await expect(here).toHaveCount(26);

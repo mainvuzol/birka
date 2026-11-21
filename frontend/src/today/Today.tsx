@@ -42,7 +42,8 @@ import type { OpenOrders } from "./reads";
 import { Found, Search, useFound, useSearched } from "./Search";
 import type { Searched } from "./Search";
 import { see, unsee } from "./seen";
-import { useWaiting, whenText } from "./waiting";
+import { whenText } from "@/shared/when";
+import { useWaiting } from "./waiting";
 import type { Kind, Tag, Waiting as Work } from "./waiting";
 
 /** Below this much of Telegram's steady height, the day-tag is one line. */

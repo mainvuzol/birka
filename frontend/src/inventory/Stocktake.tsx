@@ -1383,7 +1383,7 @@ export function Stocktake({
                 // 2026-11-07); refused, it waits under the plate.
                 <button
                   type="button"
-                  className="quiet stocktake-more"
+                  className="list-more"
                   disabled={list.isFetching || readAgainFailed}
                   onClick={() => {
                     setFocusFrom(items.length);

@@ -696,7 +696,7 @@ export function NewReturn({
                 {stock.hasNextPage && (
                   <button
                     type="button"
-                    className="quiet"
+                    className="list-more"
                     disabled={
                       stock.isFetchingNextPage || stock.isPlaceholderData
                     }
@@ -704,7 +704,7 @@ export function NewReturn({
                       void stock.fetchNextPage();
                     }}
                   >
-                    Ще товари
+                    Показати ще
                   </button>
                 )}
               </>
