@@ -11425,3 +11425,77 @@ changes; what is recorded, and the server's checks of it, are as before.
 
     No one opens there first. The hold is kept so that each screen's own
     list says what holds it, as the till's does. No journey reaches it.
+
+## Chosen in chat — 2026-11-21 (audit 2026-11-20, batch 2: lists past fifty — a return's and an invoice's own read finds them past their supplier's fifty newest; «Моделі» found past fifty; «Початкові залишки» past a hundred, read on to the list «Сьогодні» opens; «Клієнт забрав» and «Скасовані й повернені на склад» read on while none of theirs is read; money Н1, Н2, goods Н1, Н2, orders-cash Н3)
+
+Taken as the next after «merged go next»: the audit's five finds about a
+list read only in part. No request, check, journal, right or word changes;
+no backend change. What is recorded, and the server's checks of it, are as
+before.
+
+- **A return's own screen finds it past its supplier's fifty newest**
+  (money Н1, inventory-ledger):
+  - It read its supplier's fifty newest returns once. A return from «Брак»
+    older than them, cancelled on its screen, stayed standing: the server
+    answers that cancel with «Брак»'s unit, not the return. Its buzz said
+    it was done, its sheet closed, and «Скасувати повернення» was offered
+    again.
+  - Now page by page, fifty a page, newest first, until the return is
+    found (`suppliers/findPaged.ts`): «Скасовано», when, why and who — the
+    server's, never made up on the phone.
+  - A cancel's own answer, cancelled, stands over a read from before it: a
+    read again that fails never shows the return standing (review).
+  - Revises 2026-11-19 «a return's own screen reads its supplier's fifty
+    newest … and keeps the row's or its cancel's answer past them»: past the
+    server's furthest page (10 000 returns to one supplier) only.
+- **An invoice read again after a refusal is found past its supplier's
+  fifty newest** (money Н2, financial-integrity): `readAgain`, after a
+  payment's, a set-off's, a write-off's or a cancel's refusal, page by page
+  as the return. «Винні …», «Увесь залишок …» and the card's «Сплатити»
+  are as the invoice is now.
+  - A read that comes after the invoice was shown anew — a payment pressed
+    again and answered meanwhile — is older than it, and is let go
+    (review).
+  - Opened from elsewhere: as decided 2026-11-06, its supplier's fifty
+    newest, then that supplier's invoices, as before.
+- **«Моделі» found past fifty** (goods Н1; «Об’єднати моделі» the same
+  search, Д3): twenty a page by `offset`, as «Інший колір нашої моделі»,
+  «Показати ще» until the server has no more. Before, it stopped at fifty
+  and «Показати ще» was gone with more found.
+  - As the family search: the cursor goes to the first model a page brings;
+    a page that fails, its retry alone where «Показати ще» stood, the models
+    read kept; a model read twice, shown once.
+- **«Початкові залишки» past a hundred** (goods Н2): a hundred a page,
+  newest first, «Показати ще» under the tags, as the lines' pages.
+  - Decided here: the cursor goes to the first list's «Відкрити» a page
+    brings; a page that fails, its retry alone where «Показати ще» stood.
+  - Decided here: a list to open not among those read — «Сьогодні»'s
+    «Переглянути й затвердити», or a list just saved — is read on to, its
+    big tag's place meanwhile, as when the first page is read.
+  - Not changed: «Сьогодні» counts the hundred newest lists, as before.
+- **«Клієнт забрав» and «Скасовані й повернені на склад» read on**
+  (orders-cash Н3 (а), no Backend):
+  - The closed are read fifty a page and picked out on the phone. None of a
+    screen's own among those read and more to read: the next page is read
+    at once, the rows' places in grey and «Завантажуємо замовлення…» heard
+    meanwhile — never a «Показати ще» alone. A page «Показати ще» brought
+    with none of the screen's own is read past too, the rows as they are,
+    «Показати ще» held. «Тут посилок немає.» once every page is read.
+  - Decided here, how far: every page, as «Зарахувати повернення» reads its
+    returns (2026-11-19). A next page that fails stops it: its plate, its
+    retry; a press's page that failed reads on after its retry (review).
+  - Known, kept (review): a shop with many closed orders and none
+    cancelled reads them all, fifty a page, to say «Тут посилок немає.» on
+    «Скасовані й повернені на склад» — and again on each return to the app
+    while that screen or «Клієнт забрав» stands. Rare, as the screen is;
+    the server's own filter of the collected and the cancelled (Н3 (б),
+    Backend) is what ends it.
+  - Revises 2026-11-01 «while more open orders are to be read, a place none
+    is in yet says nothing» for the closed places only. The open ones (a
+    hundred a page): as decided.
+- **Known, kept (review):**
+  - a return's walk past its fifty newest is not stopped when its screen is
+    left (`api` takes no signal); the pages are read to their end;
+  - «Початкові залишки»: a list found past the first page, read again
+    whole as the app comes back while another phone begins a list, may be
+    read on to once more, its big tag's place meanwhile.

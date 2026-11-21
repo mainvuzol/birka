@@ -1988,6 +1988,71 @@ test("a payment kept on the phone is checked from another screen, and the till i
   await expect(own).toContainText("сплачено 200,00 грн з 800,00 грн");
 });
 
+test("a payment refused as another phone paid meanwhile shows the invoice as it is now, past its supplier's fifty newest invoices (audit 2026-11-20, money Н2)", async ({
+  page,
+}) => {
+  const supplier = `Далі ${randomUUID().slice(0, 6)}`;
+  const invoiceId = await anInvoice(
+    page,
+    await aSupplier(page, supplier),
+    "800.00",
+  );
+  // The read after a refusal: fifty others of the supplier's the newest,
+  // this one on the next page.
+  const readAgain = (url: URL): boolean =>
+    url.pathname === "/api/v1/supplier-invoices" &&
+    url.searchParams.has("supplier_id") &&
+    url.searchParams.get("limit") === "50";
+  const offsets: string[] = [];
+  await page.route(readAgain, async (route, request) => {
+    const url = new URL(request.url());
+    const offset = Number(url.searchParams.get("offset") ?? "0");
+    offsets.push(String(offset));
+    if (offset === 0) {
+      const real = (await (await route.fetch()).json()) as {
+        items: { id: string }[];
+      };
+      await route.fulfill({
+        json: {
+          items: real.items.map((item) => ({ ...item, id: randomUUID() })),
+          has_more: true,
+        },
+      });
+      return;
+    }
+    url.searchParams.set("offset", String(offset - 50));
+    await route.fallback({ url: url.toString() });
+  });
+  await invoicesAt(page, hanna);
+  await open(page, supplier);
+  await payOnCard(page).click();
+  await keyIn(page, "400");
+  // 500,00 paid on another phone meanwhile: 300,00 left.
+  const elsewhere = await page.request.post(
+    `/api/v1/supplier-invoices/${invoiceId}/payments`,
+    {
+      headers: await headersOf(page, hanna),
+      data: { command_id: randomUUID(), amount: "500.00" },
+    },
+  );
+  expect(elsewhere.status()).toBe(201);
+  await payButton(page).click();
+  await expect(
+    page
+      .getByRole("alert")
+      .filter({ hasText: "Це більше, ніж винні: залишок 300,00 грн." }),
+  ).toBeVisible();
+  // Read again to its page: what is left, as it is now.
+  await expect(
+    page.getByRole("button", { name: "Увесь залишок 300,00 грн" }),
+  ).toBeVisible();
+  expect(offsets).toEqual(["0", "50"]);
+  await back(page, "Накладна").click();
+  await expect(owes(page).locator(".invoice-owed-sum")).toHaveText(
+    "300,00 грн",
+  );
+});
+
 test("a kept payment refused on its check says why in the invoices' words, and frees the till", async ({
   page,
 }) => {

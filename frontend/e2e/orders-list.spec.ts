@@ -157,6 +157,8 @@ interface Server {
   pageFails?: Set<string>;
   /** An order's own read answered only once this opens. */
   detailHeld?: Promise<void>;
+  /** The closed past their first page answered only once this opens. */
+  closedLater?: Promise<void>;
 }
 
 async function stub(page: Page, server: Server): Promise<void> {
@@ -178,6 +180,8 @@ async function stub(page: Page, server: Server): Promise<void> {
         return;
       }
       if (waybill !== null && waybill === server.heldFor) await server.gate;
+      if (status === "closed" && offset > 0 && server.closedLater)
+        await server.closedLater;
       if (status === "open" && server.openHeld) await server.openHeld;
       if (status === "open" && server.openFails) {
         await route.fulfill({
@@ -1384,6 +1388,155 @@ test("more than a hundred open: «Показати ще» reads the rest, a row 
   await page.getByRole("button", { name: "Показати ще" }).click();
   // The second page holds the first's last row again: shown once.
   await expect(closedRows).toHaveCount(55);
+});
+
+test("«Скасовані й повернені на склад» with none among the fifty newest closed reads the next page at once, its places in grey meanwhile; every page read, «Тут посилок немає.», never a «Показати ще» alone (audit 2026-11-20, orders-cash Н3)", async ({
+  page,
+}) => {
+  const done = Array.from({ length: 55 }, (_, index) =>
+    order({ status: "COLLECTED", created_at: ago(1 + index / 10) }),
+  );
+  let later = (): void => undefined;
+  const orders = server({
+    open: [order({ created_at: ago(0) })],
+    closed: done,
+  });
+  await stub(page, orders);
+  await enter(page);
+  await knot(page, "Клієнт забрав").click();
+  const closedRows = rows(page, "Клієнт забрав");
+  await expect(closedRows).toHaveCount(50);
+  orders.closedLater = new Promise<void>((resolve) => {
+    later = resolve;
+  });
+  // More to read: the link stands.
+  await page
+    .getByRole("button", { name: /^Скасовані й повернені на склад/ })
+    .click();
+  await expect
+    .poll(() => orders.asked.filter((asked) => asked.startsWith("closed|")))
+    .toEqual(["closed||0", "closed||50"]);
+  await expect(page.locator(".placeholder .order-tag")).toHaveCount(3);
+  await expect(
+    page.getByRole("status").filter({ hasText: "Завантажуємо замовлення…" }),
+  ).toBeAttached();
+  await expect(page.getByRole("button", { name: "Показати ще" })).toHaveCount(
+    0,
+  );
+  await expect(page.getByText("Тут посилок немає.")).toHaveCount(0);
+  later();
+  await expect(page.getByText("Тут посилок немає.")).toBeVisible();
+  await expect(page.locator(".placeholder")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Показати ще" })).toHaveCount(
+    0,
+  );
+  // Back: «Клієнт забрав» with what was read for it.
+  await page.getByRole("button", { name: "До замовлень" }).click();
+  await expect(closedRows).toHaveCount(55);
+  await expect(page.getByRole("button", { name: "Показати ще" })).toHaveCount(
+    0,
+  );
+});
+
+test("«Клієнт забрав» with none collected among the fifty newest closed reads the next page at once, its places in grey meanwhile, never a «Показати ще» alone; «Скасовані й повернені на склад» shows what is read (audit 2026-11-20, orders-cash Н3)", async ({
+  page,
+}) => {
+  const cancelled = Array.from({ length: 60 }, (_, index) =>
+    order({ status: "CANCELLED", created_at: ago(1 + index / 10) }),
+  );
+  const collected = Array.from({ length: 3 }, (_, index) =>
+    order({ status: "COLLECTED", created_at: ago(20 + index / 10) }),
+  );
+  let later = (): void => undefined;
+  const orders = server({
+    open: [order({ created_at: ago(0) })],
+    closed: [...cancelled, ...collected],
+    closedLater: new Promise<void>((done) => {
+      later = done;
+    }),
+  });
+  await stub(page, orders);
+  await enter(page);
+  await knot(page, "Клієнт забрав").click();
+  // The second page asked at once: the rows' places, heard, nothing else.
+  await expect
+    .poll(() => orders.asked.filter((asked) => asked.startsWith("closed|")))
+    .toEqual(["closed||0", "closed||50"]);
+  await expect(page.locator(".placeholder .order-tag")).toHaveCount(3);
+  await expect(
+    page.getByRole("status").filter({ hasText: "Завантажуємо замовлення…" }),
+  ).toBeAttached();
+  await expect(page.getByRole("button", { name: "Показати ще" })).toHaveCount(
+    0,
+  );
+  await expect(page.getByText("Тут посилок немає.")).toHaveCount(0);
+  later();
+  const closedRows = rows(page, "Клієнт забрав");
+  await expect(closedRows).toHaveCount(3);
+  await expect(page.locator(".placeholder")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Показати ще" })).toHaveCount(
+    0,
+  );
+  await page
+    .getByRole("button", { name: /^Скасовані й повернені на склад/ })
+    .click();
+  await expect(rows(page, "Скасовані й повернені на склад")).toHaveCount(60);
+  expect(orders.asked.filter((asked) => asked.startsWith("closed|"))).toEqual([
+    "closed||0",
+    "closed||50",
+  ]);
+});
+
+test("«Показати ще» under «Клієнт забрав» whose page brings none collected reads past it, after that page's retry too, the rows as they are, its button held meanwhile (audit 2026-11-20, orders-cash Н3; review)", async ({
+  page,
+}) => {
+  const first = Array.from({ length: 50 }, (_, index) =>
+    order({ status: "COLLECTED", created_at: ago(1 + index / 100) }),
+  );
+  const between = Array.from({ length: 60 }, (_, index) =>
+    order({ status: "RETURNED", created_at: ago(2 + index / 100) }),
+  );
+  const last = Array.from({ length: 2 }, (_, index) =>
+    order({ status: "COLLECTED", created_at: ago(3 + index / 100) }),
+  );
+  const orders = server({
+    open: [order({ created_at: ago(0) })],
+    closed: [...first, ...between, ...last],
+    pageFails: new Set(["closed||50"]),
+  });
+  await stub(page, orders);
+  await enter(page);
+  await knot(page, "Клієнт забрав").click();
+  const closedRows = rows(page, "Клієнт забрав");
+  await expect(closedRows).toHaveCount(50);
+  const more = page.getByRole("button", { name: "Показати ще" });
+  await more.click();
+  // Its page refused: the plate, its retry, the fifty kept.
+  const plate = await pageFailed(page, closedRows.last());
+  let retried = (): void => undefined;
+  let past = (): void => undefined;
+  orders.closedLater = new Promise<void>((done) => {
+    retried = done;
+  });
+  await plate.getByRole("button", { name: "Спробувати ще раз" }).click();
+  await expect
+    .poll(() => orders.asked.filter((asked) => asked.startsWith("closed|")))
+    .toEqual(["closed||0", "closed||50", "closed||50"]);
+  orders.closedLater = new Promise<void>((done) => {
+    past = done;
+  });
+  retried();
+  // Its page brought none collected: the next one read at once, the
+  // button held, the fifty as they were.
+  await expect
+    .poll(() => orders.asked.filter((asked) => asked.startsWith("closed|")))
+    .toEqual(["closed||0", "closed||50", "closed||50", "closed||100"]);
+  await expect(more).toBeDisabled();
+  await expect(closedRows).toHaveCount(50);
+  past();
+  await expect(closedRows).toHaveCount(52);
+  await expect(more).toHaveCount(0);
+  await expect(page.locator(".placeholder")).toHaveCount(0);
 });
 
 /** The one plate where «Показати ще» stood: under the last row, no second

@@ -29,6 +29,7 @@ import { Placeholder } from "@/shared/Placeholder";
 import { ageOf } from "@/today/reads";
 import { Stamp, Unreads, staleOf, useNow } from "@/today/age";
 import { shortDay, shortWhen } from "@/credits/format";
+import { findPaged } from "./findPaged";
 import { submitInvoiceCommand, useInvoiceCommand } from "./invoiceCommands";
 import { SupplierFilter, SupplierPicker } from "./Picker";
 import { InvoiceActions, EntryCancel } from "./InvoiceActions";
@@ -152,6 +153,11 @@ export function Invoices({
         ? { screen: "finding" }
         : { screen: "list" },
   );
+  // The screen as it is now, for a read again that comes late.
+  const shownNow = useRef(view);
+  useEffect(() => {
+    shownNow.current = view;
+  }, [view]);
   const [supplierId, setSupplierId] = useState("");
   const [owedOnly, setOwedOnly] = useState(true);
   // Opened from outside: the invoice as it is now, among its supplier's.
@@ -271,18 +277,29 @@ export function Invoices({
   }
 
   /** The invoice as it is now, read again after a refusal: there is no
-   * read of one, so its supplier's are read (no backend change). */
+   * read of one, so its supplier's are read (no backend change), page by
+   * page until it is found, past their fifty newest too (audit 2026-11-20,
+   * money Н2). */
   async function readAgain(invoice: Invoice): Promise<Invoice | null> {
     try {
-      const [current] = (
-        await api<InvoicePage>(
-          `/supplier-invoices?store_id=${store.id}&supplier_id=${invoice.supplier.id}${
-            invoice.store_id !== store.id ? "&elsewhere=true" : ""
-          }&limit=50`,
-          token,
-        )
-      ).items.filter((item) => item.id === invoice.id);
-      return current ?? null;
+      const current = await findPaged(
+        (page) =>
+          api<InvoicePage>(
+            `/supplier-invoices?store_id=${store.id}&supplier_id=${invoice.supplier.id}${
+              invoice.store_id !== store.id ? "&elsewhere=true" : ""
+            }${page}`,
+            token,
+          ),
+        invoice.id,
+      );
+      // The invoice shown anew while it was read — a payment pressed again
+      // and answered meanwhile — is newer than this read: kept (review).
+      const now = shownNow.current;
+      return (now.screen === "card" || now.screen === "pay") &&
+        now.invoice.id === invoice.id &&
+        now.invoice !== invoice
+        ? null
+        : current;
     } catch {
       // What was shown stays; the refusal says what to do.
       return null;

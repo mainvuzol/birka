@@ -1961,6 +1961,72 @@ test("a kept creation refused stays across tabs, answered on its own proposal al
   expect(attempts).toBe(2);
 });
 
+test("«Моделі» found past fifty: «Показати ще» reads twenty more each time, the cursor on the first it brings, to the last one found; a page that could not be read, its retry alone where «Показати ще» stood (audit 2026-11-20, goods Н1)", async ({
+  page,
+}) => {
+  const word = `Багато ${randomUUID().slice(0, 6)}`;
+  const many = Array.from({ length: 65 }, (_, at) => ({
+    product_variant_id: randomUUID(),
+    display_name: `${word} ${String(at + 1).padStart(2, "0")}`,
+    status: "ACTIVE",
+  }));
+  const asked: string[] = [];
+  let refuse = true;
+  await page.route("**/api/v1/catalog/models?*", async (route, request) => {
+    const params = new URL(request.url()).searchParams;
+    if (params.get("query") !== word) {
+      await route.fallback();
+      return;
+    }
+    const limit = Number(params.get("limit") ?? "20");
+    const offset = Number(params.get("offset") ?? "0");
+    asked.push(`${String(offset)}+${String(limit)}`);
+    if (offset === 40 && refuse) {
+      refuse = false;
+      await route.fulfill({
+        status: 500,
+        json: { code: "INTERNAL_ERROR", message: "Internal error" },
+      });
+      return;
+    }
+    await route.fulfill({
+      json: {
+        items: many.slice(offset, offset + limit),
+        has_more: many.length > offset + limit,
+      },
+    });
+  });
+  await enter(page, "Моделі");
+  await page.getByLabel("Знайти модель").fill(word);
+  const search = page.locator(".models-search");
+  const found = search
+    .getByRole("list", { name: "Знайдені моделі" })
+    .getByRole("button");
+  const more = search.getByRole("button", { name: "Показати ще" });
+  await expect(found).toHaveCount(20);
+  await more.click();
+  await expect(found).toHaveCount(40);
+  await expect(found.nth(20)).toBeFocused();
+  // The third page refused: its plate alone where «Показати ще» stood, the
+  // forty kept; its retry reads that page.
+  await more.click();
+  const plate = search.locator(".notice.read-failure");
+  await expect(plate).toHaveCount(1);
+  await expect(more).toHaveCount(0);
+  await expect(found).toHaveCount(40);
+  await plate.getByRole("button", { name: "Спробувати ще раз" }).click();
+  await expect(found).toHaveCount(60);
+  await expect(found.nth(40)).toBeFocused();
+  await expect(plate).toHaveCount(0);
+  // Past fifty, to the last one found.
+  await more.click();
+  await expect(found).toHaveCount(65);
+  await expect(found.nth(60)).toBeFocused();
+  await expect(found.last()).toContainText(`${word} 65`);
+  await expect(more).toHaveCount(0);
+  expect(asked).toEqual(["0+20", "20+20", "40+20", "40+20", "60+20"]);
+});
+
 test("the models' search read slowly: three rows in grey, one line each, where the rows come, «Шукаємо моделі…» said to a reader alone; answered, the rows where the grey stood (audit 2026-11-13, goods P2-1)", async ({
   page,
 }) => {

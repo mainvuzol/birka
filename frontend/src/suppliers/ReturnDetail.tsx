@@ -11,6 +11,7 @@ import { Sticker } from "@/shared/Sticker";
 import { money } from "@/orders/types";
 import type { Store } from "@/orders/types";
 import { shortDay, shortWhen } from "@/credits/format";
+import { findPaged } from "./findPaged";
 import { Reasoned, noAnswer } from "./InvoiceActions";
 import { lineText, placeText, refusalText } from "./returnWords";
 import type { ReturnPage, SetOff, SupplierReturn } from "./types";
@@ -47,21 +48,36 @@ export function ReturnDetail({
 }): JSX.Element {
   const cache = useQueryClient();
   // The return as it is now — a set-off cancelled in «Накладних» meanwhile
-  // is gone: there is no read of one, so its supplier's are read.
+  // is gone, one from «Брак» cancelled: there is no read of one, so its
+  // supplier's are read, page by page until it is found, past their fifty
+  // newest too (audit 2026-11-20, money Н1).
   const fresh = useQuery({
-    queryKey: ["supplier-returns", store.id, "of", opened.supplier.id],
+    queryKey: [
+      "supplier-returns",
+      store.id,
+      "of",
+      opened.supplier.id,
+      opened.id,
+    ],
     queryFn: () =>
-      api<ReturnPage>(
-        `/supplier-returns?store_id=${store.id}&supplier_id=${opened.supplier.id}&limit=50`,
-        token,
+      findPaged(
+        (page) =>
+          api<ReturnPage>(
+            `/supplier-returns?store_id=${store.id}&supplier_id=${opened.supplier.id}${page}`,
+            token,
+          ),
+        opened.id,
       ),
     retry: false,
   });
-  // A cancel's own answer: a return older than its supplier's fifty newest
-  // is not in that read.
+  // A cancel's own answer: a return past the server's furthest page is not
+  // in that read; read again and refused, the read before the cancel is
+  // older than it (review).
   const [answered, setAnswered] = useState<SupplierReturn | null>(null);
   const item =
-    fresh.data?.items.find((one) => one.id === opened.id) ?? answered ?? opened;
+    answered?.cancelled && !fresh.data?.cancelled
+      ? answered
+      : (fresh.data ?? answered ?? opened);
   const [asking, setAsking] = useState(false);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
