@@ -133,14 +133,52 @@ export function Openings({
     window.scrollTo(0, 0);
     heading.current?.focus();
   }, [creating]);
-  const lists = useQuery({
+  // A hundred a page, the newest first, every one the server has (audit
+  // 2026-11-20, goods Н2): before, the hundred newest alone.
+  const lists = useInfiniteQuery({
     queryKey: ["stock-lists", scopeKey, store.id],
-    queryFn: () =>
-      api<{ items: StockList[]; has_more: boolean }>(
-        `/snapshots?store_id=${store.id}&limit=100`,
+    queryFn: ({ pageParam }) =>
+      api<ListPage>(
+        `/snapshots?store_id=${store.id}&limit=${String(listsPerPage)}&offset=${String(pageParam)}`,
         token,
       ),
+    initialPageParam: 0,
+    getNextPageParam: (last: ListPage, pages: ListPage[]) =>
+      last.has_more && pages.length * listsPerPage <= LAST_OFFSET
+        ? pages.length * listsPerPage
+        : undefined,
     retry: false,
+  });
+  // A list begun between two pages moves the older ones down by one: each
+  // shown once.
+  const items = [
+    ...new Map(
+      (lists.data?.pages ?? [])
+        .flatMap((page) => page.items)
+        .map((list) => [list.snapshot_id, list]),
+    ).values(),
+  ];
+  // A next page that could not be read: its retry alone, where «Показати
+  // ще» stood, the lists read kept.
+  const nextFailed = useNextPageFailed(lists);
+  // «Показати ще» pressed: the cursor goes to the first list it brings, its
+  // «Відкрити».
+  const [focusAt, setFocusAt] = useState<number | null>(null);
+  const shelf = useRef<HTMLDivElement>(null);
+  const listsFetching = lists.isFetching;
+  const moreLists = lists.hasNextPage;
+  useEffect(() => {
+    if (focusAt === null || listsFetching) return;
+    const verbs =
+      shelf.current?.querySelectorAll<HTMLElement>(".opening-tag .tag-verb") ??
+      [];
+    // Nothing new on it and none more: the last one.
+    const next =
+      verbs[focusAt] ?? (moreLists ? undefined : verbs[verbs.length - 1]);
+    if (next) {
+      next.focus();
+      setFocusAt(null);
+    }
   });
   const locations = useQuery({
     queryKey: ["opening-locations", scopeKey, store.id],
@@ -151,7 +189,20 @@ export function Openings({
   // Only ever shown, so guarded once here for every place it reaches.
   const warehouse = (id: string): string =>
     visible(locations.data?.find((l) => l.id === id)?.name ?? "склад");
-  const open = lists.data?.items.find((l) => l.snapshot_id === openId);
+  const open = items.find((l) => l.snapshot_id === openId);
+  // A list to open not among those read — «Сьогодні»'s, older than the
+  // hundred newest: read on until it comes, its tag's place meanwhile
+  // (audit 2026-11-20, goods Н2).
+  const seeking =
+    openId !== null &&
+    open === undefined &&
+    lists.data !== undefined &&
+    lists.hasNextPage &&
+    !nextFailed;
+  const { fetchNextPage } = lists;
+  useEffect(() => {
+    if (seeking && !listsFetching) void fetchNextPage();
+  }, [seeking, listsFetching, fetchNextPage]);
   // The list a draft's command made, its answer lost, opened — from its
   // tag here or «Сьогодні»'s: made, so nothing of the draft is sent again
   // (review, fourth round, 2026-10-09; 2026-11-08).
@@ -180,7 +231,7 @@ export function Openings({
   };
   // «Сьогодні»'s list, its read still on its way: the list, not the lists,
   // is what opens.
-  const awaited = openId !== null && lists.isPending;
+  const awaited = openId !== null && (lists.isPending || seeking);
   // The lists' one action, Telegram's: «Новий список» (P0-6); not while
   // «Сьогодні»'s list is on its way.
   const here = open === undefined && !creating && !awaited;
@@ -245,7 +296,7 @@ export function Openings({
         back={back && <BackToMore back={back} />}
       />
       <section className="openings">
-        {lists.isPending ? (
+        {lists.isPending || seeking ? (
           // The lists' tags in grey, where they come (goods task list after
           // stage 2, P2-2); «Сьогодні»'s list awaited, its big tag over its
           // lines (review).
@@ -254,14 +305,14 @@ export function Openings({
           ) : (
             <OpeningPlaceholder said="Завантажуємо списки…" shape="lists" />
           )
-        ) : lists.error ? (
+        ) : lists.error && !nextFailed ? (
           <Unread
             error={lists.error}
             retry={() => {
               void lists.refetch();
             }}
           />
-        ) : lists.data.items.length === 0 ? (
+        ) : items.length === 0 ? (
           // What a list is, on the blank tag of every empty place (P0-6;
           // goods task list after stage 2, P2-2): its line, its meta.
           <Empty
@@ -269,19 +320,45 @@ export function Openings({
             meta="Поки список чекає, склад не рухається."
           />
         ) : (
-          <div className="tags opening-lists">
-            {lists.data.items.map((list) => (
-              <ListTag
-                key={list.snapshot_id}
-                list={list}
-                store={store}
-                warehouse={warehouse(list.location_id)}
-                open={() => {
-                  setOpenId(list.snapshot_id);
+          <>
+            <div className="tags opening-lists" ref={shelf}>
+              {items.map((list) => (
+                <ListTag
+                  key={list.snapshot_id}
+                  list={list}
+                  store={store}
+                  warehouse={warehouse(list.location_id)}
+                  open={() => {
+                    setOpenId(list.snapshot_id);
+                  }}
+                />
+              ))}
+            </div>
+            {nextFailed ? (
+              <Unread
+                error={lists.error}
+                held={lists.isFetching}
+                retry={() => {
+                  void lists.fetchNextPage();
                 }}
               />
-            ))}
-          </div>
+            ) : (
+              lists.hasNextPage && (
+                <button
+                  type="button"
+                  className="quiet"
+                  disabled={lists.isFetching}
+                  onClick={() => {
+                    // Kept until the page is read: after its retry too.
+                    setFocusAt(items.length);
+                    void lists.fetchNextPage();
+                  }}
+                >
+                  Показати ще
+                </button>
+              )
+            )}
+          </>
         )}
         {canImport && !main && (
           // Outside Telegram, its MainButton as the dock's one button.
@@ -307,6 +384,16 @@ function answeredText(list: StockList): string {
   return `Розібрано ${number(resolved)} з ${number(lines)}${
     skipped > 0 ? ` · не товар ${number(skipped)}` : ""
   }`;
+}
+
+/** The most lists the server gives a page. */
+const listsPerPage = 100;
+/** The furthest page the server reads (`offset`). */
+const LAST_OFFSET = 10000;
+
+interface ListPage {
+  items: StockList[];
+  has_more: boolean;
 }
 
 const listTones: Record<StockList["status"], string> = {

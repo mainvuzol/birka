@@ -336,6 +336,9 @@ async function lists(
   store: string,
   inReview: number[],
   undecided: (number | null)[] = [],
+  /** «Початкові залишки»' own read page by page: those in review past its
+   * first page (audit 2026-11-20, goods Н2); «Сьогодні»'s, all at once. */
+  paged = false,
 ): Promise<void> {
   const list = (
     at: number,
@@ -388,18 +391,26 @@ async function lists(
   };
   await page.route(
     `**/api/v1/snapshots?store_id=${store}&**`,
-    async (route) => {
+    async (route, request) => {
+      const reviewed = inReview.map((lines, at) =>
+        list(at, "IN_REVIEW", lines, store, undecided[at] ?? null),
+      );
+      const others = [
+        list(50, "APPLIED", 30),
+        list(51, "IN_REVIEW", 7, "00000000-0000-4000-8000-300000000000"),
+      ];
+      const offset = new URL(request.url()).searchParams.get("offset");
+      if (paged && offset !== null) {
+        await route.fulfill({
+          json:
+            offset === "0"
+              ? { items: others, has_more: true }
+              : { items: reviewed, has_more: false },
+        });
+        return;
+      }
       await route.fulfill({
-        json: {
-          items: [
-            ...inReview.map((lines, at) =>
-              list(at, "IN_REVIEW", lines, store, undecided[at] ?? null),
-            ),
-            list(50, "APPLIED", 30),
-            list(51, "IN_REVIEW", 7, "00000000-0000-4000-8000-300000000000"),
-          ],
-          has_more: false,
-        },
+        json: { items: [...reviewed, ...others], has_more: false },
       });
     },
   );
@@ -1735,6 +1746,82 @@ test("a list ready to approve is three taps from «Сьогодні», with no s
   // its way as the page lets go of its routes holds the teardown (CI, #181;
   // as #176, #177).
   await expect.poll(places).toBeGreaterThan(before);
+  await expect.poll(() => unanswered(urls, settled)).toEqual([]);
+});
+
+test("a list ready to approve past the lists' first page opens from «Сьогодні» all the same: the lists read on to it, its big tag's place meanwhile (audit 2026-11-20, goods Н2)", async ({
+  page,
+}) => {
+  await twoStores(page);
+  await orders(page, centre, [0, 0, 0]);
+  await orders(page, market, [0, 0, 0]);
+  await lists(page, centre, [5], [], true);
+  const urls = asked(page);
+  const settled = answered(page);
+  const pages = (): string[] =>
+    urls.filter((url) =>
+      url.startsWith(`/api/v1/snapshots?store_id=${centre}&limit=100&offset=`),
+    );
+  await onToday(page);
+  await waiting(page)
+    .getByRole("button", { name: "Переглянути й затвердити", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Затвердити · 5 шт." }),
+  ).toBeVisible();
+  expect(pages()).toEqual([
+    `/api/v1/snapshots?store_id=${centre}&limit=100&offset=0`,
+    `/api/v1/snapshots?store_id=${centre}&limit=100&offset=100`,
+  ]);
+  await expect.poll(() => unanswered(urls, settled)).toEqual([]);
+});
+
+test("the lists past their first page: «Показати ще» under the tags brings the next, the cursor on its first «Відкрити»; a page that could not be read, its retry alone where «Показати ще» stood (audit 2026-11-20, goods Н2)", async ({
+  page,
+}) => {
+  await twoStores(page);
+  await orders(page, centre, [0, 0, 0]);
+  await orders(page, market, [0, 0, 0]);
+  await lists(page, centre, [5, 7], [], true);
+  let refuse = true;
+  await page.route(
+    `**/api/v1/snapshots?store_id=${centre}&**`,
+    async (route, request) => {
+      if (refuse && new URL(request.url()).searchParams.get("offset") === "100") {
+        refuse = false;
+        await route.fulfill({
+          status: 500,
+          json: { code: "INTERNAL_ERROR", message: "Internal error" },
+        });
+        return;
+      }
+      await route.fallback();
+    },
+  );
+  const urls = asked(page);
+  const settled = answered(page);
+  await onToday(page);
+  await waiting(page)
+    .getByRole("button", { name: "Переглянути й затвердити", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Початкові залишки", exact: true }),
+  ).toBeVisible();
+  const tags = page.getByRole("article", { name: "Список Зошит" });
+  await expect(tags).toHaveCount(2);
+  const more = page.getByRole("button", { name: "Показати ще" });
+  await more.click();
+  const plate = page.locator(".openings .notice.read-failure");
+  await expect(plate).toHaveCount(1);
+  await expect(more).toHaveCount(0);
+  await expect(tags).toHaveCount(2);
+  await plate.getByRole("button", { name: "Спробувати ще раз" }).click();
+  await expect(tags).toHaveCount(4);
+  await expect(plate).toHaveCount(0);
+  await expect(more).toHaveCount(0);
+  await expect(
+    tags.nth(2).getByRole("button", { name: "Відкрити" }),
+  ).toBeFocused();
   await expect.poll(() => unanswered(urls, settled)).toEqual([]);
 });
 

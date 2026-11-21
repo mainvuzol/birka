@@ -560,12 +560,78 @@ export function Orders({
     closed: useNextPageFailed(closed.pages),
   };
 
+  // The closed orders a screen shows — «Клієнт забрав»'s, or the cancelled
+  // and come back — are picked out on the phone from those read, fifty a
+  // page (audit 2026-11-20, orders-cash Н3): none of them among those read
+  // and more to read, the next page is read at once, their places in grey
+  // meanwhile; a page «Показати ще» brought with none of them is read past
+  // too, the rows as they are. «Тут посилок немає.» once every page is read.
+  const closedHere =
+    search !== ""
+      ? null
+      : gone
+        ? cancelled
+        : place === "collected"
+          ? collected
+          : null;
+  const [closedPressed, setClosedPressed] = useState<{
+    gone: boolean;
+    had: number;
+  } | null>(null);
+  const readingOn =
+    closedHere !== null &&
+    closed.pages.data !== undefined &&
+    closed.pages.hasNextPage &&
+    !nextFailed.closed &&
+    (closedHere.length === 0 ||
+      (closedPressed !== null &&
+        closedPressed.gone === gone &&
+        closedHere.length <= closedPressed.had));
+  const closedFetching = closed.pages.isFetching;
+  const { fetchNextPage: fetchClosed } = closed.pages;
+  useEffect(() => {
+    if (readingOn && !closedFetching) void fetchClosed();
+  }, [readingOn, closedFetching, fetchClosed]);
+  // The press answered — one come, every page read, another screen: let go.
+  // A page that failed keeps it for its retry (review).
+  const closedFailed = nextFailed.closed;
+  useEffect(() => {
+    if (
+      closedPressed !== null &&
+      !readingOn &&
+      !closedFetching &&
+      !closedFailed
+    )
+      setClosedPressed(null);
+  }, [closedPressed, readingOn, closedFetching, closedFailed]);
+  /** The closed rows' place: the rows, their places while read on, or «Тут
+   * посилок немає.» once every page is read. */
+  function closedRows(
+    orders: readonly Order[],
+    label: string,
+  ): JSX.Element | false | null {
+    if (closed.pages.data === undefined) return null;
+    if (orders.length > 0) return rows(orders, label, true);
+    if (readingOn) return places("Завантажуємо замовлення…");
+    return !closed.pages.hasNextPage && empty;
+  }
+  /** «Показати ще» under the closed rows, none while their places stand. */
+  function closedMore(orders: readonly Order[]): JSX.Element | null {
+    if (orders.length === 0 && readingOn) return null;
+    return more(closed.pages, nextFailed.closed, readingOn, () => {
+      setClosedPressed({ gone, had: orders.length });
+    });
+  }
+
   /** «Показати ще» under the rows read; the next page that could not be
    * read, one plate in its place, its retry reading that page — those read
-   * stay (orders and «Каса» task list after stage 2, P2-6). */
+   * stay (orders and «Каса» task list after stage 2, P2-6). Held while the
+   * closed are read on. */
   function more(
     pages: ReturnType<typeof useOrders>["pages"],
     failed: boolean,
+    reading = false,
+    pressed?: () => void,
   ): JSX.Element | null {
     if (failed)
       return (
@@ -581,8 +647,9 @@ export function Orders({
       <button
         type="button"
         className="quiet"
-        disabled={pages.isFetching}
+        disabled={pages.isFetching || reading}
         onClick={() => {
+          pressed?.();
           void pages.fetchNextPage();
         }}
       >
@@ -637,11 +704,8 @@ export function Orders({
       return (
         <>
           {closedRead()}
-          {closed.pages.data !== undefined &&
-            (collected.length > 0
-              ? rows(collected, placeWords.collected, true)
-              : !closed.pages.hasNextPage && empty)}
-          {more(closed.pages, nextFailed.closed)}
+          {closedRows(collected, placeWords.collected)}
+          {closedMore(collected)}
           {closed.pages.data !== undefined &&
             (cancelled.length > 0 || closed.pages.hasNextPage) && (
               <button
@@ -724,11 +788,8 @@ export function Orders({
         />
         <section className="orders">
           {closedRead()}
-          {closed.pages.data !== undefined &&
-            (cancelled.length > 0
-              ? rows(cancelled, "Скасовані й повернені на склад", true)
-              : !closed.pages.hasNextPage && empty)}
-          {more(closed.pages, nextFailed.closed)}
+          {closedRows(cancelled, "Скасовані й повернені на склад")}
+          {closedMore(cancelled)}
         </section>
       </>
     );

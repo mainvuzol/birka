@@ -3,6 +3,7 @@ import type { JSX, ReactNode, RefObject } from "react";
 import { createPortal } from "react-dom";
 import {
   keepPreviousData,
+  useInfiniteQuery,
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
@@ -15,6 +16,7 @@ import {
   refusedWrite,
 } from "@/shared/api";
 import { Fold } from "@/shared/Fold";
+import { useNextPageFailed } from "@/shared/nextPage";
 import { Unread } from "@/shared/Unread";
 import { visible } from "@/shared/visible";
 import { money } from "@/orders/types";
@@ -57,6 +59,8 @@ import { askPopup, buzz, popupHere, useMainButton } from "@/shared/telegram";
 import { Sticker } from "@/shared/Sticker";
 
 const pageSize = 20;
+/** The furthest page the server reads (`offset`). */
+const LAST_OFFSET = 10000;
 /** The search asks what is typed once typing pauses (stage 2, goods task
  * list, P1-2, as P0-1), from two letters. */
 const PAUSE = 300;
@@ -173,7 +177,9 @@ function ModelSearch({
   const text = given ?? own;
   const setText = change ?? setOwn;
   const [asked, setAsked] = useState<string | null>(() => askable(text));
-  const [shown, setShown] = useState(pageSize);
+  // «Показати ще» pressed: the cursor goes to the first model it brings,
+  // as «Інший колір нашої моделі»'s.
+  const [focusAt, setFocusAt] = useState<number | null>(null);
   const field = useRef<HTMLInputElement>(null);
   // Mounted by a tap: the cursor in it at once — once the sheet the tap was
   // in has let go of the page, whose `inert` a field's own autofocus would
@@ -185,43 +191,76 @@ function ModelSearch({
     const wanted = askable(text);
     if (wanted === asked) return;
     const wait = window.setTimeout(() => {
-      setShown(pageSize);
       setAsked(wanted);
     }, PAUSE);
     return () => {
       window.clearTimeout(wait);
     };
   }, [text, asked]);
-  const found = useQuery({
-    queryKey: ["catalog-models", store.id, asked, shown],
-    queryFn: () =>
+  // Page by page, twenty a page, every one the server has (audit
+  // 2026-11-20, goods Н1): before, it stopped at fifty, «Показати ще» gone
+  // with more found.
+  const found = useInfiniteQuery({
+    queryKey: ["catalog-models", store.id, asked],
+    queryFn: ({ pageParam }) =>
       api<ModelPage>(
         `/catalog/models?store_id=${store.id}&query=${encodeURIComponent(
           asked ?? "",
-        )}&limit=${String(Math.min(shown, 50))}`,
+        )}&limit=${String(pageSize)}&offset=${String(pageParam)}`,
         token,
       ),
+    initialPageParam: 0,
+    getNextPageParam: (last: ModelPage, pages: ModelPage[]) =>
+      last.has_more && pages.length * pageSize <= LAST_OFFSET
+        ? pages.length * pageSize
+        : undefined,
     enabled: asked !== null,
     retry: false,
     // The rows found stand while the next words are asked: no flicker.
     placeholderData: keepPreviousData,
   });
+  // A model renamed between two pages may come twice: shown once.
   const items =
     asked === null
       ? []
-      : (found.data?.items ?? []).filter(
-          (item) => item.product_variant_id !== except,
-        );
+      : [
+          ...new Map(
+            (found.data?.pages ?? [])
+              .flatMap((page) => page.items)
+              .map((item) => [item.product_variant_id, item]),
+          ).values(),
+        ].filter((item) => item.product_variant_id !== except);
+  // A next page that could not be read: its retry alone, where «Показати
+  // ще» stood, the models read kept.
+  const nextFailed = useNextPageFailed(found);
+  const shelf = useRef<HTMLUListElement>(null);
+  const fetching = found.isFetching;
+  const more = found.hasNextPage;
+  useEffect(() => {
+    if (focusAt === null || fetching) return;
+    const rows =
+      shelf.current?.querySelectorAll<HTMLElement>(".catalog-proposal") ?? [];
+    // Nothing new on it and none more: the last one.
+    const next = rows[focusAt] ?? (more ? undefined : rows[rows.length - 1]);
+    if (next) {
+      next.focus();
+      setFocusAt(null);
+    }
+  });
   return (
     <section className="models-search">
       <SearchField
         label={label}
         placeholder="Модель або колір"
         value={text}
-        change={setText}
+        change={(next) => {
+          // Typed: a page pressed before takes no cursor from the field.
+          setFocusAt(null);
+          setText(next);
+        }}
         inputRef={field}
       />
-      {asked !== null && found.isError && (
+      {asked !== null && found.isError && !nextFailed && (
         <Unread
           error={found.error}
           retry={() => {
@@ -263,7 +302,11 @@ function ModelSearch({
       {items.length > 0 && (
         // Rows 64 on a white block, each opening its model (spec §6.8;
         // audit 2026-11-15, goods P2-2).
-        <ul className="catalog-rows list-block" aria-label="Знайдені моделі">
+        <ul
+          ref={shelf}
+          className="catalog-rows list-block"
+          aria-label="Знайдені моделі"
+        >
           {items.map((item) => (
             <li key={item.product_variant_id}>
               <button
@@ -291,18 +334,31 @@ function ModelSearch({
           ))}
         </ul>
       )}
-      {asked !== null && found.data?.has_more && shown < 50 && (
-        <button
-          type="button"
-          className="quiet"
-          disabled={found.isFetching}
-          onClick={() => {
-            setShown(shown + pageSize);
-          }}
-        >
-          Показати ще
-        </button>
-      )}
+      {asked !== null &&
+        (nextFailed ? (
+          <Unread
+            error={found.error}
+            held={found.isFetching}
+            retry={() => {
+              void found.fetchNextPage();
+            }}
+          />
+        ) : (
+          found.hasNextPage && (
+            <button
+              type="button"
+              className="quiet"
+              disabled={found.isFetching || found.isPlaceholderData}
+              onClick={() => {
+                // Kept until the page is read: after its retry too.
+                setFocusAt(items.length);
+                void found.fetchNextPage();
+              }}
+            >
+              Показати ще
+            </button>
+          )
+        ))}
     </section>
   );
 }

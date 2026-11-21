@@ -1717,19 +1717,53 @@ test("a confirmed unit goes back to its supplier from «Брак», and comes ba
   );
   await expect(unit).toHaveCount(0);
 
+  // The return's own read of its supplier's: fifty others the newest, this
+  // one on the next page (audit 2026-11-20, money Н1).
+  const ofSupplier: string[] = [];
+  await page.route(
+    (url) =>
+      url.pathname === "/api/v1/supplier-returns" &&
+      url.searchParams.has("supplier_id"),
+    async (route, request) => {
+      const url = new URL(request.url());
+      const offset = Number(url.searchParams.get("offset") ?? "0");
+      ofSupplier.push(String(offset));
+      if (offset === 0) {
+        const real = (await (await route.fetch()).json()) as {
+          items: { id: string }[];
+        };
+        await route.fulfill({
+          json: {
+            items: real.items.map((item) => ({ ...item, id: randomUUID() })),
+            has_more: true,
+          },
+        });
+        return;
+      }
+      url.searchParams.set("offset", String(offset - 50));
+      await route.fallback({ url: url.toString() });
+    },
+  );
   await section(page, "Постачальникам");
   const row = returnRow(page, supplier);
   await expect(row).toContainText("з «Браку» «Брак ринку»");
   await row.click();
+  await expect.poll(() => ofSupplier).toEqual(["0", "50"]);
   await page.getByRole("button", { name: "Скасувати повернення" }).click();
   const ask = page.getByRole("dialog", { name: "Скасувати повернення" });
   await expect(ask).toHaveAttribute("data-ready", "");
   await expect(ask).toContainText("Товар повернеться у «Брак» «Брак ринку».");
   await ask.getByLabel("Чому скасовуємо").fill("постачальник відмовив");
   await ask.getByRole("button", { name: "Так, скасувати повернення" }).click();
+  // Its cancel answered by «Брак»'s unit: the return read again, found on
+  // its page — «Скасовано», never «Скасувати повернення» again.
+  await expect(ask).toHaveCount(0);
   await expect(page.locator(".supplier-return-cancelled")).toContainText(
-    /^Скасовано/,
+    /^Скасовано.* · постачальник відмовив · /,
   );
+  await expect(
+    page.getByRole("button", { name: "Скасувати повернення" }),
+  ).toHaveCount(0);
 
   await section(page, "Брак");
   await page
