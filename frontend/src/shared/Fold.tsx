@@ -15,6 +15,7 @@ export function Fold({
   toggle,
   controls,
   className,
+  describedBy,
   children,
 }: {
   open: boolean;
@@ -22,6 +23,8 @@ export function Fold({
   /** The id of what it opens, there only while open. */
   controls: string;
   className?: string;
+  /** What is said of what it folds while folded: a line under it. */
+  describedBy?: string | undefined;
   children: ReactNode;
 }): JSX.Element {
   return (
@@ -30,6 +33,7 @@ export function Fold({
       className={className ? `quiet fold ${className}` : "quiet fold"}
       aria-expanded={open}
       aria-controls={open ? controls : undefined}
+      aria-describedby={describedBy}
       onClick={toggle}
     >
       {children}{" "}

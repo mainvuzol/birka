@@ -1,4 +1,5 @@
 import {
+  expectListMore,
   test,
   expect,
   blockRow,
@@ -433,7 +434,7 @@ test("a proposal read slowly: its words, its sticker and two models offered in g
   ).toBeVisible();
 });
 
-test("«Прийшов товар» read slowly: two warehouses' choices in grey, then a size's steps four in grey, 44 high; the catalogue's search three rows in grey, «Ще товари» adding its next page under the first, a page that failed its retry alone, «Попередні» gone (goods task list after stage 2, P2-1, P2-2)", async ({
+test("«Прийшов товар» read slowly: two warehouses' choices in grey, then a size's steps four in grey, 44 high; the catalogue's search three rows in grey, «Показати ще» adding its next page under the first, a page that failed its retry alone, «Попередні» gone (goods task list after stage 2, P2-1, P2-2)", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 360, height: 640 });
@@ -509,7 +510,13 @@ test("«Прийшов товар» read slowly: two warehouses' choices in grey
   expect(Math.abs((await top(radios.first())) - greyAt)).toBeLessThanOrEqual(2);
   await expect(page.getByRole("button", { name: "Попередні" })).toHaveCount(0);
 
-  const more = page.getByRole("button", { name: "Ще товари", exact: true });
+  const more = page.getByRole("button", { name: "Показати ще", exact: true });
+  // One word and one look under every list (audit 2026-11-20, frame P2-1).
+  await expect(page.getByRole("button", { name: "Ще товари" })).toHaveCount(0);
+  await expectListMore(
+    more,
+    page.getByRole("radiogroup", { name: "Знайдені товари" }),
+  );
   await more.click();
   const retry = page.getByRole("button", { name: "Спробувати ще раз" });
   await expect(retry).toHaveCount(1);

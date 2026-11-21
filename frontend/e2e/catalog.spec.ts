@@ -1,4 +1,7 @@
 import {
+  expectFieldLine,
+  expectFieldSaidWrong,
+  expectListMore,
   test,
   expect,
   addModel,
@@ -1590,6 +1593,11 @@ test("«Інший колір нашої моделі»: every model at once, as
   // «Показати ще»: a page that fails says so where it stood, the rows
   // stay; its retry reads that page alone, added under the first, the
   // cursor on the first it brings.
+  // One word and one look under every list, the sheet's width (audit 2026-11-20, frame P2-1).
+  await expectListMore(
+    search.getByRole("button", { name: "Показати ще" }),
+    search.getByRole("group", { name: "Знайдені моделі" }),
+  );
   await search.getByRole("button", { name: "Показати ще" }).click();
   const plate = search.locator(".read-failure");
   await expect(plate.getByRole("button")).toHaveText(["Спробувати ще раз"]);
@@ -1835,5 +1843,85 @@ test("without the right to receive, a new model's sizes are typed: the organisat
   await expect(sheet.getByRole("alert")).toHaveCount(0);
   await expect(sheet.getByText("Завантажуємо розміри…")).toHaveCount(0);
   expect(asked).toEqual([]);
+  await leave(page);
+});
+
+test("«Пропозиції» past their first page: «Показати ще» under them, the list's width, 44 high, its edge, ink on nothing — one look and one word under every list (audit 2026-11-20, frame P2-1)", async ({
+  page,
+}) => {
+  await enter(page);
+  await create(page, `Наступна сторінка ${randomUUID().slice(0, 8)}`);
+  await leave(page);
+  // The queue's first page as the server's, more said to follow; the next
+  // none.
+  const asked: (string | null)[] = [];
+  await page.route("**/api/v1/catalog/match-decisions?**", async (route) => {
+    const url = new URL(route.request().url());
+    if (route.request().method() !== "GET" || !url.searchParams.has("limit")) {
+      await route.continue();
+      return;
+    }
+    const offset = url.searchParams.get("offset");
+    asked.push(offset);
+    if (offset === "0") {
+      const response = await route.fetch();
+      const body = (await response.json()) as { has_more: boolean };
+      await route.fulfill({ response, json: { ...body, has_more: true } });
+    } else await route.fulfill({ json: { items: [], has_more: false } });
+  });
+  await page.reload();
+  await openStore(page, "Основний MAIN");
+  await section(page, "Перевірка каталогу");
+  const list = page.getByRole("list", { name: "Пропозиції" });
+  await expect(list.getByRole("button").first()).toBeVisible();
+  const more = page.getByRole("button", { name: "Показати ще", exact: true });
+  await expectListMore(more, list);
+  await more.click();
+  await expect(more).toHaveCount(0);
+  expect(asked[0]).toBe("0");
+  expect(asked).toContain("20");
+});
+
+test("«Довжина, см» said wrong in «Нова модель»: its line under the field, the field marked and read with it; folded, the line under «Ще ознаки», the way on held — never the plate (audit 2026-11-20, frame P2-2, goods P2-1 (а))", async ({
+  page,
+}) => {
+  await enter(page);
+  const sheet = await create(page, `Довжина ${randomUUID().slice(0, 8)}`);
+  await newModel(sheet, `Довжина ${randomUUID().slice(0, 8)}`, "M");
+  const more = sheet.getByRole("button", { name: "Ще ознаки" });
+  if ((await more.getAttribute("aria-expanded")) === "false")
+    await more.click();
+  await expect(more).toHaveAttribute("aria-expanded", "true");
+  const length = sheet.getByLabel("Довжина, см", { exact: true });
+  const add = sheet.getByRole("button", { name: /^Додати модель/ });
+  await expect(add).toBeEnabled();
+  await length.fill("12,34");
+  const line = sheet.locator(".field-wrong", {
+    hasText: "Вкажіть додатну довжину до 9999,9 см, з одним знаком після коми.",
+  });
+  await expectFieldSaidWrong(length, line);
+  await expect(add).toBeDisabled();
+  // Folded: the same line under «Ще ознаки», read with it, heard once as it
+  // was typed — no alert of its own.
+  await more.click();
+  await expect(length).toHaveCount(0);
+  await expectFieldLine(line, { alert: false });
+  const id = await line.getAttribute("id");
+  expect(id).toBeTruthy();
+  await expect(more).toHaveAttribute("aria-describedby", id ?? "");
+  const [fold, under] = await Promise.all([
+    more.boundingBox(),
+    line.boundingBox(),
+  ]);
+  if (!fold || !under) throw new Error("the fold not laid out");
+  expect(under.y).toBeGreaterThanOrEqual(fold.y + fold.height);
+  await expect(add).toBeDisabled();
+  // Open again: under its field; emptied, the line gone, the way on taken.
+  await more.click();
+  await expectFieldSaidWrong(length, line);
+  await length.fill("");
+  await expect(line).toHaveCount(0);
+  await expect(more).not.toHaveAttribute("aria-describedby");
+  await expect(add).toBeEnabled();
   await leave(page);
 });

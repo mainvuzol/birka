@@ -312,7 +312,7 @@ export function Stock({
                       stock.hasNextPage && (
                         <button
                           type="button"
-                          className="quiet"
+                          className="list-more"
                           disabled={stock.isFetchingNextPage || readAgainFailed}
                           onClick={() => {
                             setFocusAt(tags.length);

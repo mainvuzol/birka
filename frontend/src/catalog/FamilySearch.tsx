@@ -244,7 +244,7 @@ export function FamilySearch({
               families.hasNextPage && (
                 <button
                   type="button"
-                  className="quiet"
+                  className="list-more"
                   disabled={
                     blocked ||
                     families.isFetching ||

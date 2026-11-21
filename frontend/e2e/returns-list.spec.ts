@@ -1,4 +1,5 @@
 import {
+  expectListMore,
   test,
   expect,
   expectTextLink,
@@ -299,6 +300,11 @@ test("«Показати ще» reads twenty more at a time, never past the serv
   await returns(page);
   await expect(page.getByRole("article")).toHaveCount(20);
   const more = page.getByRole("button", { name: "Показати ще" });
+  // One word and one look under every list (audit 2026-11-20, frame P2-1).
+  await expectListMore(
+    more,
+    page.locator(".list-block", { has: page.getByRole("article") }).last(),
+  );
   await more.click();
   await expect(page.getByRole("article")).toHaveCount(40);
   await more.click();

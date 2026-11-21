@@ -289,6 +289,24 @@ export function listConflict(error: unknown): boolean {
   return errorText(error) === CONFLICT_TEXT;
 }
 
+/** A line typed longer than the server takes, said under its field. */
+export const tooLongText = "Рядок довший за 500 символів: розділіть його.";
+
+/**
+ * A field's lines said wrong, by their ids: the field marked so, its edge in
+ * the error's colour, and read with them (audit 2026-11-20, frame P2-2);
+ * nothing while none stands.
+ */
+export function saidWrong(...ids: (string | null)[]): {
+  "aria-invalid"?: true;
+  "aria-describedby"?: string;
+} {
+  const standing = ids.filter((id): id is string => id !== null);
+  return standing.length === 0
+    ? {}
+    : { "aria-invalid": true, "aria-describedby": standing.join(" ") };
+}
+
 /**
  * Lines typed by hand more than the server takes at once (ADR-0014: a
  * part of at most 1 000 lines and 100 000 characters), said before sending

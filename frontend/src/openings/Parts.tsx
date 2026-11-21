@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { JSX, RefObject } from "react";
 import type { UseQueryResult } from "@tanstack/react-query";
 import { ApiError, SlowAnswer, api, errorText } from "@/shared/api";
@@ -23,6 +23,8 @@ import {
   listConflict,
   listRefusal,
   number,
+  saidWrong,
+  tooLongText,
   typedTooMuch,
 } from "./types";
 import type { StockList, StockPart } from "./types";
@@ -775,6 +777,10 @@ export function AddLines({
   const lines = draft.text.split("\n").filter((line) => line.trim() !== "");
   const tooLong = lines.find((line) => line.length > 500);
   const tooMuch = typedTooMuch(lines, "Розділіть їх на кілька разів.");
+  // What is typed and would not be taken, a line under the lines' field
+  // (audit 2026-11-20, frame P2-2).
+  const tooLongId = useId();
+  const tooMuchId = useId();
 
   function setDraft(change: Partial<LinesDraft>): void {
     // From the draft as it is now: typing may go on while an answer is
@@ -892,6 +898,10 @@ export function AddLines({
             enterKeyHint="enter"
             value={draft.text}
             rows={6}
+            {...saidWrong(
+              tooLong === undefined ? null : tooLongId,
+              tooMuch === null ? null : tooMuchId,
+            )}
             onChange={(event) => {
               setDraft({ text: event.target.value });
             }}
@@ -900,10 +910,16 @@ export function AddLines({
         <p className="hint">
           Рядків: {lines.length}. Порожні рядки не зберігаються.
         </p>
-        {tooLong && (
-          <p role="alert">Рядок довший за 500 символів: розділіть його.</p>
+        {tooLong !== undefined && (
+          <p className="field-wrong" role="alert" id={tooLongId}>
+            {tooLongText}
+          </p>
         )}
-        {tooMuch && <p role="alert">{tooMuch}</p>}
+        {tooMuch !== null && (
+          <p className="field-wrong" role="alert" id={tooMuchId}>
+            {tooMuch}
+          </p>
+        )}
         <Problems problems={problems} />
         {!main && (
           // Outside Telegram, its MainButton as the dock's one button.

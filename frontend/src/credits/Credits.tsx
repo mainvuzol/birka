@@ -961,7 +961,7 @@ function Rows({
         customers.hasNextPage && (
           <button
             type="button"
-            className="quiet"
+            className="list-more"
             disabled={customers.isFetching}
             onClick={() => {
               void customers.fetchNextPage();

@@ -30,7 +30,13 @@ import {
 } from "./modelCommands";
 import type { CorrectionBody } from "./modelCommands";
 import { Similar } from "./Similar";
-import { blockerText, similarFrom, statusText, wordLabels } from "./modelTypes";
+import {
+  blockerText,
+  lengthWrong,
+  similarFrom,
+  statusText,
+  wordLabels,
+} from "./modelTypes";
 import type {
   Correction,
   MergeModel,
@@ -347,7 +353,7 @@ function ModelSearch({
           found.hasNextPage && (
             <button
               type="button"
-              className="quiet"
+              className="list-more"
               disabled={found.isFetching || found.isPlaceholderData}
               onClick={() => {
                 // Kept until the page is read: after its retry too.
@@ -443,6 +449,7 @@ function RenameSheet({
   });
   const [more, setMore] = useState(false);
   const extra = useId();
+  const lengthId = useId();
   const [refusal, setRefusal] = useState<ApiError | null>(null);
   const [family, setFamily] = useState<string | null>(null);
   const [separate, setSeparate] = useState(false);
@@ -610,9 +617,18 @@ function RenameSheet({
             }}
             controls={extra}
             className="new-model-more"
+            describedBy={!more && !lengthValid ? lengthId : undefined}
           >
             Ще ознаки
           </Fold>
+          {!more && !lengthValid && (
+            // Folded with a length wrong: its line under «Ще ознаки», so the
+            // held «Зберегти назву» says why; heard once as it was typed,
+            // read with the fold (audit 2026-11-20, goods P2-1 (а), Д2).
+            <p className="field-wrong" id={lengthId}>
+              {lengthWrong}
+            </p>
+          )}
           {more && (
             <div id={extra} className="new-model-extra">
               {moreWords.map((name) => (
@@ -634,11 +650,20 @@ function RenameSheet({
                   enterKeyHint="done"
                   inputMode="decimal"
                   value={fields.length_cm}
+                  aria-invalid={lengthValid ? undefined : true}
+                  aria-describedby={lengthValid ? undefined : lengthId}
                   onChange={(e) => {
                     change("length_cm", e.target.value);
                   }}
                 />
               </label>
+              {/* A field said wrong is a line under it, never the plate
+                  (audit 2026-11-20, frame P2-2; goods P2-1 (а)). */}
+              {!lengthValid && (
+                <p className="field-wrong" role="alert" id={lengthId}>
+                  {lengthWrong}
+                </p>
+              )}
               <label>
                 Категорія
                 <input
@@ -666,11 +691,6 @@ function RenameSheet({
                 немає в каталозі.
               </p>
             </div>
-          )}
-          {!lengthValid && (
-            <p role="alert">
-              Вкажіть додатну довжину до 9999,9 см, з одним знаком після коми.
-            </p>
           )}
           {similar && (
             <>

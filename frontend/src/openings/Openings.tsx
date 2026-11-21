@@ -36,6 +36,8 @@ import {
   number,
   plural,
   sourceQuantity,
+  saidWrong,
+  tooLongText,
   typedTooMuch,
 } from "./types";
 import type {
@@ -346,7 +348,7 @@ export function Openings({
               lists.hasNextPage && (
                 <button
                   type="button"
-                  className="quiet"
+                  className="list-more"
                   disabled={lists.isFetching}
                   onClick={() => {
                     // Kept until the page is read: after its retry too.
@@ -740,6 +742,10 @@ function NewList({
           "Розділіть: решту додайте до списку через «Додати рядки вручну».",
         )
       : null;
+  // What is typed and would not be taken, a line under the list's field
+  // (audit 2026-11-20, frame P2-2).
+  const tooLongId = useId();
+  const tooMuchId = useId();
   // A draft's warehouse no longer offered — closed, or no longer taking
   // goods — is no choice: another is chosen, or the only one taken (review,
   // 2026-11-08).
@@ -1105,6 +1111,10 @@ function NewList({
                 enterKeyHint="enter"
                 value={draft.text}
                 rows={10}
+                {...saidWrong(
+                  tooLong === undefined ? null : tooLongId,
+                  tooMuch === null ? null : tooMuchId,
+                )}
                 onChange={(event) => {
                   setDraft({ text: event.target.value });
                 }}
@@ -1113,10 +1123,16 @@ function NewList({
             <p className="hint">
               Рядків: {lines.length}. Порожні рядки не зберігаються.
             </p>
-            {tooLong && (
-              <p role="alert">Рядок довший за 500 символів: розділіть його.</p>
+            {tooLong !== undefined && (
+              <p className="field-wrong" role="alert" id={tooLongId}>
+                {tooLongText}
+              </p>
             )}
-            {tooMuch && <p role="alert">{tooMuch}</p>}
+            {tooMuch !== null && (
+              <p className="field-wrong" role="alert" id={tooMuchId}>
+                {tooMuch}
+              </p>
+            )}
           </>
         )}
         {/* What the list is and when it was counted: optional, under one

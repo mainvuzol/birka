@@ -2,6 +2,7 @@ import {
   test,
   expect,
   expectSignedLink,
+  expectListMore,
   addSupplier,
   blockRow,
   countTaps,
@@ -1837,7 +1838,9 @@ test("a return whose answer is lost is resent unchanged, and takes the goods onc
   await expect(kept).toContainText(
     "Невідомо, чи записано повернення постачальнику. Перевірте результат — те саме повернення не запишеться двічі.",
   );
-  await expect(kept).toContainText(/Чекає відповіді сервера з \d{2}:\d{2}\./);
+  await expect(kept).toContainText(
+    /Чекає відповіді сервера з (?:учора о )?\d{2}:\d{2}\./,
+  );
   await expect(page.getByText(/Перевіряємо кожні 20 с/)).toHaveCount(0);
   // What was sent stays, held; «←» brings the menu back, the stub over the
   // returns.
@@ -2287,3 +2290,38 @@ async function contrast(element: Locator): Promise<number> {
     return (Math.max(fore, back) + 0.05) / (Math.min(fore, back) + 0.05);
   });
 }
+
+test("«Повернути постачальнику»'s models found past their first page: «Показати ще» under them, the list's width, 44 high, its edge — the word every list's, never «Ще товари» (audit 2026-11-20, frame P2-1)", async ({
+  page,
+}) => {
+  const coat = await received(page, hanna, fixture.network_centre_store_id, 1);
+  // The models found as the server's, more said to follow; the next none.
+  const asked: (string | null)[] = [];
+  await page.route("**/api/v1/catalog/stock-options?**", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.searchParams.get("query") !== coat.model) {
+      await route.continue();
+      return;
+    }
+    const offset = url.searchParams.get("offset");
+    asked.push(offset);
+    if (offset === "0") {
+      const response = await route.fetch();
+      const body = (await response.json()) as { has_more: boolean };
+      await route.fulfill({ response, json: { ...body, has_more: true } });
+    } else await route.fulfill({ json: { items: [], has_more: false } });
+  });
+  await newReturn(page);
+  await page.getByRole("searchbox", { name: "Пошук моделі" }).fill(coat.model);
+  const list = page.getByRole("list", { name: "Товар на складі" });
+  await expect(
+    list.getByRole("button", { name: new RegExp(`^${coat.model}`) }),
+  ).toBeVisible();
+  const next = page.getByRole("button", { name: "Показати ще", exact: true });
+  await expect(page.getByRole("button", { name: "Ще товари" })).toHaveCount(0);
+  await expectListMore(next, list);
+  await next.click();
+  await expect(next).toHaveCount(0);
+  expect(asked[0]).toBe("0");
+  expect(asked).toContain("100");
+});

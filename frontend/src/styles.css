@@ -2330,6 +2330,24 @@ button.sale-row:disabled .sale-goods {
   -webkit-mask-size: 16px 16px;
   mask-size: 16px 16px;
 }
+/* A field's line kept in sight with no alert of its own — a length wrong
+   under a folded «Ще ознаки», heard as it was typed (audit 2026-11-20,
+   goods P2-1 (а)): the same look, its crossed circle 16. */
+.field-wrong:not([role]) {
+  position: relative;
+  padding: 0 0 0 22px;
+}
+.field-wrong:not([role])::before {
+  content: "";
+  position: absolute;
+  top: 1.5px;
+  left: 0;
+  width: 16px;
+  height: 16px;
+  background: currentColor;
+  -webkit-mask: var(--glyph-danger) center / 16px 16px no-repeat;
+  mask: var(--glyph-danger) center / 16px 16px no-repeat;
+}
 /* The app's own keypad (spec §6.25): the sum 56 to the right in a 72 box,
    twelve keys 60 high under it, in the display face. The phone's keyboard
    never opens over the dock. */
@@ -6307,8 +6325,15 @@ button.day-folded {
    2026-11-18, frame P2-4): the list's whole width, 44 high, the edge, 15/600
    in ink, on nothing — on «Сьогодні», a stocktake's «Попередні» and a
    finished one's «Розбіжності» (its «+ ще N» and its next page),
-   «Початкові залишки», a customer's history and the report's entries.
-   Their words, what they do and where the cursor goes, as before; «+ ще N»
+   «Початкові залишки», a customer's history and the report's entries; and
+   since audit 2026-11-20 (frame P2-1) under every list's next page — the
+   till's and «Нове замовлення»'s, «Повернення», «Покупці», «Замовлення»,
+   «Закриття», the suppliers' three and the set-off's sheet, the till's
+   «Внесок», «Моделі» and «Об’єднати моделі», «Перевірка каталогу», «Інший
+   колір нашої моделі», a count's positions, «Залишки», the catalogue's
+   search, «Повернути постачальнику» and «Початкові залишки»' own lists,
+   its word «Показати ще» everywhere (in a sheet, the sheet's width). Their
+   words, what they do and where the cursor goes, as before; «+ ще N»
    inside a line of goods is a link (frame P2-1). */
 .list-more {
   width: 100%;
@@ -7642,14 +7667,10 @@ p.receive-place {
 .stocktake-modes {
   margin-top: 12px;
 }
-.stocktake-more {
-  display: block;
-  margin: 12px 0 0;
-}
 .stocktake .tags + .quiet,
 .stocktake .counted-rows + .quiet,
 .stocktake-empty + .quiet,
-.stocktake-more + .quiet {
+.stocktake .list-more + .quiet {
   margin-top: 12px;
 }
 .count-cell:disabled {

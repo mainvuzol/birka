@@ -1,4 +1,5 @@
 import {
+  expectListMore,
   test,
   expect,
   expectLinkChevron,
@@ -1372,6 +1373,11 @@ test("more than a hundred open: «Показати ще» reads the rest, a row 
   await expect(page.getByRole("button", { name: "Показати ще" })).toBeVisible();
   await expect(page.getByText("Тут посилок немає.")).toHaveCount(0);
   await knot(page, "До відправлення").click();
+  // One word and one look under every list (audit 2026-11-20, frame P2-1).
+  await expectListMore(
+    page.getByRole("button", { name: "Показати ще" }),
+    page.getByRole("list", { name: "Склад «Основний»", exact: true }),
+  );
   await page.getByRole("button", { name: "Показати ще" }).click();
   await expect(ready).toHaveCount(105);
   await expect(page.locator(".order-place-label")).toHaveText([

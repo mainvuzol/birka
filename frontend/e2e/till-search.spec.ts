@@ -1,4 +1,5 @@
 import {
+  expectListMore,
   test,
   expect,
   basketDone,
@@ -296,7 +297,12 @@ test("«Показати ще» reads the next hundred under the first, the word
   await stubList(page, [...alpacas, laurent]);
   await onTheTill(page);
   await expect(chip(page, "Альпака 100", "S, вільно 1")).toBeVisible();
+  // One word and one look under every list (audit 2026-11-20, frame P2-1).
   await expect(page.getByRole("button", { name: "Ще товари" })).toHaveCount(0);
+  await expectListMore(
+    page.getByRole("button", { name: "Показати ще" }),
+    page.locator("div.tags", { has: page.locator(".model-tag") }),
+  );
   await page.getByRole("button", { name: "Показати ще" }).click();
   await expect(chip(page, "Лоран шоколад", "M, вільно 2")).toBeVisible();
   await expect(chip(page, "Альпака 001", "S, вільно 1")).toBeVisible();

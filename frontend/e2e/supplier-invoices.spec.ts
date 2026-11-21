@@ -1,4 +1,5 @@
 import {
+  expectListMore,
   test,
   expect,
   countTaps,
@@ -1181,6 +1182,11 @@ test("«Зарахувати повернення» reads past the fifty newest:
   );
   await expect(failure).toHaveCount(0);
   await expect(more).toBeVisible();
+  // One word and one look under every list, the sheet's width (audit 2026-11-20, frame P2-1).
+  await expectListMore(
+    more,
+    setOff.getByRole("radiogroup", { name: "Повернення" }),
+  );
   await expect(nothing).toHaveCount(0);
   // Read again by its own retry alone, never the pages read before it.
   expect(asked.map((params) => params.get("offset"))).toEqual([
@@ -1744,7 +1750,9 @@ test("a payment whose answer is lost is resent unchanged, and paid once", async 
   await expect(kept).toContainText(
     "Невідомо, чи записано оплату. Перевірте результат — та сама операція не запишеться двічі.",
   );
-  await expect(kept).toContainText(/Чекає відповіді сервера з \d{2}:\d{2}\./);
+  await expect(kept).toContainText(
+    /Чекає відповіді сервера з (?:учора о )?\d{2}:\d{2}\./,
+  );
   await expect(page.getByText(/Перевіряємо кожні 20 с/)).toHaveCount(0);
   // Suppliers are not paid on paper: no paper line on it, and nothing
   // under it says what the paper banner says (stage 2, orders task list,
@@ -1944,7 +1952,9 @@ test("a payment kept on the phone is checked from another screen, and the till i
     banner.getByRole("heading", { name: "Оплату ще не підтверджено" }),
   ).toBeVisible();
   await expect(banner).toContainText("Невідомо, чи записано оплату.");
-  await expect(banner).toContainText(/Чекає відповіді сервера з \d{2}:\d{2}\./);
+  await expect(banner).toContainText(
+    /Чекає відповіді сервера з (?:учора о )?\d{2}:\d{2}\./,
+  );
   await expect(banner.locator(".check-line")).toHaveCount(0);
   await expect(page.locator(".stub-notice")).toHaveCount(0);
   // «Ще» meanwhile: its row «Постачальникам» held, unfaded, its title in

@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { create } from "zustand";
 import { visible } from "@/shared/visible";
+import { isToday, whenText } from "@/shared/when";
 
 /**
  * Whether the server answers, as this phone last saw it (ADR-0013 §4.2).
@@ -268,12 +269,14 @@ export function waitsText(since: string | undefined): string {
   return waitsSince(since).trim();
 }
 
-/** «Чекає відповіді сервера з 14:20. », or nothing for an attempt kept
- * before it said since when. */
+/** «Чекає відповіді сервера з 14:20. » — of another day «з учора о 14:20»,
+ * «з 18.11 о 14:20», by the phone's day, as «Сьогодні» says when (audit
+ * 2026-11-20, frame P2-3) — or nothing for an attempt kept before it said
+ * since when. */
 function waitsSince(since: string | undefined): string {
-  return since !== undefined && !Number.isNaN(Date.parse(since))
-    ? `Чекає відповіді сервера з ${clockOf(since)}. `
-    : "";
+  if (since === undefined || Number.isNaN(Date.parse(since))) return "";
+  const now = Date.now();
+  return `Чекає відповіді сервера з ${isToday(since, now) ? clockOf(since) : whenText(since, now)}. `;
 }
 
 /** An optional `since` read back from storage: absent, or a moment. */

@@ -399,7 +399,8 @@ export function Borrowed({
               (money task list after stage 2, P2-1). */}
             {lots.hasNextPage && !lots.isFetchNextPageError && (
               <button
-                className="quiet"
+                type="button"
+                className="list-more"
                 disabled={lots.isFetching}
                 onClick={() => {
                   void lots.fetchNextPage();

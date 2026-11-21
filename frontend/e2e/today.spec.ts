@@ -1810,6 +1810,8 @@ test("the lists past their first page: «Показати ще» under the tags 
   const tags = page.getByRole("article", { name: "Список Зошит" });
   await expect(tags).toHaveCount(2);
   const more = page.getByRole("button", { name: "Показати ще" });
+  // One word and one look under every list (audit 2026-11-20, frame P2-1).
+  await expectListMore(more, page.locator(".opening-lists"));
   await more.click();
   const plate = page.locator(".openings .notice.read-failure");
   await expect(plate).toHaveCount(1);

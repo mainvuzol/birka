@@ -11,6 +11,7 @@ import { plural } from "@/openings/types";
 import type { StockList } from "@/openings/types";
 import type { OrderItem, Store } from "@/orders/types";
 import { visible } from "@/shared/visible";
+import { whenText } from "@/shared/when";
 import {
   ageOf,
   dayStores,
@@ -88,23 +89,6 @@ export interface Waiting {
   /** «Зроблено сьогодні»: the news seen today on this phone, the latest
    * first, of what is still read. */
   done: Done[];
-}
-
-/** «сьогодні о 03:15», «учора о 03:15», «28.10 о 03:15»: when, by the
- * phone's day. */
-export function whenText(iso: string, now: number): string {
-  const at = new Date(iso);
-  const day = (date: Date): string => date.toDateString();
-  const yesterday = new Date(now);
-  yesterday.setDate(yesterday.getDate() - 1);
-  const time = timeOf(iso);
-  if (day(at) === day(new Date(now))) return `сьогодні о ${time}`;
-  if (day(at) === day(yesterday)) return `учора о ${time}`;
-  const date = at.toLocaleDateString("uk-UA", {
-    day: "2-digit",
-    month: "2-digit",
-  });
-  return `${date} о ${time}`;
 }
 
 /** Today or yesterday, by the phone's day. */

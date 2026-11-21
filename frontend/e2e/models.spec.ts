@@ -1,4 +1,7 @@
 import {
+  expectFieldLine,
+  expectFieldSaidWrong,
+  expectListMore,
   test,
   expect,
   addModel,
@@ -478,7 +481,7 @@ test("a duplicate is merged after a preview, its stock moving to the model that 
   ).toBeVisible();
   await expect(
     page.getByText(
-      /^Чекає відповіді сервера з \d\d:\d\d\. Телефон перевірить сам\./,
+      /^Чекає відповіді сервера з (?:учора о )?\d\d:\d\d\. Телефон перевірить сам\./,
     ),
   ).toBeVisible();
   // Held while it is unknown: the merge's own ways, and every section.
@@ -2004,6 +2007,11 @@ test("«Моделі» found past fifty: «Показати ще» reads twenty 
     .getByRole("button");
   const more = search.getByRole("button", { name: "Показати ще" });
   await expect(found).toHaveCount(20);
+  // One word and one look under every list (audit 2026-11-20, frame P2-1).
+  await expectListMore(
+    more,
+    search.getByRole("list", { name: "Знайдені моделі" }),
+  );
   await more.click();
   await expect(found).toHaveCount(40);
   await expect(found.nth(20)).toBeFocused();
@@ -2460,4 +2468,61 @@ test("inside Telegram the rename's fork is felt as a choice: «Це вона» o
   await expect(apart).toHaveAttribute("aria-pressed", "true");
   await feels(felt, () => apart.click(), []);
   await feels(felt, () => it.click(), [selection]);
+});
+
+test("«Довжина, см» said wrong in «Перейменувати модель»: its line under the field, above «Категорія», the field marked and read with it; folded, the line under «Ще ознаки», «Зберегти назву» held — never the plate (audit 2026-11-20, frame P2-2, goods P2-1 (а))", async ({
+  page,
+}) => {
+  const bearer = await token(page);
+  const name = `Довжина ${randomUUID().slice(0, 8)}`;
+  await model(page, bearer, { concept: name, variant: { color: "графіт" } }, 0);
+  await enter(page, "Моделі");
+  await open(page, name, /графіт/);
+  const sheet = await renameSheet(page);
+  const more = sheet.getByRole("button", { name: "Ще ознаки" });
+  if ((await more.getAttribute("aria-expanded")) === "false")
+    await more.click();
+  await expect(more).toHaveAttribute("aria-expanded", "true");
+  const length = sheet.getByLabel("Довжина, см", { exact: true });
+  await length.fill("12,34");
+  const line = sheet.locator(".field-wrong", {
+    hasText: "Вкажіть додатну довжину до 9999,9 см, з одним знаком після коми.",
+  });
+  await expectFieldSaidWrong(length, line);
+  // Under its own field, above «Категорія» — never under another's.
+  const [field, said, category] = await Promise.all([
+    length.boundingBox(),
+    line.boundingBox(),
+    sheet.getByLabel("Категорія", { exact: true }).boundingBox(),
+  ]);
+  if (!field || !said || !category) throw new Error("the fields not laid out");
+  expect(said.y).toBeGreaterThanOrEqual(field.y + field.height);
+  expect(said.y + said.height).toBeLessThanOrEqual(category.y);
+  // No plate of a refusal for it.
+  await expect(sheet.locator('[role="alert"]:not(.field-wrong)')).toHaveCount(
+    0,
+  );
+  await expect(saveName(sheet)).toBeDisabled();
+  // Folded: the same line under «Ще ознаки», read with it, heard once as it
+  // was typed — no alert of its own.
+  await more.click();
+  await expect(length).toHaveCount(0);
+  await expectFieldLine(line, { alert: false });
+  const id = await line.getAttribute("id");
+  expect(id).toBeTruthy();
+  await expect(more).toHaveAttribute("aria-describedby", id ?? "");
+  const [fold, under] = await Promise.all([
+    more.boundingBox(),
+    line.boundingBox(),
+  ]);
+  if (!fold || !under) throw new Error("the fold not laid out");
+  expect(under.y).toBeGreaterThanOrEqual(fold.y + fold.height);
+  await expect(saveName(sheet)).toBeDisabled();
+  // Open again: under its field; a right length, the line gone.
+  await more.click();
+  await expectFieldSaidWrong(length, line);
+  await length.fill("12,3");
+  await expect(line).toHaveCount(0);
+  await expect(length).not.toHaveAttribute("aria-invalid");
+  await expect(more).not.toHaveAttribute("aria-describedby");
 });

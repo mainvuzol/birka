@@ -102,7 +102,7 @@ export function CatalogPicker({
   // nor its button offered (review).
   const [addedFor, setAddedFor] = useState<string | null>(null);
   const field = useRef<HTMLInputElement>(null);
-  // «Ще товари» pressed: the cursor goes to the first model it brings.
+  // «Показати ще» pressed: the cursor goes to the first model it brings.
   const [focusAt, setFocusAt] = useState<number | null>(null);
   useEffect(() => {
     const wanted = askable(search);
@@ -114,7 +114,7 @@ export function CatalogPicker({
       window.clearTimeout(wait);
     };
   }, [search, asked]);
-  // «Ще товари» adds the next page under what was found, as the till's list
+  // «Показати ще» adds the next page under what was found, as the till's list
   // does (goods task list after stage 2, P2-1): «Попередні» is gone.
   const variants = useInfiniteQuery({
     queryKey: ["receivable-variants", scopeKey, store.id, asked],
@@ -144,7 +144,7 @@ export function CatalogPicker({
   const found = variants.data?.pages.flatMap((page) => page.items) ?? [];
   // What could not be read (as the till's list, sale P1-4): never read, the
   // plate in the list's place; read again and refused, the plate over what
-  // was found; a next page, the plate where «Ще товари» stood (review).
+  // was found; a next page, the plate where «Показати ще» stood (review).
   const nextFailed = useNextPageFailed(variants);
   const neverRead = variants.error !== null && variants.data === undefined;
   const readAgainFailed =
@@ -279,7 +279,7 @@ export function CatalogPicker({
                 ))}
               </div>
             )}
-            {/* A page that failed: its retry alone, where «Ще товари»
+            {/* A page that failed: its retry alone, where «Показати ще»
                 stood. */}
             {nextFailed ? (
               <Unread
@@ -293,7 +293,7 @@ export function CatalogPicker({
               variants.hasNextPage && (
                 <button
                   type="button"
-                  className="quiet"
+                  className="list-more"
                   disabled={
                     variants.isFetching ||
                     variants.isPlaceholderData ||
@@ -305,7 +305,7 @@ export function CatalogPicker({
                     void variants.fetchNextPage();
                   }}
                 >
-                  Ще товари
+                  Показати ще
                 </button>
               )
             )}

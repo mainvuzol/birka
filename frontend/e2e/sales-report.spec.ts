@@ -350,14 +350,18 @@ function expected(before: Figures, added: Added): [string, string][] {
 
 const table = (page: Page): Locator => page.locator(".report-table");
 
-/** The column of a store, by its name in the head: «Центр». */
+/** The column of a store, by its name in the head: «Центр». Read again
+ * until it stands: the table's place while it is read is a `.report-table`
+ * too, its one head a grey «Магазин» (audit 2026-11-13, money P2-1). */
 async function columnOf(page: Page, name: string): Promise<number> {
-  await expect(table(page)).toBeVisible();
-  const heads = await table(page).locator("thead th").allTextContents();
-  const at = heads.findIndex(
-    (head) => head === name || head.startsWith(`«${name}»`),
-  );
-  expect(at, `${name} among ${heads.join(", ")}`).toBeGreaterThanOrEqual(0);
+  let at = -1;
+  await expect(async () => {
+    const heads = await table(page).locator("thead th").allTextContents();
+    at = heads.findIndex(
+      (head) => head === name || head.startsWith(`«${name}»`),
+    );
+    expect(at, `${name} among ${heads.join(", ")}`).toBeGreaterThanOrEqual(0);
+  }).toPass({ timeout: 10_000 });
   return at;
 }
 
