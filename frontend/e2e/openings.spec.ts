@@ -1,4 +1,6 @@
 import {
+  expectFieldLine,
+  expectFieldSaidWrong,
   test,
   expect,
   addModel,
@@ -1219,8 +1221,24 @@ test("a new list refused for a reason the screen does not name says so by what w
   ).toHaveText(
     /^Рядків: 1\s001, а за раз їх беруть не більше 1\s000\. Розділіть: решту додайте до списку через «Додати рядки вручну»\.$/,
   );
+  // Typed and not to be taken: a line under the field, never the plate of a
+  // refusal (audit 2026-11-20, frame P2-2).
+  await expectFieldSaidWrong(
+    text,
+    page.locator(".field-wrong", { hasText: /^Рядків: 1\s001/ }),
+  );
+  await expect(save).toBeDisabled();
+  await text.fill(`${coat} сірий ${"x".repeat(501)}`);
+  await expectFieldSaidWrong(
+    text,
+    page.locator(".field-wrong", {
+      hasText: "Рядок довший за 500 символів: розділіть його.",
+    }),
+  );
   await expect(save).toBeDisabled();
   await text.fill(`${coat} сірий 3 шт`);
+  await expect(text).not.toHaveAttribute("aria-invalid");
+  await expect(page.locator(".field-wrong")).toHaveCount(0);
   await save.click();
   await expect(
     page.getByRole("heading", { name: "Зошит нового списку" }),
@@ -1312,6 +1330,29 @@ test("a list's refusals the server does not name are said in the list's words, n
   ).toHaveText(
     /^Рядків: 1\s001, а за раз їх беруть не більше 1\s000\. Розділіть їх на кілька разів\.$/,
   );
+  await expectFieldSaidWrong(
+    pasted,
+    typing.locator(".field-wrong", { hasText: /^Рядків: 1\s001/ }),
+  );
+  await expect(add).toBeDisabled();
+  // A line too long among them too: both lines under the field, the field
+  // read with both.
+  await pasted.fill(
+    [
+      `${coat} сірий ${"x".repeat(501)}`,
+      ...Array.from({ length: 1000 }, (_, i) => `${coat} сірий ${String(i)}`),
+    ].join("\n"),
+  );
+  await expectFieldSaidWrong(
+    pasted,
+    typing.locator(".field-wrong", {
+      hasText: "Рядок довший за 500 символів: розділіть його.",
+    }),
+  );
+  await expectFieldSaidWrong(
+    pasted,
+    typing.locator(".field-wrong", { hasText: /^Рядків: 1\s001/ }),
+  );
   await expect(add).toBeDisabled();
   // Fewer lines, but more characters in all than one part takes.
   await pasted.fill(
@@ -1323,6 +1364,10 @@ test("a list's refusals the server does not name are said in the list's words, n
     typing.getByRole("alert").filter({ hasText: /^Рядки разом задовгі/ }),
   ).toHaveText(
     /^Рядки разом задовгі: за раз беруть не більше 100\s000 знаків\. Розділіть їх на кілька разів\.$/,
+  );
+  await expectFieldSaidWrong(
+    pasted,
+    typing.locator(".field-wrong", { hasText: /^Рядки разом задовгі/ }),
   );
   await expect(add).toBeDisabled();
   await pasted.fill(`${coat} сірий L 1 шт`);
@@ -1494,7 +1539,24 @@ test("a split the list does not state asks who counted, and a warehouse with his
   await pick(page, "Розбір рядка 1", coat);
   await size(editor, "M");
   await editor.getByRole("button", { name: "Ще розмір чи колір" }).click();
+  // The same coat and size twice: said under the parts, above «Ще розмір чи
+  // колір» and the note — where they are (audit 2026-11-20, goods P2-1 (б)).
+  await size(editor, "M", 1);
+  const twice = editor.locator(".field-wrong", {
+    hasText: "Той самий товар і розмір двічі: об’єднайте їх.",
+  });
+  await expectFieldLine(twice);
+  const [twiceBox, another, note] = await Promise.all([
+    twice.boundingBox(),
+    editor.getByRole("button", { name: "Ще розмір чи колір" }).boundingBox(),
+    editor.getByLabel("Хто й коли перелічив").boundingBox(),
+  ]);
+  if (!twiceBox || !another || !note) throw new Error("the parts not laid out");
+  expect(twiceBox.y + twiceBox.height).toBeLessThanOrEqual(another.y);
+  expect(twiceBox.y + twiceBox.height).toBeLessThanOrEqual(note.y);
+  await expect(saving(editor)).toBeDisabled();
   await size(editor, "L", 1);
+  await expect(twice).toHaveCount(0);
   await expect(saving(editor)).toBeDisabled();
   await editor.getByLabel("Хто й коли перелічив").fill("Оля, 01.10");
   await expect(saving(editor)).toHaveText("Зберегти · M × 1, L × 1 шт.");

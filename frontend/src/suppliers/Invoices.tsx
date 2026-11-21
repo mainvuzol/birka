@@ -727,7 +727,8 @@ function InvoiceList({
               (money task list after stage 2, P2-1). */}
             {invoices.hasNextPage && !invoices.isFetchNextPageError && (
               <button
-                className="quiet"
+                type="button"
+                className="list-more"
                 disabled={invoices.isFetching}
                 onClick={() => {
                   void invoices.fetchNextPage();

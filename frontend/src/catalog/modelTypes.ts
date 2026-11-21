@@ -84,6 +84,11 @@ export interface Blocker {
   [detail: string]: unknown;
 }
 
+/** A length the server would not take, said under its field in «Нова
+ * модель» and «Моделі» (audit 2026-11-20, frame P2-2; goods P2-1). */
+export const lengthWrong =
+  "Вкажіть додатну довжину до 9999,9 см, з одним знаком після коми.";
+
 export const statusText: Record<ModelStatus, string> = {
   ACTIVE: "Діє",
   NEEDS_REVIEW: "Потребує перевірки",

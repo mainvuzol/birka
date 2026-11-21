@@ -454,7 +454,7 @@ export function Returns({
               sales.hasNextPage && (
                 <button
                   type="button"
-                  className="quiet"
+                  className="list-more"
                   disabled={sales.isFetching}
                   onClick={() => {
                     void sales.fetchNextPage();

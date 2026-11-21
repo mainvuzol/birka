@@ -1832,9 +1832,15 @@ export async function expectTextLink(
  * its first line, 14/600/19 in the error's colour, nothing round it; read
  * out as an alert, as before.
  */
-export async function expectFieldLine(line: Locator): Promise<void> {
+export async function expectFieldLine(
+  line: Locator,
+  { alert = true }: { alert?: boolean } = {},
+): Promise<void> {
   await expect(line).toBeVisible();
-  await expect(line).toHaveAttribute("role", "alert");
+  // One kept in sight after it was heard has no alert of its own (audit
+  // 2026-11-20, goods P2-1 (а)): the same look.
+  if (alert) await expect(line).toHaveAttribute("role", "alert");
+  else await expect(line).not.toHaveAttribute("role");
   const look = await line.evaluate((node) => {
     const style = getComputedStyle(node);
     const mark = getComputedStyle(node, "::before");
@@ -1866,6 +1872,29 @@ export async function expectFieldLine(line: Locator): Promise<void> {
   });
 }
 
+/**
+ * A field and the line said wrong under it (audit 2026-11-20, frame P2-2):
+ * the line, never the plate; the field marked wrong, read with the line, its
+ * edge in the error's colour.
+ */
+export async function expectFieldSaidWrong(
+  field: Locator,
+  line: Locator,
+): Promise<void> {
+  await expectFieldLine(line);
+  await expect(field).toHaveAttribute("aria-invalid", "true");
+  const id = await line.getAttribute("id");
+  expect(id, "the line's id").toBeTruthy();
+  expect(
+    (await field.getAttribute("aria-describedby"))?.split(" ") ?? [],
+    "the field read with its line",
+  ).toContain(id);
+  await expect(field).toHaveCSS(
+    "border-top-color",
+    await tokenColour(field.page(), "--danger"),
+  );
+}
+
 /** «+ ще N» and «Показати ще» under a list, one look wherever it stands
  * (spec §6.10; audit 2026-11-18, frame P2-4): the list's width, from its
  * side, 44 high at least, its edge, 15/600 in ink on nothing. */
@@ -1874,6 +1903,9 @@ export async function expectListMore(
   list: Locator,
 ): Promise<void> {
   await expect(button).toBeVisible();
+  // The strip itself, wherever its parent would stretch a quiet button to
+  // the same width (review of audit 2026-11-20, batch 3).
+  await expect(button).toHaveClass(/\blist-more\b/);
   const page = button.page();
   const [box, of] = [await button.boundingBox(), await list.boundingBox()];
   if (!box || !of) throw new Error("the list or its «+ ще» not laid out");

@@ -276,7 +276,8 @@ export function History({
             ) : (
               closes.hasNextPage && (
                 <button
-                  className="quiet"
+                  type="button"
+                  className="list-more"
                   disabled={closes.isFetching}
                   onClick={() => {
                     void closes.fetchNextPage();

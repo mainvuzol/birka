@@ -1,4 +1,5 @@
 import {
+  expectListMore,
   test,
   expect,
   openStore,
@@ -496,6 +497,11 @@ test("twenty closes to a page, «Показати ще» for the rest; the first
   // «Показати ще» keeps the list where it was read to, never back at its
   // start (audit after stage 2, frame P1-3).
   const showMore = page.getByRole("button", { name: "Показати ще" });
+  // One word and one look under every list (audit 2026-11-20, frame P2-1).
+  await expectListMore(
+    showMore,
+    page.getByRole("list", { name: "Закриття каси" }),
+  );
   await showMore.scrollIntoViewIfNeeded();
   const at = await page.evaluate(() => window.scrollY);
   expect(at).toBeGreaterThan(0);

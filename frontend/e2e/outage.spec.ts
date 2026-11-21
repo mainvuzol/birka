@@ -394,16 +394,22 @@ async function soldWithNoAnswer(
   ).toBeVisible();
 }
 
-/** «14:20» of the kept sale's `since`, as the phone shows it. */
+/** «14:20» of the kept sale's `since`, as the phone shows it now — «учора
+ * о 14:20» once the phone's clock is past its midnight (audit 2026-11-20,
+ * frame P2-3). */
 async function keptSince(page: Page): Promise<string> {
   return page.evaluate((key) => {
     const saved = JSON.parse(localStorage.getItem(key) ?? "{}") as {
       since?: string;
     };
-    return new Date(saved.since ?? "").toLocaleTimeString("uk-UA", {
+    const since = new Date(saved.since ?? "");
+    const time = since.toLocaleTimeString("uk-UA", {
       hour: "2-digit",
       minute: "2-digit",
     });
+    return since.toDateString() === new Date().toDateString()
+      ? time
+      : `учора о ${time}`;
   }, saleKey);
 }
 
@@ -983,7 +989,9 @@ test.describe("2. a kept sale is checked by the phone itself", () => {
     server.ready = "ok";
     await page.evaluate(() => window.dispatchEvent(new Event("online")));
     await expect.poll(() => server.sales.length).toBe(2);
-    await expect(banner).toContainText(`Чекає відповіді сервера з ${since}.`);
+    await expect(banner).toContainText(
+      `Чекає відповіді сервера з ${await keptSince(page)}.`,
+    );
     release();
     await expect(
       page.getByRole("heading", { name: "Продаж записано один раз" }),
@@ -2171,7 +2179,7 @@ test.describe("9. what to do with money after the outage", () => {
       "Підрахунок 850,00 грн — сервер не відповів. Двічі цю операцію не запишуть. Поки чекаємо, інші дії недоступні.",
     );
     await expect(banner.locator("p").nth(1)).toHaveText(
-      /^Чекає відповіді сервера з \d{2}:\d{2}\. Телефон перевірить сам\. Нічого не повторюйте, поки він не скаже «не записано»\.$/,
+      /^Чекає відповіді сервера з (?:учора о )?\d{2}:\d{2}\. Телефон перевірить сам\. Нічого не повторюйте, поки він не скаже «не записано»\.$/,
     );
     await expect(banner).not.toContainText("у телефоні —");
     await expect(banner).not.toContainText(person);
@@ -6552,4 +6560,46 @@ test("a sale pressed after the session ended is kept on the phone, and the app i
   await page.waitForTimeout(1000);
   expect(asked).toEqual([]);
   expect(await asks()).toEqual({ need_confirmation: true });
+});
+
+test("a sale kept since another day: its stub names the day — «з учора о 14:20», a week back its date — and one of today its time alone (audit 2026-11-20, frame P2-3)", async ({
+  page,
+}) => {
+  // The phone's morning, at 09:05; the sale kept before it.
+  const morning = new Date();
+  morning.setHours(9, 5, 0, 0);
+  const at = (days: number, hours: number, minutes: number): Date => {
+    const moment = new Date(morning);
+    moment.setDate(moment.getDate() - days);
+    moment.setHours(hours, minutes, 0, 0);
+    return moment;
+  };
+  const weekBack = at(7, 14, 20).toLocaleDateString("uk-UA", {
+    day: "2-digit",
+    month: "2-digit",
+  });
+  await page.clock.setFixedTime(morning);
+  const server = await serve(page);
+  server.sale = async (route) => {
+    await route.abort("connectionreset");
+  };
+  const banner = page.locator("section.notice", {
+    has: page.getByRole("heading", { name: "Продаж ще не підтверджено" }),
+  });
+  for (const [since, said] of [
+    [at(1, 14, 20), "з учора о 14:20"],
+    [at(7, 14, 20), `з ${weekBack} о 14:20`],
+    [at(0, 8, 40), "з 08:40"],
+  ] as const) {
+    const kept = JSON.parse(keptSale("CASH")) as Record<string, unknown>;
+    await seed(page, {
+      [saleKey]: JSON.stringify({ ...kept, since: since.toISOString() }),
+    });
+    await page.goto(launch());
+    await openStore(page, /Подільський/);
+    // The rest of its words as they were.
+    await expect(banner).toContainText(
+      `Чекає відповіді сервера ${said}. Запишіть цю операцію на папері з позначкою «у телефоні — ${person}» і не вносьте її з паперу: телефон перевірить її сам.`,
+    );
+  }
 });

@@ -646,7 +646,7 @@ export function Orders({
     return pages.hasNextPage ? (
       <button
         type="button"
-        className="quiet"
+        className="list-more"
         disabled={pages.isFetching || reading}
         onClick={() => {
           pressed?.();

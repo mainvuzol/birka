@@ -26,7 +26,7 @@ import { FamilySearch, familyLabel } from "./FamilySearch";
 import type { Family } from "./FamilySearch";
 import { KeptCatalog } from "./KeptCatalog";
 import { Similar } from "./Similar";
-import { similarFrom } from "./modelTypes";
+import { lengthWrong, similarFrom } from "./modelTypes";
 import type { Decision } from "./types";
 
 const base = "/catalog/match-decisions";
@@ -719,9 +719,18 @@ export function NewModel({
               }}
               controls={extraFields}
               className="new-model-more"
+              describedBy={!more && !lengthValid ? lengthId : undefined}
             >
               Ще ознаки
             </Fold>
+            {!more && !lengthValid && (
+              // Folded with a length wrong: its line under «Ще ознаки», so the
+              // held way on says why; heard once as it was typed, read with
+              // the fold (audit 2026-11-20, goods P2-1 (а), Д2).
+              <p className="field-wrong" id={lengthId}>
+                {lengthWrong}
+              </p>
+            )}
             {more && (
               <div id={extraFields} className="new-model-extra">
                 {kind === "new" && (
@@ -790,16 +799,18 @@ export function NewModel({
                     inputMode="decimal"
                     value={length}
                     disabled={blocked}
+                    aria-invalid={lengthValid ? undefined : true}
                     aria-describedby={lengthValid ? undefined : lengthId}
                     onChange={(event) => {
                       setLength(event.target.value);
                     }}
                   />
                 </label>
+                {/* A field said wrong is a line under it, never the plate
+                    (audit 2026-11-20, frame P2-2). */}
                 {!lengthValid && (
-                  <p role="alert" id={lengthId}>
-                    Вкажіть додатну довжину до 9999,9 см, з одним знаком після
-                    коми.
+                  <p className="field-wrong" role="alert" id={lengthId}>
+                    {lengthWrong}
                   </p>
                 )}
                 {kind === "new" && (

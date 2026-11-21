@@ -1,4 +1,11 @@
-import { test, expect, holdReads, openStore, section } from "./fixtures";
+import {
+  test,
+  expect,
+  expectListMore,
+  holdReads,
+  openStore,
+  section,
+} from "./fixtures";
 import type { Locator, Page, Route } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -196,8 +203,11 @@ async function toTheEnd(
   more: Locator,
   failure: Locator,
   asked: URLSearchParams[],
+  list: Locator,
 ): Promise<void> {
   await expect(rows).toHaveCount(20);
+  // One word and one look under every list (audit 2026-11-20, frame P2-1).
+  await expectListMore(more, list);
   await more.click();
   // The row the page's edge moved past is shown once.
   await expect(rows).toHaveCount(39);
@@ -240,6 +250,7 @@ test("«Накладні»: «Показати ще» to the sixty-first invoice
     page.getByRole("button", { name: "Показати ще", exact: true }),
     list.last().getByRole("alert"),
     asked,
+    page.getByRole("list", { name: "Накладні" }),
   );
   // Asked as before: what is still owed, of this store.
   expect(asked[0]?.get("status")).toBe("OPEN");
@@ -265,6 +276,7 @@ test("«Постачальникам»: the returns to the sixty-first, twenty a
     page.getByRole("button", { name: "Показати ще", exact: true }),
     page.locator(".supplier-returns").getByRole("alert"),
     asked,
+    page.getByRole("list", { name: "Повернення постачальникам" }),
   );
 });
 
@@ -288,6 +300,7 @@ test("«Позичене й під реалізацію»: the lots to the sixty
     screen.getByRole("button", { name: "Показати ще", exact: true }),
     screen.getByRole("alert"),
     asked,
+    page.getByRole("list", { name: "Позичене" }),
   );
   // Asked as before: what is still on hand.
   expect(asked[0]?.has("on_hand")).toBe(false);

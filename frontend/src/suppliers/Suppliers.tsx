@@ -299,7 +299,8 @@ export function Suppliers({
               (money task list after stage 2, P2-1). */}
             {returns.hasNextPage && !returns.isFetchNextPageError && (
               <button
-                className="quiet"
+                type="button"
+                className="list-more"
                 disabled={returns.isFetching}
                 onClick={() => {
                   void returns.fetchNextPage();

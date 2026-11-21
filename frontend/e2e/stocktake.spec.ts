@@ -1623,6 +1623,11 @@ test("a long count inside Telegram: «Показати ще» waits while the li
   await expect(tags).toHaveCount(26);
   const more = counting(page).getByRole("button", { name: "Показати ще" });
   await expect(more).toBeEnabled();
+  // One word and one look under every list (audit 2026-11-20, frame P2-1).
+  await expectListMore(
+    more,
+    counting(page).locator("div.tags", { has: page.locator(".model-tag") }),
+  );
 
   // A model's only cell counted; while the list is read again «Показати
   // ще» waits — asked meanwhile, it would be read past a position that

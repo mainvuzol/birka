@@ -1058,7 +1058,9 @@ test("a change whose answer is lost is resent unchanged, and done once", async (
     // Its title the shared words, never «Незавершена» (audit after stage
     // 2, frame P1-2).
     await expect(kept.getByRole("heading")).not.toContainText("Незавершена");
-    await expect(kept).toContainText(/Чекає відповіді сервера з \d{2}:\d{2}\./);
+    await expect(kept).toContainText(
+      /Чекає відповіді сервера з (?:учора о )?\d{2}:\d{2}\./,
+    );
     // No answer says nothing more than the stub: never the error's own
     // name (review, 2026-11-07). The cursor on it.
     await expect(market.getByRole("alert")).toHaveCount(0);
