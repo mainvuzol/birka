@@ -1118,6 +1118,112 @@ test("only a person with the right in every store is offered a merge", async ({
   ).toHaveCount(0);
 });
 
+test("the rename's fork says each model as «Схожі» does: its name, what it is under it, «Відмінність моделі: …» under that — nothing of its label lost, heard as before; «Це вона» beside them chooses that model (audit 2026-11-20, goods P2-3 (б))", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 740 });
+  const bearer = await token(page);
+  const name = `Розвилка ${randomUUID().slice(0, 8)}`;
+  await model(
+    page,
+    bearer,
+    { concept: `${name} друга`, variant: { color: "графіт" } },
+    0,
+  );
+  // Two models of the name the server says it cannot tell apart: one with
+  // all it may say of itself, one with its name alone.
+  const full = {
+    family_id: randomUUID(),
+    concept_name: name,
+    source_name: "Лоран",
+    business_category_name: "Пальто",
+    garment_type_name: "Пальто",
+    distinction_note: "довге",
+  };
+  const bare = {
+    family_id: randomUUID(),
+    concept_name: name,
+    source_name: null,
+    business_category_name: null,
+    garment_type_name: null,
+    distinction_note: null,
+  };
+  const renames: Record<string, unknown>[] = [];
+  await page.route("**/api/v1/catalog/models/*/rename", async (route) => {
+    renames.push(route.request().postDataJSON() as Record<string, unknown>);
+    await route.fulfill({
+      status: 409,
+      json: {
+        code: "CATALOG_AMBIGUOUS",
+        message: "Ambiguous",
+        details: { candidate_family_ids: [full.family_id, bare.family_id] },
+      },
+    });
+  });
+  await page.route("**/api/v1/catalog/families?**", async (route) => {
+    await route.fulfill({ json: { items: [full, bare], has_more: false } });
+  });
+  await enter(page, "Моделі");
+  await open(page, `${name} друга`, /друга графіт/);
+  const sheet = await renameSheet(page);
+  await sheet.getByLabel("Назва моделі", { exact: true }).fill(name);
+  await saveName(sheet).click();
+  const fork = sheet.locator(".rename-fork");
+  const rows = fork.locator(".new-model-candidates > li");
+  await expect(rows).toHaveCount(2);
+  // «Лоран» / «Пальто · Пальто» / «Відмінність моделі: довге» — never one
+  // bold line through dashes; a model with its name alone, its name.
+  await expect(rows.nth(0).locator(".new-model-name > *")).toHaveText([
+    name,
+    "Лоран · Пальто · Пальто",
+    "Відмінність моделі: довге",
+  ]);
+  await expect(rows.nth(0).locator(".new-model-name strong")).toHaveText(name);
+  await expect(rows.nth(1).locator(".new-model-name > *")).toHaveText([name]);
+  // Heard as before: its whole label.
+  const it = fork.getByRole("button", {
+    name: `Це вона: ${name} — Лоран — Пальто — Пальто — довге`,
+    exact: true,
+  });
+  await expect(it).toBeVisible();
+  for (const scheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    // `meta` lines, 14, as the proposal's rows'.
+    for (const line of await rows
+      .nth(0)
+      .locator(".new-model-name .t-meta")
+      .all()) {
+      await expect(line).toHaveCSS("font-size", "14px");
+      expect((await line.boundingBox())?.height ?? 0).toBeLessThanOrEqual(
+        2 * 19 + 1,
+      );
+    }
+    const [words, way] = await Promise.all([
+      rows.nth(0).locator(".new-model-name").boundingBox(),
+      it.boundingBox(),
+    ]);
+    if (!words || !way) throw new Error("not laid out");
+    // «Це вона» beside the three lines, never under the name.
+    expect(way.x).toBeGreaterThanOrEqual(words.x + words.width - 1);
+    await page.screenshot({
+      path: `test-results/models-fork-rows-${scheme}.png`,
+    });
+  }
+  await page.emulateMedia({ colorScheme: "light" });
+  // «Це вона» chooses that model, as before.
+  await it.click();
+  await expect(it).toHaveAttribute("aria-pressed", "true");
+  await saveName(sheet).click();
+  await expect.poll(() => renames.length).toBe(2);
+  // The family chosen, nothing new, no distinction of its own: what the
+  // fork sent before.
+  expect(renames[1]).toMatchObject({
+    product_family_id: full.family_id,
+    new_model: false,
+    distinction_note: null,
+  });
+});
+
 test("«Моделі» is the owner's and managers' alone", async ({ page }) => {
   await page.route("**/api/v1/me", async (route) => {
     const response = await route.fetch();

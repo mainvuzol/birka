@@ -643,8 +643,10 @@ test("found goods that turn out to be held are counted against what is held", as
   await reason(page, "Перерахунок").click();
   await type(page, 1);
   await record(page, "+1").click();
+  // Nothing recorded, said, as the count's twin says it (audit 2026-11-20,
+  // goods P2-4 (б)).
   await expect(fix.getByRole("alert")).toContainText(
-    `уже є в обліку цього складу: ${String(held)} шт.`,
+    `уже є в обліку цього складу: ${String(held)} шт. Перерахуйте його й введіть кількість ще раз. Нічого не записано.`,
   );
   await expect(live(page)).toHaveText(`В обліку ${String(held)}`);
   // The sheet closed, «← Інвентаризація», then «← {модель}».

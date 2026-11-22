@@ -11707,3 +11707,70 @@ server's checks of it, are as before.
   - A set-off's return says «склад «…»» where its row in «Постачальникам»
     says where it came from by `placeText` («з «Браку» «…»»): its goods
     now say the same, its place not yet — for the next audit.
+
+## Chosen in chat — 2026-11-22 (audit 2026-11-20, batch 5: the goods' corners — «+ Нова пропозиція» as «+ Нове замовлення»; what tells a model apart named in both forks; the count's «Знайшли товар…» only for whoever may receive, and «уже є в обліку» saying nothing is recorded; goods P2-2, P2-3, P2-4)
+
+Taken as the next after «merged go next»: the goods pass's last P2s that
+wait for no owner's answer (its §8, «Углы товара»). goods P2-5 waits for
+В20-Т1. No request, check, journal or right changes; no backend change.
+What is recorded, chosen and sent, and the server's checks of it, are as
+before.
+
+- **«+ Нова пропозиція» as «+ Нове замовлення»** (goods P2-2):
+  - In «Перевірка каталогу»'s header, `button.head-add`: the plus 20 before
+    its words, the link's colour on nothing, 44 high; beside the title, or
+    under it where both do not fit one line (`ScreenHeader wraps`). It was
+    a bordered `quiet` button.
+  - Revises stage 2's «quiet in the header» (2026-11-05): the rule of
+    2026-11-16 (money P2-4) is of the header's way to make, not of its sign;
+    «Нова пропозиція» had lost its «+» before that rule came and was left
+    out of it. Its words for a reader: «Нова пропозиція», as before.
+  - When it shows (not on «Пропозиція»), held while a command is on its way,
+    and what a tap does: as before. `.catalog-ways` is gone.
+- **What tells a model apart, named in both forks** (goods P2-3; the review
+  of 2026-11-18, batch 7):
+  - (а) «Нова модель»'s «Схожі»: under a model's name, «Відмінність моделі:
+    довге» — it was «довге» alone, read as the name's own word. As the open
+    proposal's rows say it.
+  - (б) «Моделі»' rename into a name the catalogue has, «Це вона — чи окрема
+    модель…»: a row's name (`concept_name`) bold, under it its source,
+    category and garment type, whichever it has, through « · », under that
+    «Відмінність моделі: …» if it has one. It was one bold line through
+    dashes, «Лоран — Пальто — Пальто — довге».
+  - Decided here (by the task): nothing of `familyLabel` is lost, only
+    grouped; «Це вона»'s name for a reader is the whole label, as before.
+  - What each row chooses and what is sent — the family, `new_model`,
+    `distinction_note` — and «Окрема модель зі схожою назвою»: as before.
+    «Інший колір нашої моделі»'s rows and «Модель: …» wait for the owner
+    pack's № 52, as they were.
+- **«Знайшли товар, якого немає в списку» only for whoever may receive**
+  (goods P2-4 (а)):
+  - On a count, as on the entry: only with `inventory:receive` — what it
+    searches and the sizes it reads are receiving's, and the server refuses
+    them without it. Default roles have both rights; only a role set up
+    with `inventory:adjust` and no `inventory:receive` sees the difference.
+  - Its screen goes if the right goes, never back by itself, as on the
+    entry (the task's Д1); the cursor back on «Знайшли товар…» where it
+    stands, else on the count's title; a found goods' count sheet closed
+    then puts it on the title too.
+  - Decided here (review): a found goods' count sheet already open stays
+    open when the right goes, the screen under it gone — its count needs
+    only `inventory:adjust`, which the person still has, and closing it
+    would lose what was typed. The entry closes its correction's sheet with
+    it, as it did.
+  - Known, kept: the rights are read again only on the door's «Спробувати
+    ще раз» and on a change in «Магазини», neither reached while a count
+    stands — so no journey takes the right away from an open count; the
+    guard is the entry's, read in code.
+- **«уже є в обліку» says nothing is recorded** (goods P2-4 (б)):
+  - A correction against nothing (from «Знайшли товар…» on the entry)
+    refused as the goods are already in the books: «Цей товар уже є в
+    обліку цього складу: 2 шт. Перерахуйте його й введіть кількість ще раз.
+    Нічого не записано.» — as the count's twin says it (2026-10-10, each
+    with «Нічого не записано.»). A kept correction's: as before.
+- **Found by the review, fixed:**
+  - Low: the rename fork's journey checked the family and `new_model` it
+    sends, not `distinction_note: null`; it checks all three now.
+- **Known, kept (review):**
+  - No journey takes the right away from an open count (above): the
+    guard's own lines are read in code, as the entry's always were.

@@ -21,6 +21,7 @@ import {
   section,
   sheetRow,
   sizeCell,
+  tokenColour,
   typeSize,
 } from "./fixtures";
 import type { Locator, Page } from "@playwright/test";
@@ -651,6 +652,113 @@ test("catalog change rejects stale confirmation through real API", async ({
   await expect(
     page.getByRole("button", { name: "Цей опис — назва товару?" }),
   ).toHaveCount(0);
+});
+
+test("«Нова пропозиція» is said as «+ Нове замовлення»: in words, its «+» before them, the link's colour on nothing — by the title or under it, one line, at 360 and 390; never on a proposal's own screen (audit 2026-11-20, goods P2-2)", async ({
+  page,
+}) => {
+  const make = page.getByRole("button", {
+    name: "Нова пропозиція",
+    exact: true,
+  });
+  const title = page.getByRole("heading", {
+    name: "Перевірка каталогу",
+    level: 1,
+  });
+  for (const width of [360, 390]) {
+    await page.setViewportSize({ width, height: 740 });
+    await enter(page);
+    await expect(make).toHaveText("Нова пропозиція");
+    await expect(make).toHaveClass(/\bhead-add\b/);
+    await expect(make.locator("svg.icon")).toHaveCount(1);
+    expect(
+      await make.evaluate((node) => {
+        const style = getComputedStyle(node);
+        return [style.borderTopWidth, style.backgroundColor];
+      }),
+    ).toEqual(["0px", "rgba(0, 0, 0, 0)"]);
+    await expect(make).toHaveCSS("color", await tokenColour(page, "--link"));
+    await expect(make).toBeInViewport({ ratio: 1 });
+    const [said, place] = await Promise.all([
+      title.boundingBox(),
+      make.boundingBox(),
+    ]);
+    if (!said || !place) throw new Error("not laid out");
+    // One line, 44 high; beside the title or under it, never over it.
+    expect(place.height).toBeGreaterThanOrEqual(44);
+    expect(place.height).toBeLessThanOrEqual(45);
+    expect(
+      place.x >= said.x + said.width - 1 || place.y >= said.y + said.height - 1,
+    ).toBe(true);
+    expect(
+      await title.evaluate(
+        (node) =>
+          node.getBoundingClientRect().height <
+          parseFloat(getComputedStyle(node).lineHeight) * 1.5,
+      ),
+    ).toBe(true);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(width);
+    await page.screenshot({
+      path: `test-results/catalog-new-proposal-${String(width)}.png`,
+    });
+  }
+  // What it does, as before: the sheet «Нова модель»; and on a proposal's
+  // own screen it is not.
+  await create(page, `Шапка ${randomUUID().slice(0, 8)}`);
+  await leave(page);
+  await expect(make).toHaveCount(0);
+});
+
+test("«Схожі» says what tells a model apart as the proposal's rows do: «Відмінність моделі: …» under its name, at most two lines at 360 in both themes, «Це вона» beside it choosing that model (audit 2026-11-20, goods P2-3 (а))", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 740 });
+  // The catalogue's first «Лоран» told apart by a word of its own, as the
+  // server says it of a model with a distinction — in the proposal read
+  // once it is sent, which the sheet shows.
+  await page.route("**/api/v1/catalog/match-decisions/*", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.continue();
+      return;
+    }
+    const response = await route.fetch();
+    const body = (await response.json()) as {
+      preview: { candidates: { distinction_note: string | null }[] };
+    };
+    const first = body.preview.candidates[0];
+    if (first) first.distinction_note = "довге";
+    await route.fulfill({ response, json: body });
+  });
+  await enter(page);
+  const sheet = await create(
+    page,
+    `Лоран шоколад відмінність ${randomUUID().slice(0, 8)}`,
+  );
+  const row = sheet.locator(".new-model-candidates > li").first();
+  const told = row.locator(".new-model-name .t-meta");
+  await expect(told).toHaveText("Відмінність моделі: довге");
+  const it = row.getByRole("button", { name: /^Це вона: / });
+  for (const scheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    await expect(told).toHaveCSS("font-size", "14px");
+    const [name, line, way] = await Promise.all([
+      row.locator(".new-model-name").boundingBox(),
+      told.boundingBox(),
+      it.boundingBox(),
+    ]);
+    if (!name || !line || !way) throw new Error("not laid out");
+    expect(line.height).toBeLessThanOrEqual(2 * 19 + 1);
+    // Beside the words, never under them.
+    expect(way.x).toBeGreaterThanOrEqual(name.x + name.width - 1);
+    await page.screenshot({
+      path: `test-results/catalog-similar-distinction-${scheme}.png`,
+    });
+  }
+  await page.emulateMedia({ colorScheme: "light" });
+  await it.click();
+  await expect(it).toHaveAttribute("aria-pressed", "true");
 });
 
 test("catalog navigation requires catalog permission", async ({ page }) => {

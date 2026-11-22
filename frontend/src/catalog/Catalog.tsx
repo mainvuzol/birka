@@ -252,22 +252,25 @@ export function Catalog({
             back && <BackToMore back={back} />
           )
         }
+        wraps
         aside={
           !selected && (
-            <div className="catalog-ways">
-              <button
-                type="button"
-                className="quiet"
-                disabled={blocked}
-                onClick={() => {
-                  forgetCatalogRefusal();
-                  setSuccess("");
-                  setCreating(true);
-                }}
-              >
-                Нова пропозиція
-              </button>
-            </div>
+            // Said in words, its «+» before them, as «+ Нове замовлення»;
+            // under the title where it does not fit beside it (audit
+            // 2026-11-20, goods P2-2).
+            <button
+              type="button"
+              className="head-add"
+              disabled={blocked}
+              onClick={() => {
+                forgetCatalogRefusal();
+                setSuccess("");
+                setCreating(true);
+              }}
+            >
+              <Icon name="plus" size={20} />
+              Нова пропозиція
+            </button>
           )
         }
       />

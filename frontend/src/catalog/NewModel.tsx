@@ -459,8 +459,11 @@ export function NewModel({
                   <span className="new-model-name">
                     <strong>{visible(c.display_name)}</strong>
                     {c.distinction_note && (
+                      // Named as the open proposal's rows name it, never
+                      // read as the name's own word (audit 2026-11-20,
+                      // goods P2-3 (а)).
                       <span className="t-meta">
-                        {visible(c.distinction_note)}
+                        Відмінність моделі: {visible(c.distinction_note)}
                       </span>
                     )}
                   </span>

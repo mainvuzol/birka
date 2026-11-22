@@ -892,6 +892,42 @@ test("a count whose outcome is unknown blocks the app until it is resent unchang
   ).toBeEnabled();
 });
 
+test("«Знайшли товар, якого немає в списку» only for whoever may receive: without `inventory:receive` neither on the entry nor on the count — the catalogue it searches is receiving's; with it, on both (audit 2026-11-20, goods P2-4 (а))", async ({
+  page,
+}) => {
+  const finder = (where: Page | Locator): Locator =>
+    where.getByRole("button", {
+      name: "Знайшли товар, якого немає в списку",
+      exact: true,
+    });
+  for (const receives of [false, true]) {
+    await page.unrouteAll({ behavior: "wait" });
+    if (!receives)
+      await page.route("**/api/v1/me", async (route) => {
+        const response = await route.fetch();
+        const body = (await response.json()) as {
+          stores: { permissions: string[] }[];
+        };
+        for (const store of body.stores)
+          store.permissions = store.permissions.filter(
+            (p) => p !== "inventory:receive",
+          );
+        await route.fulfill({ response, json: body });
+      });
+    await stubbed(page);
+    // Opened afresh: its rights read again.
+    await page.goto("about:blank");
+    await enter(page, "Склад інвентаризації");
+    await expect(
+      page.getByRole("button", { name: "Почати інвентаризацію" }),
+    ).toBeVisible();
+    await expect(finder(page)).toHaveCount(receives ? 1 : 0);
+    await begin(page);
+    await expect(counting(page)).toBeVisible();
+    await expect(finder(counting(page))).toHaveCount(receives ? 1 : 0);
+  }
+});
+
 test("a stocktake is offered only to whoever may correct stock, and read it", async ({
   page,
 }) => {
