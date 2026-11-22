@@ -21,7 +21,7 @@ import { Unread } from "@/shared/Unread";
 import { visible } from "@/shared/visible";
 import { money } from "@/orders/types";
 import type { Store } from "@/orders/types";
-import { familyLabel } from "./FamilySearch";
+import { familyKind, familyLabel } from "./FamilySearch";
 import type { Family } from "./FamilySearch";
 import {
   resolveCorrectionCommand,
@@ -770,8 +770,20 @@ function RenameSheet({
                   .filter((item) => candidates.includes(item.family_id))
                   .map((item) => (
                     <li className="sale-row" key={item.family_id}>
+                      {/* Its name, then what it is, then what tells it
+                          apart — as «Схожі» and the proposal's rows say
+                          it; nothing of its label lost, grouped (audit
+                          2026-11-20, goods P2-3 (б)). */}
                       <span className="new-model-name">
-                        <strong>{familyLabel(item)}</strong>
+                        <strong>{visible(item.concept_name)}</strong>
+                        {familyKind(item) && (
+                          <span className="t-meta">{familyKind(item)}</span>
+                        )}
+                        {item.distinction_note && (
+                          <span className="t-meta">
+                            Відмінність моделі: {visible(item.distinction_note)}
+                          </span>
+                        )}
                       </span>
                       <button
                         type="button"

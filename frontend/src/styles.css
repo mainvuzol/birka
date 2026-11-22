@@ -954,16 +954,11 @@ nav:not(.tab-bar, .more-list) {
   flex-direction: column;
   gap: 12px;
 }
-/* «Перевірка каталогу» (P1-1): «Нова пропозиція» in the header; the
+/* «Перевірка каталогу» (P1-1): «+ Нова пропозиція» in the header as «+
+   Нове замовлення» (`.head-add`; audit 2026-11-20, goods P2-2); the
    queue's rows 64 on a white block, its words in quotes and its sticker
    under them, the chevron 16 — «Моделі»'s search the same (audit
    2026-11-15, goods P2-2); a proposal's words large. */
-.catalog-ways {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 8px;
-}
 .catalog-rows {
   margin: 12px 0;
   padding: 0;
@@ -4249,7 +4244,7 @@ span.cash-difference > .difference-sign {
    text larger, it goes under the title whole: the title's word is never
    broken (review). A class, not `:has()`. «Записати накладну» and
    «Повернути товар постачальнику» are said the same way (audit 2026-11-15,
-   money P2-4). */
+   money P2-4), and «Нова пропозиція» (audit 2026-11-20, goods P2-2). */
 .screen-title.wraps {
   flex-wrap: wrap;
   column-gap: 8px;

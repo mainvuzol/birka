@@ -355,7 +355,9 @@ export function refusalText(
   const { details } = error;
   if (error.code === "STOCK_CHANGED" && typeof details.actual === "number")
     return details.expected === 0 && system === 0
-      ? `Цей товар уже є в обліку цього складу: ${String(details.actual)} шт. Перерахуйте його й введіть кількість ще раз.`
+      ? // Nothing recorded, said, as the count's twin says it (audit
+        // 2026-11-20, goods P2-4 (б)).
+        `Цей товар уже є в обліку цього складу: ${String(details.actual)} шт. Перерахуйте його й введіть кількість ще раз.${after}`
       : `Поки ви рахували, облік змінився: було ${String(details.expected)}, тепер ${String(details.actual)}. Перерахуйте товар і введіть кількість ще раз.${after}`;
   if (error.code === "INSUFFICIENT_STOCK")
     return `В обліку вже менше, ніж ви списуєте. Залишки оновлено — перевірте кількість.${after}`;

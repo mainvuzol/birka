@@ -1033,9 +1033,18 @@ export function Stocktake({
   // it was pressed (goods task list after stage 2, P1-2).
   const wasFinding = useRef(false);
   useEffect(() => {
-    if (wasFinding.current && !finding) finder.current?.focus();
+    // The right gone meanwhile, no «Знайшли товар…» to go back to: the
+    // count's title (audit 2026-11-20, goods P2-4, Д1).
+    if (wasFinding.current && !finding)
+      (finder.current ?? heading.current)?.focus();
     wasFinding.current = finding;
   }, [finding]);
+  // It stands while its goods may be found: the right to receive gone, it
+  // goes with it — never back by itself — as on the entry (audit
+  // 2026-11-20, goods P2-4 (а), Д1).
+  useEffect(() => {
+    if (finding && !canReceive) setFinding(false);
+  }, [finding, canReceive]);
   // Finished: the stub's one way on, Telegram's. It stands where «Так,
   // завершити» was pressed: the press's second tap, landing on it, is let
   // go (review, 2026-11-07) — by every result's guard now (`ResultScreen`,
@@ -1218,7 +1227,7 @@ export function Stocktake({
 
   return (
     <>
-      {finding ? (
+      {finding && canReceive ? (
         // Goods the list does not show, on their own screen; a size tapped,
         // the count's sheet over it (P1-2).
         <FoundGoods
@@ -1394,17 +1403,22 @@ export function Stocktake({
                 </button>
               )
             )}
-            <button
-              ref={finder}
-              type="button"
-              className="quiet"
-              disabled={blocked}
-              onClick={() => {
-                setFinding(true);
-              }}
-            >
-              Знайшли товар, якого немає в списку
-            </button>
+            {/* Only for whoever may receive: what it searches and the
+                sizes it reads are receiving's, as on the entry (audit
+                2026-11-20, goods P2-4 (а)). */}
+            {canReceive && (
+              <button
+                ref={finder}
+                type="button"
+                className="quiet"
+                disabled={blocked}
+                onClick={() => {
+                  setFinding(true);
+                }}
+              >
+                Знайшли товар, якого немає в списку
+              </button>
+            )}
           </section>
         </>
       )}
@@ -1422,7 +1436,7 @@ export function Stocktake({
           told={told}
           // Goods found: their form goes with the sheet, and the cursor to
           // «Знайшли товар…» in its place, never the title far above.
-          fallback={counting.found ? finder : heading}
+          fallback={counting.found && canReceive ? finder : heading}
           left={(key) => mode !== "uncounted" || known.has(key)}
           counted={(answer, target, last) => {
             const said = `Записано: ${visible(target.name)} · ${sizeWord(target)} — ${resultWords(answer)}`;

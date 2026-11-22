@@ -53,6 +53,19 @@ export function familyLabel(family: Family): string {
     .map(visible)
     .join(" — ");
 }
+/** A model's source, category and garment type, whichever it has, as a
+ * row's `meta` says them under its name (audit 2026-11-20, goods P2-3
+ * (б)); "" when it has none. */
+export function familyKind(family: Family): string {
+  return [
+    family.source_name,
+    family.business_category_name,
+    family.garment_type_name,
+  ]
+    .filter((part): part is string => Boolean(part))
+    .map(visible)
+    .join(" · ");
+}
 /**
  * «Інший колір нашої моделі»: the model the new colour belongs to, found as
  * it is typed, from two letters, a moment after the last — no «Знайти
