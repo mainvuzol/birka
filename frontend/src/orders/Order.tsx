@@ -23,7 +23,7 @@ import {
   dayOf,
   toneOf,
 } from "./Knots";
-import { sinceDay, tagOf, titleOf } from "./Orders";
+import { orderedDay, tagOf, titleOf } from "./Orders";
 import { Returned, byPlace } from "./Returned";
 import { StepRefused } from "./StepRefused";
 import {
@@ -657,7 +657,7 @@ function Card({
                       <span className="sale-goods">{sameTitle(other)}</span>
                       {other.created_at && (
                         <span className="sale-meta">
-                          {sinceDay(other.created_at)}
+                          {orderedDay(other.status, other.created_at)}
                         </span>
                       )}
                       <StatusSticker status={other.status} />

@@ -54,8 +54,11 @@ function launch(): string {
   return `/#${new URLSearchParams({ tgWebAppData: fields.toString() }).toString()}`;
 }
 
-/** M, two free, at 1 850,00 грн. */
-async function goods(page: Page): Promise<void> {
+/** M, two free, at 1 850,00 грн — and `more` models after it. */
+async function goods(
+  page: Page,
+  more: { variant: string; name: string; price: string }[] = [],
+): Promise<void> {
   await page.route("**/api/v1/catalog/stock-options?**", async (route) => {
     await route.fulfill({
       json: {
@@ -72,6 +75,18 @@ async function goods(page: Page): Promise<void> {
             available_quantity: 2,
             suggested_price: "1850.00",
           },
+          ...more.map((model) => ({
+            location_id: till,
+            product_variant_id: model.variant,
+            size_id: fixture.size_id,
+            display_name: model.name,
+            size_label: "M",
+            size_is_unknown: false,
+            quantity: 1,
+            reserved_quantity: 0,
+            available_quantity: 1,
+            suggested_price: model.price,
+          })),
         ],
         has_more: false,
       },
@@ -85,6 +100,7 @@ interface Sent {
   found_in_store: { line_index: number; quantity: number }[];
   missing_in_store: { line_index: number; quantity: number }[];
   payment_method: string;
+  credit?: { customer_name: string; customer_phone: string; paid_now: string };
 }
 
 /** The shelf's question for the first `refusals` presses — `requested` in
@@ -324,7 +340,7 @@ test("a count the shelf cannot hold is said in the sheet, by its field — never
   ).toBeFocused();
 });
 
-test("an answer that leaves less to sell than is paid now opens the basket's sheet for the terms; closed, the shelf's question is back", async ({
+test("an answer that leaves less to sell than is paid now opens the basket's sheet for the terms; closed, the shelf's question is back. The sums said are of what is sold — the tray's «Разом» and «Зараз · винен», the sheet's «Лишиться винен» — and the terms' words the till's refusal's (audit 2026-11-22, sale P2-1)", async ({
   page,
 }) => {
   await goods(page);
@@ -341,6 +357,9 @@ test("an answer that leaves less to sell than is paid now opens the basket's she
   await basket.getByLabel(/^Сплачує зараз/).fill("3000");
   await basket.getByLabel(/^Сплачує зараз/).press("Enter");
   await expect(basket).toHaveCount(0);
+  // Before the shelf is answered, the basket's sum, as before.
+  const said = page.locator(".pay-total");
+  await expect(said).toHaveText(/^Зараз 3\s000,00\sгрн · винен 700,00\sгрн$/);
   await pay(page, "Готівка").click();
   const sheet = await shortage(page);
   await sheet.getByLabel("На місці фактично є, шт.").fill("1");
@@ -350,18 +369,129 @@ test("an answer that leaves less to sell than is paid now opens the basket's she
   // One sheet at a time: the terms, the question waiting under them.
   await expect(basket).toBeVisible();
   await expect(basket.getByRole("alert")).toHaveText(
-    /^Покупець сплачує все одразу \(1\s850,00\sгрн\) — це звичайний продаж\. Зніміть «Оплата частинами»\.$/,
+    /^Покупець сплачує все одразу \(1\s850,00\sгрн\) — це звичайний продаж\. Зніміть «Оплата частинами» або змініть суму\.$/,
   );
+  // What is sold, one coat: nothing would be left owing, and the tray says
+  // what is sold, never the whole basket.
+  await expect(basket.getByText(/^Лишиться винен/)).toHaveCount(0);
+  await expect(said).toHaveText(/^Разом 1\s850,00\sгрн$/);
   await expect(page.getByRole("dialog")).toHaveCount(1);
   // The line the question is about, marked among the basket's.
   await expect(basket.locator(".line.short")).toHaveCount(1);
   expect(sent).toHaveLength(1);
   await expect(basket).toHaveAttribute("data-ready", "");
+  // A smaller sum: owing what is left of the coat sold.
+  await basket.getByLabel(/^Сплачує зараз/).fill("1000");
+  await expect(basket.getByRole("alert")).toHaveCount(0);
+  await expect(basket.getByText("Лишиться винен 850,00 грн")).toBeVisible();
   await basket.getByRole("button", { name: "Готово", exact: true }).click();
   await expect(question(page)).toBeVisible();
   await expect(page.getByRole("dialog")).toHaveCount(1);
   // The terms' words went with their sheet: the question says its own.
   await expect(question(page).getByRole("alert")).toHaveCount(0);
+  await expect(said).toHaveText(/^Зараз 1\s000,00\sгрн · винен 850,00\sгрн$/);
+  // Answered again: sent as before — the sum paid now, the shelf's answer.
+  // (The question back takes taps once it is ready.)
+  await (
+    await shortage(page)
+  )
+    .getByRole("button", { name: "Продати стільки, скільки є · Готівка" })
+    .click();
+  await expect.poll(() => sent.length).toBe(2);
+  expect(sent[1]?.lines).toEqual(sent[0]?.lines);
+  expect(sent[1]?.credit).toEqual({
+    customer_name: "Ігор",
+    customer_phone: "0501234567",
+    paid_now: "1000.00",
+  });
+  expect(sent[1]?.missing_in_store).toEqual([{ line_index: 0, quantity: 1 }]);
+  expect(sent[1]?.found_in_store).toEqual([]);
+  expect(sent[1]?.payment_method).toBe("CASH");
+});
+
+test("«На полиці немає жодної — продати решту» in parts: the sums said are the rest's — the tray's «Зараз · винен», the basket sheet's «Лишиться винен» beside «На полиці немає — не продається» (audit 2026-11-22, sale P2-1; review)", async ({
+  page,
+}) => {
+  const iris = randomUUID();
+  await goods(page, [{ variant: iris, name: "Пальто Ірис", price: "1000.00" }]);
+  // Asked about «Лоран» twice: the second time, the answer given stands.
+  const sent = await stubSale(page, { requested: 1, available: 0 }, 2);
+  await onTheTill(page);
+  await cell(page).click();
+  await page
+    .getByRole("group", { name: "Пальто Ірис", exact: true })
+    .locator(`button.size-cell[data-stock="${iris}:${fixture.size_id}"]`)
+    .click();
+  await tray(page).locator(".tray-basket").click();
+  const basket = page.getByRole("dialog", { name: "Кошик" });
+  await expect(basket).toHaveAttribute("data-ready", "");
+  await basket.getByLabel("Оплата частинами").check();
+  await basket.getByLabel("Ім’я покупця").fill("Ігор");
+  await basket.getByLabel("Телефон покупця").fill("0501234567");
+  await basket.getByLabel(/^Сплачує зараз/).fill("500");
+  await basket.getByLabel(/^Сплачує зараз/).press("Enter");
+  await expect(basket).toHaveCount(0);
+  const said = page.locator(".pay-total");
+  await expect(said).toHaveText(/^Зараз 500,00\sгрн · винен 2\s350,00\sгрн$/);
+  await pay(page, "Готівка").click();
+  await (
+    await shortage(page)
+  )
+    .getByRole("button", {
+      name: "На полиці немає жодної — продати решту · Готівка",
+    })
+    .click();
+  await expect.poll(() => sent.length).toBe(2);
+  expect(sent[1]?.missing_in_store).toEqual([{ line_index: 0, quantity: 0 }]);
+  expect(sent[1]?.credit?.paid_now).toBe("500.00");
+  // Asked again, nothing sold: what is said owing is the coat sold.
+  await shortage(page);
+  await expect(said).toHaveText(/^Зараз 500,00\sгрн · винен 500,00\sгрн$/);
+  await page.keyboard.press("Escape");
+  await expect(question(page)).toHaveCount(0);
+  await tray(page).locator(".tray-basket").click();
+  await expect(basket).toHaveAttribute("data-ready", "");
+  await expect(
+    basket.getByText("На полиці немає — не продається"),
+  ).toBeVisible();
+  await expect(basket.getByText("Лишиться винен 500,00 грн")).toBeVisible();
+});
+
+test("an answer the terms held back is never sent beside the next one for that line: «На місці лише 1» held, then «Товар на місці — продати 2» sends that alone — the server takes one answer a line (audit 2026-11-22, sale P2-1; review)", async ({
+  page,
+}) => {
+  await goods(page);
+  const sent = await stubSale(page, { requested: 2, available: 1 });
+  await onTheTill(page);
+  await coats(page, 2);
+  await tray(page).locator(".tray-basket").click();
+  const basket = page.getByRole("dialog", { name: "Кошик" });
+  await expect(basket).toHaveAttribute("data-ready", "");
+  await basket.getByLabel("Оплата частинами").check();
+  await basket.getByLabel("Ім’я покупця").fill("Ігор");
+  await basket.getByLabel("Телефон покупця").fill("0501234567");
+  await basket.getByLabel(/^Сплачує зараз/).fill("3000");
+  await basket.getByLabel(/^Сплачує зараз/).press("Enter");
+  await expect(basket).toHaveCount(0);
+  await pay(page, "Готівка").click();
+  const sheet = await shortage(page);
+  await sheet.getByLabel("На місці фактично є, шт.").fill("1");
+  await sheet
+    .getByRole("button", { name: "Продати стільки, скільки є · Готівка" })
+    .click();
+  await expect(basket.getByRole("alert")).toContainText("це звичайний продаж");
+  // Opened by the answer: a tap before it is ready is let go.
+  await expect(basket).toHaveAttribute("data-ready", "");
+  await basket.getByRole("button", { name: "Готово", exact: true }).click();
+  await (
+    await shortage(page)
+  )
+    .getByRole("button", { name: "Товар на місці — продати 2 · Готівка" })
+    .click();
+  await expect.poll(() => sent.length).toBe(2);
+  expect(sent[1]?.found_in_store).toEqual([{ line_index: 0, quantity: 1 }]);
+  expect(sent[1]?.missing_in_store).toEqual([]);
+  expect(sent[1]?.credit?.paid_now).toBe("3000.00");
 });
 
 test("«Вношу продаж з паперу» is a switch row under the search, 44 high, over the list — the same switch «Ще» shows", async ({

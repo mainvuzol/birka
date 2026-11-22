@@ -18,12 +18,13 @@ import uuid
 from collections.abc import AsyncIterator
 
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import func, insert, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from sqlalchemy.ext.asyncio import create_async_engine as new_engine
 
 from app.modules.authz.permissions import DEFAULT_ROLE_PERMISSIONS, Permission, RoleCode
 from app.modules.damaged.models import IN_BIN, DamagedUnit
+from app.modules.identity.models import AppUser
 from app.modules.inventory.models import MovementReason, MovementType, StockMovement
 from app.modules.inventory.service import find_divergences
 from tests.conftest import requires_database
@@ -84,6 +85,20 @@ async def step(maker, shops: TwoShops, unit: str, action: str, payload=None, **s
         )
     async with api(maker, who) as client:
         return await client.post(f"/api/v1/damaged-units/{unit}/{action}", json=payload or {})
+
+
+async def another_person(maker: async_sessionmaker[AsyncSession]) -> uuid.UUID:
+    """A second person the database knows. Of two at once, either may win and
+    write the move under their own name: an id no one has fails the
+    transfer's foreign key whenever it wins (CI, 2026-11-22)."""
+    person = uuid.uuid4()
+    async with maker() as session, session.begin():
+        await session.execute(
+            insert(AppUser.__table__).values(
+                id=person, telegram_user_id=uuid.uuid4().int % 2**62, display_name="Іра"
+            )
+        )
+    return person
 
 
 async def units_left_add_up(maker, shops: TwoShops, bin_: uuid.UUID, variant: str, size: str):
@@ -304,7 +319,14 @@ async def test_two_people_returning_one_unit_at_once_move_it_once(maker):
     destination = {"destination_location_id": str(shops.shared_warehouse)}
     first, second = await asyncio.gather(
         step(maker, shops, unit["id"], "return-to-sale", destination),
-        step(maker, shops, unit["id"], "return-to-sale", destination, user_id=uuid.uuid4()),
+        step(
+            maker,
+            shops,
+            unit["id"],
+            "return-to-sale",
+            destination,
+            user_id=await another_person(maker),
+        ),
     )
     assert first.status_code == second.status_code == 200
     async with maker() as session:

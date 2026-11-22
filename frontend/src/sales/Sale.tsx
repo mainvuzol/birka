@@ -82,6 +82,43 @@ function asPrice(typed: string): string {
 }
 
 /**
+ * What will be sold, in kopecks: each line's price by what it sells — a
+ * line answered «на місці лише N» sells N, «на полиці немає жодної» none
+ * (owner decision, 2026-10-01; Q-G). With no answer it is the basket. The
+ * sale sends by it and checks the terms by it; the tray's «Разом», «Зараз ·
+ * винен» and the sheet's «Лишиться винен» say it, so the debt said is the
+ * debt recorded (audit 2026-11-22, sale P2-1).
+ */
+function soldKopecks(
+  draft: readonly Draft[],
+  missing: Record<number, number>,
+): bigint {
+  return draft.reduce(
+    (sum, d, index) =>
+      sum +
+      (kopecks(d.line.unit_price) ?? 0n) *
+        BigInt(missing[index] ?? d.line.quantity),
+    0n,
+  );
+}
+
+/**
+ * A line's answers about the shelf, that line's own left out. The server
+ * takes one per line — found, missing or its size clarified — and refuses
+ * a sale saying two of the same goods: an answer the terms held back (the
+ * sheet opened, nothing sent) is never sent beside the one given after it
+ * (audit 2026-11-22, sale P2-1; review).
+ */
+function besides(
+  answers: Record<number, number>,
+  index: number,
+): Record<number, number> {
+  return Object.fromEntries(
+    Object.entries(answers).filter(([key]) => Number(key) !== index),
+  );
+}
+
+/**
  * The till.
  *
  * Two things make this screen different from reserving an order. It takes
@@ -641,13 +678,7 @@ export function Sale({
     const empty = draft.filter((_, index) => nextMissing[index] === 0);
     const emptyShelf = draft.length > 0 && empty.length === draft.length;
     // What will be sold: a line answered «на місці лише N» sells N.
-    const sold = draft.reduce(
-      (sum, d, index) =>
-        sum +
-        (kopecks(d.line.unit_price) ?? 0n) *
-          BigInt(nextMissing[index] ?? d.line.quantity),
-      0n,
-    );
+    const sold = soldKopecks(draft, nextMissing);
     const terms =
       credit.inParts && !emptyShelf ? checkTerms(credit, sold) : null;
     if (typeof terms === "string") {
@@ -812,11 +843,8 @@ export function Sale({
     );
   }
 
-  const total = draft.reduce(
-    (sum, d) =>
-      sum + (kopecks(d.line.unit_price) ?? 0n) * BigInt(d.line.quantity),
-    0n,
-  );
+  // What is sold as the shelf's answers stand: the sum said (P2-1).
+  const total = soldKopecks(draft, missing);
   const shortIndex = shortfall ? indexOf(shortfall) : -1;
   const shortDraft = shortIndex >= 0 ? draft[shortIndex] : undefined;
   // Whether the short line's model is held at its warehouse with its size not
@@ -1368,8 +1396,12 @@ export function Sale({
                                 [shortIndex]:
                                   shortfall.requested - shortfall.available,
                               };
+                              const nextFound = besides(found, shortIndex);
+                              const nextMissing = besides(missing, shortIndex);
                               setClarified(next);
-                              answer(found, missing, next);
+                              setFound(nextFound);
+                              setMissing(nextMissing);
+                              answer(nextFound, nextMissing, next);
                             }}
                           >
                             Розмір з етикетки — продати як{" "}
@@ -1390,8 +1422,15 @@ export function Sale({
                                 [shortIndex]:
                                   shortfall.requested - shortfall.available,
                               };
+                              const nextMissing = besides(missing, shortIndex);
+                              const nextClarified = besides(
+                                clarified,
+                                shortIndex,
+                              );
                               setFound(next);
-                              answer(next, missing, clarified);
+                              setMissing(nextMissing);
+                              setClarified(nextClarified);
+                              answer(next, nextMissing, nextClarified);
                             }}
                           >
                             Товар на місці — продати {shortfall.requested}
@@ -1404,8 +1443,15 @@ export function Sale({
                           disabled={working}
                           onClick={() => {
                             const next = { ...missing, [shortIndex]: 0 };
+                            const nextFound = besides(found, shortIndex);
+                            const nextClarified = besides(
+                              clarified,
+                              shortIndex,
+                            );
                             setMissing(next);
-                            answer(found, next, clarified);
+                            setFound(nextFound);
+                            setClarified(nextClarified);
+                            answer(nextFound, next, nextClarified);
                           }}
                         >
                           {/* An empty shelf recorded takes no money. */}
@@ -1447,8 +1493,15 @@ export function Sale({
                                 return;
                               }
                               const next = { ...missing, [shortIndex]: count };
+                              const nextFound = besides(found, shortIndex);
+                              const nextClarified = besides(
+                                clarified,
+                                shortIndex,
+                              );
                               setMissing(next);
-                              answer(found, next, clarified);
+                              setFound(nextFound);
+                              setClarified(nextClarified);
+                              answer(nextFound, next, nextClarified);
                             }}
                           >
                             Продати стільки, скільки є{how}

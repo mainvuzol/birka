@@ -47,6 +47,16 @@ export const fieldLabels: Record<string, string> = {
   category_context: "категорія",
   ENTITY_NEEDS_REVIEW: "стан товару потребує перевірки",
 };
+/** «Не збігається: колір, матеріал»: where what was typed says otherwise
+ * than a candidate, by the server's `conflicts`; none, nothing. The same
+ * line wherever candidates are offered (audit 2026-11-22, goods P1-1). */
+export function conflictsText(conflicts: readonly string[]): string | null {
+  return conflicts.length > 0
+    ? `Не збігається: ${conflicts
+        .map((f) => fieldLabels[f] ?? "ознака потребує перевірки")
+        .join(", ")}`
+    : null;
+}
 export function reviewText(reason: string): string {
   const labels: Record<string, string> = {
     HUMAN_CONFIRMATION_REQUIRED: "Остаточний вибір робить людина.",

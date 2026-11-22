@@ -11822,3 +11822,96 @@ words, «Показати ще» and a failed page's plate: as before.
 - **Known, kept:** back from «Скасовані й повернені на склад» whose retry
   found none, no link stands to put the cursor back on — as before this
   batch, when every page read found none.
+
+## Chosen in chat — 2026-11-22 (audit 2026-11-22, batch 1: an order's day said by what it means; «Схожі» saying where what was typed says otherwise; «Нова модель»'s name fork, as the rename's; the till's sums of what is sold; orders-cash P1-1, goods P1-1, P1-2, sale P2-1)
+
+Chosen by the user from the audit's suggested first batch, «P1s and money
+first». No right, check, journal or step changes; nothing recorded changes.
+What is sent changes only where the person now chooses it in the fork (goods
+P1-2): the same requests as the form's own ways sent.
+
+- **An order's day on its row** (orders-cash P1-1):
+  - «з 21.10» while it waits to be sent (`READY_TO_DISPATCH`) — it waits
+    since then; «замовлено 13.10» in every other status, the card's word —
+    under «Прибув на пошту» «з» read as «at the post office since». By the
+    order's status, not by the place chosen: a search and the card's rows
+    «Замовлення з цією ТТН» show every status. The word and its day never
+    broken apart, as «з» and its day were.
+  - Revises the carrying out of 2026-10-23 (not the owner's): «since when,
+    «з 21.10»» on every row. For the waiting ones it stays.
+  - Still the order's day, `created_at`: the day of each place (sent,
+    arrived, collected, cancelled) waits on В22-З1 (owner pack).
+- **«Схожі» says where what was typed says otherwise** (goods P1-1): under
+  a candidate's name and «Відмінність моделі: …», «Не збігається: колір»
+  — the proposal's rows' words, one helper (`conflictsText`) for both, from
+  the server's `conflicts`. Decided here: a line of the row's grey (`t-meta`),
+  never an error's colour — it tells, it does not refuse; «Це вона» is
+  pressed as before, what is confirmed and sent as before.
+- **«Нова модель» asks a name some models have as the rename does**
+  (goods P1-2): refused as `CATALOG_AMBIGUOUS` with the models it names
+  (`candidate_family_ids`), the sheet asks «З такою назвою вже є модель. Це
+  вона — чи окрема модель зі схожою назвою?» — the rename's fork, one
+  component for both (`NameFork`): the question said politely (a status),
+  no plate; the models as rows with «Це вона», read as the rename reads
+  them; «Окрема модель зі схожою назвою» under them; nothing chosen
+  beforehand, «Додати модель» held until one is (ADR-0002: point at the
+  model, or declare another with what tells it apart — unchanged).
+  - «Це вона»: «Інший колір нашої моделі» with that model, «Модель: …» as a
+    model found by search says it; the colour, the other words and the sizes
+    typed stay. Sent as that way sends: `product_family_id`, no name.
+  - «Окрема модель зі схожою назвою»: the form's own box — one state with
+    it — «Ще ознаки» opened, the cursor in «Чим відрізняється модель».
+  - Revises stage 2's «Refused because the catalogue has a model of that
+    name (`CATALOG_AMBIGUOUS`), it opens by itself» and 2026-11-15's «Not
+    touched: «Окрема модель зі схожою назвою» of «Нова модель»'s own form»:
+    the stage 2 choice was the agent's, not the owner's, and showed one way
+    of two — for a new colour of a model the catalogue has, the way to a
+    double.
+  - Decided here: the fork stands where the refusal's plate stood, under
+    the sheet's title, the cursor on its question as it comes — the sheet's
+    own «Додати модель» it holds would otherwise lose it (review); «Ще
+    ознаки» opens only for «Окрема модель…».
+  - Decided here: while the models are read, their places stand where they
+    will — up to three rows of grey, a name's and «Це вона»'s, unheard —
+    and «Завантажуємо моделі…» is said to a reader alone, beside the fork,
+    not in it: «Окрема модель…» is never the only way in sight, the way to a
+    double (review). The rename's fork, the same component, does it too. A
+    read that fails: its «Не вдалося…» with «Спробувати ще раз», as the
+    rename's.
+  - Decided here: a word the model is told apart by changed — its name, its
+    source or its garment type, as the server's check reads them
+    (`family_candidates`) — the fork goes, and what was chosen in it is
+    forgotten: the other way and what was written for it, and the model
+    «Це вона» chose; the category, the colour and the sizes do not.
+    As the rename's (2026-11-15).
+  - Decided here: a kept operation's refusal, sent again, says what was not
+    recorded, as before — the plate, «Ще ознаки» open; so does a refusal
+    naming no models (a model the catalogue no longer keeps active), and a
+    read of them that finds none of the models it named (review: no fork
+    with «Окрема модель…» alone). Known: the read is the name's first fifty;
+    a model past them is not paged to.
+- **The till's sums are of what is sold** (sale P2-1, financial
+  integrity): after «на місці лише N» or «на полиці немає жодної — продати
+  решту», the tray's «Разом» and «Зараз · винен» and the basket sheet's
+  «Лишиться винен» are counted from what the sale sells, as the sale has
+  sent and checked its terms since 2026-10-01 — one count in kopecks
+  (`soldKopecks`), the basket's when the shelf is not answered. What is
+  sent, the receipt and «Продажу немає» — as before.
+  - The terms' own check says the till server's refusal's words: «Покупець
+    сплачує все одразу (…) — це звичайний продаж. Зніміть «Оплата
+    частинами» або змініть суму.» — the way out may be a smaller sum. The
+    same check on «Клієнт забрав» says it too. «Зніміть» waits on the owner
+    pack's № 13, both sentences together.
+  - Decided here: one answer of the shelf to a line — «товар на місці», «на
+    місці лише N» or «на полиці немає жодної» given to a line replaces that
+    line's other answer, as the till server refuses them together (found,
+    missing and clarified for one stock key, `sales/service.py`); the sums
+    and what is sent are of the last (money review).
+  - Kept as it is: the tray's «Кошик · N» counts what was put in the basket,
+    not what is sold — the basket stays as it was put together, as a sale
+    refused keeps it; only the sums are of what is sold (money review).
+  - Known: the server's own refusal of the same (`PAID_IN_FULL`), said
+    outside the till — «Клієнт забрав» among them — by the shared words
+    (`shared/api.ts`), still ends «Зніміть «Оплата частинами».» with no «або
+    змініть суму»; left to the owner pack's № 13 with the rest (money
+    review).

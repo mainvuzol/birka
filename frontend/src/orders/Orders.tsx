@@ -18,7 +18,7 @@ import { SearchField } from "@/shared/SearchField";
 import { useNextPageFailed } from "@/shared/nextPage";
 import { buzz } from "@/shared/telegram";
 import { Toast } from "@/shared/Toast";
-import { KnotFilter, StatusSticker, placeWords } from "./Knots";
+import { KnotFilter, StatusSticker, dayOf, placeWords } from "./Knots";
 import type { Place } from "./Knots";
 import { placesKey, shippingText } from "./types";
 import type {
@@ -86,16 +86,24 @@ function goesBy(order: Order): string {
     : shippingText(order);
 }
 
-/** « · з 21.10»: since when the order waits, by the phone's own calendar,
- * never broken after «з». */
-export function since(iso: string | null | undefined): string {
-  return iso ? ` · ${sinceDay(iso)}` : "";
+/** « · з 21.10» or « · замовлено 13.10»: an order's day on its row, none
+ * where it has none. */
+export function since(order: Pick<Order, "status" | "created_at">): string {
+  return order.created_at
+    ? ` · ${orderedDay(order.status, order.created_at)}`
+    : "";
 }
 
-/** «з 21.10», alone. */
-export function sinceDay(iso: string): string {
-  const at = new Date(iso);
-  return `з\u00a0${String(at.getDate()).padStart(2, "0")}.${String(at.getMonth() + 1).padStart(2, "0")}`;
+/**
+ * The day an order was made, said by what it means where it stands (audit
+ * 2026-11-22, orders-cash P1-1): «з 21.10» while it waits to be sent — it
+ * waits since then; «замовлено 13.10» in every other status, its card's
+ * word — under «Прибув на пошту» «з» read as «at the post office since».
+ * By its status, not by the place chosen: a search and the card's rows show
+ * every status. By the phone's own calendar, never broken inside.
+ */
+export function orderedDay(status: Status, iso: string): string {
+  return `${status === "READY_TO_DISPATCH" ? "з" : "замовлено"}\u00a0${dayOf(iso)}`;
 }
 
 /** An order's first goods, and how many more lines: its card's title. */
@@ -136,10 +144,10 @@ const verbWords: Record<Next, string> = {
 /**
  * One order as a row tag (spec §6.9; «Усе на бірці» sections task list,
  * P0-1): its eyelet by whose turn it is, its goods — two lines and «+ ще
- * N» — how it goes and since when; never its sum or the way it was paid
- * (G32), nor the eight characters of its id (owner decision, 2026-10-23,
- * В1). Its status a sticker only where no place says it. A tap opens its
- * card; its next step, one verb at the bottom right.
+ * N» — how it goes and its day (`orderedDay`); never its sum or the way it
+ * was paid (G32), nor the eight characters of its id (owner decision,
+ * 2026-10-23, В1). Its status a sticker only where no place says it. A tap
+ * opens its card; its next step, one verb at the bottom right.
  */
 function OrderTag({
   order,
@@ -186,7 +194,7 @@ function OrderTag({
             </span>
             <span className="order-tag-meta t-meta">
               {goesBy(order)}
-              {since(order.created_at)}
+              {since(order)}
             </span>
             {sticker && <StatusSticker status={order.status} />}
           </button>

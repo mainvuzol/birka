@@ -26,7 +26,7 @@ import {
 import type { Command } from "./commands";
 import { KeptCatalog } from "./KeptCatalog";
 import { NewModel } from "./NewModel";
-import { fieldLabels, reviewText, statusLabels } from "./types";
+import { conflictsText, reviewText, statusLabels } from "./types";
 import type { Decision } from "./types";
 import { BackToMore } from "@/shared/More";
 import type { MoreBack } from "@/shared/More";
@@ -684,14 +684,7 @@ function Detail({
                     </span>
                   )}
                   {c.conflicts.length > 0 && (
-                    <span className="t-meta">
-                      Не збігається:{" "}
-                      {c.conflicts
-                        .map(
-                          (f) => fieldLabels[f] ?? "ознака потребує перевірки",
-                        )
-                        .join(", ")}
-                    </span>
+                    <span className="t-meta">{conflictsText(c.conflicts)}</span>
                   )}
                 </span>
                 <button

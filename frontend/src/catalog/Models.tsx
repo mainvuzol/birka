@@ -21,8 +21,7 @@ import { Unread } from "@/shared/Unread";
 import { visible } from "@/shared/visible";
 import { money } from "@/orders/types";
 import type { Store } from "@/orders/types";
-import { familyKind, familyLabel } from "./FamilySearch";
-import type { Family } from "./FamilySearch";
+import { NameFork, forkedFamilies, useForkedFamilies } from "./NameFork";
 import {
   resolveCorrectionCommand,
   submitCorrectionCommand,
@@ -466,25 +465,13 @@ function RenameSheet({
   const edits = useRef(0);
   const [foot, setFoot] = useState<HTMLElement | null>(null);
   const similar = similarFrom(refusal);
-  const candidates =
-    refusal?.code === "CATALOG_AMBIGUOUS" &&
-    Array.isArray(refusal.details.candidate_family_ids)
-      ? (refusal.details.candidate_family_ids as unknown[]).filter(
-          (id): id is string => typeof id === "string",
-        )
-      : [];
-  const families = useQuery({
-    queryKey: ["catalog-model-families", store.id, fields.concept, candidates],
-    queryFn: () =>
-      api<{ items: Family[] }>(
-        `/catalog/families?store_id=${store.id}&query=${encodeURIComponent(
-          fields.concept.trim(),
-        )}&limit=50`,
-        token,
-      ),
-    enabled: candidates.length > 0,
-    retry: false,
-  });
+  const candidates = forkedFamilies(refusal);
+  const families = useForkedFamilies(
+    store.id,
+    token,
+    fields.concept,
+    candidates,
+  );
   const sameAs =
     refusal?.code === "SAME_AS" && typeof refusal.details.same_as === "string"
       ? refusal.details.same_as
@@ -745,77 +732,23 @@ function RenameSheet({
             </section>
           )}
           {candidates.length > 0 && (
-            // The fork as «Нова модель»'s «Схожі» asks it: the question, said
-            // to a reader as it comes but never drawn as a refusal, the models
-            // as rows with «Це вона», «Окрема модель зі схожою назвою» under
-            // them; nothing chosen beforehand, no plate and no circles (audit
-            // 2026-11-13, goods P2-5; review).
-            <section className="rename-fork">
-              <p className="new-model-ask" role="status">
-                З такою назвою вже є модель. Це вона — чи окрема модель зі
-                схожою назвою?
-              </p>
-              {families.isError && (
-                <Unread
-                  error={families.error}
-                  retry={() => {
-                    void families.refetch();
-                  }}
-                />
-              )}
-              {/* In the sheet, white already: rows 64 with no block (audit
-                  2026-11-15, goods P2-2). */}
-              <ul className="new-model-candidates">
-                {(families.data?.items ?? [])
-                  .filter((item) => candidates.includes(item.family_id))
-                  .map((item) => (
-                    <li className="sale-row" key={item.family_id}>
-                      {/* Its name, then what it is, then what tells it
-                          apart — as «Схожі» and the proposal's rows say
-                          it; nothing of its label lost, grouped (audit
-                          2026-11-20, goods P2-3 (б)). */}
-                      <span className="new-model-name">
-                        <strong>{visible(item.concept_name)}</strong>
-                        {familyKind(item) && (
-                          <span className="t-meta">{familyKind(item)}</span>
-                        )}
-                        {item.distinction_note && (
-                          <span className="t-meta">
-                            Відмінність моделі: {visible(item.distinction_note)}
-                          </span>
-                        )}
-                      </span>
-                      <button
-                        type="button"
-                        className="quiet"
-                        aria-pressed={!separate && family === item.family_id}
-                        aria-label={`Це вона: ${familyLabel(item)}`}
-                        onClick={() => {
-                          // A choice changed, felt (spec §4.4; audit
-                          // 2026-11-15, goods P2-3).
-                          if (separate || family !== item.family_id)
-                            buzz("selection");
-                          setFamily(item.family_id);
-                          setSeparate(false);
-                        }}
-                      >
-                        Це вона
-                      </button>
-                    </li>
-                  ))}
-              </ul>
-              <button
-                type="button"
-                className="quiet"
-                aria-pressed={separate}
-                onClick={() => {
-                  if (!separate) buzz("selection");
-                  setSeparate(true);
-                  setFamily(null);
-                }}
-              >
-                Окрема модель зі схожою назвою
-              </button>
+            // The fork as «Нова модель»'s «Схожі» asks it: nothing chosen
+            // beforehand (audit 2026-11-13, goods P2-5; review) — one fork
+            // with «Нова модель»'s own (audit 2026-11-22, goods P1-2).
+            <NameFork
+              families={families}
+              candidates={candidates}
+              chosen={family}
+              separate={separate}
+              choose={(item) => {
+                setFamily(item.family_id);
+                setSeparate(false);
+              }}
+              chooseSeparate={() => {
+                setSeparate(true);
+                setFamily(null);
+              }}
+            >
               {separate && (
                 <label>
                   Чим відрізняється модель
@@ -831,7 +764,7 @@ function RenameSheet({
                   />
                 </label>
               )}
-            </section>
+            </NameFork>
           )}
           {refusal && !similar && !sameAs && candidates.length === 0 && (
             <p role="alert">

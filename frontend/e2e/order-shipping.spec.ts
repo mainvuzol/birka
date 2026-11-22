@@ -569,8 +569,9 @@ test("one waybill on two orders is saved and named, and orders are found by it",
   await expect(page.locator(".order-number")).toHaveText(
     `№ ${second.slice(0, 8)}`,
   );
-  // The other order its row (orders task list, P1-3): its goods, since
-  // when and its pill — never its eight characters (В1).
+  // The other order its row (orders task list, P1-3): its goods, its day
+  // and its pill — never its eight characters (В1). Sent, its day is when
+  // it was ordered (audit 2026-11-22, orders-cash P1-1).
   await expect(
     page.getByText(
       "Ця ТТН є також у замовленні — перевірте, чи це один пакунок.",
@@ -582,7 +583,9 @@ test("one waybill on two orders is saved and named, and orders are found by it",
     .getByRole("button");
   await expect(other).toHaveCount(1);
   await expect(other.locator(".sale-goods")).toHaveText(/^Лоран.* · \S+$/);
-  await expect(other.locator(".sale-meta")).toHaveText(/^з\s\d{2}\.\d{2}$/);
+  await expect(other.locator(".sale-meta")).toHaveText(
+    /^замовлено\u00a0\d{2}\.\d{2}$/,
+  );
   await expect(other.locator(".sticker")).toHaveText("Відправлено");
   await expect(other).not.toContainText(first.slice(0, 8));
   // A tap opens it, and it names this one.

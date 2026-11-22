@@ -47,7 +47,9 @@ export function checkTerms(
   if (paid === null || paid <= 0n)
     return "Вкажіть, скільки покупець сплачує зараз — більше нуля, з точністю до копійок.";
   if (paid >= total)
-    return `Покупець сплачує все одразу (${money(decimal(total))}) — це звичайний продаж. Зніміть «Оплата частинами».`;
+    // As the till's server refusal says it: the way out may be a smaller
+    // sum (audit 2026-11-22, sale P2-1).
+    return `Покупець сплачує все одразу (${money(decimal(total))}) — це звичайний продаж. Зніміть «Оплата частинами» або змініть суму.`;
   return {
     customer_name: name,
     customer_phone: phone,

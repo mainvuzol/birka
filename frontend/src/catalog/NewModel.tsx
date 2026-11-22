@@ -25,8 +25,10 @@ import type { Command } from "./commands";
 import { FamilySearch, familyLabel } from "./FamilySearch";
 import type { Family } from "./FamilySearch";
 import { KeptCatalog } from "./KeptCatalog";
+import { NameFork, forkedFamilies, useForkedFamilies } from "./NameFork";
 import { Similar } from "./Similar";
 import { lengthWrong, similarFrom } from "./modelTypes";
+import { conflictsText } from "./types";
 import type { Decision } from "./types";
 
 const base = "/catalog/match-decisions";
@@ -121,6 +123,16 @@ export function NewModel({
   const [length, setLength] = useState("");
   const [separate, setSeparate] = useState(false);
   const [note, setNote] = useState("");
+  const noteField = useRef<HTMLTextAreaElement>(null);
+  // «Окрема модель зі схожою назвою» chosen in the fork: the cursor goes to
+  // what tells it apart as it opens, as the rename's does.
+  const [askNote, setAskNote] = useState(false);
+  useEffect(() => {
+    if (!askNote) return;
+    setAskNote(false);
+    noteField.current?.focus();
+  }, [askNote]);
+  const fork = useRef<HTMLDivElement>(null);
   const [foot, setFoot] = useState<HTMLElement | null>(null);
   const lengthId = useId();
   // The decisions this sheet sent: a refusal is said only where it was
@@ -174,16 +186,6 @@ export function NewModel({
     variant: variantWords,
     sizes: picked,
   };
-  const modelReady =
-    kind === "colour"
-      ? family !== null
-      : concept.trim() !== "" && (!separate || note.trim() !== "");
-  const creatable =
-    !blocked &&
-    decision !== null &&
-    picked.length > 0 &&
-    lengthValid &&
-    modelReady;
   // A name like one the catalogue uses is refused once (owner decision,
   // 2026-10-03): take the spelling in use, or say this is another name —
   // only while the form holds the words refused.
@@ -200,18 +202,75 @@ export function NewModel({
     refused !== null &&
     (sentHere.includes(refused.decisionId) ||
       refused.decisionId === decision?.decision_id);
+  // Refused as a name some models have already, by this sheet's own send
+  // (audit 2026-11-22, goods P1-2): the fork asks which — one of them, or
+  // another model with what tells it apart (ADR-0002). A kept operation's
+  // refusal says what was not recorded, as before (decided here).
+  const forkIds =
+    refusedHere && ours && !kept && pending === null
+      ? forkedFamilies(error)
+      : [];
+  const sentName =
+    refusedHere && typeof refused.body.concept === "string"
+      ? refused.body.concept
+      : "";
+  const forkFamilies = useForkedFamilies(store.id, token, sentName, forkIds);
+  // Read and none of them found by their name — a model under review, past
+  // the first fifty: a fork with no model to point at would leave one way
+  // alone, so the refusal is said as before (decided here; review).
+  const forked =
+    forkIds.length > 0 &&
+    !(
+      forkFamilies.isSuccess &&
+      !forkFamilies.data.items.some((item) => forkIds.includes(item.family_id))
+    );
+  const modelReady =
+    kind === "colour"
+      ? family !== null
+      : concept.trim() !== "" &&
+        // Asked which, nothing is created until one is chosen.
+        (separate ? note.trim() !== "" : !forked);
+  const creatable =
+    !blocked &&
+    decision !== null &&
+    picked.length > 0 &&
+    lengthValid &&
+    modelReady;
   useEffect(() => {
     if (refusedSimilar && sent !== typed) forgetCatalogRefusal();
   }, [refusedSimilar, sent, typed]);
-  // Refused as a model the catalogue has by that name: the way to say this
-  // is another one, «Окрема модель зі схожою назвою», is in sight.
+  // Refused as a model the catalogue no longer keeps, or a kept operation
+  // refused so: the way to say this is another one, «Окрема модель зі
+  // схожою назвою», is in sight. A name some models have asks its fork
+  // instead, «Ще ознаки» as they were (audit 2026-11-22, goods P1-2).
   const ambiguous =
     refusedHere &&
     error instanceof ApiError &&
-    error.code === "CATALOG_AMBIGUOUS";
+    error.code === "CATALOG_AMBIGUOUS" &&
+    !forked;
   useEffect(() => {
     if (ambiguous) setMore(true);
   }, [ambiguous]);
+  // The fork comes where the refusal's plate stood, under the sheet's
+  // title: the cursor on its question, brought into sight from the button
+  // that sent it — the sheet's own, now held, never keeps it (review).
+  useEffect(() => {
+    if (forked)
+      fork.current?.querySelector<HTMLElement>(".new-model-ask")?.focus();
+  }, [forked]);
+  /** A word the model is told apart by changed — its name, its source or
+   * its garment type (`family_candidates`): the fork answered for the words
+   * as they were, so it goes, and what was chosen in it is forgotten, as
+   * the rename's is (business rules, 2026-11-15; P6 «ничего не угадываем»). */
+  function forgetFork(): void {
+    if (!forked) return;
+    forgetCatalogRefusal();
+    if (separate) {
+      setSeparate(false);
+      setNote("");
+    }
+    if (family !== null && forkIds.includes(family.family_id)) setFamily(null);
+  }
   // A refusal goes with the sheet: the screen under it never says it.
   useEffect(
     () => () => {
@@ -413,10 +472,38 @@ export function NewModel({
         {/* The refusal's own words, a similar name's too: what to do with
             it (owner decision, 2026-10-03) — this sheet's only, never a kept
             operation's refused elsewhere (review). */}
-        {error !== null && ours && (
+        {error !== null && ours && !forked && (
           <p role="alert" className="new-model-refusal">
             {catalogRefusal(error, kept, pending !== null)}
           </p>
+        )}
+        {forked && (
+          // «З такою назвою вже є модель. Це вона — чи окрема модель зі
+          // схожою назвою?» — the rename's fork, no plate (audit 2026-11-22,
+          // goods P1-2). «Це вона»: another colour of that model, what was
+          // typed for the colour and the sizes kept; the other way: this
+          // form's «Окрема модель зі схожою назвою», what tells it apart
+          // asked under «Ще ознаки».
+          <div ref={fork}>
+            <NameFork
+              families={forkFamilies}
+              candidates={forkIds}
+              chosen={kind === "colour" ? (family?.family_id ?? null) : null}
+              separate={kind === "new" && separate}
+              disabled={blocked}
+              choose={(item) => {
+                setKind("colour");
+                setFamily(item);
+                setSeparate(false);
+              }}
+              chooseSeparate={() => {
+                setKind("new");
+                setSeparate(true);
+                setMore(true);
+                setAskNote(true);
+              }}
+            />
+          </div>
         )}
         {step === "raw" ? (
           <label className="new-model-raw">
@@ -464,6 +551,15 @@ export function NewModel({
                       // goods P2-3 (а)).
                       <span className="t-meta">
                         Відмінність моделі: {visible(c.distinction_note)}
+                      </span>
+                    )}
+                    {/* Where what was typed says otherwise — «бордо» typed,
+                        «шоколад» it is — said under it as the proposal's
+                        rows say it, before «Це вона»: a fact, not an error;
+                        nothing held (audit 2026-11-22, goods P1-1). */}
+                    {c.conflicts.length > 0 && (
+                      <span className="t-meta">
+                        {conflictsText(c.conflicts)}
                       </span>
                     )}
                   </span>
@@ -527,6 +623,7 @@ export function NewModel({
                   onKeyDown={enterGoes}
                   onChange={(event) => {
                     setConcept(event.target.value);
+                    forgetFork();
                   }}
                 />
               </label>
@@ -748,6 +845,7 @@ export function NewModel({
                         disabled={blocked}
                         onChange={(event) => {
                           setSource(event.target.value);
+                          forgetFork();
                         }}
                       />
                     </label>
@@ -774,6 +872,7 @@ export function NewModel({
                         disabled={blocked}
                         onChange={(event) => {
                           setGarment(event.target.value);
+                          forgetFork();
                         }}
                       />
                     </label>
@@ -833,6 +932,7 @@ export function NewModel({
                       <label>
                         Чим відрізняється модель
                         <textarea
+                          ref={noteField}
                           enterKeyHint="enter"
                           maxLength={1000}
                           value={note}
