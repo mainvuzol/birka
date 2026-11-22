@@ -11774,3 +11774,51 @@ before.
 - **Known, kept (review):**
   - No journey takes the right away from an open count (above): the
     guard's own lines are read in code, as the entry's always were.
+
+## Chosen in chat — 2026-11-22 (audit 2026-11-20, batch 6: the orders' closed screens read on the server — «Клієнт забрав» only the collected, «Скасовані й повернені на склад» only the cancelled and come back; orders-cash Н3 (б))
+
+Taken as the next after «merged go next»: the last point of the audit that
+waits for no owner's answer. No right, check, journal, step or word
+changes; nothing recorded changes. What each closed screen shows, its rows,
+words, «Показати ще» and a failed page's plate: as before.
+
+- **The server's list reads each closed screen's own** (orders-cash Н3 (б),
+  Backend):
+  - `GET /orders` takes `status=collected` — the collected — and
+    `status=cancelled_or_returned` — those cancelled or come back to the
+    warehouse — besides `open` and `closed`. Newest first, fifty a page as
+    asked, the rights' filter before the page, `has_more`: as every order
+    list.
+  - Decided here: the two names. `closed` stays: an app still open on a
+    phone across the update reads it; the app reads it no more.
+- **«Клієнт забрав» and «Скасовані й повернені на склад» each read their
+  own**:
+  - «Клієнт забрав» reads `collected`, «Скасовані й повернені на склад»
+    `cancelled_or_returned` — none picked out on the phone. A page holds the
+    screen's own or there are none: «Тут посилок немає.» once the first page
+    is read with none.
+  - Revises 2026-11-21 (batch 2) «read on while none of theirs is read»:
+    there is nothing to read past; its known cost — a shop with none
+    cancelled reading every closed order — is gone.
+  - When each is read: the collected on «Клієнт забрав» — and while its
+    search or the cancelled screen stands over it, so the way back finds
+    them as they are, as the closed were — and when nothing is open; the
+    cancelled and come back on «Клієнт забрав» (for its link), on their
+    screen, and when nothing is open. Each read again on a step, on
+    entering and as the app comes back, as before.
+- **The link «Скасовані й повернені на склад ›»**:
+  - Under «Клієнт забрав» once it is answered — its rows, its words or its
+    failure — when their read says there are any. Revises 2026-11-01 «shown
+    when there are any or more pages to read»: their own read says it.
+  - Decided here: also whenever their read failed, the first or one read
+    again since — their screen says the failure where their rows go, its
+    «Спробувати ще раз» reads them again; a failed read never hides the way
+    (review). Either read not answered yet: no link; it comes under the rows
+    and «Показати ще», nothing above it moves.
+- **«Замовлень ще немає.»** — nothing open, and neither the collected nor
+  the cancelled and come back have any; until both are known, the rows'
+  places; either read failed, the list as before (a failed read never says
+  there was no order).
+- **Known, kept:** back from «Скасовані й повернені на склад» whose retry
+  found none, no link stands to put the cursor back on — as before this
+  batch, when every page read found none.

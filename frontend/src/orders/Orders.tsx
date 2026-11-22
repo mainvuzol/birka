@@ -339,11 +339,22 @@ export function Orders({
   const opened = useOrders(store, token, "&status=open", OPEN_PAGE, mayRead);
   const nothingOpen =
     opened.pages.data !== undefined && opened.orders.length === 0;
-  // Read as soon as nothing is open: whether there was ever an order.
-  const closed = useOrders(
+  // The closed, each screen its own read (audit 2026-11-20, orders-cash Н3
+  // (б)): «Клієнт забрав» the collected, «Скасовані й повернені на склад»
+  // the cancelled and come back — the latter on «Клієнт забрав» too, for
+  // its link. Both as soon as nothing is open: whether there was ever an
+  // order.
+  const collectedRead = useOrders(
     store,
     token,
-    "&status=closed",
+    "&status=collected",
+    PAGE,
+    mayRead && (place === "collected" || nothingOpen),
+  );
+  const goneRead = useOrders(
+    store,
+    token,
+    "&status=cancelled_or_returned",
     PAGE,
     mayRead && (place === "collected" || gone || nothingOpen),
   );
@@ -363,9 +374,7 @@ export function Orders({
     sent: inPlace("DISPATCHED"),
     post: inPlace("ARRIVED"),
   };
-  const collected = closed.orders.filter(
-    (order) => order.status === "COLLECTED",
-  );
+  const collected = collectedRead.orders;
   // Those to be sent by their warehouse, for whoever reads the stock: until
   // the warehouses are first read, the rows' places — never one list the
   // labels come over later (orders and «Каса» task list after stage 2,
@@ -379,9 +388,9 @@ export function Orders({
         warehouses.status === "success" ? warehouses.data : undefined,
       )
     : null;
-  const cancelled = closed.orders.filter(
-    (order) => order.status === "CANCELLED" || order.status === "RETURNED",
-  );
+  const cancelled = goneRead.orders;
+  const closedPending =
+    collectedRead.pages.isPending || goneRead.pages.isPending;
   // The open ones counted once every one of them is read.
   const counts =
     opened.pages.data !== undefined && !opened.pages.hasNextPage
@@ -557,81 +566,27 @@ export function Orders({
   const nextFailed = {
     found: useNextPageFailed(found.pages),
     opened: useNextPageFailed(opened.pages),
-    closed: useNextPageFailed(closed.pages),
+    collected: useNextPageFailed(collectedRead.pages),
+    gone: useNextPageFailed(goneRead.pages),
   };
 
-  // The closed orders a screen shows — «Клієнт забрав»'s, or the cancelled
-  // and come back — are picked out on the phone from those read, fifty a
-  // page (audit 2026-11-20, orders-cash Н3): none of them among those read
-  // and more to read, the next page is read at once, their places in grey
-  // meanwhile; a page «Показати ще» brought with none of them is read past
-  // too, the rows as they are. «Тут посилок немає.» once every page is read.
-  const closedHere =
-    search !== ""
-      ? null
-      : gone
-        ? cancelled
-        : place === "collected"
-          ? collected
-          : null;
-  const [closedPressed, setClosedPressed] = useState<{
-    gone: boolean;
-    had: number;
-  } | null>(null);
-  const readingOn =
-    closedHere !== null &&
-    closed.pages.data !== undefined &&
-    closed.pages.hasNextPage &&
-    !nextFailed.closed &&
-    (closedHere.length === 0 ||
-      (closedPressed !== null &&
-        closedPressed.gone === gone &&
-        closedHere.length <= closedPressed.had));
-  const closedFetching = closed.pages.isFetching;
-  const { fetchNextPage: fetchClosed } = closed.pages;
-  useEffect(() => {
-    if (readingOn && !closedFetching) void fetchClosed();
-  }, [readingOn, closedFetching, fetchClosed]);
-  // The press answered — one come, every page read, another screen: let go.
-  // A page that failed keeps it for its retry (review).
-  const closedFailed = nextFailed.closed;
-  useEffect(() => {
-    if (
-      closedPressed !== null &&
-      !readingOn &&
-      !closedFetching &&
-      !closedFailed
-    )
-      setClosedPressed(null);
-  }, [closedPressed, readingOn, closedFetching, closedFailed]);
-  /** The closed rows' place: the rows, their places while read on, or «Тут
-   * посилок немає.» once every page is read. */
+  /** A closed screen's rows: once read, its rows or «Тут посилок немає.» —
+   * the server sends only its own (audit 2026-11-20, orders-cash Н3 (б)),
+   * so a page holds them or there is none. */
   function closedRows(
-    orders: readonly Order[],
+    read: ReturnType<typeof useOrders>,
     label: string,
-  ): JSX.Element | false | null {
-    if (closed.pages.data === undefined) return null;
-    if (orders.length > 0) return rows(orders, label, true);
-    if (readingOn) return places("Завантажуємо замовлення…");
-    return !closed.pages.hasNextPage && empty;
-  }
-  /** «Показати ще» under the closed rows, none while their places stand. */
-  function closedMore(orders: readonly Order[]): JSX.Element | null {
-    if (orders.length === 0 && readingOn) return null;
-    return more(closed.pages, nextFailed.closed, readingOn, () => {
-      setClosedPressed({ gone, had: orders.length });
-    });
+  ): JSX.Element | null {
+    if (read.pages.data === undefined) return null;
+    return read.orders.length > 0 ? rows(read.orders, label, true) : empty;
   }
 
   /** «Показати ще» under the rows read; the next page that could not be
    * read, one plate in its place, its retry reading that page — those read
-   * stay (orders and «Каса» task list after stage 2, P2-6). Held while the
-   * closed are read on. */
+   * stay (orders and «Каса» task list after stage 2, P2-6). */
   function more(
     pages: ReturnType<typeof useOrders>["pages"],
     failed: boolean,
-    reading = false,
-    pressed?: () => void,
   ): JSX.Element | null {
     if (failed)
       return (
@@ -647,9 +602,8 @@ export function Orders({
       <button
         type="button"
         className="list-more"
-        disabled={pages.isFetching || reading}
+        disabled={pages.isFetching}
         onClick={() => {
-          pressed?.();
           void pages.fetchNextPage();
         }}
       >
@@ -679,17 +633,20 @@ export function Orders({
     );
   }
 
-  /** The closed read's state over its rows: its places while it is read,
+  /** A closed read's state over its rows: its places while it is read,
    * what failed — a next page's failure is said where «Показати ще» was. */
-  function closedRead(): JSX.Element | null {
-    return closed.pages.isPending ? (
+  function closedRead(
+    read: ReturnType<typeof useOrders>,
+    nextPageFailed: boolean,
+  ): JSX.Element | null {
+    return read.pages.isPending ? (
       places("Завантажуємо замовлення…")
-    ) : closed.pages.error && !nextFailed.closed ? (
+    ) : read.pages.error && !nextPageFailed ? (
       <Unread
-        error={closed.pages.error}
-        held={closed.pages.isFetching}
+        error={read.pages.error}
+        held={read.pages.isFetching}
         retry={() => {
-          void closed.pages.refetch();
+          void read.pages.refetch();
         }}
       />
     ) : null;
@@ -703,11 +660,15 @@ export function Orders({
     if (place === "collected")
       return (
         <>
-          {closedRead()}
-          {closedRows(collected, placeWords.collected)}
-          {closedMore(collected)}
-          {closed.pages.data !== undefined &&
-            (cancelled.length > 0 || closed.pages.hasNextPage) && (
+          {closedRead(collectedRead, nextFailed.collected)}
+          {closedRows(collectedRead, placeWords.collected)}
+          {more(collectedRead.pages, nextFailed.collected)}
+          {/* Once «Клієнт забрав» is answered: when there are any, or
+              their read failed — their screen says it, its retry reads
+              again; a failed read never hides the way (audit 2026-11-20,
+              orders-cash Н3 (б); review). */}
+          {!collectedRead.pages.isPending &&
+            (cancelled.length > 0 || goneRead.pages.isError) && (
               <button
                 type="button"
                 className="quiet order-rare orders-gone"
@@ -787,9 +748,9 @@ export function Orders({
           }
         />
         <section className="orders">
-          {closedRead()}
-          {closedRows(cancelled, "Скасовані й повернені на склад")}
-          {closedMore(cancelled)}
+          {closedRead(goneRead, nextFailed.gone)}
+          {closedRows(goneRead, "Скасовані й повернені на склад")}
+          {more(goneRead.pages, nextFailed.gone)}
         </section>
       </>
     );
@@ -915,12 +876,14 @@ export function Orders({
                 />
               )
             ) : nothingOpen &&
-              (closed.pages.isPending ||
-                (closed.pages.data !== undefined &&
-                  closed.orders.length === 0)) ? (
+              collected.length === 0 &&
+              cancelled.length === 0 &&
+              (closedPending ||
+                (collectedRead.pages.data !== undefined &&
+                  goneRead.pages.data !== undefined)) ? (
               // Whether there was ever an order: until it is known, the
               // places; never one, the words that teach what an order is.
-              closed.pages.isPending ? (
+              closedPending ? (
                 places("Завантажуємо замовлення…")
               ) : (
                 // Nothing yet (spec §6.28): a blank tag drawn, the words

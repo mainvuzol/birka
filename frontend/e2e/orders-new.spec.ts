@@ -230,7 +230,7 @@ async function stub(page: Page, server: Server): Promise<void> {
         const open = new URL(request.url()).searchParams.get("status");
         await route.fulfill({
           json: {
-            orders: open === "closed" ? [] : server.orders,
+            orders: open === "open" || open === null ? server.orders : [],
             has_more: false,
           },
         });
