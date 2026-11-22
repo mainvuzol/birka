@@ -146,6 +146,13 @@ Mutants (mutate84, 27, each against its journey): 27/27 caught.
   answer sent beside the next; «продати решту» counted whole; the terms'
   old words.
 
+CI (Auto-fix): the backend's second database pass failed once on a test
+this batch does not touch, `test_damaged_units`' two people returning one
+unit at once — its second person an id no one has: whenever that one won
+the race, the transfer it wrote failed its foreign key. The second person
+is a real user now (`another_person`). Proven with that person's request
+first: main's test 0/8, the fixed 8/8; the file's 10 tests pass.
+
 ## The reviews
 
 Two independent reviews read the diff against the audit's points, ADR-0002
