@@ -1762,7 +1762,13 @@ test("inside Telegram «Прийшов товар» is felt: a warehouse, a mode
   await expect(sheet.getByRole("alert")).toHaveText(
     "Закупівельну ціну вкажіть у гривнях, до копійок, наприклад 1850,50.",
   );
+  // Read with its field, while it stands (audit 2026-11-22, goods P2-4).
+  await expect(price).toHaveAttribute("aria-invalid", "true");
+  await expect(price).toHaveAccessibleDescription(
+    "Закупівельну ціну вкажіть у гривнях, до копійок, наприклад 1850,50.",
+  );
   await price.fill("");
+  await expect(price).not.toHaveAttribute("aria-describedby", /./);
   await receiveWayDone(sheet);
   // The same line twice: said at «Додати ще модель», felt as an error.
   await up.click();

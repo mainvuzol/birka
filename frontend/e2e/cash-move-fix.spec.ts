@@ -686,6 +686,98 @@ test("«Внести в касу»: one kind, nothing to choose, Бірка's ke
   expect((await taps()) - keyed).toBe(3);
 });
 
+test("inside Telegram «Видати з каси» and «Внести в касу» ask before Бірка closes while a sum is typed, as the count does — wiped, the sheet closed or the cash recorded, no longer (audit 2026-11-22, orders-cash P2-1)", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const host = window as unknown as {
+      TelegramWebviewProxy: {
+        postEvent: (event: string, data: string) => void;
+      };
+      told: [string, unknown][];
+    };
+    host.told = [];
+    host.TelegramWebviewProxy = {
+      postEvent: (event, data) => {
+        host.told.push([event, data ? (JSON.parse(data) as unknown) : null]);
+      },
+    };
+  });
+  const asked = async (): Promise<unknown> =>
+    (
+      await page.evaluate(() =>
+        (window as unknown as { told: [string, unknown][] }).told
+          .filter(([event]) => event === "web_app_setup_closing_behavior")
+          .map(([, data]) => data),
+      )
+    ).at(-1) ?? null;
+  const asks = { need_confirmation: true };
+  const asksNot = { need_confirmation: false };
+  const server = await stub(page, { now: drawer(), method: sale });
+  await page.goto("about:blank");
+  // Telegram's question came with 6.2.
+  await page.goto(launch({ version: "6.2" }));
+  await openStore(page, /^Каса CASH/);
+  await cash(page);
+  expect(await asked()).not.toEqual(asks);
+  // A sum typed asks; wiped, no longer.
+  await page
+    .getByRole("button", { name: "Видати з каси", exact: true })
+    .click();
+  const out = await moveSheet(page, "Видати з каси");
+  await out
+    .getByRole("group", { name: "Кому чи на що" })
+    .getByRole("button", { name: "Витрати", exact: true })
+    .click();
+  await keyIn(page, ["5", "0", "0"]);
+  await expect.poll(asked).toEqual(asks);
+  await keyIn(page, ["Стерти", "Стерти", "Стерти"]);
+  await expect(sum(page)).toHaveValue("");
+  await expect.poll(asked).toEqual(asksNot);
+  // Typed again, the sheet closed by Telegram's «Назад»: no longer.
+  await keyIn(page, ["5", "0", "0"]);
+  await expect.poll(asked).toEqual(asks);
+  await page.evaluate(() => {
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        data: JSON.stringify({ eventType: "back_button_pressed" }),
+        source: window.parent,
+      }),
+    );
+  });
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect.poll(asked).toEqual(asksNot);
+  // Recorded: no longer.
+  await page
+    .getByRole("button", { name: "Видати з каси", exact: true })
+    .click();
+  const again = await moveSheet(page, "Видати з каси");
+  await again
+    .getByRole("group", { name: "Кому чи на що" })
+    .getByRole("button", { name: "Витрати", exact: true })
+    .click();
+  await keyIn(page, ["5", "0", "0"]);
+  await expect.poll(asked).toEqual(asks);
+  await moveButton(page).click();
+  await expect(
+    page.getByText("Записано: Витрати, 500,00 грн.", { exact: true }),
+  ).toBeVisible();
+  await expect.poll(asked).toEqual(asksNot);
+  // «Внести в касу» the same.
+  await page
+    .getByRole("button", { name: "Внести в касу", exact: true })
+    .click();
+  await moveSheet(page, "Внести в касу");
+  await keyIn(page, ["1", "0", "0"]);
+  await expect.poll(asked).toEqual(asks);
+  await page.getByRole("button", { name: "Внести 100,00 грн" }).click();
+  await expect(
+    page.getByText("Записано: Розмін, 100,00 грн.", { exact: true }),
+  ).toBeVisible();
+  await expect.poll(asked).toEqual(asksNot);
+  expect(server.sent.movements).toHaveLength(2);
+});
+
 test("cash taken out and refused is said over the panel, the sum kept and the cursor in it; pressed again it is a new command (cash task list, P1-2)", async ({
   page,
 }) => {

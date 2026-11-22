@@ -81,6 +81,9 @@ export function SaleLinks({
   fixHeld?: boolean;
   returnSale?: (() => void) | undefined;
 }): JSX.Element {
+  // «Оформити повернення» heard with its question (audit 2026-11-22, sale
+  // P2-2).
+  const returnAsk = useId();
   return (
     <>
       {fixWay ? (
@@ -103,10 +106,15 @@ export function SaleLinks({
         // A sale is never changed: a mistake is returned, then sold again
         // (I8), as from the till's receipt.
         <p className="hint return-offer">
-          Помилилися з товаром чи ціною?{" "}
+          <span id={returnAsk}>Помилилися з товаром чи ціною?</span>{" "}
           {/* A link of its sentence, as the till's receipt's (spec S11 №9;
-              audit 2026-11-18, frame P2-1 (б)). */}
-          <button type="button" className="text-button" onClick={returnSale}>
+              audit 2026-11-18, frame P2-1 (б)), read with it. */}
+          <button
+            type="button"
+            className="text-button"
+            aria-describedby={returnAsk}
+            onClick={returnSale}
+          >
             Оформити повернення
           </button>
         </p>

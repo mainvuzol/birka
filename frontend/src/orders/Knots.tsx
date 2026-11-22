@@ -114,7 +114,8 @@ function standing(status: Status): { done: number; at: number | null } {
  * The string on an order's card (spec S17): the places passed filled in
  * their colours, the one it stands at a ring, those to come hollow; under
  * «До відправлення» the day it was ordered, under «Відправлено» the day of
- * its last sending. The server keeps no day for the other two. Collected,
+ * its last sending. The server records the other two's days but does not
+ * send them yet (audit 2026-11-22, orders-cash Н1; В22-З1). Collected,
  * its last knot tied; cancelled or come back, no place is its own, and a
  * sticker says which.
  */

@@ -1956,6 +1956,11 @@ test("a collected order whose way is not given to this person offers no «Змі
   await expect(
     page.getByRole("button", { name: "Оформити повернення" }),
   ).toBeVisible();
+  // Heard with its question, as the till's receipt's (audit 2026-11-22,
+  // sale P2-2).
+  await expect(
+    page.getByRole("button", { name: "Оформити повернення" }),
+  ).toHaveAccessibleDescription("Помилилися з товаром чи ціною?");
 });
 
 /** Two frames painted: what an answer drew is on the screen. */
@@ -2408,6 +2413,71 @@ test("outside Telegram a toast stands 16 over the card's dock where the dock sta
   const high = await where();
   expect(high.dock.bottom).toBeLessThan(high.toast.top);
   expect(Math.round(high.menu - high.toast.bottom)).toBe(16);
+});
+
+test("inside Telegram «Клієнт забрав» in parts asks before Бірка closes once what is paid now is typed, as «Внесок» with the same terms: a name and a phone alone ask nothing; «Оплата частинами» off, the sheet closed or the order collected, no longer (audit 2026-11-22, orders-cash P2-1)", async ({
+  page,
+}) => {
+  const server: Server = {
+    order: order({ status: "ARRIVED", total: "3000.00" }),
+    sent: [],
+  };
+  // A Telegram that asks before closing: from 6.2.
+  await open(page, server, undefined, "7.0");
+  const closing = async (): Promise<unknown> =>
+    (
+      await page.evaluate(() =>
+        (window as unknown as { told: [string, unknown][] }).told
+          .filter(([event]) => event === "web_app_setup_closing_behavior")
+          .map(([, data]) => data),
+      )
+    ).at(-1) ?? null;
+  const asks = { need_confirmation: true };
+  const asksNot = { need_confirmation: false };
+  let taking = await ways(page);
+  const inParts = taking.getByLabel("Оплата частинами");
+  const paid = taking.getByLabel("Сплачує зараз, грн");
+  await inParts.check();
+  await taking.getByLabel("Ім’я покупця").fill("Оксана");
+  await taking.getByLabel("Телефон покупця").fill("0501234567");
+  // Long enough for a question to be asked, were one.
+  await wait(page, 300);
+  expect(await closing()).not.toEqual(asks);
+  await paid.fill("1000");
+  await expect.poll(closing).toEqual(asks);
+  await inParts.uncheck();
+  await expect.poll(closing).toEqual(asksNot);
+  await inParts.check();
+  await paid.fill("1000");
+  await expect.poll(closing).toEqual(asks);
+  // Telegram's «Назад»: the sheet closed, nothing sent, the question gone.
+  await page.evaluate(() => {
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        data: JSON.stringify({ eventType: "back_button_pressed" }),
+        source: window.parent,
+      }),
+    );
+  });
+  await expect(taking).toHaveCount(0);
+  await expect.poll(closing).toEqual(asksNot);
+  expect(server.sent).toEqual([]);
+  // Collected in parts: the sheet goes, and the question with it. A press
+  // the moment «Клієнт забрав» is back is let go (review, 2026-11-01).
+  await wait(page, 700);
+  taking = await ways(page);
+  await taking.getByLabel("Оплата частинами").check();
+  await taking.getByLabel("Ім’я покупця").fill("Оксана");
+  await taking.getByLabel("Телефон покупця").fill("0501234567");
+  await taking.getByLabel("Сплачує зараз, грн").fill("1000");
+  await expect.poll(closing).toEqual(asks);
+  await taking
+    .getByRole("group", { name: "Зараз, у магазині" })
+    .getByRole("button", { name: "Готівка", exact: true })
+    .click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect.poll(() => server.sent.length).toBe(1);
+  await expect.poll(closing).toEqual(asksNot);
 });
 
 test("«Відправити»'s sheet: the parcel by its warehouses, Нова пошта's one line and Укрпошта's none, abroad its note and no customer's data; Enter puts the keyboard away and sends nothing; while typed Telegram asks before closing, and its «Назад» closes the sheet («Усе на бірці» sections task list, P0-3)", async ({

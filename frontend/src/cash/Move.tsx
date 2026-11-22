@@ -8,7 +8,7 @@ import { NoCustomerData } from "@/shared/NoCustomerData";
 import type { JournalOutcome } from "@/shared/journal";
 import { SendingLine } from "@/shared/Sending";
 import { Sheet } from "@/shared/Sheet";
-import { buzz } from "@/shared/telegram";
+import { buzz, useAskBeforeClosing } from "@/shared/telegram";
 import { cashErrorText, dayOf } from "./errors";
 import { movementDone } from "./format";
 import { directionOf, movementLabels } from "./types";
@@ -87,6 +87,11 @@ export function Move({
   // p. 6; review).
   const cents = amount.trim() === "" ? null : typedKopecks(amount);
   const unread = amount.trim() !== "" && cents === null;
+  // A sum typed and not yet recorded: Telegram asks before Бірка closes, as
+  // the count does (spec §4.4, rule 2; В-Т7 (а); audit 2026-11-22,
+  // orders-cash P2-1). Recorded or closed, the sheet goes and the question
+  // with it.
+  useAskBeforeClosing(amount.trim() !== "");
   const sum = cents !== null && cents > 0n ? cents : null;
 
   async function record(): Promise<void> {

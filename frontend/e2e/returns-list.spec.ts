@@ -597,8 +597,34 @@ test("the other stores are offered from two letters under this store's results, 
     )
     .toBe(true);
   await expect(offer).toHaveCount(0);
-  // Back in one tap, what was typed kept.
-  await page.getByRole("button", { name: "У своєму магазині" }).click();
+  // Back in one tap, what was typed kept — «У цьому магазині», as
+  // «Внесок»'s; at 360 no wider than «У своєму магазині» was, nothing out
+  // of the screen (audit 2026-11-22, sale P2-3). Under 480 the toolbar
+  // stands the way under the heading, as it did.
+  await page.setViewportSize({ width: 360, height: 640 });
+  const back = page.getByRole("button", {
+    name: "У цьому магазині",
+    exact: true,
+  });
+  const [now, before] = await back.evaluate((node) => {
+    const was = node.cloneNode(true) as HTMLElement;
+    const words = was.lastChild;
+    if (!words) throw new Error("no words");
+    words.textContent = "У своєму магазині";
+    node.after(was);
+    const widths = [
+      node.getBoundingClientRect().width,
+      was.getBoundingClientRect().width,
+    ];
+    was.remove();
+    return widths;
+  });
+  expect(now).toBeGreaterThan(0);
+  expect(now).toBeLessThanOrEqual(before ?? 0);
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(360);
+  await back.click();
   await expect(
     page.getByRole("heading", { name: "В інших магазинах мережі" }),
   ).toHaveCount(0);

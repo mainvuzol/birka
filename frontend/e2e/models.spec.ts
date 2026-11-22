@@ -542,6 +542,74 @@ test("a duplicate is merged after a preview, its stock moving to the model that 
   ).toBe(false);
 });
 
+test("a size nobody knows in the merge's preview is «?», heard «розмір невідомий», «? — розмір невідомий» under the cells — never «UNKNOWN»; at 360 in both themes (audit 2026-11-22, goods P2-1)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  const bearer = await token(page);
+  const name = `Злиття ${randomUUID().slice(0, 8)}`;
+  const colour = colours();
+  await duplicate(page, bearer, name, colour);
+  // The duplicate's stock as the server names a size nobody knows: by its
+  // code (catalog `UNKNOWN_SIZE_CODE`), as a legacy opening list keeps it.
+  await page.route(
+    (url) => /\/catalog\/models\/[^/]+\/merge\/[^/]+$/.test(url.pathname),
+    async (route) => {
+      const response = await route.fetch();
+      const preview = (await response.json()) as {
+        stock: { size_label: string | null }[];
+      };
+      await route.fulfill({
+        response,
+        json: {
+          ...preview,
+          stock: preview.stock.map((line) => ({
+            ...line,
+            size_label: "UNKNOWN",
+          })),
+        },
+      });
+    },
+  );
+  await enter(page, "Моделі");
+  await open(page, name, new RegExp(colour.typo));
+  await way(page, "Об’єднати з іншою");
+  await page.getByLabel("Модель, що лишиться").fill(name);
+  await foundModels(page)
+    .getByRole("button", { name: `${name} ${colour.right}`, exact: true })
+    .click();
+  const goes = page.getByRole("group", {
+    name: `${name} ${colour.typo}`,
+    exact: true,
+  });
+  const staying = page.getByRole("group", {
+    name: `${name} ${colour.right}`,
+    exact: true,
+  });
+  await expect(
+    goes.getByRole("list", { name: "Склад повернень" }).getByRole("listitem"),
+  ).toHaveText(["розмір невідомий — 3 шт.?3"]);
+  await expect(goes.locator(".size-letter")).toHaveText("?");
+  await expect(goes.locator(".cell-note")).toHaveText("? — розмір невідомий");
+  // The model that stays knows its size: no note.
+  await expect(
+    staying
+      .getByRole("list", { name: "Склад повернень" })
+      .getByRole("listitem"),
+  ).toHaveText(["M — 2 шт.M2"]);
+  await expect(staying.locator(".cell-note")).toHaveCount(0);
+  await expect(page.getByText(/UNKNOWN/)).toHaveCount(0);
+  for (const scheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(360);
+    await page.screenshot({
+      path: `test-results/models-merge-unknown-size-${scheme}.png`,
+    });
+  }
+});
+
 test("nothing is merged into a retired model: the preview says so and the merge stays shut", async ({
   page,
 }) => {
@@ -1222,6 +1290,50 @@ test("the rename's fork says each model as «Схожі» does: its name, what i
     new_model: false,
     distinction_note: null,
   });
+});
+
+test("a model's tag says what tells it from another of its name — «Відмінність моделі: довге» under its name, in the forks' words; a model with none says nothing; at 360 in both themes (audit 2026-11-22, goods P2-3 (а))", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  const bearer = await token(page);
+  const name = `Відмінність ${randomUUID().slice(0, 8)}`;
+  await model(page, bearer, { concept: name, variant: { color: "графіт" } }, 0);
+  await model(
+    page,
+    bearer,
+    {
+      concept: name,
+      new_model: true,
+      distinction_note: "довге",
+      variant: { color: "чорний" },
+    },
+    0,
+  );
+  await enter(page, "Моделі");
+  await open(page, name, /чорний/);
+  const told = page.getByText("Відмінність моделі: довге", { exact: true });
+  await expect(told).toBeVisible();
+  await expect(told).toHaveClass(/\bt-meta\b/);
+  // Under its name.
+  const heading = await page.locator("h1.model-hero-name").boundingBox();
+  const line = await told.boundingBox();
+  if (!heading || !line) throw new Error("not laid out");
+  expect(line.y).toBeGreaterThan(heading.y + heading.height - 1);
+  for (const scheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(360);
+    await page.screenshot({
+      path: `test-results/models-tag-distinction-${scheme}.png`,
+    });
+  }
+  await page.emulateMedia({ colorScheme: "light" });
+  // The other, with none: no line.
+  await enter(page, "Моделі");
+  await open(page, name, /графіт/);
+  await expect(page.getByText(/^Відмінність моделі:/)).toHaveCount(0);
 });
 
 test("«Моделі» is the owner's and managers' alone", async ({ page }) => {
