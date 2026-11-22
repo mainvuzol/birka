@@ -1167,7 +1167,9 @@ function CorrectStep({
             )}
             {problem && <p role="alert">{problem}</p>}
             {!valid ? (
-              <p>Оберіть день.</p>
+              // The field's hint, in pencil, as every hint under a field of
+              // «Каса» (audit 2026-11-22, orders-cash Д1).
+              <p className="hint">Оберіть день.</p>
             ) : events.isPending ? (
               <Placeholder
                 said="Завантажуємо операції…"

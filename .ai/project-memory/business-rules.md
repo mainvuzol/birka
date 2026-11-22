@@ -11915,3 +11915,79 @@ P1-2): the same requests as the form's own ways sent.
     (`shared/api.ts`), still ends «Зніміть «Оплата частинами».» with no «або
     змініть суму»; left to the owner pack's № 13 with the rest (money
     review).
+
+## Chosen in chat — 2026-11-22 (audit 2026-11-22, batch 2: the small points left — «Оформити повернення» heard with its question; one way back from the other stores; the merge's unknown size as «?»; a model's tag naming what tells it apart; the purchase price's line read with its field; the opening line's sizes felt as they change; Telegram asking before closing over a typed cash sum and a part paid; «Оберіть день.» a hint; sale P2-2, P2-3, goods P2-1, P2-3 (а), P2-4, P2-5, orders-cash P2-1, Д1, Д2)
+
+Taken as the next after «merged go next»: the audit's small points that
+wait for no owner's answer and need no backend change, in the sections the
+first batch touched. No right, check, journal or step changes; nothing
+recorded or sent changes.
+
+- **«Оформити повернення» heard with its question** (sale P2-2; the rule of
+  2026-11-22, batch 4 of audit 2026-11-20, carried to its last two places):
+  on the till's receipt and on «Клієнт забрав»'s card, «Помилилися з
+  товаром чи ціною?» is a `<span id>`, the link read with it
+  (`aria-describedby`). What is seen: as before.
+- **One way back from the other stores: «← У цьому магазині»** (sale P2-3):
+  «Повернути»'s «← У своєму магазині» says it as «Внесок» and «Покупці» do.
+  - Decided here (the audit's): «цьому», not «своєму» — the store named in
+    the header, plain to whoever keeps several stores and switches between
+    them; as «За цим номером у цьому магазині боргів немає.» and «Склад
+    «Брак» цього магазину…» say it. A reading for the owner, not a
+    question: should she prefer «У своєму магазині», both places change.
+  - Checked: the audit's «the header in one line» held for neither word —
+    under 480 px every toolbar stands its way under its title
+    (`.toolbar` wraps), as this one did; the way back is narrower now, the
+    header's look otherwise as before.
+- **The merge's unknown size: «?», heard «розмір невідомий»** (goods P2-1):
+  in «Об’єднати моделі»'s stock cells, a size with no label or the
+  server's code for one nobody knows («UNKNOWN») is «?», heard «розмір
+  невідомий — 3 шт.»; under the cells «? — розмір невідомий», as «Залишки»
+  say it (decided by the audit). It was «UNKNOWN 3». What the merge moves
+  and what holds it: as before.
+  - Checked (the audit's Д4): no organisation size is named «UNKNOWN» —
+    the catalogue refuses that spelling of a size typed
+    (`catalog/service.py`, «UNKNOWN is reserved for a size nobody knows»);
+    the code means one thing, as four other screens already read it.
+- **A model's tag names what tells it apart** (goods P2-3 (а)): in
+  «Моделі», under «Джерело: …», «Відмінність моделі: довге» in grey
+  (`t-meta`) when the model has it — the forks' words (2026-11-22, batch 5
+  of audit 2026-11-20). Decided by the audit: only that, none of the card's
+  other words — it is the one thing that tells two models of one name apart
+  (ADR-0002). (б), the search's rows and the merge's tags, waits for
+  В22-Т1 or a count (Н2), and a server field.
+- **The purchase price's line read with its field** (goods P2-4; the rule
+  of 2026-11-18 «a field said wrong is a line under it», its last place in
+  the goods): in «Як надійшов», «Закупівельну ціну вкажіть у гривнях…» has
+  its id; the field, `aria-invalid`, is read with it (`aria-describedby`)
+  while it stands. When, where and how it is said: as before.
+- **An opening line's sizes felt as they change** (goods P2-5; the rule of
+  2026-11-17 «a choice — `selection`, only when it changes; the one chosen
+  tapped again feels nothing»): a size cell, «?» among them, buzzes when
+  the size changes, or when the tap confirms the size the line reads (the
+  dashed cell, «Схоже на M — торкніться, щоб підтвердити»); tapped again,
+  nothing. The keyboard put away and the choice: as before.
+  - Decided here: the dashed cell's tap is felt though the size stays — it
+    is a choice made, the reading confirmed, as the cell turns from dashed
+    to chosen.
+- **Telegram asks before closing over a sum typed in «Каса» and a part paid
+  at «Клієнт забрав»** (orders-cash P2-1; В-Т7 (а), 2026-10-31, the
+  project's own reading of spec §4.4 rule 2, carried to two forms it
+  missed; the rule itself waits on the owner pack's № 26):
+  - «Видати з каси» / «Внести в касу»: while a sum is typed, as the count
+    does. Wiped, the sheet closed, or the cash recorded: no longer.
+  - «Клієнт забрав»: while «Оплата частинами» is on and «Сплачує зараз»
+    typed, as «Внесок» with the same terms. A name or a phone alone asks
+    nothing, as «Нова накладна»'s note alone (2026-11-14). «Оплата
+    частинами» off, the sheet closed, or the order collected: no longer.
+  - Checked (the audit's Д4): no moment goes unasked between a step on its
+    way and its answer lost — the sheet stays, held, with the sum typed,
+    and a step kept on the phone asks by the app's own rule.
+  - A kept operation, what is sent, the sum's checks, the keypad and the
+    words: as before. Outside Telegram nothing changes.
+- **«Оберіть день.» a hint** (orders-cash Д1): in «Операції дня», under
+  «Інший день», 14/500 in pencil, as every hint under a field of «Каса»; it
+  was the page's ink. Its words and when it shows: as before.
+- **Two comments mended** (orders-cash Д2): the order lists are newest
+  first (owner decision, 2026-10-23), not oldest; the server records the
+  other places' days but does not send them yet (Н1, В22-З1).

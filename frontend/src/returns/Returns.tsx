@@ -336,6 +336,9 @@ export function Returns({
         {away && (
           // Never mixed with this store's: headed, and left in one tap. The
           // section's caption (spec §5; stage 2, orders task list, P0-6).
+          // «У цьому магазині», as «Внесок»'s way back: the store named in
+          // the header, plain to whoever keeps several (audit 2026-11-22,
+          // sale P2-3).
           <div className="toolbar elsewhere-head">
             <h3 className="t-label">В інших магазинах мережі</h3>
             <button
@@ -345,7 +348,7 @@ export function Returns({
                 setElsewhere(false);
               }}
             >
-              <span aria-hidden="true">← </span>У своєму магазині
+              <span aria-hidden="true">← </span>У цьому магазині
             </button>
           </div>
         )}

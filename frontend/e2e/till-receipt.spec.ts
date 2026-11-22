@@ -573,6 +573,11 @@ test("a sale made by mistake is returned from its own receipt, by the usual rule
   await expectTextLink(
     page.getByRole("button", { name: "Оформити повернення" }),
   );
+  // Heard with its question, as the till's other links under theirs (audit
+  // 2026-11-22, sale P2-2).
+  await expect(
+    page.getByRole("button", { name: "Оформити повернення" }),
+  ).toHaveAccessibleDescription("Помилилися з товаром чи ціною?");
   // One tap, and the return of this very sale is open: no search.
   await page.getByRole("button", { name: "Оформити повернення" }).click();
   await expect(page.getByRole("heading", { name: "Повернення" })).toBeVisible();

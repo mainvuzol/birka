@@ -747,6 +747,47 @@ test("inside Telegram a line's answer is its MainButton, naming what is recorded
   await expect(sheet).toHaveCount(0);
 });
 
+test("inside Telegram a line's size is felt only as it changes: the size the line reads, dashed, touched — felt, it is confirmed; touched again — nothing; «?» once, again nothing; back to M, once (audit 2026-11-22, goods P2-5)", async ({
+  page,
+}) => {
+  const { main, felt, pressMain } = await telegram(page);
+  const coat = await model(page);
+  await noListWaits(page, fixture.opening_location_id);
+  await openings(page, "8.0");
+  await pressMain();
+  await warehouse(page, fixture.opening_location_id);
+  await aboutList(page);
+  const source = `Зошит розмірів ${word()}`;
+  await page.getByLabel("Звідки список (необов’язково)").fill(source);
+  await page
+    .getByLabel("Рядки списку — кожен товар з нового рядка, як написано")
+    .fill(`${coat} сірий M 2 шт`);
+  await expect.poll(main).toMatchObject({
+    is_visible: true,
+    is_active: true,
+    text: "Зберегти список",
+  });
+  await pressMain();
+  await expect(page.getByRole("heading", { name: source })).toBeVisible();
+  const editor = await answer(page, 1);
+  const selection = { type: "selection_change" };
+  const read = editor.getByRole("radio", { name: "M", exact: true });
+  await expect(read).toHaveAttribute("aria-checked", "true");
+  await expect(read).toHaveClass(/suggested/);
+  // The line's reading confirmed: felt, though the size stays.
+  await feels(felt, () => read.click(), [selection]);
+  await expect(read).toHaveClass(/chosen/);
+  await feels(felt, () => read.click(), []);
+  const unknown = editor.getByRole("radio", { name: "Розмір невідомий" });
+  await feels(felt, () => unknown.click(), [selection]);
+  await expect(unknown).toHaveAttribute("aria-checked", "true");
+  await feels(felt, () => unknown.click(), []);
+  await feels(felt, () => read.click(), [selection]);
+  await expect(read).toHaveAttribute("aria-checked", "true");
+  // The warehouse free for the journeys after (review).
+  await noListWaits(page, fixture.opening_location_id);
+});
+
 test("inside Telegram «Новий список» is felt: a warehouse chosen anew as a choice, never the one chosen tapped again; «Зберегти список» refused as an error, its answer lost as nothing — it may have been saved —, saved as success (audit 2026-11-15, goods P2-3)", async ({
   page,
 }) => {

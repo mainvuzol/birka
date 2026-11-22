@@ -561,7 +561,21 @@ test("another day is chosen on the calendar: nothing is read until one is, and a
   await expect.poll(() => server.days.length).toBe(2);
   await expect(page.getByLabel("День", { exact: true })).toHaveCount(0);
   await days.getByRole("button", { name: "Інший день", exact: true }).click();
-  await expect(page.getByText("Оберіть день.")).toBeVisible();
+  const pick = page.getByText("Оберіть день.");
+  await expect(pick).toBeVisible();
+  // The field's hint, 14/500 in pencil, never the page's ink (audit
+  // 2026-11-22, orders-cash Д1).
+  expect(
+    await pick.evaluate((node) => {
+      const probe = document.createElement("span");
+      probe.style.color = "var(--pencil)";
+      document.body.append(probe);
+      const pencil = getComputedStyle(probe).color;
+      probe.remove();
+      const look = getComputedStyle(node);
+      return [look.fontSize, look.fontWeight, look.color === pencil];
+    }),
+  ).toEqual(["14px", "500", true]);
   // Long enough for a read to be asked, were one.
   await page.evaluate(
     () =>

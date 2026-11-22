@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { BackToMore } from "@/shared/More";
 import type { MoreBack } from "@/shared/More";
 import type { JSX } from "react";
@@ -143,6 +143,9 @@ export function Receive({
   // (goods task list after stage 2, P1-3).
   const [pricing, setPricing] = useState(false);
   const [costWrong, setCostWrong] = useState(false);
+  // The price's line read with its field, while it stands (audit
+  // 2026-11-22, goods P2-4).
+  const costWrongId = useId();
   const [received, setReceived] = useState<{
     receipt: Receipt;
     names: Draft[];
@@ -865,6 +868,7 @@ export function Receive({
                 placeholder={paidWhenSold(acquisition) ? "обов’язково" : "0,00"}
                 value={cost}
                 aria-invalid={costWrong || undefined}
+                aria-describedby={costWrong ? costWrongId : undefined}
                 onChange={(event) => {
                   setCost(event.target.value);
                   setCostWrong(false);
@@ -873,7 +877,7 @@ export function Receive({
               />
             </label>
             {costWrong && (
-              <p className="field-wrong" role="alert">
+              <p className="field-wrong" role="alert" id={costWrongId}>
                 Закупівельну ціну вкажіть у гривнях, до копійок, наприклад
                 1850,50.
               </p>

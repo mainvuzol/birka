@@ -4,6 +4,7 @@ import { Eyelet } from "@/shared/Eyelet";
 import { methodLabels } from "@/shared/payment";
 import type { PaymentMethod } from "@/shared/payment";
 import { SendingLine } from "@/shared/Sending";
+import { useAskBeforeClosing } from "@/shared/telegram";
 import { Sheet } from "@/shared/Sheet";
 import { Sum } from "@/shared/Sum";
 import { TermsFields, checkTerms, noTerms } from "@/credits/Terms";
@@ -108,6 +109,14 @@ export function Collect({
   useEffect(() => {
     if (refusal !== null) refused.current?.focus();
   }, [refusal]);
+  // Paid in parts with what is paid now typed: Telegram asks before Бірка
+  // closes, as «Внесок» with the same terms does. A name or a phone alone
+  // asks nothing, as «Нова накладна»'s note alone (spec §4.4, rule 2;
+  // В-Т7 (а); audit 2026-11-22, orders-cash P2-1). Collected or closed, the
+  // sheet goes and the question with it; its answer lost, the sheet goes as
+  // the step is kept, and the app's own question for a kept step stands
+  // (the audit's Д4; review).
+  useAskBeforeClosing(credit.inParts && credit.paid.trim() !== "");
   const total = kopecks(order.total) ?? 0n;
   // In parts, what is paid now and what is left, once the part is a sum
   // under the whole, as the till's panel says it.

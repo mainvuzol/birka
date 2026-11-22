@@ -243,9 +243,11 @@ function SizeCells({
             key={option.size_id}
             className={look(size === option.size_id, code.length > 3)}
             onClick={() => {
-              // A choice, felt (spec §4.4); not typing, so the keyboard
-              // goes away (spec §6.3; audit 2026-11-13, goods P2-3).
-              buzz("selection");
+              // A choice, felt (spec §4.4) — when it changes, or confirms
+              // the size the line reads; the one chosen tapped again feels
+              // nothing (audit 2026-11-22, goods P2-5). Not typing, so the
+              // keyboard goes away (spec §6.3; audit 2026-11-13, goods P2-3).
+              if (read || size !== option.size_id) buzz("selection");
               hideKeyboard();
               choose(option.size_id);
             }}
@@ -261,7 +263,7 @@ function SizeCells({
         aria-label="Розмір невідомий"
         className={look(size === "UNKNOWN", false)}
         onClick={() => {
-          buzz("selection");
+          if (read || size !== "UNKNOWN") buzz("selection");
           hideKeyboard();
           choose("UNKNOWN");
         }}

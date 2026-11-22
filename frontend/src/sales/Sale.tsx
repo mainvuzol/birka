@@ -1970,6 +1970,9 @@ function Receipt({
   /** The basket's sizes by stock key, for an answer that names none. */
   sizes: Record<string, string>;
 }): JSX.Element {
+  // «Оформити повернення» heard with its question, as the till's other links
+  // under theirs (audit 2026-11-22, sale P2-2).
+  const returnAsk = useId();
   // The tray goes with the way pressed: the reader starts here, and so does
   // the page — on the title, never a field, so no keyboard opens (spec
   // §6.30; audit 2026-11-15, sale P2-1).
@@ -2134,12 +2137,14 @@ function Receipt({
         // A sale is never changed: a mistake is returned, then sold again
         // (I8; redesign P1-2).
         <p className="hint return-offer">
-          Помилилися з товаром чи ціною?{" "}
+          <span id={returnAsk}>Помилилися з товаром чи ціною?</span>{" "}
           {/* A link of its sentence, never a button's edge (spec S11 №9;
-              audit 2026-11-18, frame P2-1 (б)). */}
+              audit 2026-11-18, frame P2-1 (б)), read with it (audit
+              2026-11-22, sale P2-2). */}
           <button
             type="button"
             className="text-button"
+            aria-describedby={returnAsk}
             onClick={() => {
               returnSale(receipt);
             }}

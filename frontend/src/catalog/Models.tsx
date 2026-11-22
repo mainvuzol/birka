@@ -823,8 +823,11 @@ function StockCells({ lines }: { lines: StockLine[] }): JSX.Element {
           <p className="t-meta">{visible(place.name)}</p>
           <ul className="cells merge-cells" aria-label={visible(place.name)}>
             {place.lines.map((line) => {
-              const size =
-                line.size_label === null ? "розмір" : visible(line.size_label);
+              // No size known — no label, or the server's «UNKNOWN»: «?»,
+              // heard «розмір невідомий», as «Залишки» and every other place
+              // say it (audit 2026-11-22, goods P2-1).
+              const label = unknownSize(line) ? null : line.size_label;
+              const size = label === null ? "розмір невідомий" : visible(label);
               const count =
                 line.quantity === null
                   ? "є залишок, кількість не видно"
@@ -833,7 +836,7 @@ function StockCells({ lines }: { lines: StockLine[] }): JSX.Element {
                 <li className="size-cell merge-cell" key={line.size_id}>
                   <span className="visually-hidden">{`${size} — ${count}`}</span>
                   <span className="size-letter" aria-hidden="true">
-                    {line.size_label === null ? "?" : visible(line.size_label)}
+                    {label === null ? "?" : visible(label)}
                   </span>
                   <span className="size-free" aria-hidden="true">
                     {line.quantity === null ? "є" : line.quantity}
@@ -844,6 +847,11 @@ function StockCells({ lines }: { lines: StockLine[] }): JSX.Element {
           </ul>
         </div>
       ))}
+      {lines.some(unknownSize) && (
+        <p className="cell-note" aria-hidden="true">
+          ? — розмір невідомий
+        </p>
+      )}
       {lines.some((line) => line.quantity === null) && (
         <p className="cell-note" aria-hidden="true">
           є — залишок є, кількість не видно
@@ -851,6 +859,11 @@ function StockCells({ lines }: { lines: StockLine[] }): JSX.Element {
       )}
     </>
   );
+}
+
+/** Stock kept with no size known: no label, or the server's code for it. */
+function unknownSize(line: StockLine): boolean {
+  return line.size_label === null || line.size_label === "UNKNOWN";
 }
 
 /** One of the merge's two models: what becomes of it, its name, its price,
@@ -1505,6 +1518,14 @@ export function Models({
                 {model.source && (
                   <p className="t-row">
                     {wordLabels.source}: {visible(model.source)}
+                  </p>
+                )}
+                {/* What tells it from a model of the same name, as both forks
+                    say it — the one thing that does (ADR-0002; audit
+                    2026-11-22, goods P2-3 (а)). */}
+                {model.distinction_note && (
+                  <p className="t-meta">
+                    Відмінність моделі: {visible(model.distinction_note)}
                   </p>
                 )}
                 {model.merged_into && (

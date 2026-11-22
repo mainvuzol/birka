@@ -293,11 +293,11 @@ function byWarehouse(
  * «Замовлення» (spec S16; «Усе на бірці» sections task list, P0-1): the
  * string of places — «До відправлення», «Відправлено», «Прибув на пошту»
  * counted once every open order is read, «Клієнт забрав» — as the filter,
- * a list a place, oldest first; those to be sent by the warehouse they are
- * taken from; each row's next step on it. Under «Клієнт забрав», the
- * cancelled and come back as a screen of their own. An order found by its
- * waybill as it is typed; «+» for a new one. Read again on every step, as
- * the app comes back, and on entering.
+ * a list a place, newest first (owner decision, 2026-10-23); those to be
+ * sent by the warehouse they are taken from; each row's next step on it.
+ * Under «Клієнт забрав», the cancelled and come back as a screen of their
+ * own. An order found by its waybill as it is typed; «+» for a new one.
+ * Read again on every step, as the app comes back, and on entering.
  */
 export function Orders({
   store,
