@@ -574,6 +574,20 @@ OPEN_STATUSES = frozenset(
     {OrderStatus.READY_TO_DISPATCH, OrderStatus.DISPATCHED, OrderStatus.ARRIVED}
 )
 
+ListStatus = Literal["open", "closed", "collected", "cancelled_or_returned"]
+
+# What each of the list's reads holds (orders task list, P0-1; audit
+# 2026-11-20, orders-cash Н3 (б)): the open ones; every closed one; those
+# the customer took — «Клієнт забрав»; those cancelled or come back to the
+# warehouse — «Скасовані й повернені на склад». Each screen reads its own,
+# never picked out on the phone from the closed.
+LIST_STATUSES: dict[ListStatus, frozenset[OrderStatus]] = {
+    "open": OPEN_STATUSES,
+    "closed": frozenset(OrderStatus) - OPEN_STATUSES,
+    "collected": frozenset({OrderStatus.COLLECTED}),
+    "cancelled_or_returned": frozenset({OrderStatus.CANCELLED, OrderStatus.RETURNED}),
+}
+
 
 async def open_order_count(
     session: AsyncSession, *, organization_id: uuid.UUID, store_id: uuid.UUID
@@ -666,17 +680,22 @@ async def list_orders(
     limit: int = 50,
     offset: int = 0,
     waybill: str | None = None,
-    status: Literal["open", "closed"] | None = None,
+    status: ListStatus | None = None,
 ) -> dict[str, Any]:
     """Filter every source's current permission before ordering and pagination.
 
     `waybill` finds the orders whose waybill holds it, however either is
-    spaced (owner decision, 2026-10-01). `status` reads the open ones —
-    still to send or on their way — or the closed ones (orders task list,
-    P0-1); newest first, as every order is (owner decision, 2026-10-23)."""
+    spaced (owner decision, 2026-10-01). `status` reads one of
+    `LIST_STATUSES` — the open ones, the closed, the collected, or the
+    cancelled and come back; newest first, as every order is (owner
+    decision, 2026-10-23)."""
     scope.require(Permission.SALE_VIEW, store_id)
     wanted = waybill_key(waybill or "")
-    open_ = CustomerOrder.status.in_([each.value for each in OPEN_STATUSES])
+    statuses = (
+        [CustomerOrder.status.in_(sorted(each.value for each in LIST_STATUSES[status]))]
+        if status is not None
+        else []
+    )
     orders = list(
         (
             await session.scalars(
@@ -686,7 +705,7 @@ async def list_orders(
                     CustomerOrder.store_id == store_id,
                     ~_unreadable(scope, store_id),
                     *([CustomerOrder.waybill_key.contains(wanted)] if wanted else []),
-                    *([open_] if status == "open" else [~open_] if status == "closed" else []),
+                    *statuses,
                 )
                 .order_by(CustomerOrder.created_at.desc(), CustomerOrder.id.desc())
                 .limit(limit + 1)

@@ -35,6 +35,7 @@ from app.modules.cash.current import sale_methods
 from app.modules.credit import service as credit_service
 from app.modules.orders.models import Carrier, Destination
 from app.modules.orders.service import (
+    ListStatus,
     OrderLineInput,
     change_shipping,
     create_order,
@@ -223,9 +224,11 @@ async def list_page(
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
     waybill: Annotated[CleanText | None, Query(max_length=64)] = None,
-    # The open ones or the closed (orders task list, P0-1), newest first as
-    # every order is (owner decision, 2026-10-23); every order without it.
-    status: Literal["open", "closed"] | None = None,
+    # The open ones, the closed, the collected, or the cancelled and come
+    # back (orders task list, P0-1; audit 2026-11-20, orders-cash Н3 (б)),
+    # newest first as every order is (owner decision, 2026-10-23); every
+    # order without it.
+    status: ListStatus | None = None,
 ) -> dict[str, Any]:
     page = await list_orders(
         session,

@@ -153,13 +153,15 @@ interface Server {
   placesRefused?: boolean;
   /** How many times the warehouses were asked. */
   placesAsked?: number;
-  /** Pages refused once, by what was asked: «open||100», «closed||50»,
-   * «|2045|50». */
+  /** Pages refused once, by what was asked: «open||100», «collected||50»,
+   * «cancelled_or_returned||0», «|2045|50». */
   pageFails?: Set<string>;
   /** An order's own read answered only once this opens. */
   detailHeld?: Promise<void>;
-  /** The closed past their first page answered only once this opens. */
-  closedLater?: Promise<void>;
+  /** The cancelled and come back answered only once this opens. */
+  goneHeld?: Promise<void>;
+  /** The collected answered only once this opens. */
+  collectedHeld?: Promise<void>;
 }
 
 async function stub(page: Page, server: Server): Promise<void> {
@@ -181,8 +183,10 @@ async function stub(page: Page, server: Server): Promise<void> {
         return;
       }
       if (waybill !== null && waybill === server.heldFor) await server.gate;
-      if (status === "closed" && offset > 0 && server.closedLater)
-        await server.closedLater;
+      if (status === "cancelled_or_returned" && server.goneHeld)
+        await server.goneHeld;
+      if (status === "collected" && server.collectedHeld)
+        await server.collectedHeld;
       if (status === "open" && server.openHeld) await server.openHeld;
       if (status === "open" && server.openFails) {
         await route.fulfill({
@@ -191,15 +195,19 @@ async function stub(page: Page, server: Server): Promise<void> {
         });
         return;
       }
+      // Each closed screen its own (audit 2026-11-20, orders-cash Н3 (б)).
       const closed = ["COLLECTED", "CANCELLED", "RETURNED"];
+      const gone = ["CANCELLED", "RETURNED"];
       const all =
         waybill !== null
           ? (server.found[waybill] ?? [])
           : status === "open"
             ? server.open.filter((each) => !closed.includes(each.status))
-            : status === "closed"
-              ? server.closed
-              : [...server.open, ...server.closed];
+            : status === "collected"
+              ? server.closed.filter((each) => each.status === "COLLECTED")
+              : status === "cancelled_or_returned"
+                ? server.closed.filter((each) => gone.includes(each.status))
+                : [...server.open, ...server.closed];
       // Newest first, a page may hold the last row of the one before: an
       // order made meanwhile moves the pages' edge.
       const start = offset > 0 ? offset - 1 : offset;
@@ -567,7 +575,7 @@ test("the string of places is the filter: «До відправлення 3 · �
   expect(first && menu && first.y + first.height <= menu.y).toBe(true);
   // The closed: not read until their place is chosen.
   await settle(page);
-  expect(orders.asked.filter((asked) => asked.startsWith("closed|"))).toEqual(
+  expect(orders.asked.filter((asked) => !asked.startsWith("open|"))).toEqual(
     [],
   );
 
@@ -1396,153 +1404,196 @@ test("more than a hundred open: «Показати ще» reads the rest, a row 
   await expect(closedRows).toHaveCount(55);
 });
 
-test("«Скасовані й повернені на склад» with none among the fifty newest closed reads the next page at once, its places in grey meanwhile; every page read, «Тут посилок немає.», never a «Показати ще» alone (audit 2026-11-20, orders-cash Н3)", async ({
+/** What the closed screens asked, in order: never the closed whole. */
+function closedAsked(orders: Server): string[] {
+  return orders.asked.filter((asked) => !asked.startsWith("open|"));
+}
+
+test("«Клієнт забрав» reads only the collected, «Скасовані й повернені на склад» only the cancelled and come back: sixty cancelled newer than three collected — the three at once, no places, no «Показати ще»; the sixty fifty and «Показати ще»; never the closed whole (audit 2026-11-20, orders-cash Н3 (б))", async ({
   page,
 }) => {
-  const done = Array.from({ length: 55 }, (_, index) =>
-    order({ status: "COLLECTED", created_at: ago(1 + index / 10) }),
+  const cancelled = Array.from({ length: 60 }, (_, index) =>
+    order({
+      status: index % 2 === 0 ? "CANCELLED" : "RETURNED",
+      created_at: ago(1 + index / 10),
+    }),
   );
-  let later = (): void => undefined;
+  const collected = Array.from({ length: 3 }, (_, index) =>
+    order({ status: "COLLECTED", created_at: ago(20 + index / 10) }),
+  );
   const orders = server({
     open: [order({ created_at: ago(0) })],
-    closed: done,
+    closed: [...cancelled, ...collected],
   });
   await stub(page, orders);
   await enter(page);
   await knot(page, "Клієнт забрав").click();
   const closedRows = rows(page, "Клієнт забрав");
-  await expect(closedRows).toHaveCount(50);
-  orders.closedLater = new Promise<void>((resolve) => {
-    later = resolve;
-  });
-  // More to read: the link stands.
-  await page
-    .getByRole("button", { name: /^Скасовані й повернені на склад/ })
-    .click();
-  await expect
-    .poll(() => orders.asked.filter((asked) => asked.startsWith("closed|")))
-    .toEqual(["closed||0", "closed||50"]);
-  await expect(page.locator(".placeholder .order-tag")).toHaveCount(3);
-  await expect(
-    page.getByRole("status").filter({ hasText: "Завантажуємо замовлення…" }),
-  ).toBeAttached();
-  await expect(page.getByRole("button", { name: "Показати ще" })).toHaveCount(
-    0,
-  );
-  await expect(page.getByText("Тут посилок немає.")).toHaveCount(0);
-  later();
-  await expect(page.getByText("Тут посилок немає.")).toBeVisible();
+  await expect(closedRows).toHaveCount(3);
+  await settle(page);
   await expect(page.locator(".placeholder")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Показати ще" })).toHaveCount(
     0,
   );
-  // Back: «Клієнт забрав» with what was read for it.
-  await page.getByRole("button", { name: "До замовлень" }).click();
-  await expect(closedRows).toHaveCount(55);
+  await expect(page.getByText("Тут посилок немає.")).toHaveCount(0);
+  // Each read once, its own first page; the cancelled for the link.
+  expect(closedAsked(orders).sort()).toEqual([
+    "cancelled_or_returned||0",
+    "collected||0",
+  ]);
+  const link = page.getByRole("button", {
+    name: "Скасовані й повернені на склад",
+  });
+  await link.click();
+  await expect(
+    page.getByRole("heading", { name: "Скасовані й повернені на склад" }),
+  ).toBeFocused();
+  const gone = rows(page, "Скасовані й повернені на склад");
+  await expect(gone).toHaveCount(50);
+  await expect(page.locator(".placeholder")).toHaveCount(0);
+  await page.getByRole("button", { name: "Показати ще" }).click();
+  await expect(gone).toHaveCount(60);
   await expect(page.getByRole("button", { name: "Показати ще" })).toHaveCount(
     0,
   );
+  await expect(
+    page
+      .getByRole("list", { name: "Скасовані й повернені на склад" })
+      .locator(".sticker"),
+  ).toHaveText(
+    Array.from({ length: 60 }, (_, index) =>
+      index % 2 === 0 ? "Скасовано" : "Повернено на склад",
+    ),
+  );
+  // Back: «Клієнт забрав» as it was, the link in focus; nothing read again.
+  await page.getByRole("button", { name: "До замовлень" }).click();
+  await expect(closedRows).toHaveCount(3);
+  await expect(link).toBeFocused();
+  await settle(page);
+  expect(closedAsked(orders).sort()).toEqual([
+    "cancelled_or_returned||0",
+    "cancelled_or_returned||50",
+    "collected||0",
+  ]);
 });
 
-test("«Клієнт забрав» with none collected among the fifty newest closed reads the next page at once, its places in grey meanwhile, never a «Показати ще» alone; «Скасовані й повернені на склад» shows what is read (audit 2026-11-20, orders-cash Н3)", async ({
+test("the link to «Скасовані й повернені на склад» comes once their read says there are some, under «Клієнт забрав» as it stands; none, never — and «Клієнт забрав» fifty at a time on its own (audit 2026-11-20, orders-cash Н3 (б))", async ({
   page,
 }) => {
-  const cancelled = Array.from({ length: 60 }, (_, index) =>
-    order({ status: "CANCELLED", created_at: ago(1 + index / 10) }),
+  const collected = Array.from({ length: 55 }, (_, index) =>
+    order({ status: "COLLECTED", created_at: ago(1 + index / 10) }),
   );
-  const collected = Array.from({ length: 3 }, (_, index) =>
-    order({ status: "COLLECTED", created_at: ago(20 + index / 10) }),
-  );
-  let later = (): void => undefined;
+  let answer = (): void => undefined;
   const orders = server({
     open: [order({ created_at: ago(0) })],
-    closed: [...cancelled, ...collected],
-    closedLater: new Promise<void>((done) => {
-      later = done;
+    closed: [...collected, cancelled],
+    goneHeld: new Promise<void>((done) => {
+      answer = done;
     }),
   });
   await stub(page, orders);
   await enter(page);
   await knot(page, "Клієнт забрав").click();
-  // The second page asked at once: the rows' places, heard, nothing else.
-  await expect
-    .poll(() => orders.asked.filter((asked) => asked.startsWith("closed|")))
-    .toEqual(["closed||0", "closed||50"]);
-  await expect(page.locator(".placeholder .order-tag")).toHaveCount(3);
-  await expect(
-    page.getByRole("status").filter({ hasText: "Завантажуємо замовлення…" }),
-  ).toBeAttached();
-  await expect(page.getByRole("button", { name: "Показати ще" })).toHaveCount(
-    0,
-  );
-  await expect(page.getByText("Тут посилок немає.")).toHaveCount(0);
-  later();
   const closedRows = rows(page, "Клієнт забрав");
-  await expect(closedRows).toHaveCount(3);
-  await expect(page.locator(".placeholder")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Показати ще" })).toHaveCount(
-    0,
-  );
-  await page
-    .getByRole("button", { name: /^Скасовані й повернені на склад/ })
-    .click();
-  await expect(rows(page, "Скасовані й повернені на склад")).toHaveCount(60);
-  expect(orders.asked.filter((asked) => asked.startsWith("closed|"))).toEqual([
-    "closed||0",
-    "closed||50",
+  await expect(closedRows).toHaveCount(50);
+  const link = page.getByRole("button", {
+    name: "Скасовані й повернені на склад",
+  });
+  // Their read not answered: no link yet.
+  await settle(page);
+  await expect(link).toHaveCount(0);
+  answer();
+  await expect(link).toBeVisible();
+  // Under «Показати ще», which stands under the rows.
+  const [more, under] = await Promise.all([
+    page.getByRole("button", { name: "Показати ще" }).boundingBox(),
+    link.boundingBox(),
   ]);
+  expect(more && under && under.y >= more.y + more.height).toBe(true);
+  await page.getByRole("button", { name: "Показати ще" }).click();
+  await expect(closedRows).toHaveCount(55);
+  expect(
+    closedAsked(orders).filter((asked) => asked.startsWith("collected|")),
+  ).toEqual(["collected||0", "collected||50"]);
+
+  // None cancelled or come back: once their read answers, still no link.
+  const goneAnswered = (): Promise<unknown> =>
+    page.waitForResponse((answer) =>
+      answer.url().includes("status=cancelled_or_returned"),
+    );
+  orders.closed = collected;
+  await enter(page);
+  const none = goneAnswered();
+  await knot(page, "Клієнт забрав").click();
+  await expect(closedRows).toHaveCount(50);
+  await none;
+  await settle(page);
+  await expect(link).toHaveCount(0);
+
+  // Some, «Клієнт забрав» not answered yet: the link waits for it, never
+  // under the rows' places (review).
+  let collectedAnswer = (): void => undefined;
+  orders.closed = [...collected, cancelled];
+  orders.collectedHeld = new Promise<void>((done) => {
+    collectedAnswer = done;
+  });
+  await enter(page);
+  const some = goneAnswered();
+  await knot(page, "Клієнт забрав").click();
+  await some;
+  await settle(page);
+  await expect(page.locator(".placeholder .order-tag")).toHaveCount(3);
+  await expect(link).toHaveCount(0);
+  collectedAnswer();
+  await expect(closedRows).toHaveCount(50);
+  await expect(link).toBeVisible();
 });
 
-test("«Показати ще» under «Клієнт забрав» whose page brings none collected reads past it, after that page's retry too, the rows as they are, its button held meanwhile (audit 2026-11-20, orders-cash Н3; review)", async ({
+test("their read failed under «Клієнт забрав»: the link stands, their screen says the failure where their rows go, its retry reads them — none, «Тут посилок немає.» (audit 2026-11-20, orders-cash Н3 (б); decided here)", async ({
   page,
 }) => {
-  const first = Array.from({ length: 50 }, (_, index) =>
-    order({ status: "COLLECTED", created_at: ago(1 + index / 100) }),
-  );
-  const between = Array.from({ length: 60 }, (_, index) =>
-    order({ status: "RETURNED", created_at: ago(2 + index / 100) }),
-  );
-  const last = Array.from({ length: 2 }, (_, index) =>
-    order({ status: "COLLECTED", created_at: ago(3 + index / 100) }),
-  );
   const orders = server({
     open: [order({ created_at: ago(0) })],
-    closed: [...first, ...between, ...last],
-    pageFails: new Set(["closed||50"]),
+    closed: [collected],
+    pageFails: new Set(["cancelled_or_returned||0"]),
   });
   await stub(page, orders);
   await enter(page);
   await knot(page, "Клієнт забрав").click();
-  const closedRows = rows(page, "Клієнт забрав");
-  await expect(closedRows).toHaveCount(50);
-  const more = page.getByRole("button", { name: "Показати ще" });
-  await more.click();
-  // Its page refused: the plate, its retry, the fifty kept.
-  const plate = await pageFailed(page, closedRows.last());
-  let retried = (): void => undefined;
-  let past = (): void => undefined;
-  orders.closedLater = new Promise<void>((done) => {
-    retried = done;
+  await expect(rows(page, "Клієнт забрав")).toHaveCount(1);
+  const link = page.getByRole("button", {
+    name: "Скасовані й повернені на склад",
   });
+  await expect(link).toBeVisible();
+  // Not said on «Клієнт забрав»: its own rows were read (review: once
+  // their read has failed).
+  await expect(page.locator(".notice.read-failure")).toHaveCount(0);
+  await link.click();
+  const plate = page.locator(".notice.read-failure");
+  await expect(plate).toHaveCount(1);
+  await expect(plate).toHaveAttribute("role", "alert");
+  await expect(page.getByText("Тут посилок немає.")).toHaveCount(0);
   await plate.getByRole("button", { name: "Спробувати ще раз" }).click();
-  await expect
-    .poll(() => orders.asked.filter((asked) => asked.startsWith("closed|")))
-    .toEqual(["closed||0", "closed||50", "closed||50"]);
-  orders.closedLater = new Promise<void>((done) => {
-    past = done;
+  await expect(page.getByText("Тут посилок немає.")).toBeVisible();
+  await expect(plate).toHaveCount(0);
+  expect(
+    closedAsked(orders).filter((asked) =>
+      asked.startsWith("cancelled_or_returned|"),
+    ),
+  ).toEqual(["cancelled_or_returned||0", "cancelled_or_returned||0"]);
+  // Back: none to go to, no link.
+  await page.getByRole("button", { name: "До замовлень" }).click();
+  await expect(rows(page, "Клієнт забрав")).toHaveCount(1);
+  await expect(link).toHaveCount(0);
+  // Read again as the app comes back, their read fails: the way stands
+  // again — what was read of them may be old now (review).
+  orders.pageFails?.add("cancelled_or_returned||0");
+  await page.evaluate(() => {
+    window.dispatchEvent(new Event("visibilitychange"));
   });
-  retried();
-  // Its page brought none collected: the next one read at once, the
-  // button held, the fifty as they were.
-  await expect
-    .poll(() => orders.asked.filter((asked) => asked.startsWith("closed|")))
-    .toEqual(["closed||0", "closed||50", "closed||50", "closed||100"]);
-  await expect(more).toBeDisabled();
-  await expect(closedRows).toHaveCount(50);
-  past();
-  await expect(closedRows).toHaveCount(52);
-  await expect(more).toHaveCount(0);
-  await expect(page.locator(".placeholder")).toHaveCount(0);
+  await expect(link).toBeVisible();
+  await expect(rows(page, "Клієнт забрав")).toHaveCount(1);
+  await expect(page.locator(".notice.read-failure")).toHaveCount(0);
 });
 
 /** The one plate where «Показати ще» stood: under the last row, no second
@@ -1581,7 +1632,7 @@ test("a next page that could not be read is one plate where «Показати �
     closed: done,
     found: { "2045": done },
     places: [warehouse(main, "Основний")],
-    pageFails: new Set(["open||100", "closed||50", "|2045|50"]),
+    pageFails: new Set(["open||100", "collected||50", "|2045|50"]),
   });
   await stub(page, orders);
   await enter(page);
@@ -1691,6 +1742,39 @@ test("no order yet says what an order does, with «Нове замовлення
   await expect(
     page.getByText("Зараз нічого не треба відправляти."),
   ).toHaveCount(0);
+
+  // Only cancelled ones: there were orders too — read apart from the
+  // collected, none of which there is (audit 2026-11-20, orders-cash Н3
+  // (б)).
+  orders.closed = [cancelled];
+  await enter(page);
+  await expect(
+    page.getByText("Зараз нічого не треба відправляти."),
+  ).toBeVisible();
+  await expect(page.getByText("Замовлень ще немає.")).toHaveCount(0);
+
+  // None collected, the cancelled not answered yet: the rows' places,
+  // neither words before both are known (review).
+  let goneAnswer = (): void => undefined;
+  orders.closed = [];
+  orders.goneHeld = new Promise<void>((done) => {
+    goneAnswer = done;
+  });
+  const collectedAnswered = page.waitForResponse((answer) =>
+    answer.url().includes("status=collected"),
+  );
+  await enter(page);
+  await collectedAnswered;
+  await settle(page);
+  await expect(page.locator(".placeholder .order-tag")).toHaveCount(3);
+  await expect(
+    page.getByText("Зараз нічого не треба відправляти."),
+  ).toHaveCount(0);
+  await expect(page.getByText("Замовлень ще немає.")).toHaveCount(0);
+  goneAnswer();
+  await expect(page.locator(".orders-empty .t-row")).toHaveText(
+    "Замовлень ще немає.",
+  );
 });
 
 /** The title and «Нове замовлення» as drawn: beside it, 8 px from it or

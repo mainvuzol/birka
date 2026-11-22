@@ -129,6 +129,11 @@ async def test_the_open_orders_come_apart_from_the_closed_newest_first(maker):
     assert await ids(status="open", limit=1, offset=1) == ([second["id"]], True)
     # Collected and cancelled alike, newest first.
     assert await ids(status="closed") == ([collected["id"], cancelled["id"]], False)
+    # Each closed screen its own (audit 2026-11-20, orders-cash Н3 (б)):
+    # «Клієнт забрав» the collected, «Скасовані й повернені на склад» the
+    # cancelled and come back — never picked out on the phone.
+    assert await ids(status="collected") == ([collected["id"]], False)
+    assert await ids(status="cancelled_or_returned") == ([cancelled["id"]], False)
     assert await ids() == (
         [collected["id"], cancelled["id"], sent["id"], second["id"], str(first)],
         False,
@@ -138,6 +143,51 @@ async def test_the_open_orders_come_apart_from_the_closed_newest_first(maker):
             "/api/v1/orders", params={"store_id": str(shop.store_id), "status": "sent"}
         )
     assert wrong.status_code == 422
+
+
+async def test_the_collected_and_the_cancelled_or_returned_read_apart_paged(maker):
+    """«Клієнт забрав» and «Скасовані й повернені на склад» each read only
+    their own, fifty a page as the phone asks, newest first (audit
+    2026-11-20, orders-cash Н3 (б)): an order come back from the post stands
+    with the cancelled, none open or collected among them; a page past
+    either's own says nothing more."""
+    shop, first = await setup(maker)
+    async with maker() as session:
+        await give_stock(session, shop, 1)
+        await session.commit()
+    made = []
+    for _ in range(4):
+        async with maker() as session:
+            made.append(await new_order(session, shop, [shop.location_id]))
+            await session.commit()
+    collected, cancelled, returned, later = made
+    for step in ("dispatch", "arrive", "collect"):
+        await act(maker, shop, uuid.UUID(collected["id"]), step)
+    await act(maker, shop, uuid.UUID(cancelled["id"]), "cancel")
+    await act(maker, shop, uuid.UUID(returned["id"]), "dispatch")
+    await act(maker, shop, uuid.UUID(returned["id"]), "return", reason="Не забрали")
+    for step in ("dispatch", "arrive", "collect"):
+        await act(maker, shop, uuid.UUID(later["id"]), step)
+
+    async def ids(**params):
+        async with api(maker, shop.scope()) as client:
+            answer = await client.get(
+                "/api/v1/orders", params={"store_id": str(shop.store_id), **params}
+            )
+        assert answer.status_code == 200, answer.text
+        body = answer.json()
+        return [order["id"] for order in body["orders"]], body["has_more"]
+
+    assert await ids(status="collected") == ([later["id"], collected["id"]], False)
+    assert await ids(status="collected", limit=1) == ([later["id"]], True)
+    assert await ids(status="collected", limit=1, offset=1) == ([collected["id"]], False)
+    assert await ids(status="collected", offset=2) == ([], False)
+    assert await ids(status="cancelled_or_returned") == (
+        [returned["id"], cancelled["id"]],
+        False,
+    )
+    assert await ids(status="cancelled_or_returned", limit=1) == ([returned["id"]], True)
+    assert await ids(status="open") == ([str(first)], False)
 
 
 async def test_order_private_permissions_and_tenant_store_boundaries(maker):

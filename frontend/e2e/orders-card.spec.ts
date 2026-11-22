@@ -173,13 +173,18 @@ async function stub(page: Page, server: Server): Promise<void> {
     (url) => url.pathname === "/api/v1/orders",
     async (route) => {
       server.listReads = (server.listReads ?? 0) + 1;
-      // Open or closed, as asked; a waybill's search, either.
+      // Open, collected, or cancelled and come back, as asked (audit
+      // 2026-11-20, orders-cash Н3 (б)); a waybill's search, any.
       const asked = new URL(route.request().url()).searchParams.get("status");
-      const closed = ["COLLECTED", "CANCELLED", "RETURNED"].includes(
-        server.order.status,
-      );
+      const holds: Record<string, string[]> = {
+        open: ["READY_TO_DISPATCH", "DISPATCHED", "ARRIVED"],
+        collected: ["COLLECTED"],
+        cancelled_or_returned: ["CANCELLED", "RETURNED"],
+      };
       const listed =
-        asked === null || (asked === "closed") === closed ? [server.order] : [];
+        asked === null || holds[asked]?.includes(server.order.status)
+          ? [server.order]
+          : [];
       await route.fulfill({ json: { orders: listed, has_more: false } });
     },
   );
