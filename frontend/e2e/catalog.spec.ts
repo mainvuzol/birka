@@ -761,6 +761,61 @@ test("«Схожі» says what tells a model apart as the proposal's rows do: «
   await expect(it).toHaveAttribute("aria-pressed", "true");
 });
 
+test("«Схожі» says where what was typed says otherwise, as the proposal's rows do: «Лоран бордо» typed, «Не збігається: колір» under «Лоран шоколад 70 см», a fact in the row's grey, never an alert, «Це вона» beside it and choosing it; at 360 in both themes; «Лоран шоколад» typed, no such line (audit 2026-11-22, goods P1-1)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 740 });
+  await enter(page);
+  const sheet = await create(page, `Лоран бордо ${randomUUID().slice(0, 8)}`);
+  const row = sheet
+    .locator(".new-model-candidates > li")
+    .filter({ has: itIs(page) });
+  const said = row.locator(".new-model-name .t-meta");
+  await expect(said).toHaveText("Не збігається: колір");
+  // Before «Це вона», which stays beside the words; nothing held, nothing
+  // said as an error.
+  await expect(sheet.getByRole("alert")).toHaveCount(0);
+  for (const scheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    await expect(said).toHaveCSS("font-size", "14px");
+    const [name, line, way] = await Promise.all([
+      row.locator(".new-model-name").boundingBox(),
+      said.boundingBox(),
+      itIs(sheet).boundingBox(),
+    ]);
+    if (!name || !line || !way) throw new Error("not laid out");
+    expect(line.height).toBeLessThanOrEqual(2 * 19 + 1);
+    expect(way.x).toBeGreaterThanOrEqual(name.x + name.width - 1);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(360);
+    await page.screenshot({
+      path: `test-results/catalog-similar-conflicts-${scheme}.png`,
+    });
+  }
+  await page.emulateMedia({ colorScheme: "light" });
+  // Chosen anyway, it is the person's to choose — as before.
+  await itIs(sheet).click();
+  await expect(itIs(sheet)).toHaveAttribute("aria-pressed", "true");
+  await expect(confirmAs(sheet)).toBeEnabled();
+  // The proposal's own rows say it in the same words.
+  await leave(page);
+  await expect(
+    page
+      .locator(".new-model-candidates > li")
+      .filter({ has: itIs(page) })
+      .locator(".new-model-name .t-meta"),
+  ).toHaveText("Не збігається: колір");
+  // Typed in the model's own colour: nothing to say.
+  await enter(page);
+  const same = await create(page, `Лоран шоколад ${randomUUID().slice(0, 8)}`);
+  const own = same
+    .locator(".new-model-candidates > li")
+    .filter({ has: itIs(page) });
+  await expect(own).toHaveCount(1);
+  await expect(own.getByText(/^Не збігається/)).toHaveCount(0);
+});
+
 test("catalog navigation requires catalog permission", async ({ page }) => {
   await page.route("**/api/v1/me", async (route) => {
     const response = await route.fetch();
@@ -1182,33 +1237,300 @@ test("a product created says its sizes as the cells do, never the system's code;
   }
 });
 
-test("ambiguous named model retains explicit form then allows a distinct model", async ({
+/** «Нова модель» for «Лоран», a size typed, sent and refused as a name
+ * some models have: the models the refusal names, as the fork reads them. */
+async function refusedAsNamed(
+  page: Page,
+  sheet: Locator,
+): Promise<{ family_id: string }[]> {
+  const read = page.waitForResponse(
+    (r) =>
+      r.request().method() === "GET" &&
+      r.url().includes("/catalog/families?") &&
+      !r.url().includes("offset="),
+  );
+  const refused = page.waitForResponse(
+    (r) => r.url().endsWith("/create-product") && r.status() === 409,
+  );
+  await addModel(sheet).click();
+  const refusal = (await (await refused).json()) as {
+    code: string;
+    details: { candidate_family_ids: string[] };
+  };
+  expect(refusal.code).toBe("CATALOG_AMBIGUOUS");
+  const ids = refusal.details.candidate_family_ids;
+  const { items } = (await (await read).json()) as {
+    items: { family_id: string }[];
+  };
+  return items.filter((item) => ids.includes(item.family_id));
+}
+const forkAsks =
+  "З такою назвою вже є модель. Це вона — чи окрема модель зі схожою назвою?";
+
+test("a name some models have asks its fork in «Нова модель», as the rename does: the question said, never a refusal's plate; the models as rows with «Це вона», «Окрема модель зі схожою назвою» under them, nothing chosen and nothing created until one is; in sight at 360×640 in both themes; «Ще ознаки» as they were. «Це вона», then «Нова модель» again: nothing chosen, held. The other way: the form's own «Окрема модель…» ticked, «Ще ознаки» open, the cursor in what tells it apart — a separate model, as before (audit 2026-11-22, goods P1-2)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  await enter(page);
+  const sheet = await create(page, "Лоран інша модель");
+  await newModel(sheet, "Лоран", "XL");
+  const families = await refusedAsNamed(page, sheet);
+  await expect(sheet.getByLabel("Назва моделі", { exact: true })).toHaveValue(
+    "Лоран",
+  );
+  const fork = sheet.locator(".rename-fork");
+  const question = fork.getByRole("status");
+  await expect(question).toHaveText(forkAsks);
+  // Where the refusal stood, under the title — the cursor on it, in sight:
+  // the sheet's own button it holds never keeps it (review).
+  await expect(question).toBeFocused();
+  await expect(question).toBeInViewport();
+  await expect(sheet.getByRole("alert")).toHaveCount(0);
+  await expect(sheet.getByText(/неоднозначна/)).toHaveCount(0);
+  await expect(
+    sheet.getByRole("button", { name: "Ще ознаки" }),
+  ).toHaveAttribute("aria-expanded", "false");
+  const rows = fork.locator(".new-model-candidates > li");
+  await expect(rows).toHaveCount(families.length);
+  const its = rows.getByRole("button", { name: /^Це вона: / });
+  const apart = fork.getByRole("button", {
+    name: "Окрема модель зі схожою назвою",
+    exact: true,
+  });
+  for (const each of await its.all())
+    await expect(each).toHaveAttribute("aria-pressed", "false");
+  await expect(apart).toHaveAttribute("aria-pressed", "false");
+  await expect(addModel(sheet)).toBeDisabled();
+  await sheetRow(rows.first());
+  await rowTitle(rows.first().locator(".new-model-name strong"));
+  for (const scheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(360);
+    await page.screenshot({
+      path: `test-results/catalog-new-model-fork-${scheme}.png`,
+    });
+  }
+  await page.emulateMedia({ colorScheme: "light" });
+  // «Це вона», then «Нова модель» pressed again: nothing chosen, held.
+  const kind = sheet.getByRole("group", { name: "Яка модель" });
+  await its.first().click();
+  await expect(its.first()).toHaveAttribute("aria-pressed", "true");
+  await kind.getByRole("button", { name: "Нова модель" }).click();
+  await expect(its.first()).toHaveAttribute("aria-pressed", "false");
+  await expect(addModel(sheet)).toBeDisabled();
+  // The other way: the form's own box, one state with it.
+  await apart.click();
+  await expect(apart).toHaveAttribute("aria-pressed", "true");
+  await expect(
+    sheet.getByLabel("Окрема модель зі схожою назвою"),
+  ).toBeChecked();
+  await expect(
+    sheet.getByRole("button", { name: "Ще ознаки" }),
+  ).toHaveAttribute("aria-expanded", "true");
+  const how = sheet.getByLabel("Чим відрізняється модель");
+  await expect(how).toBeFocused();
+  await expect(addModel(sheet)).toBeDisabled();
+  await how.fill("Інший крій для тесту");
+  const sent = page.waitForRequest((r) => r.url().endsWith("/create-product"));
+  await addModel(sheet).click();
+  expect((await sent).postDataJSON()).toMatchObject({
+    concept: "Лоран",
+    new_model: true,
+    distinction_note: "Інший крій для тесту",
+  });
+  await expect(
+    page.getByText("Збережений товар: Лоран. Розміри: XL", {
+      exact: true,
+    }),
+  ).toBeVisible();
+});
+
+test("«Це вона» in «Нова модель»'s fork: another colour of that model — «Інший колір нашої моделі» with it, the colour and the sizes typed kept; created in that model, nothing of a new one sent (audit 2026-11-22, goods P1-2)", async ({
+  page,
+}) => {
+  await enter(page);
+  // A model of its own, so the fork names it alone and the shared
+  // catalogue's «Лоран» gains nothing (review).
+  const name = `Модель ${randomUUID().slice(0, 8)}`;
+  const fresh = await create(page, name);
+  await newModel(fresh, name, "XL");
+  await addModel(fresh).click();
+  await expect(
+    page.getByText(`Збережений товар: ${name}. Розміри: XL`, { exact: true }),
+  ).toBeVisible();
+  await enter(page);
+  const colour = `тест ${randomUUID().slice(0, 8)}`;
+  const sheet = await create(page, `${name} ${colour}`);
+  await newModel(sheet, name, "XL");
+  await sheet.getByLabel("Колір", { exact: true }).fill(colour);
+  const named = await refusedAsNamed(page, sheet);
+  expect(named).toHaveLength(1);
+  const [first] = named;
+  if (!first) throw new Error("no model named");
+  const it = sheet
+    .locator(".rename-fork .new-model-candidates > li")
+    .first()
+    .getByRole("button", { name: /^Це вона: / });
+  const label = ((await it.getAttribute("aria-label")) ?? "").replace(
+    /^Це вона: /,
+    "",
+  );
+  await it.click();
+  await expect(it).toHaveAttribute("aria-pressed", "true");
+  const kind = sheet.getByRole("group", { name: "Яка модель" });
+  await expect(
+    kind.getByRole("button", { name: "Інший колір нашої моделі" }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect(sheet.getByText(/^Модель: /)).toHaveText(`Модель: ${label}`);
+  await expect(sheet.getByLabel("Колір", { exact: true })).toHaveValue(colour);
+  await expect(sizeCell(sheet, "XL")).toHaveAttribute("aria-pressed", "true");
+  await expect(addModel(sheet)).toHaveText("Додати модель · 1 розмір");
+  const sent = page.waitForRequest((r) => r.url().endsWith("/create-product"));
+  const made = page.waitForResponse(
+    (r) => r.url().endsWith("/create-product") && r.status() === 200,
+  );
+  await addModel(sheet).click();
+  const body = (await sent).postDataJSON() as Record<string, unknown>;
+  expect(body.product_family_id).toBe(first.family_id);
+  for (const gone of ["concept", "new_model", "distinction_note"])
+    expect(body).not.toHaveProperty(gone);
+  const result = (await (await made).json()) as {
+    creation: {
+      product_family_id: string;
+      family_created: boolean;
+      variant_created: boolean;
+    };
+  };
+  expect(result.creation.product_family_id).toBe(first.family_id);
+  expect(result.creation.family_created).toBe(false);
+  expect(result.creation.variant_created).toBe(true);
+  await expect(
+    page.getByText(
+      new RegExp(`^Збережений товар: ${name}.* ${colour}.*\\. Розміри: XL$`),
+    ),
+  ).toBeVisible();
+});
+
+test("a word of the name changed after «Нова модель»'s fork forgets it and what was chosen in it, as the rename's does: the other way chosen and written, the name changed — no question, «Окрема модель…» unticked, what tells it apart gone, the model creatable as typed; «Це вона» chosen, the name changed under «Нова модель» — that model forgotten for «Інший колір нашої моделі» (audit 2026-11-22, goods P1-2)", async ({
   page,
 }) => {
   await enter(page);
   const sheet = await create(page, "Лоран інша модель");
   await newModel(sheet, "Лоран", "XL");
-  const response = page.waitForResponse(
+  await refusedAsNamed(page, sheet);
+  const fork = sheet.locator(".rename-fork");
+  const name = sheet.getByLabel("Назва моделі", { exact: true });
+  await fork
+    .getByRole("button", { name: "Окрема модель зі схожою назвою" })
+    .click();
+  await sheet.getByLabel("Чим відрізняється модель").fill("Інший крій");
+  await name.fill("Лоран Б");
+  await expect(fork).toHaveCount(0);
+  await expect(sheet.getByText(forkAsks)).toHaveCount(0);
+  await expect(
+    sheet.getByLabel("Окрема модель зі схожою назвою"),
+  ).not.toBeChecked();
+  await expect(sheet.getByLabel("Чим відрізняється модель")).toHaveCount(0);
+  await expect(addModel(sheet)).toBeEnabled();
+  // Asked again, «Це вона», then the name changed under «Нова модель».
+  await name.fill("Лоран");
+  await refusedAsNamed(page, sheet);
+  await fork
+    .locator(".new-model-candidates > li")
+    .first()
+    .getByRole("button", { name: /^Це вона: / })
+    .click();
+  const kind = sheet.getByRole("group", { name: "Яка модель" });
+  await expect(sheet.getByText(/^Модель: /)).toBeVisible();
+  await kind.getByRole("button", { name: "Нова модель" }).click();
+  await name.fill("Лоран В");
+  await expect(fork).toHaveCount(0);
+  await kind.getByRole("button", { name: "Інший колір нашої моделі" }).click();
+  await expect(sheet.getByText(/^Модель: /)).toHaveCount(0);
+  await expect(sheet.getByLabel("Пошук моделі в каталозі")).toBeVisible();
+});
+
+test("the fork's models read slowly: their rows' places stand where they will, a name's and «Це вона»'s in grey, unheard; «Завантажуємо моделі…» said to a reader alone, beside the fork — «Окрема модель…» never the only way in sight; come, the rows where they stood (audit 2026-11-22, goods P1-2; review)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  let answer = (): void => undefined;
+  // Let go by itself in ten seconds, should the journey fail before it
+  // answers: no read is left hanging as it ends.
+  const held = new Promise<void>((resolve) => {
+    answer = resolve;
+    setTimeout(resolve, 10_000);
+  });
+  await enter(page);
+  const sheet = await create(page, "Лоран інша модель");
+  await newModel(sheet, "Лоран", "XL");
+  await page.route("**/api/v1/catalog/families?*", async (route) => {
+    await held;
+    await route.fallback();
+  });
+  const refused = page.waitForResponse(
     (r) => r.url().endsWith("/create-product") && r.status() === 409,
   );
   await addModel(sheet).click();
-  await response;
-  await expect(sheet.getByLabel("Назва моделі", { exact: true })).toHaveValue(
-    "Лоран",
+  const { details } = (await (await refused).json()) as {
+    details: { candidate_family_ids: string[] };
+  };
+  const fork = sheet.locator(".rename-fork");
+  await expect(fork.getByRole("status")).toHaveText(forkAsks);
+  const grey = fork.locator(".new-model-candidates > li[aria-hidden='true']");
+  await expect(grey).toHaveCount(
+    Math.min(details.candidate_family_ids.length, 3),
   );
-  // The way to say it is another model is in sight, «Ще ознаки» open.
+  await expect(grey.first().locator(".skeleton-name")).toBeVisible();
+  await expect(grey.first().locator(".skeleton-choose")).toBeVisible();
+  await expect(grey.first()).toBeInViewport();
+  await expect(
+    sheet.getByRole("status").filter({ hasText: "Завантажуємо моделі…" }),
+  ).toHaveClass(/\bvisually-hidden\b/);
+  await expect(fork.getByText("Завантажуємо моделі…")).toHaveCount(0);
+  await expect(fork.getByRole("button", { name: /^Це вона: / })).toHaveCount(0);
+  await expect(addModel(sheet)).toBeDisabled();
+  const from = (await fork.boundingBox())?.y ?? 0;
+  const before = await grey.first().boundingBox();
+  answer();
+  const rows = fork.locator(".new-model-candidates > li:not([aria-hidden])");
+  await expect(rows.first()).toBeVisible();
+  await expect(grey).toHaveCount(0);
+  await expect(sheet.getByText("Завантажуємо моделі…")).toHaveCount(0);
+  const after = await rows.first().boundingBox();
+  const to = (await fork.boundingBox())?.y ?? 0;
+  expect(
+    Math.abs((after?.y ?? 0) - to - ((before?.y ?? 0) - from)),
+  ).toBeLessThanOrEqual(4);
+});
+
+test("a read of the fork's models that finds none of them says the refusal as before — its plate, «Ще ознаки» open on «Окрема модель зі схожою назвою»; no fork with that way alone (audit 2026-11-22, goods P1-2; review)", async ({
+  page,
+}) => {
+  await enter(page);
+  const sheet = await create(page, "Лоран інша модель");
+  await newModel(sheet, "Лоран", "XL");
+  // As a model under review, or past the name's first fifty, is read.
+  await page.route("**/api/v1/catalog/families?*", async (route) => {
+    const response = await route.fetch();
+    const read = (await response.json()) as Record<string, unknown>;
+    await route.fulfill({ response, json: { ...read, items: [] } });
+  });
+  const read = page.waitForResponse((r) =>
+    r.url().includes("/catalog/families?"),
+  );
+  await addModel(sheet).click();
+  await read;
+  await expect(sheet.getByRole("alert")).toContainText("Модель неоднозначна");
+  await expect(sheet.locator(".rename-fork")).toHaveCount(0);
+  await expect(sheet.getByText(forkAsks)).toHaveCount(0);
   await expect(
     sheet.getByRole("button", { name: "Ще ознаки" }),
   ).toHaveAttribute("aria-expanded", "true");
-  await sheet.getByLabel("Окрема модель зі схожою назвою").check();
-  await sheet
-    .getByLabel("Чим відрізняється модель")
-    .fill("Інший крій для тесту");
-  await addModel(sheet).click();
   await expect(
-    page.getByText("Збережений товар: Лоран. Розміри: XL", {
-      exact: true,
-    }),
+    sheet.getByLabel("Окрема модель зі схожою назвою"),
   ).toBeVisible();
 });
 

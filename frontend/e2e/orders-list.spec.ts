@@ -607,7 +607,7 @@ test("the string of places is the filter: «До відправлення 3 · �
   await knot(page, "Прибув на пошту 2").click();
   await expect(rows(page, "Прибув на пошту")).toHaveCount(2);
   await expect(rows(page, "Прибув на пошту").first()).toContainText(
-    `Укрпошта · ТТН 0505012345678 · з\u00a0${short(arrived.created_at as string)}`,
+    `Укрпошта · ТТН 0505012345678 · замовлено\u00a0${short(arrived.created_at as string)}`,
   );
   await expect(
     page
@@ -1430,6 +1430,14 @@ test("«Клієнт забрав» reads only the collected, «Скасован
   await knot(page, "Клієнт забрав").click();
   const closedRows = rows(page, "Клієнт забрав");
   await expect(closedRows).toHaveCount(3);
+  // Their day is when they were ordered, the card's word: never «з …» —
+  // nothing waits (audit 2026-11-22, orders-cash P1-1).
+  await expect(closedRows.locator(".order-tag-meta")).toHaveText(
+    Array.from(
+      { length: 3 },
+      () => /^[^·]+ · [^·]+ · замовлено\u00a0\d{2}\.\d{2}$/,
+    ),
+  );
   await settle(page);
   await expect(page.locator(".placeholder")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Показати ще" })).toHaveCount(
@@ -1455,6 +1463,12 @@ test("«Клієнт забрав» reads only the collected, «Скасован
   await expect(gone).toHaveCount(60);
   await expect(page.getByRole("button", { name: "Показати ще" })).toHaveCount(
     0,
+  );
+  await expect(gone.locator(".order-tag-meta")).toHaveText(
+    Array.from(
+      { length: 60 },
+      () => /^[^·]+ · [^·]+ · замовлено\u00a0\d{2}\.\d{2}$/,
+    ),
   );
   await expect(
     page
@@ -2312,7 +2326,7 @@ for (const [name, theme] of [
     await knot(page, "Відправлено 2").click();
     const far = rows(page, "Відправлено").last();
     await expect(far.locator(".order-tag-meta")).toHaveText(
-      `За кордон · ${note.slice(0, 60)}… · з\u00a0${short(abroad.created_at as string)}`,
+      `За кордон · ${note.slice(0, 60)}… · замовлено\u00a0${short(abroad.created_at as string)}`,
     );
     const tag = await page.locator("article.order-tag").last().boundingBox();
     const meta = await far.locator(".order-tag-meta").boundingBox();
