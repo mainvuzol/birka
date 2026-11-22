@@ -7,6 +7,7 @@ import {
   section,
   expectOneSticker,
   expectEmpty,
+  expectAskedLink,
   tillWays,
   tokenColour,
 } from "./fixtures";
@@ -405,20 +406,32 @@ test("«Покупці» says who they are, the store's block what it is owed, l
     "Покупець з’являється тут, коли купує частинами. Ім’я й телефон боргу зберігаємо рік після того, як його закрито, і 3 роки після списання.",
   );
   await expect(
-    page.getByRole("button", { name: /^Борг магазину, що зараз не працює\?/ }),
+    page.getByRole("button", {
+      name: "Шукати за цим номером",
+      exact: true,
+    }),
   ).toHaveCount(0);
   // A whole number owed here: its row, and under it the closed stores
   // asked for, never instead of it.
   await field(page).fill("050 765 43 21");
   await expect(rows(page)).toHaveCount(1);
-  const closed = await page
-    .getByRole("button", {
-      name: "Борг магазину, що зараз не працює? Шукати за цим номером",
-    })
-    .boundingBox();
+  const ask = page.getByRole("button", {
+    name: "Шукати за цим номером",
+    exact: true,
+  });
+  const closed = await ask.boundingBox();
   const owing = await rows(page).first().boundingBox();
   if (!closed || !owing) throw new Error("not laid out");
   expect(closed.y).toBeGreaterThan(owing.y + owing.height - 1);
+  // A link of its sentence under its question, never the whole sentence a
+  // button in its edge (audit 2026-11-20, sale P2-1); at 360 nothing wider
+  // than the screen.
+  await expectAskedLink(ask, "Борг магазину, що зараз не працює?");
+  await page.setViewportSize({ width: 360, height: 640 });
+  await expectAskedLink(ask, "Борг магазину, що зараз не працює?");
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(360);
 });
 
 test("two stores are two blocks, the open one first, each owed what its own summary says and never their sum; each searched, and each «Показати ще» reads its own store (S19 acceptance)", async ({
@@ -1780,7 +1793,8 @@ test("a closed store's customer is read among the closed stores: a row a debt wi
   });
   await credits(page);
   const ask = page.getByRole("button", {
-    name: "Борг магазину, що зараз не працює? Шукати за цим номером",
+    name: "Шукати за цим номером",
+    exact: true,
   });
   // A whole number searched here first, owing nothing here: the rule said,
   // and the same number asked of the closed stores, by a tap, under it
@@ -1892,9 +1906,18 @@ test("a whole number the closed stores owe nothing either: the blank tag, its li
   const here = page.locator(".orders-empty");
   await expectEmpty(here, "За цим номером у цьому магазині боргів немає.");
   const ask = page.getByRole("button", {
-    name: "Борг магазину, що зараз не працює? Шукати за цим номером",
+    name: "Шукати за цим номером",
+    exact: true,
   });
   await expect(ask).toBeVisible();
+  // Under the blank tag, centred with it: its question, and the link under
+  // it (audit 2026-11-20, sale P2-1).
+  await expectAskedLink(ask, "Борг магазину, що зараз не працює?", {
+    centredIn: here,
+  });
+  await expect(
+    page.getByText("Борг магазину, що зараз не працює?", { exact: true }),
+  ).toHaveCSS("text-align", "center");
   const tag = await here.boundingBox();
   const offer = await ask.boundingBox();
   if (!tag || !offer) throw new Error("not laid out");

@@ -569,7 +569,9 @@ for (const scheme of ["light", "dark"] as const)
     expect(Math.abs(after.y - before.y)).toBeLessThanOrEqual(1);
     await expect(refused).toBeInViewport({ ratio: 1 });
     // The error's own: its colour, its crossed circle 16, 14/500, no plate
-    // — the tray is its plate; four lines at most at 360 px.
+    // — the tray is its plate, 22 in; four lines at most at 360 px. The
+    // rule «Клієнт забрав»'s sheet shares (audit 2026-11-20, orders-cash
+    // P2-3).
     const danger = await page.evaluate(() => {
       const probe = document.createElement("span");
       probe.style.color = "var(--danger)";
@@ -587,6 +589,7 @@ for (const scheme of ["light", "dark"] as const)
           style.fontSize,
           style.fontWeight,
           style.backgroundColor,
+          style.paddingLeft,
           sign.width,
           sign.height,
           sign.maskImage.startsWith("url("),
@@ -598,6 +601,7 @@ for (const scheme of ["light", "dark"] as const)
       "14px",
       "500",
       "rgba(0, 0, 0, 0)",
+      "22px",
       "16px",
       "16px",
       true,

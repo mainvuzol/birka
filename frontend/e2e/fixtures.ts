@@ -1827,6 +1827,93 @@ export async function expectTextLink(
 }
 
 /**
+ * A link of its sentence on a line of its own, under its question (audit
+ * 2026-11-18, frame P2-1 (б); audit 2026-11-20, sale P2-1): drawn as every
+ * text button, 44 high at least, its name its own words alone, read with
+ * its question, under it; `centredIn`, centred with a blank tag (±1).
+ */
+export async function expectAskedLink(
+  link: Locator,
+  question: string,
+  { centredIn }: { centredIn?: Locator } = {},
+): Promise<void> {
+  await expectTextLink(link);
+  await expect(link).toHaveAccessibleDescription(question);
+  const asked = link.locator("xpath=..").getByText(question, { exact: true });
+  const [over, under, tag] = await Promise.all([
+    asked.boundingBox(),
+    link.boundingBox(),
+    centredIn?.boundingBox() ?? Promise.resolve(null),
+  ]);
+  if (!over || !under) throw new Error("not laid out");
+  expect(under.height).toBeGreaterThanOrEqual(44);
+  expect(under.y).toBeGreaterThanOrEqual(over.y + over.height - 1);
+  if (centredIn) {
+    if (!tag) throw new Error("not laid out");
+    // At its words' width, never stretched across: one that filled the
+    // tag would be centred too.
+    expect(under.width).toBeLessThan(tag.width);
+    expect(
+      Math.abs(under.x + under.width / 2 - (tag.x + tag.width / 2)),
+    ).toBeLessThanOrEqual(1);
+  }
+}
+
+/**
+ * A warning standing on its screen, never said (spec S28 №10 `meta`
+ * `warning`; design-direction §4; audit 2026-11-20, orders-cash P2-2):
+ * 14/500/19 in the warning's colour in both themes, the set's triangle 16
+ * before the words, hidden from a reader, nothing round it, no role.
+ */
+export async function expectWarningLine(line: Locator): Promise<void> {
+  await expect(line).toBeVisible();
+  const look = await line.evaluate((node, triangle) => {
+    const probe = document.createElement("span");
+    document.body.append(probe);
+    // Its colour whatever the theme, as a text button's is read.
+    const ours = (): boolean => {
+      probe.style.color = "var(--warning)";
+      return getComputedStyle(node).color === getComputedStyle(probe).color;
+    };
+    const root = document.documentElement;
+    const was = root.dataset.theme;
+    const here = ours();
+    root.dataset.theme = "dark";
+    const dark = ours();
+    if (was === undefined) delete root.dataset.theme;
+    else root.dataset.theme = was;
+    probe.remove();
+    const style = getComputedStyle(node);
+    const first = node.firstElementChild;
+    const glyph = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    glyph.innerHTML = triangle;
+    const box = first?.getBoundingClientRect();
+    return {
+      colour: here && dark,
+      face: [style.fontSize, style.fontWeight, style.lineHeight],
+      fill: style.backgroundColor,
+      side: style.paddingLeft,
+      triangle:
+        first?.tagName.toLowerCase() === "svg" &&
+        first.innerHTML === glyph.innerHTML,
+      size: box ? [box.width, box.height] : null,
+      hidden: first?.getAttribute("aria-hidden") ?? null,
+      role: node.getAttribute("role"),
+    };
+  }, icons.warning);
+  expect(look).toEqual({
+    colour: true,
+    face: ["14px", "500", "19px"],
+    fill: "rgba(0, 0, 0, 0)",
+    side: "0px",
+    triangle: true,
+    size: [16, 16],
+    hidden: "true",
+    role: null,
+  });
+}
+
+/**
  * A field said wrong, under it (audit 2026-11-15, money P2-3; 2026-11-18,
  * frame P2-2): a line, never a refusal's plate — the crossed circle 16 by
  * its first line, 14/600/19 in the error's colour, nothing round it; read

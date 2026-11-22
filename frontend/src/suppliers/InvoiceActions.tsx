@@ -21,6 +21,7 @@ import {
   refusalText,
 } from "./invoiceWords";
 import type { Command, Sent } from "./invoiceWords";
+import { goodsText } from "./returnWords";
 import type { Invoice, InvoiceEntry, ReturnPage } from "./types";
 
 /** No answer to a cancellation: pressed again, it is answered as it is. */
@@ -626,6 +627,12 @@ function SetOff({
                       )}{" "}
                       шт. · склад «{visible(item.location_name)}»
                     </span>
+                    {/* What was returned, as its row in «Постачальникам»
+                        says it: the supplier's paper names the goods
+                        (audit 2026-11-20, money P2-3). */}
+                    {item.lines.length > 0 && (
+                      <span className="t-meta">{goodsText(item)}</span>
+                    )}
                     {counted > 0n && (
                       <span className="t-meta">
                         уже зараховано {money(decimal(counted))}

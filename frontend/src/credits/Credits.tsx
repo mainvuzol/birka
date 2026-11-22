@@ -245,6 +245,8 @@ export function Credits({
   const switched = useRef(false);
   const heading = useRef<HTMLHeadingElement>(null);
   const elsewhereHeading = useRef<HTMLHeadingElement>(null);
+  // The question «Шукати за цим номером» answers, read with it.
+  const askId = useId();
   useEffect(() => {
     if (!switched.current) return;
     switched.current = false;
@@ -610,14 +612,10 @@ export function Credits({
         )}
         {askElsewhere && (
           // Under this store's results for a whole number, and under none:
-          // the same number among the stores that do not trade (P1-1).
-          <button
-            type="button"
-            className="quiet elsewhere-ask"
-            onClick={toElsewhere}
-          >
-            Борг магазину, що зараз не працює? Шукати за цим номером
-          </button>
+          // the same number among the stores that do not trade (P1-1). A
+          // link of its sentence, as «Шукати там» (audit 2026-11-20, sale
+          // P2-1).
+          <ElsewhereAsk id={askId} ask={toElsewhere} />
         )}
       </section>
       {chosen && (
@@ -694,6 +692,7 @@ function Block({
   ask?: () => void;
 }): JSX.Element {
   const headingId = useId();
+  const askId = useId();
   const name = visible(store.name);
   const customers = useInfiniteQuery({
     queryKey: ["credits", here.id, "block", store.id, status, search],
@@ -883,11 +882,36 @@ function Block({
       {ask && answered && (
         // Under this store's results for a whole number, and under none:
         // the same number among the stores that do not trade (P1-1).
-        <button type="button" className="quiet elsewhere-ask" onClick={ask}>
-          Борг магазину, що зараз не працює? Шукати за цим номером
-        </button>
+        <ElsewhereAsk id={askId} ask={ask} />
       )}
     </section>
+  );
+}
+
+/**
+ * «Борг магазину, що зараз не працює?» and «Шукати за цим номером» under
+ * it: a link of its sentence, never a button's edge, read with its
+ * question (spec S11; audit 2026-11-20, sale P2-1).
+ */
+function ElsewhereAsk({
+  id,
+  ask,
+}: {
+  id: string;
+  ask: () => void;
+}): JSX.Element {
+  return (
+    <p className="hint elsewhere-ask">
+      <span id={id}>Борг магазину, що зараз не працює?</span>{" "}
+      <button
+        type="button"
+        className="text-button"
+        aria-describedby={id}
+        onClick={ask}
+      >
+        Шукати за цим номером
+      </button>
+    </p>
   );
 }
 

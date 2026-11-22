@@ -11598,3 +11598,112 @@ change. What is recorded, and the server's checks of it, are as before.
     23:50».
   - Under the length's line, 20 in «Нова модель» and 12 in «Перейменувати
     модель», as their forms space their lines.
+
+## Chosen in chat — 2026-11-22 (audit 2026-11-20, batch 4: one look on the money screens — the till's and «Покупці»'s ways out a link of their sentence; what holds the phone on «Каса» a warning's line; «Клієнт забрав»'s refusals the tray's line; «Повернути постачальнику»'s found on a white block, the supplier felt only as it changes; the set-off's returns name their goods; another store's sold-borrowed invoice without what this store has not; sale P2-1, orders-cash P2-2, P2-3, Д5, money P2-2, P2-3, P2-4)
+
+Taken as the next after «merged go next»: the audit's P2s of the sale, the
+orders-cash and the money passes, each a look already decided elsewhere and
+carried to its last places. No request, check, journal or right changes; no
+backend change. What is recorded, held, set off or cancelled, and the
+server's checks of it, are as before.
+
+- **«Знайти в каталозі» and «Шукати за цим номером» a link of their sentence**
+  (sale P2-1; the rule of 2026-11-18, frame P2-1 (б), carried to its last two
+  places):
+  - The question the paragraph's text in a `<span id>`; the way a
+    `.text-button` on a line of its own under it, read with the question
+    (`aria-describedby`). No edge, no fill, `--link`, underlined 1 at 3, 44
+    high; held, in pencil, as every text button.
+  - «Шукати за цим номером» is heard by its own words now, «Борг магазину, що
+    зараз не працює?» its description; it was one button of the whole
+    sentence. Under a store's list and under a network's store block, as
+    before; under the blank tag the question and the link centred with it.
+  - «Знайти в каталозі» under the tags found and under the blank tag, as
+    before; under the blank tag centred, as «Очистити» beside it.
+  - Decided here: the till's link stands 4 under its question, not the 8 of
+    «Шукати там» — at 8 its paragraph at 360 was 6.75 taller than the line
+    its bordered button stood in, past the task's 4; at 4, 2.75. The other
+    three keep 8.
+  - Decided here: one rule for a link under its question —
+    `:is(.return-offer, .elsewhere-offer, .catalog-offer, .elsewhere-ask)
+    .text-button` — in place of the receipt's and «Шукати там»'s two copies;
+    centred inside or under the blank tag by one rule more.
+  - Words, where each stands, what a tap does and who sees it: as before.
+- **«Поки причину не записано, інші розділи недоступні.» a warning's line**
+  (orders-cash P2-2):
+  - On the reason's form in Telegram, in its dock out of Telegram, and on
+    «Каса» over «Записати причину»: `.reason-held` — 14/500/19 in
+    `--warning`, the triangle 16 before the words (unheard), no plate, no
+    role: it stands, it is not said again. It was a field's grey hint, the
+    dock's `--text-2`.
+  - Decided here: 6 between the triangle and the words, so they start at
+    22, as a refusal's line.
+  - «Без імен і телефонів покупців.» stays the field's hint in pencil. The
+    place, the margins, the dock's «Записати причину» and the MainButton, and
+    when the phone is held and for whom: as before.
+  - Measured at 360 × 640 out of Telegram: the dock's «Записати причину» at
+    510 before and after; the line's two lines 38 high where they were 43.4
+    (19 a line, not 1.55 × 14), so the dock's top stands 5.4 lower.
+- **«Клієнт забрав»'s refusals the tray's line** (orders-cash P2-3; the
+  look of 2026-11-13, sale P1-3, carried to its twin):
+  - The server's refusal and what the terms in parts need, in the sheet over
+    the ways: the error's colour and its crossed circle 16, 14/500/19, no
+    fill or corner, 22 in, 10 under — the till's tray's line. They were the
+    page's red plate, 24 taller and 20 further in.
+  - Decided here: one rule, `.tray-refused[role="alert"]`, in place of
+    `.till-tray .tray-refused` — the sheet has no class of its own to scope
+    it by, and nothing else carries `tray-refused`.
+  - Its place, `role="alert"`, the cursor on it, its words, the error's buzz
+    on a refusal, one at a time; the terms' checks and what is sent: as
+    before.
+- **Dead rules gone** (orders-cash Д5, the 2026-11-18 Д4 again): `.order-card`
+  (three rules), `.count-label` and `.count-field` (seven). Nothing drew them.
+- **«Повернути постачальнику»: the models found on a white block; the supplier
+  felt only as it changes** (money P2-2; the rules of 2026-11-18 «rows on a
+  white block, as the suppliers' lists» and «a choice felt only as it
+  changes», carried to their last places):
+  - (а) «Товар на складі» a `.list-block`: rows 64, 16 at the sides, the
+    hairline from the words' edge, none under the last; its three grey
+    places on the block too. Words, «S 2 · M 1», the order: as before.
+  - (б) A supplier tapped in «Постачальник»'s sheet buzzes `selection` only
+    when it is another; the same again closes the sheet, nothing felt — in
+    every form the sheet serves («Нова накладна», a return, «Як надійшов»,
+    «Брак»).
+- **«Зарахувати повернення»: each return names its goods** (money P2-3):
+  - Under «{day} · {N} шт. · склад «…»» a `meta` line of what was given back,
+    in the words of its row in «Постачальникам» (`goodsText`: two lines, «+
+    ще N» past them); «уже зараховано …» under it. Heard with it: the
+    option's name is all it says, as before.
+  - The option's look, the chosen's colours (on all three lines), the
+    arrows, Tab, «Показати ще» and what is sent: as before. A return the
+    server sent with no lines draws no empty line.
+  - Decided here: its grey places as tall as a return of one line — each
+    grey line in the middle of its line's own height (the day's `t-row` 22,
+    the goods' `meta` 19), 2 between, as the card's lines; they were 8
+    apart, 1.42 short of the card with its goods.
+- **Another store's invoice for sold borrowed goods** (money P2-4):
+  - Opened from «Накладні магазинів, що не працюють» (`invoice.store_id` not
+    this store's), it says «За продане позичене: {партія} × N.» alone: no
+    «Якщо позначили помилково — скасуйте накладну…» and no «Позичене й під
+    реалізацію ›» — its cancelling and its batch are that store's, which
+    this one cannot reach.
+  - This store's own: both, as before. The blocked store's plate and
+    «Сплатити»: as before. Cancelling an invoice still only in its store.
+- **Found by the review, fixed:**
+  - Medium: «Клієнт забрав»'s refusal by the server had no journey of its
+    own; it has one now, its look the terms' line's, one check for both.
+  - Low: «Шукати за цим номером»'s paragraph kept a paragraph's own 14 under
+    it, which its button had not; 0 again, 12 over it as before.
+  - Low: a set-off's return with no lines would have drawn an empty line.
+  - Low: the till's paragraph checked by a loose bound; it is checked as
+    its question's one line, the link 4 under it.
+  - Low: a link centred in its tag is checked at its words' width too; the
+    set-off's sheet checked by its own scroller, the page's being fixed
+    under it; «Покупці» and the till checked for nothing wider than 360.
+- **Known, kept (review):**
+  - The warning's line puts 6 between its triangle and its words, 22 in as
+    the refusal's line, where the ТТН notice's lead puts 8 and its icon 2
+    lower: the lines nearest it on the money screens are the refusals'.
+  - A set-off's return says «склад «…»» where its row in «Постачальникам»
+    says where it came from by `placeText` («з «Браку» «…»»): its goods
+    now say the same, its place not yet — for the next audit.

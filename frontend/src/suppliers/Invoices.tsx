@@ -1076,13 +1076,17 @@ function InvoiceDetail({
           {invoice.note && ` · ${visible(invoice.note)}`}
         </p>
         {invoice.sold && (
+          // Another store's invoice, paid here because that one does not
+          // trade: only what it is for — its cancelling and its batch are
+          // that store's, never this one's (audit 2026-11-20, money P2-4).
           <div className="invoice-sold">
             <p>
               За продане позичене: {visible(invoice.sold.label)} ×{" "}
-              {invoice.sold.quantity}. Якщо позначили помилково — скасуйте
-              накладну, і товар знову буде «на руках».
+              {invoice.sold.quantity}.
+              {!elsewhere &&
+                " Якщо позначили помилково — скасуйте накладну, і товар знову буде «на руках»."}
             </p>
-            {openBorrowed && (
+            {openBorrowed && !elsewhere && (
               <button
                 type="button"
                 className="quiet set-off-open"

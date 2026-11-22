@@ -25,6 +25,7 @@ import {
   sections,
   supplierList,
   holdReads,
+  tokenColour,
   under14,
   resultTakesPresses,
 } from "./fixtures";
@@ -775,7 +776,14 @@ test("goods returned are set off against an invoice, and their return waits for 
     .getByRole("radiogroup", { name: "Повернення" })
     .getByRole("radio");
   await expect(returns).toHaveCount(1);
-  await expect(returns).toHaveText(/^\d\d\.\d\d · 2 шт\. · склад «.+»$/);
+  // What was given back under its day, units and warehouse, as its row in
+  // «Постачальникам» says it (audit 2026-11-20, money P2-3).
+  await expect(returns).toHaveText(
+    new RegExp(`^\\d\\d\\.\\d\\d · 2 шт\\. · склад «.+»${model}[^·]*, L × 2$`),
+  );
+  await expect(returns.locator(".t-meta")).toHaveText(
+    new RegExp(`^${model}[^·]*, L × 2$`),
+  );
   await expect(returns).not.toBeChecked();
   await returns.click();
   await expect(returns).toBeChecked();
@@ -1178,7 +1186,7 @@ test("«Зарахувати повернення» reads past the fifty newest:
   // may carry its year in the first days of January.
   await expect(returns).toHaveCount(1);
   await expect(returns).toHaveText(
-    /^\d\d\.\d\d(?:\.\d\d)? · 1 шт\. · склад «Основний»$/,
+    /^\d\d\.\d\d(?:\.\d\d)? · 1 шт\. · склад «Основний»Давнє, L × 1$/,
   );
   await expect(failure).toHaveCount(0);
   await expect(more).toBeVisible();
@@ -1206,7 +1214,9 @@ test("«Зарахувати повернення» reads past the fifty newest:
   // the hundred and fifty: its own card, the cursor on it and Tab's stop
   // with it, nothing more to read.
   await expect(returns).toHaveCount(2);
-  await expect(returns.nth(1)).toHaveText(/^\d\d\.\d\d · 2 шт\. · склад «.+»$/);
+  await expect(returns.nth(1)).toHaveText(
+    /^\d\d\.\d\d · 2 шт\. · склад «.+».+ × 2$/,
+  );
   await expect(returns.nth(1)).toBeFocused();
   await expect(returns.nth(1)).toHaveAttribute("tabindex", "0");
   await expect(returns.nth(0)).toHaveAttribute("tabindex", "-1");
@@ -3167,4 +3177,179 @@ test("nothing owed: the blank mark, what is so now, what an invoice is, and «З
   await expect(
     empty.getByRole("button", { name: "Записати накладну" }),
   ).toHaveCount(0);
+});
+
+test("«Зарахувати повернення» says what each return gave back, as «Постачальникам» does: two lines and «+ ще 1» past them, wrapped within the sheet at 360 × 640, the chosen's lines in its colours; its places as tall as a return of one line (audit 2026-11-20, money P2-3)", async ({
+  page,
+}) => {
+  const supplier = `Що повернули ${randomUUID().slice(0, 6)}`;
+  const supplierId = await aSupplier(page, supplier);
+  const headers = await headersOf(page, hanna);
+  const model = `Три ${randomUUID().slice(0, 6)}`;
+  const created = await page.request.post("/api/v1/catalog/products", {
+    headers: { ...headers, "Idempotency-Key": randomUUID() },
+    data: {
+      store_id: centre,
+      concept: model,
+      variant: { color: "сірий" },
+      sizes: ["S", "M", "L"].map((code) => ({ system: "ALPHA", code })),
+    },
+  });
+  expect(created.status()).toBe(201);
+  const product = (await created.json()) as {
+    product_variant_id: string;
+    sizes: { size_id: string }[];
+  };
+  const lines = product.sizes.map((size) => ({
+    product_variant_id: product.product_variant_id,
+    size_id: size.size_id,
+  }));
+  expect(lines).toHaveLength(3);
+  const receipt = await page.request.post("/api/v1/inventory/receipts", {
+    headers: { ...headers, "Idempotency-Key": randomUUID() },
+    data: {
+      store_id: centre,
+      location_id: fixture.network_shared_location_id,
+      command_id: randomUUID(),
+      lines: lines.map((line) => ({
+        ...line,
+        quantity: 2,
+        acquisition_type: "PURCHASE",
+      })),
+      notes: null,
+    },
+  });
+  expect(receipt.status()).toBe(201);
+  // Three lines given back, then one: the newest first.
+  for (const given of [lines, lines.slice(0, 1)]) {
+    const returned = await page.request.post("/api/v1/supplier-returns", {
+      headers,
+      data: {
+        command_id: randomUUID(),
+        store_id: centre,
+        location_id: fixture.network_shared_location_id,
+        supplier_id: supplierId,
+        lines: given.map((line) => ({ ...line, quantity: 1 })),
+        note: null,
+      },
+    });
+    expect(returned.status()).toBe(201);
+  }
+  await anInvoice(page, supplierId, "1000.00");
+
+  await invoicesAt(page, hanna);
+  await open(page, supplier);
+  const held = await holdReads(page, "supplier-returns");
+  await act(page, "Зарахувати повернення");
+  const setOff = await sheet(page, "Зарахувати повернення");
+  const cards = setOff.locator(
+    ".placeholder .set-off-returns > .set-off-return",
+  );
+  await expect(cards).toHaveCount(3);
+  const place = (await cards.first().boundingBox())?.height ?? 0;
+  held();
+  const returns = setOff
+    .getByRole("radiogroup", { name: "Повернення" })
+    .getByRole("radio");
+  await expect(returns).toHaveCount(2);
+  // Under its day, units and warehouse, what was given back, in the words
+  // of its row in «Постачальникам»: two lines, and «+ ще 1» past them.
+  await expect(returns.locator(".t-meta")).toHaveText([
+    new RegExp(`^${model}[^·]*× 1$`),
+    new RegExp(`^${model}[^·]*× 1 · ${model}[^·]*× 1 · \\+ ще 1$`),
+  ]);
+  // Heard with it: its name is all it says, as before.
+  await expect(returns.nth(1)).toHaveAccessibleName(/ · \+ ще 1$/);
+  // A return of one line as tall as its places: nothing moves as the
+  // answer comes.
+  const one = (await returns.first().boundingBox())?.height ?? 0;
+  expect(Math.abs(one - place)).toBeLessThanOrEqual(1);
+  // At 360 × 640 its lines wrap within it, nothing wider than the screen.
+  await page.setViewportSize({ width: 360, height: 640 });
+  const within = await setOff.boundingBox();
+  if (!within) throw new Error("not laid out");
+  for (const option of await returns.all()) {
+    const box = await option.boundingBox();
+    if (!box) throw new Error("not laid out");
+    expect(box.x + box.width).toBeLessThanOrEqual(within.x + within.width);
+  }
+  // The sheet's own scroller, not the page's: a sheet stands fixed over it.
+  expect(
+    await setOff
+      .locator(".sheet-body")
+      .evaluate((node) => node.scrollWidth - node.clientWidth),
+  ).toBeLessThanOrEqual(0);
+  // Chosen, each of its lines in the chosen's colours, in both themes.
+  await returns.nth(1).click();
+  await expect(returns.nth(1)).toBeChecked();
+  for (const scheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    const onChosen = await tokenColour(page, "--on-chosen");
+    for (const said of await returns.nth(1).locator("span").all())
+      await expect(said).toHaveCSS("color", onChosen);
+  }
+  await page.emulateMedia({ colorScheme: "light" });
+});
+
+test("an invoice for borrowed goods sold, of a store that does not trade, says only what it is for — never its cancelling or a batch this store does not keep; this store's own says both (audit 2026-11-20, money P2-4)", async ({
+  page,
+}) => {
+  const lot = {
+    stock_lot_id: randomUUID(),
+    quantity: 2,
+    label: "Пальто Старе графіт, M",
+  };
+  const own = `Позичене ${randomUUID().slice(0, 6)}`;
+  const ownInvoice = await anInvoice(
+    page,
+    await aSupplier(page, own),
+    "500.00",
+  );
+  // The archived store's invoices, and one of this store's, each for
+  // borrowed goods sold: so in the server's answer.
+  await page.route(/\/api\/v1\/supplier-invoices\?/, async (route) => {
+    const response = await route.fetch();
+    const body = (await response.json()) as {
+      items: { id: string; store_id: string }[];
+    };
+    await route.fulfill({
+      response,
+      json: {
+        ...body,
+        items: body.items.map((item) =>
+          item.store_id !== centre || item.id === ownInvoice
+            ? { ...item, sold: lot }
+            : item,
+        ),
+      },
+    });
+  });
+  await invoicesAt(page, hanna);
+  const sold = page.locator(".invoice-sold");
+  // This store's own: what it is for, how to undo it, and its batch.
+  await open(page, own);
+  await expect(sold.locator("p")).toHaveText(
+    "За продане позичене: Пальто Старе графіт, M × 2. Якщо позначили помилково — скасуйте накладну, і товар знову буде «на руках».",
+  );
+  await expect(
+    sold.getByRole("button", { name: "Позичене й під реалізацію" }),
+  ).toBeVisible();
+  await back(page, "Накладні").click();
+  // The archived store's, paid here: what it is for alone — its cancelling
+  // is that store's, and its batch is not among this store's.
+  await page
+    .getByRole("button", { name: "Накладні магазинів, що не працюють" })
+    .click();
+  await tag(page, "Постачальник Старого").locator(".order-row").click();
+  await expect(
+    page.getByText(/^Накладна магазину «Старий», який зараз закрито/),
+  ).toBeVisible();
+  await expect(sold.locator("p")).toHaveText(
+    "За продане позичене: Пальто Старе графіт, M × 2.",
+  );
+  await expect(page.getByText(/скасуйте накладну/)).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Позичене й під реалізацію" }),
+  ).toHaveCount(0);
+  await expect(payOnCard(page)).toBeVisible();
 });

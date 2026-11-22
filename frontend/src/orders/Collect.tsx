@@ -160,13 +160,16 @@ export function Collect({
         )}
       </p>
       <p className="hint">{collectHint}</p>
+      {/* A line of the tray, never a plate: the till's tray says the same
+          words so (audit 2026-11-13, sale P1-3; audit 2026-11-20,
+          orders-cash P2-3). */}
       {refusal !== null && (
-        <p role="alert" ref={refused} tabIndex={-1}>
+        <p role="alert" className="tray-refused" ref={refused} tabIndex={-1}>
           {refusal}
         </p>
       )}
       {problem && (
-        <p role="alert" ref={why} tabIndex={-1}>
+        <p role="alert" className="tray-refused" ref={why} tabIndex={-1}>
           {problem}
         </p>
       )}

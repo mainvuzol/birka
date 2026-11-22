@@ -1,4 +1,11 @@
-import { test, expect, openStore, sellsFrom, toTill } from "./fixtures";
+import {
+  test,
+  expect,
+  expectAskedLink,
+  openStore,
+  sellsFrom,
+  toTill,
+} from "./fixtures";
 import type { Page, Route } from "@playwright/test";
 import { createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -183,6 +190,35 @@ test("a search typed keeps the list where it was until the new one comes, and th
   await answered;
   await expect(page.locator("button.size-cell").first()).toBeVisible();
   expect(await onPage()).toBe(before);
+  // Under the tags found: a link of its sentence under its question, never
+  // a button's edge (audit 2026-11-20, sale P2-1).
+  const find = page.getByRole("button", {
+    name: "Знайти в каталозі",
+    exact: true,
+  });
+  await expectAskedLink(find, "Товар у руках, а в списку його немає?");
+  // Its paragraph at 360 no taller than the line the bordered button stood
+  // in, within 4: the question one line of 14, the link 4 under it, and
+  // nothing wider than the screen.
+  await page.setViewportSize({ width: 360, height: 640 });
+  expect(await find.evaluate((node) => getComputedStyle(node).marginTop)).toBe(
+    "4px",
+  );
+  const question = await find.evaluate((node) => ({
+    lines: node.previousElementSibling?.getClientRects().length ?? 0,
+    line: parseFloat(getComputedStyle(node.parentElement ?? node).lineHeight),
+  }));
+  expect(question.lines).toBe(1);
+  const [para, link] = await Promise.all([
+    find.locator("xpath=..").boundingBox(),
+    find.boundingBox(),
+  ]);
+  if (!para || !link) throw new Error("not laid out");
+  // The question's line its paragraph's one line, nothing more.
+  expect(para.height - link.height - 4).toBeLessThanOrEqual(question.line + 1);
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(360);
 });
 
 test("a search with nothing found, typed further, never says «нічого немає» under the new words before they are searched", async ({

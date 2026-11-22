@@ -12,6 +12,7 @@ import {
   sellsFrom,
   shortage,
   expectEmpty,
+  expectAskedLink,
 } from "./fixtures";
 import type { Page, Route } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
@@ -345,6 +346,13 @@ test("an empty warehouse names itself, and a coat in hand is found in the catalo
   await expect(
     page.getByText("Товар у руках, а в списку його немає?"),
   ).toBeVisible();
+  // In the blank tag with no goods: a link of its sentence under its
+  // question, centred with the tag (audit 2026-11-20, sale P2-1).
+  await expectAskedLink(
+    page.getByRole("button", { name: "Знайти в каталозі", exact: true }),
+    "Товар у руках, а в списку його немає?",
+    { centredIn: page.locator(".orders-empty") },
+  );
   await page.getByRole("button", { name: "Знайти в каталозі" }).click();
 
   const panel = page.getByRole("region", { name: "Товар з каталогу" });
@@ -397,9 +405,23 @@ test("a search that finds nothing offers the catalogue; without the rights, or f
   await expect(empty.locator(".t-meta")).toHaveText(
     "Перевірте назву або очистіть пошук.",
   );
-  await expect(
-    empty.getByRole("button", { name: "Знайти в каталозі" }),
-  ).toBeVisible();
+  // Beside «Очистити»: a link of its sentence under its question, never a
+  // button's edge, centred with the tag (audit 2026-11-20, sale P2-1).
+  const find = empty.getByRole("button", {
+    name: "Знайти в каталозі",
+    exact: true,
+  });
+  await expectAskedLink(find, "Товар у руках, а в списку його немає?", {
+    centredIn: empty,
+  });
+  // On a line of its own where both would fit on one: 560, Telegram on a
+  // computer.
+  const phone = page.viewportSize();
+  await page.setViewportSize({ width: 560, height: 800 });
+  await expectAskedLink(find, "Товар у руках, а в списку його немає?", {
+    centredIn: empty,
+  });
+  if (phone) await page.setViewportSize(phone);
   // From paper nobody stands at the shelf: no coat in hand is found.
   await fromPaper(page);
   await expect(

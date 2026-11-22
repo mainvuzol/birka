@@ -2504,7 +2504,8 @@ test.describe("«Продаж» › «Внесок»: a payment on a debt from t
     await search.fill("0671234567");
     await page
       .getByRole("button", {
-        name: "Борг магазину, що зараз не працює? Шукати за цим номером",
+        name: "Шукати за цим номером",
+        exact: true,
       })
       .click();
     await page

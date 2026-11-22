@@ -451,14 +451,23 @@ function ReasonForm({
         />
         <NoCustomerData id={hint} />
       </fieldset>
+      {/* What holds the phone here, a warning standing, never said: in its
+          colour, its triangle before the words, no plate — never a field's
+          grey hint (audit 2026-11-20, orders-cash P2-2). */}
       {main ? (
-        <p className="hint">{line}</p>
+        <p className="hint reason-held">
+          <Icon name="warning" size={16} />
+          {line}
+        </p>
       ) : (
         // The section's own child, so it stays under the thumb however long
         // what comes before it — the owner's period figures (review,
         // 2026-10-21).
         <div className="pay-panel" ref={panel}>
-          <p className="pay-what">{line}</p>
+          <p className="pay-what reason-held">
+            <Icon name="warning" size={16} />
+            {line}
+          </p>
           <button
             type="button"
             className="cash-panel-button primary"
