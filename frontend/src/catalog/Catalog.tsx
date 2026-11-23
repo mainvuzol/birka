@@ -27,7 +27,7 @@ import {
 import type { Command } from "./commands";
 import { KeptCatalog } from "./KeptCatalog";
 import { NewModel } from "./NewModel";
-import { conflictsText, reviewText, statusLabels } from "./types";
+import { conflictsText, decidedText, reviewText, statusLabels } from "./types";
 import type { Decision } from "./types";
 import { BackToMore } from "@/shared/More";
 import type { MoreBack } from "@/shared/More";
@@ -306,7 +306,7 @@ export function Catalog({
           done={(_variant, _said, decision) => {
             setCreating(false);
             setSelected(decision.decision_id);
-            setSuccess(addedSaid(decision));
+            setSuccess(decidedText(decision));
             void cache.invalidateQueries({
               queryKey: ["catalog-decisions", journalKey],
             });
@@ -335,7 +335,7 @@ export function Catalog({
             making={making}
             make={setMaking}
             made={(decision) => {
-              setSuccess(addedSaid(decision));
+              setSuccess(decidedText(decision));
             }}
           />
         )
@@ -494,19 +494,6 @@ function ProposalPlaceholder(): JSX.Element {
       </section>
     </>
   );
-}
-
-/** What a proposal resolved by «Нова модель» says on this screen. */
-function addedSaid(decision: Decision): string {
-  const variant = decision.resolved_variant_id;
-  const name =
-    decision.creation?.display_name ??
-    decision.preview.candidates.find((c) => c.variant_id === variant)
-      ?.display_name ??
-    "";
-  return decision.creation
-    ? `Модель додано: ${visible(name)}.`
-    : `Модель обрано: ${visible(name)}.`;
 }
 
 function Failure({

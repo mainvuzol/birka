@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import type { JSX } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ApiError, api, isConflict } from "@/shared/api";
+import { ApiError, api, isConflict, unreachable } from "@/shared/api";
 import { Back } from "@/shared/Back";
 import { Icon } from "@/shared/Icon";
 import { ScreenHeader } from "@/shared/ScreenHeader";
@@ -117,7 +117,9 @@ export function ReturnDetail({
       setAsking(false);
     } catch (error) {
       if (error instanceof ApiError) {
-        buzz("error");
+        // No answer — a gateway's 502–504 among it — is not felt as a
+        // refusal (audit 2026-11-23, money P2-1's review).
+        if (!unreachable(error)) buzz("error");
         if (isConflict(error)) void changed();
         setAsking(false);
         setProblem(refusalText(error));

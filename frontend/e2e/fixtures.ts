@@ -663,9 +663,10 @@ export async function typeSize(
   await add.click();
 }
 
-/** «Додати модель · N розмір(и/ів)»: the sheet's one button. */
+/** «Додати модель · N розмір(и/ів)»: the sheet's one button — «Додати
+ * колір · …» for another colour of a model (audit 2026-11-23, goods P1-1). */
 export function addModel(sheet: Locator): Locator {
-  return sheet.getByRole("button", { name: /^Додати модель/ });
+  return sheet.getByRole("button", { name: /^Додати (модель|колір)/ });
 }
 
 /** «Нова модель» left by «Назад» (Escape here). */

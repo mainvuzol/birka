@@ -56,6 +56,26 @@ export function restText(invoice: Invoice): string {
     : `Залишок ${money(invoice.owed)}.`;
 }
 
+/** What a cancel undid, said as a record says what it recorded: the entry
+ * cancelled, or the whole invoice, and what is left by the server's answer
+ * (audit 2026-11-23, money P2-1). Only payments and set-offs are cancelled
+ * one by one; a write-off never is. */
+export function cancelledText(
+  invoice: Invoice,
+  entry?: Pick<InvoiceEntry, "kind" | "amount">,
+): string {
+  if (entry === undefined)
+    return `Накладну «${visible(invoice.supplier.name)}» на ${money(invoice.amount)} скасовано.`;
+  const what = entry.kind === "SET_OFF" ? "Залік" : "Оплату";
+  // A repeat the server answers as it stands may find the invoice
+  // cancelled or written off since: nothing left to say of it (review).
+  const rest =
+    invoice.status === "OPEN" || invoice.status === "SETTLED"
+      ? ` ${restText(invoice)}`
+      : "";
+  return `${what} ${money(entry.amount)} скасовано.${rest}`;
+}
+
 /** «14.10.25, 10:20», as the invoices said it before. */
 export function when(iso: string): string {
   return new Date(iso).toLocaleString("uk-UA", {

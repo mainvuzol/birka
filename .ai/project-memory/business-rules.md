@@ -12223,3 +12223,81 @@ change.
   heading level (no rule); «Повернули постачальнику» in «Брак» (not a task
   until the glossary asks it). Still owner-held: money P2-5 (Д4, В22-Г1),
   goods P2-3 (б) (В22-Т1 / Н2), goods P2-5 of 2026-11-20 (В20-Т1).
+
+
+## Chosen in chat — 2026-11-24 (audit 2026-11-23, batch 1: «Що записано — те й сказано» — a supplier screen held by its own unread journal; a cancel felt and said as a record is; «Модель додано», «Колір додано» or «Модель обрано» by what the server made; /me read again never the sign-in; money Н1, money P2-1, goods P1-1, frame P2-1)
+
+The user's pick after audit 2026-11-23: «Both batches, money first» — this
+batch first, the small points second. No right, check, journal or step
+changes; nothing recorded or sent changes; no server change, no migration.
+
+- **A supplier screen is held by its own unread journal** (money Н1,
+  `financial-integrity`; as «Моделі», «Каса», «Магазини» and the sale
+  pass's find of 2026-11-20): a return to a supplier the phone keeps and
+  cannot read holds «Постачальникам» and «Позичене й під реалізацію»; an
+  invoice operation it cannot read holds «Накладні» — the screen still
+  opens from «Ще» and «Гроші», its plate at the top says why, and nothing
+  on it sends. Before, its buttons took a press that went into the unread
+  journal, sent nothing and said nothing. The hold holds the cancels too
+  (Д3), as any other unsettled journal already did. What the phone keeps
+  is never touched.
+- **A cancel is felt and said as a record is** (money P2-1; design P3,
+  Telegram rule 9): «Так, скасувати» on a payment or a set-off and «Так,
+  скасувати накладну» buzz `success` once the server answers (a repeat it
+  answers as it stands is the same), `error` on its refusal, nothing when
+  there is no answer (the sheet says «Немає відповіді сервера…» as before).
+  The card says what became of it over the sum, a status with the
+  eyelet, as «… записано. Залишок …»: «Оплату 500,00 грн скасовано.
+  Залишок 2 000,00 грн.», «Залік 1 200,00 грн скасовано. Залишок
+  4 000,00 грн.», «Накладну «Ганна» на 2 000,00 грн скасовано.» — the sum
+  the history line's own, what is left the server's answer. It goes with
+  the next action on the card, as a record's line does. A write-off is
+  never cancelled; nothing changes there. Decided here (review): a
+  gateway's 502–504 is no answer, as everywhere the app reads it so — not
+  felt as a refusal, here and on a return's cancel, its twin; a repeat
+  answered as it stands that finds the invoice cancelled or written off
+  since says no «Залишок».
+- **What a new model's sheet made is said by the server's answer, never
+  guessed** (goods P1-1; catalogue identity unchanged): the result line —
+  the sheet's stub where the count is typed and «Пропозиція»'s status alike
+  — says «Модель додано: …» when the server made a model
+  (`family_created`), «Колір додано: …» when it made a colour of one
+  there already (`variant_created` alone), and «Модель обрано: …» when it
+  made nothing — the model and colour there already, chosen (`_resolve_
+  variant`'s «find or create», a merged name's model) — as a confirmed
+  candidate is. A creation saved before the server said (no fields) says
+  «Модель додано», as it did (Д1). In «Інший колір нашої моделі» the
+  sheet's button — Telegram's MainButton alike — is «Додати колір» /
+  «Додати колір · 2 розміри»; «Нова модель»'s stays «Додати модель». This
+  revises stage 2's one button and one stub («Модель додано» for every
+  creation; «Chosen in chat — 2026-11-08 (stage 2 batch 10 …)», words of
+  the stage 2 TZ the owner never approved): since the fork of 2026-11-22,
+  «Це вона» leads to «Інший колір нашої моделі» as the main way to a new
+  colour. Decided here: «колір» by the mode's name, though a new variant
+  may differ by length or material too.
+- **/me read again never shows the sign-in where its answer stands**
+  (frame P2-1; «One paper banner» of 2026-11-05 — no paper over a store
+  that does not trade, where nothing is sold; navigation P0-5 — the basket
+  kept while the person is in the store): a read of /me after the person
+  is in — a
+  not-trading store's or «Магазинів поки немає»'s «Спробувати ще раз»,
+  the owner's change of a store's state — that fails for any reason but a
+  401 (the session ended, as before) or `NO_ACCESS` («Доступу ще немає»,
+  as before) leaves the screen it was asked from. On the not-trading store
+  and «Магазинів поки немає» the failure is the plate of every place
+  unread — «Сервер не відповідає.» or the server's words — its
+  «Спробувати ще раз» the one retry, held while asked; no paper's words
+  there any more. The owner who changed a store's state keeps her store,
+  its basket and the stub on «Магазини»; the server silent, the paper's
+  banner over it as at any read. Decided as the TZ proposed (Д2): until
+  Бірка is opened again, the door «Змінити магазин» shows the stores as
+  read before the change; the server refuses work at a blocked store in
+  its own words, and the owner has just seen the stub. Decided here
+  (review): «Доступу ще немає», once answered, stands until /me is answered
+  again — a later read that goes unanswered is the sign-in's screen, as
+  before, never the workplace of the rights read before it.
+- **Not in it** (batch 2, the user's pick): frame P2-2 and P2-3, sale P2-1
+  and P2-2, orders-cash P2-1, Д1, Д2, money P2-2, goods P2-1 and P2-2.
+  Owner-held: В23-К1 («Зверніться до менеджера» read by a manager or the
+  owner), money P2-5 (Д4, В22-Г1), goods P2-3 (б) (В22-Т1 / Н2), goods P2-5
+  of 2026-11-20 (В20-Т1).

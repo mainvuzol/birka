@@ -1305,6 +1305,62 @@ test("a coat the catalogue has not is added from the empty search, in the sheet 
   ]);
 });
 
+test("«Інший колір нашої моделі» with the colour the model has already: «Додати колір · 1 розмір», the server makes nothing new and chooses it — «Модель обрано: … Кількість впишіть тут.», never «додано» (audit 2026-11-23, goods P1-1)", async ({
+  page,
+}) => {
+  const model = `Наявна ${randomUUID().slice(0, 8)}`;
+  const created = await page.request.post("/api/v1/catalog/products", {
+    headers: {
+      Authorization: `Bearer ${await bearer(page)}`,
+      "Idempotency-Key": randomUUID(),
+    },
+    data: {
+      store_id: fixture.store_id,
+      concept: model,
+      variant: { color: "графіт" },
+      sizes: [{ system: "ALPHA", code: "M" }],
+    },
+  });
+  expect(created.status()).toBe(201);
+  const existing = (await created.json()) as { product_variant_id: string };
+  await enter(page);
+  const typed = `Шукана ${randomUUID().slice(0, 8)}`;
+  await find(page, typed);
+  await (await nothingFound(page, `Нічого не знайшли за «${typed}»`))
+    .getByRole("button", { name: `Додати нову модель «${typed}»` })
+    .click();
+  const sheet = await newModelSheet(page);
+  await sheet.getByRole("button", { name: "Далі", exact: true }).click();
+  const kind = sheet.getByRole("group", { name: "Яка модель" });
+  const notThis = sheet.getByRole("button", { name: "Ні, це нова модель" });
+  await expect(kind.or(notThis)).toBeVisible();
+  if ((await notThis.count()) > 0) await notThis.click();
+  await kind.getByRole("button", { name: "Інший колір нашої моделі" }).click();
+  await sheet.getByLabel("Пошук моделі в каталозі").fill(model);
+  await sheet
+    .getByRole("button", { name: new RegExp(`^Обрати модель: ${model}`) })
+    .click();
+  await sheet.getByLabel("Колір", { exact: true }).fill("графіт");
+  await sizeCell(sheet, "M").click();
+  await expect(addModel(sheet)).toHaveText("Додати колір · 1 розмір");
+  const response = page.waitForResponse(
+    (r) => r.url().endsWith("/create-product") && r.status() === 200,
+  );
+  await addModel(sheet).click();
+  const decision = (await (await response).json()) as {
+    resolved_variant_id: string;
+    creation: { family_created: boolean; variant_created: boolean };
+  };
+  expect(decision.creation.family_created).toBe(false);
+  expect(decision.creation.variant_created).toBe(false);
+  expect(decision.resolved_variant_id).toBe(existing.product_variant_id);
+  await expect(sheet).toHaveCount(0);
+  await expect(
+    page.getByRole("status").filter({ hasText: /^Модель обрано/ }),
+  ).toHaveText(`Модель обрано: ${model} графіт. Кількість впишіть тут.`);
+  await expect(page.getByText(/додано/)).toHaveCount(0);
+});
+
 test("without the right to create or to confirm in the catalogue, an empty search only says so: no model is offered to add (stage 2, goods task list, P0-1)", async ({
   page,
 }) => {

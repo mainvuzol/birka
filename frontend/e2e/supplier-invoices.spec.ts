@@ -949,6 +949,10 @@ test("goods returned are set off against an invoice, and their return waits for 
   await expect(undoneLine.locator(".timeline-node")).toHaveClass(/\bhollow\b/);
   await expect(undoneLine.getByRole("button")).toHaveCount(0);
   expect(await owed(page, invoiceId)).toBe("4000.00");
+  // Said over the sum as a record is (audit 2026-11-23, money P2-1).
+  await expect(page.locator(".invoice-done")).toHaveText(
+    "Залік 1 200,00 грн скасовано. Залишок 4 000,00 грн.",
+  );
 
   // A payment's answer lost on this card: the way back is held as
   // «Постачальникам»'s row is, until the payment is checked.
@@ -1567,6 +1571,31 @@ test("a payment or an invoice recorded by mistake is cancelled, saying why", asy
     "2 000,00 грн",
   );
   expect(await owed(page, invoiceId)).toBe("2000.00");
+  // Said over the sum as a record is: what was undone, what is left by
+  // the server's answer (audit 2026-11-23, money P2-1).
+  const undone = page.locator(".invoice-done");
+  await expect(undone).toHaveText(
+    "Оплату 500,00 грн скасовано. Залишок 2 000,00 грн.",
+  );
+  await expect(undone).toHaveAttribute("role", "status");
+  // At 360 × 640, in both themes: the line wraps in the card, the sum
+  // under it, nothing wider than the phone.
+  const size = page.viewportSize();
+  await page.setViewportSize({ width: 360, height: 640 });
+  for (const scheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    const line = await undone.boundingBox();
+    const sum = await owes(page).boundingBox();
+    expect((line?.x ?? 0) + (line?.width ?? 0)).toBeLessThanOrEqual(360);
+    expect(sum?.y ?? 0).toBeGreaterThan(line?.y ?? 0);
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth > innerWidth,
+      ),
+    ).toBe(false);
+  }
+  await page.emulateMedia({ colorScheme: "light" });
+  if (size) await page.setViewportSize(size);
 
   actions = await ways(page);
   await actions.getByRole("button", { name: "Скасувати накладну" }).click();
@@ -1588,12 +1617,129 @@ test("a payment or an invoice recorded by mistake is cancelled, saying why", asy
   await expect(page.locator(".invoice-closed")).toContainText(
     /\d\d\.\d\d · не та сума · Тест/,
   );
+  await expect(undone).toHaveText(
+    `Накладну «${supplier}» на 2 000,00 грн скасовано.`,
+  );
   // Nothing to pay, nothing behind a ⋯.
   await expect(payOnCard(page)).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "Дії з накладною" }),
   ).toHaveCount(0);
   expect(await owed(page, invoiceId)).toBe("0.00");
+});
+
+test("inside Telegram a cancel is felt as a record is: answered, a buzz of success and its line over the sum; refused, a buzz of the error and no line; no answer, neither — the sheet says so (audit 2026-11-23, money P2-1)", async ({
+  page,
+}) => {
+  const supplier = `Скасування ${randomUUID().slice(0, 6)}`;
+  await anInvoice(page, await aSupplier(page, supplier), "2000.00", "500.00");
+  await invoicesAt(page, hanna, { telegram: true });
+  await open(page, supplier);
+  const buzzes = async (kind: string): Promise<number> =>
+    (await told(page, "web_app_trigger_haptic_feedback")).filter(
+      (each) =>
+        each.type === "notification" && each.notification_type === kind,
+    ).length;
+  const undone = page.locator(".invoice-done");
+  const cancelPayment = async (): Promise<Locator> => {
+    await line(page, "Оплата 500,00 грн").getByRole("button").click();
+    const why = await sheet(page, "Скасувати: оплата 500,00 грн");
+    await why.getByLabel("Чому скасовуємо").fill("гроші не віддали");
+    await why.getByRole("button", { name: "Так, скасувати" }).click();
+    return why;
+  };
+  // Refused: the error felt, the refusal said, nothing «скасовано».
+  await refuseOnce(
+    page,
+    "**/api/v1/supplier-invoices/*/entries/*/cancel",
+    409,
+  );
+  await cancelPayment();
+  await expect(page.getByRole("alert")).toBeVisible();
+  await expect.poll(() => buzzes("error")).toBe(1);
+  await expect(undone).toHaveCount(0);
+  // A gateway's 503 is no answer: not felt as a refusal (review).
+  let gateway = false;
+  await page.route(
+    "**/api/v1/supplier-invoices/*/entries/*/cancel",
+    async (route) => {
+      if (gateway) {
+        await route.fallback();
+        return;
+      }
+      gateway = true;
+      await route.fulfill({ status: 503 });
+    },
+  );
+  const gone = await cancelPayment();
+  // Answered by the gateway, the sheet closes — its answer taken.
+  await expect(gone).toHaveCount(0);
+  await expect(page.getByRole("alert")).toBeVisible();
+  expect(gateway).toBe(true);
+  expect(await buzzes("error")).toBe(1);
+  expect(await buzzes("success")).toBe(0);
+  await expect(undone).toHaveCount(0);
+  // No answer: nothing felt, the sheet says so and stays.
+  let lost = false;
+  await page.route(
+    "**/api/v1/supplier-invoices/*/entries/*/cancel",
+    async (route) => {
+      if (lost) {
+        await route.fallback();
+        return;
+      }
+      lost = true;
+      await route.abort("connectionreset");
+    },
+  );
+  const why = await cancelPayment();
+  await expect(why).toContainText("Немає відповіді сервера.");
+  expect(await buzzes("success")).toBe(0);
+  expect(await buzzes("error")).toBe(1);
+  await expect(undone).toHaveCount(0);
+  // Pressed again, answered: success felt, its line over the sum.
+  await why.getByRole("button", { name: "Так, скасувати" }).click();
+  await expect(undone).toHaveText(
+    "Оплату 500,00 грн скасовано. Залишок 2 000,00 грн.",
+  );
+  await expect.poll(() => buzzes("success")).toBe(1);
+  // The whole invoice: the same — refused, unanswered, then answered.
+  const cancelInvoice = async (): Promise<Locator> => {
+    await act(page, "Скасувати накладну");
+    const cancelling = await sheet(page, "Скасувати накладну");
+    await cancelling.getByLabel("Чому скасовуємо").fill("не та сума");
+    await cancelling
+      .getByRole("button", { name: "Так, скасувати накладну" })
+      .click();
+    return cancelling;
+  };
+  await refuseOnce(page, "**/api/v1/supplier-invoices/*/cancel", 409);
+  await cancelInvoice();
+  await expect(page.getByRole("alert")).toBeVisible();
+  await expect.poll(() => buzzes("error")).toBe(2);
+  await expect(undone).toHaveCount(0);
+  let dropped = false;
+  await page.route("**/api/v1/supplier-invoices/*/cancel", async (route) => {
+    if (dropped) {
+      await route.fallback();
+      return;
+    }
+    dropped = true;
+    await route.abort("connectionreset");
+  });
+  const cancelling = await cancelInvoice();
+  await expect(cancelling).toContainText("Немає відповіді сервера.");
+  expect(await buzzes("success")).toBe(1);
+  expect(await buzzes("error")).toBe(2);
+  await expect(undone).toHaveCount(0);
+  await cancelling
+    .getByRole("button", { name: "Так, скасувати накладну" })
+    .click();
+  await expect(undone).toHaveText(
+    `Накладну «${supplier}» на 2 000,00 грн скасовано.`,
+  );
+  await expect.poll(() => buzzes("success")).toBe(2);
+  expect(await buzzes("error")).toBe(2);
 });
 
 test("what is left is written off by the owner, never by a manager", async ({

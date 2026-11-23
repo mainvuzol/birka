@@ -579,6 +579,91 @@ test("a mistaken «Продано» is undone by cancelling its invoice", async 
   await expect(page.locator(".invoice-closed")).toContainText("Скасовано");
 });
 
+test("a supplier screen whose own kept operation the phone cannot read is held, as «Моделі» and «Каса»: «Постачальникам», «Позичене» and «Накладні» reached, the plate over them, nothing sent (audit 2026-11-23, money Н1)", async ({
+  page,
+}) => {
+  const coat = await aModel(page);
+  const supplier = await aSupplier(page);
+  await borrowed(page, coat, supplier.id, 1);
+  const invoice = await page.request.post("/api/v1/supplier-invoices", {
+    headers: await headers(page),
+    data: {
+      command_id: randomUUID(),
+      store_id: centre,
+      supplier_id: supplier.id,
+      amount: "2000.00",
+      paid_now: "0",
+      note: null,
+    },
+  });
+  expect(invoice.status()).toBe(201);
+  const me = (await (
+    await page.request.get("/api/v1/me", { headers: await headers(page) })
+  ).json()) as { organization_id: string; user_id: string };
+  const returnsKey = `birka:supplier-return-pending:${me.organization_id}:${me.user_id}:${centre}`;
+  const invoicesKey = `birka:supplier-invoice-pending:${me.organization_id}:${me.user_id}:${centre}`;
+  const sent = posts(page, /\/api\/v1\/(supplier-returns|supplier-invoices)/);
+  // The phone keeps a return to a supplier it cannot read; Бірка is opened
+  // again.
+  await openAs(page, hanna);
+  await page.evaluate((key) => {
+    localStorage.setItem(key, "{not a return");
+  }, returnsKey);
+  await openAs(page, hanna);
+  await expect(
+    page
+      .getByRole("alert")
+      .filter({ hasText: "збережене повернення постачальнику" }),
+  ).toBeVisible();
+  // Its screens still open — the plate at the top says why — and nothing
+  // there sends: a press would be lost unheard.
+  await section(page, "Постачальникам");
+  await expect(
+    page
+      .locator(".screen-title")
+      .getByRole("button", { name: "Повернути товар постачальнику" }),
+  ).toBeDisabled();
+  await section(page, "Позичене й під реалізацію");
+  await expect(
+    tag(page, coat).getByRole("button", { name: "Продано", exact: true }),
+  ).toBeDisabled();
+  // The returns' read again, the invoices' kept operation unread.
+  await page.evaluate(
+    ([returns, invoices]) => {
+      localStorage.removeItem(returns ?? "");
+      localStorage.setItem(invoices ?? "", "{not an invoice");
+    },
+    [returnsKey, invoicesKey],
+  );
+  await openAs(page, hanna);
+  await expect(
+    page
+      .getByRole("alert")
+      .filter({ hasText: "збережену операцію з накладною" }),
+  ).toBeVisible();
+  await section(page, "Накладні");
+  await page
+    .getByRole("group", { name: "Які накладні" })
+    .getByRole("button", { name: "Усі", exact: true })
+    .click();
+  await page
+    .getByRole("article", { name: supplier.name, exact: true })
+    .locator(".order-row")
+    .click();
+  await expect(
+    page.getByRole("heading", { name: supplier.name, level: 1 }),
+  ).toBeVisible();
+  await expect(
+    page
+      .locator(".order-dock")
+      .getByRole("button", { name: "Сплатити", exact: true }),
+  ).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "Дії з накладною" }),
+  ).toBeDisabled();
+  expect(sent.bodies).toHaveLength(0);
+});
+
 test("a seller takes only the shop's own goods", async ({ page }) => {
   await openAs(page, lida);
   await section(page, "Приймання");

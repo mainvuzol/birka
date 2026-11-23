@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import type { JSX, ReactNode, RefObject } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { ListMore } from "@/shared/ListMore";
-import { ApiError, api } from "@/shared/api";
+import { ApiError, api, unreachable } from "@/shared/api";
 import { Unread } from "@/shared/Unread";
 import { useNextPageFailed } from "@/shared/nextPage";
 import { Placeholder } from "@/shared/Placeholder";
@@ -14,7 +14,7 @@ import { Icon } from "@/shared/Icon";
 import { SendingLine } from "@/shared/Sending";
 import { Sheet } from "@/shared/Sheet";
 import { radioArrows } from "@/shared/radioKeys";
-import { useAskBeforeClosing } from "@/shared/telegram";
+import { buzz, useAskBeforeClosing } from "@/shared/telegram";
 import { shortDay } from "@/credits/format";
 import {
   doneText,
@@ -214,10 +214,15 @@ export function InvoiceActions({
         token,
         { reason },
       );
+      // Felt as a return's cancel is: the server's answer in the hand, its
+      // refusal too; no answer — a gateway's 502–504 among it — nothing
+      // (audit 2026-11-23, money P2-1; review).
+      buzz("success");
       setView(null);
       cancelled(current);
     } catch (error) {
       if (error instanceof ApiError) {
+        if (!unreachable(error)) buzz("error");
         setView(null);
         refused(refusalText(error));
       } else setProblem(noAnswer);
@@ -754,10 +759,13 @@ export function EntryCancel({
           ...(elsewhere ? { store_id: store.id } : {}),
         },
       );
+      buzz("success");
       cancelled(current);
     } catch (error) {
-      if (error instanceof ApiError) refused(refusalText(error));
-      else setProblem(noAnswer);
+      if (error instanceof ApiError) {
+        if (!unreachable(error)) buzz("error");
+        refused(refusalText(error));
+      } else setProblem(noAnswer);
     } finally {
       setBusy(false);
     }
