@@ -112,7 +112,7 @@ export function Count({
         {takeOut && (
           <button
             type="button"
-            className="quiet cash-first"
+            className="sign-link"
             aria-haspopup="dialog"
             onClick={takeOut}
           >

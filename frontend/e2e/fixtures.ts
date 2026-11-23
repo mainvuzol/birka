@@ -2040,6 +2040,87 @@ export async function expectSignedLink(button: Locator): Promise<void> {
   await expect(button).toHaveCSS("text-decoration-line", "none");
 }
 
+/**
+ * A way on from its sentence, told by its sign (spec §5.5 `button-s`, the
+ * `link` token; audit 2026-11-22, money P2-2, orders-cash P2-2), as «Спершу
+ * запишіть видане з каси ›» is drawn: nothing round it — no edge, no fill —
+ * its words in the link's colour in both themes, 15/600, never underlined,
+ * 44 high at least, its words' width at its block's left edge, the set's
+ * chevron 16 in pencil after them. `held`: taking no tap, its words in
+ * pencil, still nothing round it — never the dashed «not now».
+ */
+export async function expectSignLink(
+  button: Locator,
+  name: string,
+  { held = false }: { held?: boolean } = {},
+): Promise<void> {
+  await expectLinkChevron(button, name);
+  if (held) await expect(button).toBeDisabled();
+  else await expect(button).toBeEnabled();
+  const look = await button.evaluate((node, inPencil) => {
+    const probe = document.createElement("span");
+    document.body.append(probe);
+    // Its colour whatever the theme: in the light one the link is the
+    // ink's too, so the dark one is read as well — set and put back here,
+    // with nothing drawn between.
+    const ours = (): boolean => {
+      probe.style.color = inPencil ? "var(--pencil)" : "var(--link)";
+      return getComputedStyle(node).color === getComputedStyle(probe).color;
+    };
+    const root = document.documentElement;
+    const was = root.dataset.theme;
+    const here = ours();
+    root.dataset.theme = "dark";
+    const dark = ours();
+    if (was === undefined) delete root.dataset.theme;
+    else root.dataset.theme = was;
+    probe.remove();
+    const style = getComputedStyle(node);
+    const block = node.parentElement;
+    if (block === null) throw new Error("no block");
+    // As laid out, never as drawn: a stub turned 1.5° widens every box.
+    if (!(node instanceof HTMLElement)) throw new Error("not an element");
+    const from =
+      node.offsetParent === block
+        ? node.offsetLeft
+        : node.offsetLeft - block.offsetLeft - block.clientLeft;
+    const width = node.style.width;
+    node.style.width = "max-content";
+    const words = node.offsetWidth;
+    node.style.width = width;
+    return {
+      colour: here && dark,
+      edge: [
+        style.borderTopWidth,
+        style.borderRightWidth,
+        style.borderBottomWidth,
+        style.borderLeftWidth,
+      ],
+      fill: style.backgroundColor,
+      size: style.fontSize,
+      weight: style.fontWeight,
+      line: style.textDecorationLine,
+      opacity: style.opacity,
+      tall: node.offsetHeight >= 44,
+      atLeft:
+        Math.abs(from - parseFloat(getComputedStyle(block).paddingLeft)) <= 1,
+      snug: Math.abs(words - node.offsetWidth) <= 1,
+    };
+  }, held);
+  expect(look).toEqual({
+    colour: true,
+    edge: ["0px", "0px", "0px", "0px"],
+    fill: "rgba(0, 0, 0, 0)",
+    size: "15px",
+    weight: "600",
+    line: "none",
+    opacity: "1",
+    tall: true,
+    atLeft: true,
+    snug: true,
+  });
+}
+
 /** The shared empty place (spec §6.28; audit after stage 2, frame P2-1):
  * the blank tag 64 square in the edge, its one line 17/600 in ink — one
  * markup wherever nothing is yet. */
@@ -2250,9 +2331,11 @@ export async function expectLinkChevron(
       const words = range.getBoundingClientRect();
       const box = chevron.getBoundingClientRect();
       const middle = box.top + box.height / 2;
+      // Its size as laid out: a stub turned 1.5° widens every box drawn.
+      const laid = getComputedStyle(chevron);
       return {
         set: chevron.innerHTML === probe.innerHTML,
-        size: [box.width, box.height],
+        size: [parseFloat(laid.width), parseFloat(laid.height)],
         pencil: getComputedStyle(chevron).color === colour,
         after: box.left >= words.right,
         line: middle >= words.top && middle <= words.bottom,

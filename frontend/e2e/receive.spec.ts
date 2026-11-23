@@ -1802,3 +1802,49 @@ test("inside Telegram «Прийшов товар» is felt: a warehouse, a mode
     "Нічого не прийнято, список збережено. Перевірте рядки.",
   );
 });
+
+test("«Пошук у каталозі»: a model added on another phone between two pages moves the next by one — the row it repeats is shown once, no key said twice (audit 2026-11-22, goods Н1)", async ({
+  page,
+}) => {
+  const said: string[] = [];
+  page.on("console", (message) => {
+    said.push(message.text());
+  });
+  const variant = (name: string) => ({
+    product_variant_id: randomUUID(),
+    display_name: name,
+  });
+  const first = Array.from({ length: 20 }, (_, i) =>
+    variant(`Двічі ${String(i + 1).padStart(2, "0")}`),
+  );
+  // The next page asked from 20 after one more was added before: it starts
+  // with the first page's last.
+  const second = [first[19], variant("Двічі 21"), variant("Двічі 22")];
+  await page.route(
+    "**/api/v1/catalog/receivable-variants?**",
+    async (route) => {
+      const offset = new URL(route.request().url()).searchParams.get("offset");
+      await route.fulfill({
+        json:
+          offset === "0"
+            ? { items: first, has_more: true }
+            : { items: second, has_more: false },
+      });
+    },
+  );
+  await enter(page);
+  await receiveInto(page, "Каса-склад");
+  await find(page, "Двічі");
+  const found = page
+    .getByRole("radiogroup", { name: "Знайдені товари" })
+    .getByRole("radio");
+  await expect(found).toHaveCount(20);
+  await page.getByRole("button", { name: "Показати ще" }).click();
+  await expect(found).toHaveCount(22);
+  const names = await found.allTextContents();
+  expect(new Set(names).size).toBe(22);
+  expect(names.filter((name) => name === "Двічі 20")).toHaveLength(1);
+  await expect(found.nth(20)).toHaveText("Двічі 21");
+  await expect(found.nth(20)).toBeFocused();
+  expect(said.filter((line) => /same key/i.test(line))).toEqual([]);
+});

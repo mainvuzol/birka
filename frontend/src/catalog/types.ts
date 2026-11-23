@@ -4,6 +4,13 @@ export interface Candidate {
   display_name: string;
   distinction_note: string | null;
   conflicts: string[];
+  /** The candidate's model, named as a model is named everywhere else
+   * (audit 2026-11-22, goods P2-2); a proposal saved before the server said
+   * them has none. */
+  concept_name?: string | null;
+  source_name?: string | null;
+  business_category_name?: string | null;
+  garment_type_name?: string | null;
 }
 export interface Decision {
   decision_id: string;

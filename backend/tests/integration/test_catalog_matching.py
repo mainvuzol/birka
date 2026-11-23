@@ -12,7 +12,14 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from app.modules.authz.permissions import Permission
 from app.modules.catalog.evidence import AliasStatus, AliasTargetType, ProductAlias
 from app.modules.catalog.matching import duplicate_family_signatures, preview_match
-from app.modules.catalog.models import CanonicalConcept, ProductFamily, ProductVariant
+from app.modules.catalog.models import (
+    BusinessCategory,
+    CanonicalConcept,
+    GarmentType,
+    ProductFamily,
+    ProductVariant,
+    SourceIdentity,
+)
 from tests.conftest import requires_database
 from tests.integration.test_sale_command import make_shop
 from tests.integration.test_transfer_command import api
@@ -160,6 +167,93 @@ async def test_preview_api_authorizes_store_and_rejects_invalid_input(maker):
                 "/api/v1/catalog/match-preview", json={**payload, "store_id": str(foreign.store_id)}
             )
         ).status_code == 403
+
+
+async def test_a_candidate_names_its_model_never_one_of_its_colours(maker):
+    """Audit 2026-11-22, goods P2-2: a candidate carries its model's names —
+    the model's, its source's, its category's and its garment type's — so a
+    phone names the model as it names it everywhere else, never by one of
+    its colours. Read only: what is chosen is still `family_id`, and the
+    preview's evidence is unchanged."""
+    async with maker() as session:
+        shop = await make_shop(session)
+        bare = (
+            await preview_match(session, organization_id=shop.organization_id, raw_text="Лоран")
+        ).to_dict()
+        own = next(c for c in bare["candidates"] if c["variant_id"] == str(shop.variant_id))
+        # A model with its name alone: the rest said as nothing.
+        assert own["display_name"] == "Лоран шоколад 70 см"
+        assert (
+            own["concept_name"],
+            own["source_name"],
+            own["business_category_name"],
+            own["garment_type_name"],
+        ) == ("Лоран", None, None, None)
+        category = BusinessCategory(
+            organization_id=shop.organization_id, name="Пальто", normalized_name="пальто"
+        )
+        garment = GarmentType(
+            organization_id=shop.organization_id, name="Пальто", normalized_name="пальто"
+        )
+        source = SourceIdentity(
+            organization_id=shop.organization_id, name="Понте", normalized_name="понте"
+        )
+        session.add_all([category, garment, source])
+        await session.flush()
+        concept = await session.get(CanonicalConcept, shop.concept_id)
+        concept.business_category_id = category.id
+        # The garment type the name was first given; the model has none of
+        # its own — said as the model search says it (review).
+        concept.garment_type_id = garment.id
+        variant = await session.get(ProductVariant, shop.variant_id)
+        family = await session.get(ProductFamily, variant.product_family_id)
+        family.source_identity_id = source.id
+        await session.flush()
+        named = (
+            await preview_match(session, organization_id=shop.organization_id, raw_text="Лоран")
+        ).to_dict()
+        candidate = next(c for c in named["candidates"] if c["variant_id"] == str(shop.variant_id))
+        # The variant's name carries its colour; the model's names do not.
+        assert candidate["display_name"] == "Лоран Понте шоколад 70 см"
+        assert (
+            candidate["concept_name"],
+            candidate["source_name"],
+            candidate["business_category_name"],
+            candidate["garment_type_name"],
+        ) == ("Лоран", "Понте", "Пальто", "Пальто")
+        assert candidate["family_id"] == str(family.id)
+        # A model's own garment type is its, before its name's.
+        jacket = GarmentType(
+            organization_id=shop.organization_id, name="Куртка", normalized_name="куртка"
+        )
+        session.add(jacket)
+        await session.flush()
+        family.garment_type_id = jacket.id
+        await session.flush()
+        own_type = (
+            await preview_match(session, organization_id=shop.organization_id, raw_text="Лоран")
+        ).to_dict()
+        jacketed = next(
+            c for c in own_type["candidates"] if c["variant_id"] == str(shop.variant_id)
+        )
+        assert jacketed["garment_type_name"] == "Куртка"
+        family.garment_type_id = None
+        await session.commit()
+    async with api(maker, shop.scope(frozenset(Permission))) as client:
+        answered = await client.post(
+            "/api/v1/catalog/match-preview",
+            json={"store_id": str(shop.store_id), "raw_text": "Лоран"},
+        )
+        assert answered.status_code == 200, answered.text
+        sent = next(
+            c for c in answered.json()["candidates"] if c["variant_id"] == str(shop.variant_id)
+        )
+        assert (
+            sent["concept_name"],
+            sent["source_name"],
+            sent["business_category_name"],
+            sent["garment_type_name"],
+        ) == ("Лоран", "Понте", "Пальто", "Пальто")
 
 
 async def test_foreign_family_cannot_be_used_as_explicit_context(maker):

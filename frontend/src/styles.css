@@ -3680,20 +3680,6 @@ section.cash {
   margin: 20px 0 4px;
   color: var(--pencil);
 }
-/* A quiet line, not a button: cash out first, so the field, the reminders
-   and the panel stand together on a small screen. */
-.cash-first {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 44px;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  color: var(--link);
-  font-weight: 600;
-  text-align: left;
-}
 .cash-count .hint,
 .cash-closed .hint,
 .cash-move .hint {
@@ -4395,6 +4381,31 @@ span.cash-difference > .difference-sign {
   flex: none;
   vertical-align: -3px;
   color: var(--pencil);
+}
+/* A way on from its sentence, told by its sign (spec §5.5 `button-s`, the
+   `link` token; audit 2026-11-22, money P2-2, orders-cash P2-2): nothing
+   round it, its words in the link's colour 15/600, a finger's height, its
+   words' width at its block's left edge, the set's chevron 16 in pencil
+   after them; never underlined — its sign tells it. «Спершу запишіть
+   видане з каси ›» drew it first; «Відкрити накладну ›», «Позичене й під
+   реалізацію ›» and «Скасовані й повернені на склад ›» take it. Taking no
+   tap: its words in pencil, nothing round them, as a text button's. */
+.sign-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--link);
+  font-weight: 600;
+  text-align: left;
+}
+/* Under «Показати ще», or under the rows. */
+.orders-gone {
+  margin-top: 16px;
 }
 /* What opens in place (audit 2026-11-13, frame P2-3; spec S21): a quiet
    button of a finger's height, its words, the set's chevron 16 in pencil
@@ -7573,13 +7584,6 @@ p.receive-place {
   padding: 8px 0;
   border-top: 1px solid var(--line);
 }
-.set-off-open {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  min-height: 44px;
-  padding: 0;
-}
 .supplier-return-cancel {
   margin-top: 24px;
 }
@@ -8386,6 +8390,7 @@ nav.report-ways {
 button:disabled:where(
     :not(
         .pressed,
+        .sign-link,
         .size-cell,
         .sale-row,
         .supplier-row,
@@ -8437,7 +8442,8 @@ button:disabled:where(
     .tab,
     .store-line button,
     .screen-header .back,
-    .model-open
+    .model-open,
+    .sign-link
   ):disabled {
   border-color: transparent;
   background: transparent;

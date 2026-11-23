@@ -11,6 +11,7 @@ import {
   expectListBlock,
   expectResultHeading,
   expectSheetCancel,
+  expectSignLink,
   expectSumRole,
   grn,
   menu,
@@ -912,7 +913,12 @@ test("goods returned are set off against an invoice, and their return waits for 
   ).toHaveCount(0);
 
   // «Відкрити накладну ›» from its set-off (P1-3): the invoice's card, its
-  // way back to the return.
+  // way back to the return. The way of its line, told by its sign (audit
+  // 2026-11-22, money P2-2).
+  await expectSignLink(
+    counts.getByRole("button", { name: "Відкрити накладну" }),
+    "Відкрити накладну",
+  );
   await counts.getByRole("button", { name: "Відкрити накладну" }).click();
   await expect(
     page.getByRole("heading", { name: supplier, exact: true }),

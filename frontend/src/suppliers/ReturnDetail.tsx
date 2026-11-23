@@ -181,14 +181,18 @@ export function ReturnDetail({
                 {openInvoice && (
                   <button
                     type="button"
-                    className="quiet set-off-open"
+                    className="sign-link"
                     disabled={openInvoice.held || busy}
                     onClick={() => {
                       openInvoice.go(setOff);
                     }}
                   >
                     Відкрити накладну
-                    <Icon name="chevron-right" size={16} />
+                    <Icon
+                      name="chevron-right"
+                      size={16}
+                      className="link-chevron"
+                    />
                   </button>
                 )}
               </li>

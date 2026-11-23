@@ -4,6 +4,7 @@ import {
   countTaps,
   dockOnMenu,
   expectHeldLook,
+  expectSignLink,
   more,
   openStore,
   pickSupplier,
@@ -559,7 +560,12 @@ test("a mistaken «Продано» is undone by cancelling its invoice", async 
   await expect(page.locator(".invoice-closed")).toContainText(
     / · ще не продали · /,
   );
-  // From the card to its lot, and back to the card (P1-3).
+  // From the card to its lot, and back to the card (P1-3); the way of the
+  // card's sentence, told by its sign (audit 2026-11-22, money P2-2).
+  await expectSignLink(
+    page.getByRole("button", { name: "Позичене й під реалізацію" }),
+    "Позичене й під реалізацію",
+  );
   await page.getByRole("button", { name: "Позичене й під реалізацію" }).click();
   await expect(
     page.getByRole("heading", { name: "Позичене й під реалізацію" }),
@@ -986,6 +992,18 @@ for (const [name, theme] of [
       stub.getByRole("button", { name: "Відкрити накладну" }),
     ])
       expect(await contrast(part)).toBeGreaterThanOrEqual(4.5);
+    // «Відкрити накладну ›» a way of the stub's sentence, told by its sign:
+    // nothing round it, the link's colour; taking no tap, its words in
+    // pencil, never dashed (audit 2026-11-22, money P2-2).
+    const open = stub.getByRole("button", { name: "Відкрити накладну" });
+    await expectSignLink(open, "Відкрити накладну");
+    await open.evaluate((node) => {
+      (node as HTMLButtonElement).disabled = true;
+    });
+    await expectSignLink(open, "Відкрити накладну", { held: true });
+    await open.evaluate((node) => {
+      (node as HTMLButtonElement).disabled = false;
+    });
     await expect(page.locator("html")).toHaveJSProperty("scrollWidth", 360);
     // «Готово» outside Telegram: the MainButton's place in the result's
     // dock at the menu's top, as every result's (audit 2026-11-18, money

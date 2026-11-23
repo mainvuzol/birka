@@ -1815,7 +1815,7 @@ const hands = `
     <input type="search" aria-label="Пошук" />
     <button type="button" class="search-clear" data-sign="clear">×</button>
   </div>
-  <button type="button" class="quiet cash-first" data-sign="first">ⓘ Спершу запишіть видане з каси ›</button>
+  <button type="button" class="sign-link" data-sign="first">ⓘ Спершу запишіть видане з каси ›</button>
   <p class="field-wrong" role="alert" data-field="wrong">Оберіть період від одного дня до року.</p>
   <p class="pay-over" role="alert" data-field="over">Це більше, ніж винні: 2 000,00 грн.</p>
   <p role="alert" data-field="plate">Список не збережено.</p>

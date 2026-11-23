@@ -309,14 +309,18 @@ export function Borrowed({
               {openInvoice && (
                 <button
                   type="button"
-                  className="quiet set-off-open"
+                  className="sign-link"
                   disabled={openInvoice.held}
                   onClick={() => {
                     openInvoice.go(done.invoice);
                   }}
                 >
                   Відкрити накладну
-                  <Icon name="chevron-right" size={16} />
+                  <Icon
+                    name="chevron-right"
+                    size={16}
+                    className="link-chevron"
+                  />
                 </button>
               )}
             </Stub>
