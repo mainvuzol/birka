@@ -379,24 +379,27 @@ test("a debt says who and what in one line, what is owed first and large, how mu
     .getByRole("list", { name: "Історія боргу" })
     .getByRole("listitem");
   await expect(rows).toHaveCount(3);
+  // The newest first (spec §6.21), as the customer's card and an
+  // invoice's «Історія»: the server answers the oldest first (audit
+  // 2026-11-22, money P2-3's twin, forwarded).
   await expect(rows.locator(".history-what")).toHaveText([
-    "Внесок · готівка",
-    "Внесок · готівка",
     "Повернення товару",
+    "Внесок · готівка",
+    "Внесок · готівка",
   ]);
   await expect(rows.nth(0).locator(".history-meta")).toHaveText(
-    /^01\.10, \d\d:\d\d · Оля$/,
+    /^13\.10, \d\d:\d\d · Оля · повернено 500,00\sгрн на картку$/,
   );
   await expect(rows.nth(1).locator(".history-meta")).toHaveText(
     /^12\.10, \d\d:\d\d · Ганна · прийняв магазин «Центр»$/,
   );
   await expect(rows.nth(2).locator(".history-meta")).toHaveText(
-    /^13\.10, \d\d:\d\d · Оля · повернено 500,00\sгрн на картку$/,
+    /^01\.10, \d\d:\d\d · Оля$/,
   );
   await expect(rows.locator(".history-sum")).toHaveText([
+    "500,00 грн",
+    "500,00 грн",
     "1 000,00 грн",
-    "500,00 грн",
-    "500,00 грн",
   ]);
   // «Внесок» never hides the last of it.
   const last = rows.last();
@@ -2522,6 +2525,75 @@ test.describe("«Продаж» › «Внесок»: a payment on a debt from t
     await expect(rows.nth(1)).toContainText("Магазин «Ринок»");
   });
 
+  test("among the stores that do not trade, a customer owing two of them is a row a store — its sum and its store in its name, never their sum; a row of one debt opens it, a row of two «На який борг вносить?» with all her debts (audit 2026-11-22, sale Н1; review)", async ({
+    page,
+  }) => {
+    const market = {
+      store_id: randomUUID(),
+      store_name: "Ринок",
+      store_state: "BLOCKED",
+    };
+    const podil = {
+      store_id: randomUUID(),
+      store_name: "Поділ",
+      store_state: "ARCHIVED",
+    };
+    const first = coat(market);
+    const there = { ...coat(podil), goods: ["Альпака сіра · L"] };
+    const debts = [first, { ...aside(), ...market }, there];
+    await serve(page, coat());
+    await page.route("**/api/v1/credits/customers?**", async (route) => {
+      const url = new URL(route.request().url());
+      const elsewhere = url.searchParams.get("elsewhere") === "true";
+      await route.fulfill({
+        json: {
+          items: elsewhere
+            ? [
+                {
+                  ...customerOf(first, "4500.00"),
+                  open_debts: 3,
+                  credits: debts,
+                },
+              ]
+            : [],
+          has_more: false,
+        },
+      });
+    });
+    await atTheTill(page);
+    await page
+      .getByRole("searchbox", { name: "Ім’я або телефон" })
+      .fill("0671234567");
+    await page
+      .getByRole("button", { name: "Шукати за цим номером", exact: true })
+      .click();
+    const rows = page.getByRole("button", {
+      name: /^Відкрити борг: Оксана Петренко,/,
+    });
+    await expect(rows).toHaveCount(2);
+    await expect(rows.nth(0)).toHaveAccessibleName(
+      /^Відкрити борг: Оксана Петренко, винні 2\s500,00\sгрн, магазин «Ринок»$/,
+    );
+    await expect(rows.nth(1)).toHaveAccessibleName(
+      /^Відкрити борг: Оксана Петренко, винні 2\s000,00\sгрн, магазин «Поділ»$/,
+    );
+    await expect(rows.nth(1)).toContainText("Альпака сіра · L");
+    await expect(page.locator("body")).not.toContainText(/4\s500,00/);
+    // Two debts at «Ринок»: which one, among all hers, each its store's.
+    await rows.nth(0).click();
+    const which = page.getByRole("dialog", { name: "На який борг вносить?" });
+    await expect(which).toHaveAttribute("data-ready", "");
+    await expect(which.getByRole("button")).toHaveCount(3);
+    await expect(which).not.toContainText("винні всього");
+    await page.keyboard.press("Escape");
+    await expect(which).toHaveCount(0);
+    // One debt at «Поділ»: it opens, no question.
+    await rows.nth(1).click();
+    await expect(page.getByLabel("Сума, грн")).toBeVisible();
+    await expect(page.getByText("Альпака сіра · L").first()).toBeVisible();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+  });
+
   test("more than is owed darkens the ways and says so in the error's colour — a line under the sum, never a refusal's plate, the three ways in view at 360×640 — and nothing is sent; the keypad keeps a sum to the kopeck (audit 2026-11-18, frame P2-2)", async ({
     page,
   }) => {
@@ -2871,6 +2943,11 @@ test.describe("«Продаж» › «Внесок»: a payment on a debt from t
     await page.getByLabel("Ім’я або телефон").fill("067 123 45 67");
     const none = page.locator(".orders-empty");
     await expectEmpty(none, "За цим номером у цьому магазині боргів немає.");
+    // Heard as it comes, as every search's answer (audit 2026-11-18, goods
+    // P2-4; forwarded by the audits since).
+    await expect(
+      page.getByRole("status").filter({ hasText: "боргів немає" }),
+    ).toHaveText("За цим номером у цьому магазині боргів немає.");
     await expect(none.locator(".t-meta")).toHaveText(
       "Внесок приймає магазин, де продали.",
     );

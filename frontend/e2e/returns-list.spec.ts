@@ -281,6 +281,11 @@ test("the search runs as it is typed, from two letters; Enter at once; one lette
   await field.press("Enter");
   const empty = page.locator(".returns-empty");
   await expectEmpty(empty, "За «немає такого» продажів не знайдено.");
+  // Heard as it comes, as every search's answer (audit 2026-11-18, goods
+  // P2-4; forwarded by the audits since).
+  await expect(
+    page.getByRole("status").filter({ hasText: "не знайдено" }),
+  ).toHaveText("За «немає такого» продажів не знайдено.");
   await expect(empty.locator(":scope > .t-meta")).toHaveText(
     "Перевірте назву або очистіть пошук.",
   );

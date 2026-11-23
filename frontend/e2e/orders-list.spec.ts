@@ -1299,6 +1299,11 @@ test("a waybill is found as it is typed, from two characters, Enter at once, in 
     blank,
     "За «9999» замовлень не знайдено. Перевірте номер ТТН.",
   );
+  // Heard as it comes, as every search's answer (audit 2026-11-18, goods
+  // P2-4; forwarded by the audits since).
+  await expect(
+    page.getByRole("status").filter({ hasText: "не знайдено" }),
+  ).toHaveText("За «9999» замовлень не знайдено. Перевірте номер ТТН.");
   await expect(blank.getByRole("button")).toHaveText(["Очистити"]);
   // Another typed after nothing found: «not found» is never said of it
   // before its answer (review, 2026-10-23).

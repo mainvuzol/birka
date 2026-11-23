@@ -33,7 +33,7 @@ import { CustomerRow, debtsCount } from "./CustomerRow";
 import { Customer as CustomerCard } from "./Customer";
 import { Debts } from "./Debts";
 import { Debt, refusalText } from "./Debt";
-import { askForPhone, erasedCustomer, wholePhone } from "./types";
+import { apartByStore, askForPhone, erasedCustomer, wholePhone } from "./types";
 import type {
   Credit,
   CreditStatus,
@@ -574,9 +574,12 @@ export function Credits({
           // The whole list empty: the blank tag (spec §6.28; audit after
           // stage 2, sale P1-2), the words as before, a sentence a line.
           elsewhere ? (
+            // Every search's answer heard as it is drawn (audit 2026-11-18,
+            // goods P2-4; forwarded by the audits since).
             <Empty
               title="За цим номером боргів магазинів, що не працюють, не знайдено."
               meta="Перевірте номер або зверніться до менеджера."
+              status
             />
           ) : search && othersPending ? (
             <Placeholder said="Завантажуємо борги…" rows={1} debts block />
@@ -593,7 +596,7 @@ export function Credits({
               ))}
             </div>
           ) : search ? (
-            <Empty {...notFound(search, false)}>
+            <Empty {...notFound(search, false)} status>
               <button type="button" className="quiet" onClick={clear}>
                 Очистити
               </button>
@@ -609,6 +612,7 @@ export function Credits({
             open={till ? openAtTill : openCard(store, true)}
             dated={!till}
             card={!till}
+            apart={elsewhere}
           />
         )}
         {askElsewhere && (
@@ -841,7 +845,7 @@ function Block({
           alone ? (
             // The whole list: the blank tag (sale P1-2); in a block among
             // several, its line (2026-11-01).
-            <Empty {...notFound(search, readOnly)}>
+            <Empty {...notFound(search, readOnly)} status>
               <button type="button" className="quiet" onClick={clear}>
                 Очистити
               </button>
@@ -929,6 +933,7 @@ function Rows({
   open,
   dated = true,
   card,
+  apart = false,
 }: {
   customers: UseInfiniteQueryResult<InfiniteData<CustomerPage>>;
   listed: readonly Customer[];
@@ -942,6 +947,12 @@ function Rows({
    * one its one debt; the till's open a debt (audit 2026-11-18, sale
    * P2-3) — as `openCard` and `openAtTill` do. */
   card: boolean;
+  /** The stores that do not trade: a customer owing in several, a row a
+   * store, each with its own sum and name — never one sum of them (audit
+   * 2026-11-22, sale Н1). A row opens all the customer's debts, as one
+   * row did — the card, or the till's sheet, each debt naming its store —
+   * but at the till a row of one debt opens it (review). */
+  apart?: boolean;
 }): JSX.Element {
   return (
     <>
@@ -958,19 +969,30 @@ function Rows({
         />
       )}
       <div className="list-block" role="list" aria-label={label}>
-        {listed.map((each) => (
-          <div role="listitem" key={keyOf(each)}>
-            <CustomerRow
-              customer={each}
-              here={here}
-              open={() => {
-                open(each);
-              }}
-              dated={dated}
-              opens={card && each.phone_digits !== null ? "card" : "debt"}
-            />
-          </div>
-        ))}
+        {listed.flatMap((each) =>
+          (apart ? apartByStore(each) : [each]).map((part) => (
+            <div
+              role="listitem"
+              key={`${keyOf(each)}:${part === each ? "" : (part.credits[0]?.store_id ?? "")}`}
+            >
+              <CustomerRow
+                customer={part}
+                here={here}
+                open={() => {
+                  // At the till a row naming one debt opens it; else the
+                  // whole customer, as one row did (review).
+                  open(
+                    !card && part !== each && part.credits.length === 1
+                      ? part
+                      : each,
+                  );
+                }}
+                dated={dated}
+                opens={card && each.phone_digits !== null ? "card" : "debt"}
+              />
+            </div>
+          )),
+        )}
       </div>
       {customers.isFetchNextPageError ? (
         // The next page could not be read: those read stay.

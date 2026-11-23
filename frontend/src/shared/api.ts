@@ -1,4 +1,5 @@
 import { fileProblemText, isFileIssue } from "@/openings/fileErrors";
+import { money } from "@/orders/types";
 import { noteAnswered, noteUnreachable } from "@/shared/reach";
 import { noteSessionEnded } from "@/shared/sessionEnd";
 import { visible } from "@/shared/visible";
@@ -405,6 +406,18 @@ export function sessionEndedText(): string {
   }`;
 }
 
+/** Paying in parts, all of it paid now: an ordinary sale, said with its
+ * sum, and the way out may be a smaller sum — the form's own check, the
+ * till's refusal and «Клієнт забрав»'s alike (audit 2026-11-22, sale P2-1;
+ * its server refusal forwarded). `total` is the server's, a decimal. */
+export function paidInFullText(total: unknown): string {
+  const sum =
+    typeof total === "string" && money(total) !== "—"
+      ? ` (${money(total)})`
+      : "";
+  return `Покупець сплачує все одразу${sum} — це звичайний продаж. Зніміть «Оплата частинами» або змініть суму.`;
+}
+
 export function errorText(error: unknown): string {
   // The server was not reached: the shop sells on paper (ADR-0013 §3).
   if (unreachable(error)) return UNREACHABLE;
@@ -425,7 +438,7 @@ export function errorText(error: unknown): string {
   if (error.details.reason === "PERIOD")
     return "Оберіть період від одного дня до року; перший день — не пізніше останнього.";
   if (error.details.reason === "PAID_IN_FULL")
-    return "Покупець сплачує все одразу — це звичайний продаж. Зніміть «Оплата частинами».";
+    return paidInFullText(error.details.total);
   if (error.details.reason === "CUSTOMER_NAME")
     return "Вкажіть ім’я покупця, який платить частинами.";
   if (error.details.reason === "CUSTOMER_PHONE")

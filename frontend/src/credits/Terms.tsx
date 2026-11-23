@@ -1,14 +1,14 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { JSX, KeyboardEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { decimal, kopecks, money, typedKopecks } from "@/orders/types";
+import { decimal, kopecks, typedKopecks } from "@/orders/types";
 import { useSettled } from "@/sales/StockSearch";
 import type { CreditTerms } from "@/sales/types";
-import { api } from "@/shared/api";
+import { api, paidInFullText } from "@/shared/api";
 import { SwitchRow } from "@/shared/SwitchRow";
 import { hideKeyboard } from "@/shared/telegram";
 import { visible } from "@/shared/visible";
-import { phoneDigits, wholePhone } from "./types";
+import { apartByStore, phoneDigits, wholePhone } from "./types";
 import type { CustomerPage } from "./types";
 import { OwedSum } from "@/shared/OwedSum";
 
@@ -47,9 +47,9 @@ export function checkTerms(
   if (paid === null || paid <= 0n)
     return "Вкажіть, скільки покупець сплачує зараз — більше нуля, з точністю до копійок.";
   if (paid >= total)
-    // As the till's server refusal says it: the way out may be a smaller
-    // sum (audit 2026-11-22, sale P2-1).
-    return `Покупець сплачує все одразу (${money(decimal(total))}) — це звичайний продаж. Зніміть «Оплата частинами» або змініть суму.`;
+    // As the server's refusal says it: the way out may be a smaller sum
+    // (audit 2026-11-22, sale P2-1).
+    return paidInFullText(decimal(total));
   return {
     customer_name: name,
     customer_phone: phone,
@@ -166,15 +166,18 @@ function NumberDebt({
     .filter((at) => !Number.isNaN(at))
     .reduce<number | null>((latest, at) => Math.max(latest ?? at, at), null);
   const closed = whose(away.data);
-  const owesAway = closed !== undefined && (kopecks(closed.owed) ?? 0n) > 0n;
-  // Stores by who they are, not by name, and only where something is owed.
-  const awayStores = [
-    ...new Map(
-      (closed?.credits ?? [])
-        .filter((credit) => (kopecks(credit.owed) ?? 0n) > 0n)
-        .map((credit) => [credit.store_id, visible(credit.store_name)]),
-    ).values(),
-  ];
+  // A line a closed store, by who it is, not by name, and only where
+  // something is owed: never one sum of several (spec: «никогда суммой по
+  // сети»; audit 2026-11-22, sale Н1).
+  // A store's sum unread is said as «—», never left out (review).
+  const owedAway = closed
+    ? apartByStore(closed).filter(
+        (part) =>
+          part.credits.length > 0 &&
+          (part.owed === "" || (kopecks(part.owed) ?? 0n) > 0n),
+      )
+    : [];
+  const owesAway = owedAway.length > 0;
   return (
     // Heard when it comes, and read with the phone. Its room is kept once
     // the number is whole, before the answer comes: nothing below it moves
@@ -199,17 +202,16 @@ function NumberDebt({
         // the moment this store's debt waits (review, 2026-10-21).
         <span>За номером борг списано {fullDay(writtenOff)}</span>
       ) : null}
-      {closed && owesAway && (
-        // One line, the sum first: a long name is cut, never the sum, and
-        // nothing below moves (review, 2026-10-20). The sum with the debt's
-        // arrow, as everywhere a debt is left (audit 2026-11-15, sale P2-4).
-        <span className="owing away">
-          Винні <OwedSum value={closed.owed} />{" "}
-          {awayStores.length === 1
-            ? `магазину «${awayStores[0] ?? ""}»`
-            : "магазинам, що не працюють"}
+      {owedAway.map((part) => (
+        // A line a store, the sum first: a long name is cut, never the sum
+        // (review, 2026-10-20). The sum with the debt's arrow, as
+        // everywhere a debt is left (audit 2026-11-15, sale P2-4). A second
+        // closed store's line is rare, and moves what is below.
+        <span className="owing away" key={part.credits[0]?.store_id}>
+          Винні <OwedSum value={part.owed} />{" "}
+          {`магазину «${visible(part.credits[0]?.store_name ?? "")}»`}
         </span>
-      )}
+      ))}
     </p>
   );
 }

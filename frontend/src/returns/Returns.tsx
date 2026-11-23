@@ -380,6 +380,9 @@ export function Returns({
                   : `За «${visible(search)}» продажів не знайдено.`
               }
               meta={away ? undefined : "Перевірте назву або очистіть пошук."}
+              // Heard as it is drawn, as every search's answer (audit
+              // 2026-11-18, goods P2-4; forwarded by the audits since).
+              status
             >
               <button
                 type="button"

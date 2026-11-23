@@ -1304,11 +1304,12 @@ test("the till says a number's debt was written off, and says nothing when the d
   awayDelay = 400;
   away = owedAtRynok;
   answer = "nothing here";
-  // One line however long: the sum first, a long name cut, never the sum
-  // (review, 2026-10-20). Two stores; then one, its name long, six figures.
+  // A line a store, one line however long: the sum first, a long name cut,
+  // never the sum (review, 2026-10-20). Two stores; then one, its name
+  // long, six figures.
   const owedAway = (
     owed: string,
-    stores: { name: string; owed: string }[],
+    stores: { name: string; owed: string; id?: string }[],
   ): unknown[] => [
     {
       phone_digits: "0671234567",
@@ -1319,7 +1320,7 @@ test("the till says a number's debt was written off, and says nothing when the d
       credits: stores.map((store) => ({
         id: randomUUID(),
         status: "OPEN",
-        store_id: randomUUID(),
+        store_id: store.id ?? randomUUID(),
         store_name: store.name,
         owed: store.owed,
         written_off: "0.00",
@@ -1327,15 +1328,34 @@ test("the till says a number's debt was written off, and says nothing when the d
       })),
     },
   ];
-  away = owedAway("1500.00", [
-    { name: "Ринок", owed: "1000.00" },
+  // Two closed stores, one of them twice: a line a store, each with what
+  // that store is owed — never their sum (spec: «никогда суммой по сети»;
+  // audit 2026-11-22, sale Н1). Stores by who they are, not by name.
+  const rynok = randomUUID();
+  away = owedAway("1700.00", [
+    { name: "Ринок", owed: "1000.00", id: rynok },
     { name: "Ринок", owed: "500.00" },
+    { name: "Ринок", owed: "200.00", id: rynok },
   ]);
   await page.getByLabel("Телефон покупця").fill("(067) 123-45-67");
-  await expect(said.locator(".away")).toHaveText(
-    "Винні 1 500,00 грн магазинам, що не працюють",
-  );
-  expect(await lines(said.locator(".away"))).toBe(1);
+  await expect(said.locator(".away")).toHaveText([
+    "Винні 1 200,00 грн магазину «Ринок»",
+    "Винні 500,00 грн магазину «Ринок»",
+  ]);
+  await expect(said).not.toContainText(/1\s700,00/);
+  for (const line of await said.locator(".away").all())
+    expect(await lines(line)).toBe(1);
+  // A store's sum that cannot be read: its line says «—», never left out
+  // (review).
+  away = owedAway("1000.00", [
+    { name: "Ринок", owed: "1000.00" },
+    { name: "Поділ", owed: "не сума" },
+  ]);
+  await page.getByLabel("Телефон покупця").fill("067-1234567");
+  await expect(said.locator(".away")).toHaveText([
+    "Винні 1 000,00 грн магазину «Ринок»",
+    "Винні — магазину «Поділ»",
+  ]);
   away = owedAway("123456.00", [
     { name: "Барабашова Центральний Великий Ринок", owed: "123456.00" },
   ]);

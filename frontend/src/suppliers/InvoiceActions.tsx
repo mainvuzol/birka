@@ -14,6 +14,7 @@ import { Icon } from "@/shared/Icon";
 import { SendingLine } from "@/shared/Sending";
 import { Sheet } from "@/shared/Sheet";
 import { radioArrows } from "@/shared/radioKeys";
+import { useAskBeforeClosing } from "@/shared/telegram";
 import { shortDay } from "@/credits/format";
 import {
   doneText,
@@ -415,6 +416,10 @@ function SetOff({
   const [chosen, setChosen] = useState("");
   const [amount, setAmount] = useState("");
   const [problem, setProblem] = useState<string | null>(null);
+  // A sum typed, Telegram asks before Бірка closes, as «Оплатити» and
+  // «Видати з каси» (spec §6, rule 2; В-Т7 (а); audit 2026-11-22,
+  // orders-cash P2-1's sweep, forwarded): the sheet is gone once recorded.
+  useAskBeforeClosing(amount.trim() !== "");
   const returns = useInfiniteQuery({
     queryKey: ["supplier-returns", store.id, invoice.supplier.id, "set-off"],
     queryFn: ({ pageParam }) =>

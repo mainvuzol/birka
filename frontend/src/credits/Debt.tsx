@@ -131,45 +131,44 @@ export function entryMeta(
   return parts;
 }
 
-/** The debt's history, a line an entry, the newest first, as the server
- * answers it. */
-function History({
-  credit,
-  id,
-}: {
-  credit: Credit;
-  id?: string;
-}): JSX.Element {
+/** The debt's history, a line an entry, the newest first (spec §6.21), as
+ * the customer's card and an invoice's «Історія» say it (audit 2026-11-22,
+ * money P2-3's twin, forwarded): the server answers the oldest first, so
+ * its order is turned; nothing is counted. */
+function History({ credit, id }: { credit: Credit; id?: string }): JSX.Element {
   return (
     <ul id={id} className="history" aria-label="Історія боргу">
-      {credit.entries.map((entry, index) => (
-        <li className="history-row" key={`${entry.at}:${String(index)}`}>
-          <span className="history-main">
-            <span className="history-what">{entryWhat(entry)}</span>
-            <span className="history-meta">
-              {entryMeta(entry).map((part, at) => (
-                <Fragment key={at}>
-                  {at > 0 && " · "}
-                  {part.paper ? (
-                    <span className="paper-meta">{part.text}</span>
-                  ) : (
-                    part.text
-                  )}
-                </Fragment>
-              ))}
-            </span>
-            {entry.note && (
-              <span className="history-meta">{visible(entry.note)}</span>
-            )}
-            {entry.kind === "WRITE_OFF" && entry.note === null && (
+      {credit.entries
+        .map((entry, index) => ({ entry, index }))
+        .reverse()
+        .map(({ entry, index }) => (
+          <li className="history-row" key={`${entry.at}:${String(index)}`}>
+            <span className="history-main">
+              <span className="history-what">{entryWhat(entry)}</span>
               <span className="history-meta">
-                причину стерто разом з даними покупця
+                {entryMeta(entry).map((part, at) => (
+                  <Fragment key={at}>
+                    {at > 0 && " · "}
+                    {part.paper ? (
+                      <span className="paper-meta">{part.text}</span>
+                    ) : (
+                      part.text
+                    )}
+                  </Fragment>
+                ))}
               </span>
-            )}
-          </span>
-          <span className="history-sum">{money(entry.amount)}</span>
-        </li>
-      ))}
+              {entry.note && (
+                <span className="history-meta">{visible(entry.note)}</span>
+              )}
+              {entry.kind === "WRITE_OFF" && entry.note === null && (
+                <span className="history-meta">
+                  причину стерто разом з даними покупця
+                </span>
+              )}
+            </span>
+            <span className="history-sum">{money(entry.amount)}</span>
+          </li>
+        ))}
     </ul>
   );
 }

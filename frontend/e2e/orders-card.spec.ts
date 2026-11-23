@@ -1807,6 +1807,25 @@ test("«Клієнт забрав» in parts: terms not taken said over the ways
   await expect(why).toBeFocused();
   await expectTrayLine(page, taking, why);
   expect(server.sent).toEqual([]);
+  // The server's own refusal of all of it paid now — its total not the
+  // phone's: said with the server's sum, and the way out may be a smaller
+  // sum, as the form's own check says it (audit 2026-11-22, sale P2-1; its
+  // server refusal forwarded). Nothing recorded.
+  server.answer = {
+    status: 422,
+    json: {
+      code: "VALIDATION_ERROR",
+      message: "Request failed validation",
+      details: { reason: "PAID_IN_FULL", total: "2000.00", recorded: false },
+    },
+  };
+  await taking.getByLabel("Сплачує зараз, грн").fill("2000");
+  await cash.click();
+  await expect(taking.getByRole("alert")).toHaveText(
+    /^Покупець сплачує все одразу \(2\s000,00\sгрн\) — це звичайний продаж\. Зніміть «Оплата частинами» або змініть суму\./,
+  );
+  expect(server.sent).toHaveLength(1);
+  server.sent.length = 0;
   // Its comma last, a sum still being typed: what is left owed is said, the
   // dock says what is paid now, and it is sent as it stands — «500.00»
   // below (audit 2026-11-18, sale P2-1).
