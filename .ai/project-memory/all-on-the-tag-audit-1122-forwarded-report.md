@@ -109,9 +109,12 @@ Runs on a fresh seed:
   once split.
 - CI runs all 1263.
 
-Mutants (mutate88, 19, each against its journey): written and checked to
-apply; not run before the pull request was opened (the user's «Create
-PR»).
+Mutants (mutate88, 19, each against its journey; run after the pull
+request was opened, on the user's «Create PR»): 19/19 caught. One was
+rewritten first: «a part's sum the customer's», written as
+`customer.owed ?? each.every(…) ? … : …`, was read as `(… ?? …) ? sum : ""`
+and changed nothing — it passed; written as `owed: customer.owed`, it is
+caught (`credits-list`, the closed stores' rows).
 - Heard: each of the six searches' `status` dropped.
 - The history: not turned.
 - All paid now: no sum; no «або змініть суму»; the old words in
