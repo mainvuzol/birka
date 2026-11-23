@@ -5,6 +5,7 @@ import {
   useInfiniteQuery,
   useQuery,
 } from "@tanstack/react-query";
+import { ListMore } from "@/shared/ListMore";
 import { api } from "@/shared/api";
 import { visible } from "@/shared/visible";
 import { useSettled } from "@/sales/StockSearch";
@@ -607,16 +608,13 @@ export function Orders({
         />
       );
     return pages.hasNextPage ? (
-      <button
-        type="button"
-        className="list-more"
-        disabled={pages.isFetching}
-        onClick={() => {
+      <ListMore
+        reading={pages.isFetchingNextPage}
+        held={pages.isFetching}
+        more={() => {
           void pages.fetchNextPage();
         }}
-      >
-        Показати ще
-      </button>
+      />
     ) : null;
   }
 

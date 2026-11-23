@@ -13,6 +13,7 @@ import {
   errorText,
   failedWrite,
 } from "@/shared/api";
+import { ListMore } from "@/shared/ListMore";
 import { Unread } from "@/shared/Unread";
 import { NoCustomerData } from "@/shared/NoCustomerData";
 import { visible } from "@/shared/visible";
@@ -455,16 +456,13 @@ export function Returns({
               />
             ) : (
               sales.hasNextPage && (
-                <button
-                  type="button"
-                  className="list-more"
-                  disabled={sales.isFetching}
-                  onClick={() => {
+                <ListMore
+                  reading={sales.isFetchingNextPage}
+                  held={sales.isFetching}
+                  more={() => {
                     void sales.fetchNextPage();
                   }}
-                >
-                  Показати ще
-                </button>
+                />
               )
             )}
           </>

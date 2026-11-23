@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { JSX, ReactNode, RefObject } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
+import { ListMore } from "@/shared/ListMore";
 import { ApiError, api } from "@/shared/api";
 import { Unread } from "@/shared/Unread";
 import { useNextPageFailed } from "@/shared/nextPage";
@@ -21,7 +22,7 @@ import {
   refusalText,
 } from "./invoiceWords";
 import type { Command, Sent } from "./invoiceWords";
-import { goodsText } from "./returnWords";
+import { goodsText, placeText, unitsOf } from "./returnWords";
 import type { Invoice, InvoiceEntry, ReturnPage } from "./types";
 
 /** No answer to a cancellation: pressed again, it is answered as it is. */
@@ -182,7 +183,14 @@ export function InvoiceActions({
     invoice.store_state === "ACTIVE"
       ? !readOnly && store.permissions.includes("supplier:write_off")
       : networkOwner;
-  const setsOff = owed && !readOnly && !elsewhere;
+  // The sheet reads this store's returns, which the server gives only with
+  // `supplier:return`: without it, no way that ends in «Немає доступу»
+  // (audit 2026-11-22, money P2-4).
+  const setsOff =
+    owed &&
+    !readOnly &&
+    !elsewhere &&
+    store.permissions.includes("supplier:return");
   const writesOff = owed && mayWriteOff;
   const cancels = owed && !readOnly && !elsewhere;
   // Its payments and set-offs first, so no money disappears by accident.
@@ -571,7 +579,8 @@ function SetOff({
           // The page read on failed: its retry alone.
           <Unread
             error={returns.error}
-            held={held || pressing || fetching}
+            held={fetching}
+            blocked={held || pressing}
             retry={() => {
               void fetchNextPage();
             }}
@@ -619,13 +628,12 @@ function SetOff({
                       setProblem(null);
                     }}
                   >
+                    {/* Where it came back from, as its row in
+                        «Постачальникам» says it: «з «Браку» «…»» for a unit
+                        from «Брак» (audit 2026-11-22, money P2-1). */}
                     <span className="t-row">
-                      {shortDay(item.at)} ·{" "}
-                      {item.lines.reduce(
-                        (units, line) => units + line.quantity,
-                        0,
-                      )}{" "}
-                      шт. · склад «{visible(item.location_name)}»
+                      {shortDay(item.at)} · {unitsOf(item)} шт. ·{" "}
+                      {placeText(item)}
                     </span>
                     {/* What was returned, as its row in «Постачальникам»
                         says it: the supplier's paper names the goods
@@ -648,25 +656,23 @@ function SetOff({
           {nextFailed ? (
             <Unread
               error={returns.error}
-              held={held || pressing || fetching}
+              held={fetching}
+              blocked={held || pressing}
               retry={() => {
                 void fetchNextPage();
               }}
             />
           ) : (
             returns.hasNextPage && (
-              <button
-                type="button"
-                className="list-more"
-                disabled={held || pressing || fetching}
-                onClick={() => {
+              <ListMore
+                reading={returns.isFetchingNextPage}
+                held={held || pressing || fetching}
+                more={() => {
                   // Kept until the page is read: after its retry too.
                   setFocusAt(standing.length);
                   void fetchNextPage();
                 }}
-              >
-                Показати ще
-              </button>
+              />
             )
           )}
           <label>

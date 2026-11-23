@@ -732,13 +732,17 @@ test("a server error gives its request's number; a server out of reach says to s
   );
 
   // The edge answering for a server that did not, and no answer at all: the
-  // shop sells on paper (owner decision, 2026-10-04; ADR-0013 §3).
+  // shop sells on paper (owner decision, 2026-10-04; ADR-0013 §3) — on the
+  // paper's banner in the screen's status, after a refusal's red too,
+  // never in red (audit 2026-11-22, frame P2-1).
+  const paper = page.getByRole("status").locator("section.banner-paper");
   for (const status of ["502", "503", "504", "lost"] as const) {
     answer = status;
     await again.click();
-    await expect(said).toHaveText(
+    await expect(paper).toHaveText(
       "Сервер не відповідає. Продавайте на папері: модель, розмір, ціна, як оплачено, час. Коли сервер відповість — внесіть продажі до закриття каси.",
     );
+    await expect(said).toHaveCount(0);
   }
 
   // A server error without a number reads as it always did.
@@ -747,6 +751,7 @@ test("a server error gives its request's number; a server out of reach says to s
   await expect(said).toHaveText(
     "Не вдалося виконати операцію. Спробуйте ще раз.",
   );
+  await expect(paper).toHaveCount(0);
   // A refusal the screen shows is not a broken screen: nothing is noted.
   expect(notes).toHaveLength(0);
 });

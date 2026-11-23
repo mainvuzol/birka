@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { JSX } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import type { InfiniteData } from "@tanstack/react-query";
+import { ListMore } from "@/shared/ListMore";
 import { api } from "@/shared/api";
 import { SearchField } from "@/shared/SearchField";
 import { buzz, hideKeyboard } from "@/shared/telegram";
@@ -291,22 +292,19 @@ export function CatalogPicker({
               />
             ) : (
               variants.hasNextPage && (
-                <button
-                  type="button"
-                  className="list-more"
-                  disabled={
+                <ListMore
+                  reading={variants.isFetchingNextPage}
+                  held={
                     variants.isFetching ||
                     variants.isPlaceholderData ||
                     readAgainFailed
                   }
-                  onClick={() => {
+                  more={() => {
                     // Kept until the page is read: after its retry too.
                     setFocusAt(found.length);
                     void variants.fetchNextPage();
                   }}
-                >
-                  Показати ще
-                </button>
+                />
               )
             )}
           </>

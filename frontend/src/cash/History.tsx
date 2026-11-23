@@ -3,6 +3,7 @@ import type { JSX } from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { money } from "@/orders/types";
 import type { Store } from "@/orders/types";
+import { ListMore } from "@/shared/ListMore";
 import { api } from "@/shared/api";
 import { Unread } from "@/shared/Unread";
 import { useNextPageFailed } from "@/shared/nextPage";
@@ -275,16 +276,13 @@ export function History({
               />
             ) : (
               closes.hasNextPage && (
-                <button
-                  type="button"
-                  className="list-more"
-                  disabled={closes.isFetching}
-                  onClick={() => {
+                <ListMore
+                  reading={closes.isFetchingNextPage}
+                  held={closes.isFetching}
+                  more={() => {
                     void closes.fetchNextPage();
                   }}
-                >
-                  Показати ще
-                </button>
+                />
               )
             )}
           </>

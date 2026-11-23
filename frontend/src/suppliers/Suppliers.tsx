@@ -1,6 +1,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type { JSX } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
+import { ListMore } from "@/shared/ListMore";
 import { api } from "@/shared/api";
 import { Unread } from "@/shared/Unread";
 import { Placeholder } from "@/shared/Placeholder";
@@ -298,16 +299,13 @@ export function Suppliers({
             {/* A page that failed is asked again by its own retry, alone
               (money task list after stage 2, P2-1). */}
             {returns.hasNextPage && !returns.isFetchNextPageError && (
-              <button
-                type="button"
-                className="list-more"
-                disabled={returns.isFetching}
-                onClick={() => {
+              <ListMore
+                reading={returns.isFetchingNextPage}
+                held={returns.isFetching}
+                more={() => {
                   void returns.fetchNextPage();
                 }}
-              >
-                Показати ще
-              </button>
+              />
             )}
           </>
         )}

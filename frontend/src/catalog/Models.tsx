@@ -15,6 +15,7 @@ import {
   isConflict,
   refusedWrite,
 } from "@/shared/api";
+import { ListMore } from "@/shared/ListMore";
 import { Fold } from "@/shared/Fold";
 import { useNextPageFailed } from "@/shared/nextPage";
 import { Unread } from "@/shared/Unread";
@@ -350,18 +351,15 @@ function ModelSearch({
           />
         ) : (
           found.hasNextPage && (
-            <button
-              type="button"
-              className="list-more"
-              disabled={found.isFetching || found.isPlaceholderData}
-              onClick={() => {
+            <ListMore
+              reading={found.isFetchingNextPage}
+              held={found.isFetching || found.isPlaceholderData}
+              more={() => {
                 // Kept until the page is read: after its retry too.
                 setFocusAt(items.length);
                 void found.fetchNextPage();
               }}
-            >
-              Показати ще
-            </button>
+            />
           )
         ))}
     </section>

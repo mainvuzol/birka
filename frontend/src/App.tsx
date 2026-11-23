@@ -30,6 +30,7 @@ import { Opening } from "@/shared/Placeholder";
 import { Icon } from "@/shared/Icon";
 import { Toast } from "@/shared/Toast";
 import { Banner } from "@/shared/Banner";
+import { Eyelet } from "@/shared/Eyelet";
 import {
   CheckLine,
   Kept,
@@ -338,11 +339,36 @@ function stateTitle(store: Pick<Store, "state" | "state_since">): string {
  * lets the app copy, or selected whole where it does not. No menu, no
  * MainButton: nothing here is anyone's yet.
  */
+/**
+ * The paper's words at the door, the server silent (audit 2026-11-22, frame
+ * P2-1): a status that stands empty from the sign-in's first showing and is
+ * filled just after it — a region born with its words is not read (review)
+ * — then as the failure changes, after another failure too.
+ */
+function DoorPaper({ paper }: { paper: boolean }): JSX.Element {
+  const [standing, setStanding] = useState(false);
+  useEffect(() => {
+    setStanding(true);
+  }, []);
+  return (
+    <div role="status">
+      {standing && paper && (
+        <Banner kind="paper" label="Сервер не відповідає">
+          <p>{UNREACHABLE}</p>
+        </Banner>
+      )}
+    </div>
+  );
+}
+
 function NoAccess({
   checkAgain,
+  asking,
 }: {
   /** Read again; true while there is still no access. */
   checkAgain: () => Promise<boolean>;
+  /** Its «Спробувати ще раз» asked and not answered yet. */
+  asking: boolean;
 }): JSX.Element {
   const id = telegramUserId();
   const name = telegramUserName();
@@ -420,9 +446,13 @@ function NoAccess({
           Коли вас додадуть, закрийте застосунок і відкрийте його знову кнопкою
           в боті.
         </p>
+        {/* Pressed, it keeps its look while the server is asked, the
+            eyelet's ring turning, and takes no second tap (audit
+            2026-11-22, frame P2-2). */}
         <button
           type="button"
-          className="text-button"
+          className={asking ? "text-button pressed" : "text-button"}
+          disabled={asking}
           onClick={() => {
             void checkAgain().then((still) => {
               if (still)
@@ -432,6 +462,7 @@ function NoAccess({
             });
           }}
         >
+          {asking && <Eyelet state="spin" size={20} />}
           Спробувати ще раз
         </button>
       </BlankTag>
@@ -496,9 +527,28 @@ export function App(): JSX.Element {
   function reread(): Promise<QueryObserverResult> {
     return token === undefined ? session.refetch() : me.refetch();
   }
+  // «Спробувати ще раз» before a store, asked and not answered yet: it
+  // keeps its look, the eyelet's ring turning, and takes no second tap — a
+  // second would start the read again, up to 20 s each while the server is
+  // silent (audit 2026-11-22, frame P2-2).
+  const [rereading, setRereading] = useState(false);
   function readAgain(): void {
-    void reread();
+    setRereading(true);
+    void reread().finally(() => {
+      setRereading(false);
+    });
   }
+  const tryAgain = (
+    <button
+      type="button"
+      className={rereading ? "text-button pressed" : "text-button"}
+      disabled={rereading}
+      onClick={readAgain}
+    >
+      {rereading && <Eyelet state="spin" size={20} />}
+      Спробувати ще раз
+    </button>
+  );
   // «Спробувати ще раз» on «Доступу ще немає» in flight: the screen stays
   // while it reads — a sign-in read again has nothing to show meanwhile —
   // and says, if so, that there is still no access (spec S03).
@@ -512,7 +562,22 @@ export function App(): JSX.Element {
       setAsking(false);
     }
   }
-  const failure = session.error ?? me.error;
+  // A read that never answered loses its failure while it is read again
+  // (TanStack Query): the sign-in's screen, its words and its pressed
+  // «Спробувати ще раз» stay meanwhile, never the opening's places — the
+  // failure kept until the answer (audit 2026-11-22, frame P2-2, Д1;
+  // review).
+  const live = session.error ?? me.error;
+  const [lastFailure, setLastFailure] = useState<Error | null>(null);
+  if (live !== null && live !== lastFailure) setLastFailure(live);
+  // Answered, or no failure to keep: none kept for a later read.
+  else if (live === null && !rereading && lastFailure !== null)
+    setLastFailure(null);
+  const failure =
+    live ??
+    (rereading && (token === undefined ? session : me).isFetching
+      ? lastFailure
+      : null);
   // The session ended — the server refused the token, mid-work or at the
   // door, for any reason but `NO_ACCESS` (below): one screen in S02's words
   // instead of the workplace, nothing to press, no menu, no plates (audit
@@ -543,11 +608,18 @@ export function App(): JSX.Element {
     !over &&
     ((failure instanceof ApiError && failure.code === "NO_ACCESS") || asking)
   )
-    return <NoAccess checkAgain={checkAgain} />;
+    return <NoAccess checkAgain={checkAgain} asking={asking} />;
   // A sign-in that failed: the same blank tag, its words as they were
   // («Усе на бірці» task list, P1-4; К12), the app's name over it, where
   // «Доступу ще немає» says whose Telegram opened it (owner, 2026-10-15,
   // В4) — the screen's own title its heading.
+  // The server silent at the door: the paper's words on the paper's
+  // banner, as in the store and on «Щось пішло не так» — a warning, never a
+  // refusal's red (audit 2026-11-22, frame P2-1; В-ЗП1 (а)). Its place a
+  // status from the screen's first showing, so the words are heard as they
+  // come, after another failure too; every other failure a refusal, as it
+  // was.
+  const paper = !over && unreachable(failure);
   if (failure || over)
     return (
       <main className="before-store">
@@ -559,32 +631,31 @@ export function App(): JSX.Element {
         </p>
         <BlankTag>
           <h1 className="t-title-l">Вхід через Telegram</h1>
-          <p role="alert">
-            {over
-              ? sessionEndedText()
-              : failure?.message === "TELEGRAM_REQUIRED"
-              ? "Відкрийте застосунок кнопкою в Telegram-боті вашого магазину."
-              : token === undefined &&
-                  failure instanceof ApiError &&
-                  failure.status === 401
-                ? // Launch data refused — taken for an hour only, or not
-                  // signed by the shop's bot — is answered by opening the app
-                  // from the bot again, which also finds any command kept
-                  // from an earlier opening (redesign P1-3).
-                  "Відкрийте застосунок знову кнопкою в боті вашого магазину."
-                : // Never an order's words at the door (owner decision,
-                  // 2026-10-25).
-                  inOwnWords(
-                    errorText(failure),
-                    "Не вдалося увійти. Відкрийте застосунок знову кнопкою в боті вашого магазину.",
-                    "Не вдалося увійти. Відкрийте застосунок знову кнопкою в боті вашого магазину.",
-                  )}
-          </p>
-          {!over && (
-            <button type="button" className="text-button" onClick={readAgain}>
-              Спробувати ще раз
-            </button>
+          {!over && <DoorPaper paper={paper} />}
+          {!paper && (
+            <p role="alert">
+              {over
+                ? sessionEndedText()
+                : failure?.message === "TELEGRAM_REQUIRED"
+                ? "Відкрийте застосунок кнопкою в Telegram-боті вашого магазину."
+                : token === undefined &&
+                    failure instanceof ApiError &&
+                    failure.status === 401
+                  ? // Launch data refused — taken for an hour only, or not
+                    // signed by the shop's bot — is answered by opening the app
+                    // from the bot again, which also finds any command kept
+                    // from an earlier opening (redesign P1-3).
+                    "Відкрийте застосунок знову кнопкою в боті вашого магазину."
+                  : // Never an order's words at the door (owner decision,
+                    // 2026-10-25).
+                    inOwnWords(
+                      errorText(failure),
+                      "Не вдалося увійти. Відкрийте застосунок знову кнопкою в боті вашого магазину.",
+                      "Не вдалося увійти. Відкрийте застосунок знову кнопкою в боті вашого магазину.",
+                    )}
+            </p>
           )}
+          {!over && tryAgain}
         </BlankTag>
       </main>
     );
@@ -623,9 +694,7 @@ export function App(): JSX.Element {
         <BlankTag>
           <h1 className="t-title-l">Магазинів поки немає</h1>
           <p className="blank-body">Зверніться до власника.</p>
-          <button type="button" className="text-button" onClick={readAgain}>
-            Спробувати ще раз
-          </button>
+          {tryAgain}
         </BlankTag>
       </main>
     );
@@ -696,9 +765,7 @@ export function App(): JSX.Element {
               Продажі, приймання, повернення й оплати тут зупинено. Зверніться
               до власника.
             </p>
-            <button type="button" className="text-button" onClick={readAgain}>
-              Спробувати ще раз
-            </button>
+            {tryAgain}
           </BlankTag>
         </WorkspaceLineContext.Provider>
       ) : (

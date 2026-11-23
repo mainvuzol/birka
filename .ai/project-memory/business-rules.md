@@ -11991,3 +11991,91 @@ recorded or sent changes.
 - **Two comments mended** (orders-cash Д2): the order lists are newest
   first (owner decision, 2026-10-23), not oldest; the server records the
   other places' days but does not send them yet (Н1, В22-З1).
+
+## Chosen in chat — 2026-11-22 (audit 2026-11-22, batch 3: «Звідки, що й коли» and «Сервер відповідає — видно» — the set-off's return from «Брак» said as «Постачальникам» says it; an invoice's history newest first; «Зарахувати повернення» only with the right to read the returns; the sign-in with the server silent on the paper's banner; a read asked by a press keeps the press's look, its ring turning; money P2-1, P2-3, P2-4, frame P2-1, P2-2)
+
+Taken as the next after «merged go next»: the money pass's quick wins and
+the frame pass's one batch, as both passes ordered them. No right, check,
+journal or step changes; nothing recorded or sent changes; the server and
+its answers are as they were.
+
+- **«Зарахувати повернення» says where a return came back from as
+  «Постачальникам» does** (money P2-1; В6 (а) carried to its last place):
+  a return's first line in the sheet is «{дата} · {N} шт. · {placeText}» —
+  «склад «Основний»» for a warehouse's, «з «Браку» «Брак ринку»» for a unit
+  from «Брак», as its row in «Постачальникам», its card and its result say
+  it. Its units counted by `unitsOf`, as the row counts them. The goods'
+  line, «уже зараховано …», the radios, what is chosen and what is sent: as
+  before.
+- **An invoice's history is the newest first** (money P2-3; spec §6.21, as
+  a customer's history and «Продажі й повернення»): the phone shows the
+  server's lines in reverse; the server's order and answer, the lines,
+  their look and what a tap does: as before. A cancelled line stands where
+  it was recorded, not where it was cancelled.
+  - Checked (the audit's Д2): nothing reads the lines' order — «остання
+    оплата» is the server's field, «may the invoice be cancelled» asks
+    whether any line stands; a copy is reversed, never the answer.
+- **«Зарахувати повернення» only for whoever may read the returns** (money
+  P2-4; P7, as «Знайшли товар…» only with `inventory:receive`, 2026-11-22,
+  batch 5 of audit 2026-11-20): behind ⋯ only where the store's rights hold
+  both `supplier:debt` and `supplier:return` — the sheet reads the returns,
+  which the server gives with `supplier:return` alone. Without it no way,
+  no read, no «Немає доступу»; «Скасувати накладну» stands as before, so ⋯
+  stays; a set-off already recorded is cancelled from the history as
+  before. The default roles hold both: nothing changes for them.
+- **The sign-in with the server silent: the paper's banner** (frame P2-1;
+  В-ЗП1 (а), the crash screen's 2026-11-06): on «Вхід через Telegram», a
+  503, 502, 504 or no answer says «Сервер не відповідає. Продавайте на
+  папері: …» on the paper's banner («Сервер не відповідає», the triangle)
+  where the refusal's red plate stood — as in the store and on «Щось пішло
+  не так». Every other failure — the session ended, Telegram required,
+  launch data refused, the server's other answers — the refusal's plate,
+  as before. The words, the title, «Бірка» over the tag and «Спробувати ще
+  раз» under it: as before.
+  - Decided here: its place a status that stands with the sign-in's screen
+    whatever failed, born empty and filled just after the screen first
+    shows — a region born with its words is not read (review) — so the
+    paper's words are heard as they come, after another failure too, as
+    the crash screen's status stands from the start. What a reader hears on
+    a phone was not checked.
+  - Decided here: the banner where the plate stood, as far from the title
+    and from «Спробувати ще раз»; the crash screen's banner keeps its own
+    place.
+- **A read asked by a press keeps the press's look while it is answered**
+  (frame P2-2; the record's pressed button and the eyelet's ring, spec
+  §1.4): the pressed button keeps its edge, fill and words, the eyelet's
+  ring turning before them (20), and takes no second tap — never the
+  dashed «not now», which stays for a button held for another reason.
+  Where motion is reduced the ring stands, dashed (the shared rule), as on
+  the records' pressed buttons.
+  - «Показати ще», under every list read a page at a time (twenty places):
+    one `ListMore`, pressed while **its** page is read
+    (`isFetchingNextPage`, the audit's Д2); held while the list is read
+    again whole, its tags gone stale or a read again failed — dashed, as
+    decided 2026-11-21. The four «+ ще N» that open what is read already:
+    as before.
+  - A plate's «Спробувати ще раз» (`Unread`, 106 places): pressed while
+    `held`, its read asked again — where the plate stays meanwhile: over
+    rows read, a list read again that failed or a page that failed. A
+    plate for what was never read gives way to the places while it is read
+    again, as before (review). Decided here: where a screen held the
+    retry for another press on its way — the set-off's sheet while a
+    set-off is sent, «Інший колір нашої моделі» while the rename's choice
+    is — that is `blocked`: no tap, nothing turning, as before. The places
+    that hold it while their list is read again whole turn the ring: the
+    server is asked about what was not read (the audit's Д3).
+  - «Спробувати ще раз» before a store — the sign-in, «Магазинів поки
+    немає», «Доступу ще немає» — and, decided here, the fourth with the
+    same read, a store that does not trade: a text button pressed, its
+    words in the link's colour, the ring before them, until the read is
+    answered; a second tap no longer starts the read again (up to 20 s each
+    while the server is silent).
+  - The audit's Д1, found otherwise by the review: a read that never
+    answered loses its failure while it is read again (TanStack Query), so
+    the sign-in's screen gave way to the opening's places. Decided here:
+    the failure shown is kept on the phone while its own read is asked
+    again, and forgotten once answered or none is left — the screen, its
+    words and its pressed retry stand until the answer.
+  - What, when and how much is read, the cursor after a page, a failed
+    page's plate where the strip stood, and «Завантажуємо …» where it is
+    said: as before.

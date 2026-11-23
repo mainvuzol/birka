@@ -3,6 +3,7 @@ import {
   comeBack,
   test,
   expect,
+  expectPressed,
   menu,
   openStore,
   section,
@@ -187,10 +188,16 @@ test("a seller at a blocked store reads it again with the token, however the rea
     // The first reading is lost on the way; the second finds the access
     // ended; by the third it is back.
     let reads = 0;
+    let release = (): void => undefined;
+    const held = new Promise<void>((done) => {
+      release = done;
+    });
     await page.route("**/api/v1/me", async (route) => {
       reads += 1;
-      if (reads === 1) await route.abort("connectionreset");
-      else if (reads === 2)
+      if (reads === 1) {
+        await held;
+        await route.abort("connectionreset");
+      } else if (reads === 2)
         await route.fulfill({
           status: 401,
           json: { code: "NO_ACCESS", message: "No access" },
@@ -198,11 +205,20 @@ test("a seller at a blocked store reads it again with the token, however the rea
       else await route.continue();
     });
 
-    await page.getByRole("button", { name: "Спробувати ще раз" }).click();
-    // No answer: the shop sells on paper (owner decision, 2026-10-04).
-    await expect(page.getByRole("alert")).toHaveText(
+    // Pressed, it keeps its look while the store is read again, the ring
+    // turning before its words (audit 2026-11-22, frame P2-2).
+    const again = page.getByRole("button", { name: "Спробувати ще раз" });
+    await again.click();
+    await expectPressed(again, "--link");
+    await again.click({ force: true });
+    release();
+    // No answer: the shop sells on paper (owner decision, 2026-10-04), on
+    // the paper's banner, never a refusal's red (audit 2026-11-22, frame
+    // P2-1).
+    await expect(page.locator("section.banner-paper")).toHaveText(
       "Сервер не відповідає. Продавайте на папері: модель, розмір, ціна, як оплачено, час. Коли сервер відповість — внесіть продажі до закриття каси.",
     );
+    await expect(page.getByRole("alert")).toHaveCount(0);
     await page.getByRole("button", { name: "Спробувати ще раз" }).click();
     await expect(
       page.getByRole("heading", { name: "Доступу ще немає" }),

@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { test, expect, expectPressed } from "./fixtures";
 import type { Locator, Page } from "@playwright/test";
 
 /**
@@ -226,14 +226,28 @@ test("someone not yet added sees their Telegram ID large on a blank tag, said no
 
   // Tried again, still not added: said so, the same screen.
   let asked = 0;
+  let release = (): void => undefined;
+  const held = new Promise<void>((done) => {
+    release = done;
+  });
   await page.route("**/api/v1/auth/telegram", async (route) => {
     asked += 1;
+    await held;
     await route.fulfill({
       status: 401,
       json: { code: "NO_ACCESS", message: "refused" },
     });
   });
-  await page.getByRole("button", { name: "Спробувати ще раз" }).click();
+  const again = page.getByRole("button", { name: "Спробувати ще раз" });
+  await again.click();
+  // Pressed, it keeps its look while the server is asked, the ring turning
+  // before its words, and asks once (audit 2026-11-22, frame P2-2).
+  await expectPressed(again, "--link");
+  await expect.poll(() => asked).toBe(1);
+  await again.click({ force: true });
+  release();
+  await expect(again).toBeEnabled();
+  await expect(again.locator(".eyelet")).toHaveCount(0);
   await expect(page.getByRole("status")).toHaveText(
     "Доступу поки немає. Попросіть власника магазину додати ваш ID.",
   );

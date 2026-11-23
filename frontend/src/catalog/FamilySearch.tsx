@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { JSX } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import type { InfiniteData } from "@tanstack/react-query";
+import { ListMore } from "@/shared/ListMore";
 import { api } from "@/shared/api";
 import { useNextPageFailed } from "@/shared/nextPage";
 import { Placeholder } from "@/shared/Placeholder";
@@ -189,7 +190,7 @@ export function FamilySearch({
           // goods P1-1).
           <Unread
             error={families.error}
-            held={blocked}
+            blocked={blocked}
             retry={() => {
               void families.refetch();
             }}
@@ -199,7 +200,8 @@ export function FamilySearch({
             {readAgainFailed && (
               <Unread
                 error={families.error}
-                held={blocked || families.isFetching}
+                held={families.isFetching}
+                blocked={blocked}
                 retry={() => {
                   void families.refetch();
                 }}
@@ -248,30 +250,28 @@ export function FamilySearch({
             {nextFailed ? (
               <Unread
                 error={families.error}
-                held={blocked || families.isFetching}
+                held={families.isFetching}
+                blocked={blocked}
                 retry={() => {
                   void families.fetchNextPage();
                 }}
               />
             ) : (
               families.hasNextPage && (
-                <button
-                  type="button"
-                  className="list-more"
-                  disabled={
+                <ListMore
+                  reading={families.isFetchingNextPage}
+                  held={
                     blocked ||
                     families.isFetching ||
                     families.isPlaceholderData ||
                     readAgainFailed
                   }
-                  onClick={() => {
+                  more={() => {
                     // Kept until the page is read: after its retry too.
                     setFocusAt(found.length);
                     void families.fetchNextPage();
                   }}
-                >
-                  Показати ще
-                </button>
+                />
               )
             )}
           </>

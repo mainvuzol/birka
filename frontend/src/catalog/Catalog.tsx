@@ -6,6 +6,7 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
+import { ListMore } from "@/shared/ListMore";
 import { ApiError, api } from "@/shared/api";
 import { Eyelet } from "@/shared/Eyelet";
 import { Fold } from "@/shared/Fold";
@@ -437,18 +438,15 @@ export function Catalog({
                 />
               ) : (
                 list.hasNextPage && (
-                  <button
-                    type="button"
-                    className="list-more"
-                    disabled={blocked || list.isFetching || readAgainFailed}
-                    onClick={() => {
+                  <ListMore
+                    reading={list.isFetchingNextPage}
+                    held={blocked || list.isFetching || readAgainFailed}
+                    more={() => {
                       // Kept until the page is read: after its retry too.
                       setFocusAt(rows.length);
                       void list.fetchNextPage();
                     }}
-                  >
-                    Показати ще
-                  </button>
+                  />
                 )
               )}
             </>
