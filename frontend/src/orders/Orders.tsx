@@ -835,8 +835,11 @@ export function Orders({
                   {found.pages.data && found.orders.length === 0 ? (
                     // The blank tag, «Очистити» its one button (spec §6.28;
                     // orders and «Каса» task list after stage 2, P1-1).
+                    // Heard as it is drawn, as every search's answer (audit
+                    // 2026-11-18, goods P2-4; forwarded by the audits since).
                     <Empty
                       title={`За «${visible(search)}» замовлень не знайдено. Перевірте номер ТТН.`}
+                      status
                     >
                       <button
                         type="button"

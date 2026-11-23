@@ -152,11 +152,12 @@ export function CustomerRow({
     <button
       type="button"
       className="sale-row debt-row"
-      aria-label={
-        opens === "card"
-          ? `${name}, ${said}`
-          : `Відкрити борг: ${name}, ${said}`
-      }
+      aria-label={`${opens === "card" ? "" : "Відкрити борг: "}${name}, ${said}${
+        // Another store's debts: its store named, as «На який борг
+        // вносить?» names it — rows a store apart (audit 2026-11-22, sale
+        // Н1; review).
+        away ? `, магазин «${visible(away.store_name)}»` : ""
+      }`}
       aria-describedby={meta}
       disabled={held}
       onClick={open}

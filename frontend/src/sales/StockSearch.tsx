@@ -432,11 +432,14 @@ export function StockSearch({
         // The blank tag (spec §6.28; audit after stage 2, sale P1-2): the
         // fact its line, what to do its meta; the catalogue's way under
         // it — read before, it stays under the plate of a read again
-        // refused (sale P1-4; review).
+        // refused (sale P1-4; review). A search's answer heard as it is
+        // drawn, as «Моделі»' (audit 2026-11-18, goods P2-4; forwarded by
+        // the audits since).
         query ? (
           <Empty
             title={`За «${visible(query)}» ${where} нічого немає.`}
             meta="Перевірте назву або очистіть пошук."
+            status
           >
             <button
               type="button"

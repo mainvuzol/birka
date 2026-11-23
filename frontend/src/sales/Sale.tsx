@@ -7,6 +7,7 @@ import {
   errorText,
   failedWrite,
   INVALID_TEXT,
+  paidInFullText,
 } from "@/shared/api";
 import type { ApiError } from "@/shared/api";
 import { Icon } from "@/shared/Icon";
@@ -2266,7 +2267,7 @@ export function refusalText(error: unknown): string {
     case "NOTHING_TO_SELL":
       return "У кошику не лишилося нічого, що є на полиці.";
     case "PAID_IN_FULL":
-      return `Покупець сплачує все одразу (${money(String(details.total))}) — це звичайний продаж. Зніміть «Оплата частинами» або змініть суму.`;
+      return paidInFullText(details.total);
     case "CUSTOMER_NAME":
       return "Вкажіть ім’я покупця, який платить частинами.";
     case "CUSTOMER_PHONE":

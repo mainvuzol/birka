@@ -402,6 +402,11 @@ test("a search that finds nothing offers the catalogue; without the rights, or f
   // The blank tag, the catalogue's way under it (sale P1-2).
   const empty = page.locator(".orders-empty");
   await expectEmpty(empty, "За «ябко» на складі «Спільний» нічого немає.");
+  // Heard as it comes, as every search's answer (audit 2026-11-18, goods
+  // P2-4; forwarded by the audits since).
+  await expect(
+    page.getByRole("status").filter({ hasText: "нічого немає" }),
+  ).toHaveText("За «ябко» на складі «Спільний» нічого немає.");
   await expect(empty.locator(".t-meta")).toHaveText(
     "Перевірте назву або очистіть пошук.",
   );

@@ -746,6 +746,11 @@ test("an empty «Покупці» says where a debt begins, «Сплачені»
   await field(page).fill("Оксана");
   const nobody = page.locator(".orders-empty");
   await expectEmpty(nobody, "За «Оксана» боргів не знайдено.");
+  // Heard as it comes, as every search's answer (audit 2026-11-18, goods
+  // P2-4; forwarded by the audits since).
+  await expect(
+    page.getByRole("status").filter({ hasText: "не знайдено" }),
+  ).toHaveText("За «Оксана» боргів не знайдено.");
   await expect(nobody.locator(".t-meta")).toHaveText(
     "Перевірте ім’я або введіть номер телефону.",
   );
@@ -1853,7 +1858,37 @@ test("a closed store's customer is read among the closed stores: a row a debt wi
     3,
   );
   release();
-  await page.getByRole("button", { name: /^Ірина/ }).click();
+  // A row a closed store, each with that store's sum and name — never
+  // their sum (spec: «никогда суммой по сети»; audit 2026-11-22, sale Н1).
+  const rows = page
+    .getByRole("list", { name: "Хто винен" })
+    .getByRole("listitem");
+  await expect(rows).toHaveCount(2);
+  await expect(rows.locator(".sticker")).toHaveText([
+    "Магазин «Ринок»",
+    "Магазин «Поділ»",
+  ]);
+  await expect(rows.locator(".debt-owed")).toHaveText([
+    /^2\s500,00\sгрн$/,
+    /^1\s500,00\sгрн$/,
+  ]);
+  await expect(rows.locator(".debt-name")).toHaveText([
+    "Ірина Коваль",
+    "Ірина Коваль",
+  ]);
+  await expect(page.locator("body")).not.toContainText(/4\s000,00/);
+  // Each named with its store, as «На який борг вносить?» names a debt's
+  // (review).
+  await expect(rows.nth(0).getByRole("button")).toHaveAccessibleName(
+    /^Ірина Коваль, винні 2\s500,00\sгрн, магазин «Ринок»$/,
+  );
+  await expect(rows.nth(1).getByRole("button")).toHaveAccessibleName(
+    /^Ірина Коваль, винні 1\s500,00\sгрн, магазин «Поділ»$/,
+  );
+  // Either opens all her debts, as one row did: the card names each one's
+  // store.
+  await expect(page.getByRole("button", { name: /^Ірина/ })).toHaveCount(2);
+  await page.getByRole("button", { name: /^Ірина/ }).nth(1).click();
   await expect(
     page.getByRole("heading", { name: "Ірина Коваль", level: 1 }),
   ).toBeVisible();
@@ -1931,6 +1966,9 @@ test("a whole number the closed stores owe nothing either: the blank tag, its li
     none,
     "За цим номером боргів магазинів, що не працюють, не знайдено.",
   );
+  await expect(
+    page.getByRole("status").filter({ hasText: "не знайдено" }),
+  ).toHaveText("За цим номером боргів магазинів, що не працюють, не знайдено.");
   await expect(none.locator(".t-meta")).toHaveText(
     "Перевірте номер або зверніться до менеджера.",
   );

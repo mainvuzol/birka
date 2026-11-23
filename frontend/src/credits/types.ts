@@ -1,3 +1,4 @@
+import { decimal, kopecks } from "@/orders/types";
 import type { StoreState } from "@/orders/types";
 import type { PaymentMethod, TillMethod } from "@/shared/payment";
 import type { PaperBody, PaperView } from "@/sales/paperMark";
@@ -103,6 +104,35 @@ export interface Erasure {
   /** The whole network (its owner's), or the debt's store alone (a store's owner's). */
   network: boolean;
   credit: Credit;
+}
+
+/**
+ * A customer's debts in the stores that do not trade, a part a store: a
+ * customer's debts are said by store, never added up across the network
+ * (spec: «Долги клиентов — только по магазинам»; audit 2026-11-22, sale
+ * Н1). Each part what its store is owed, its open debts and its debts, in
+ * the order read. A customer owing in one store only is as the server said
+ * them. A sum unread among a store's leaves its part's unread, never less.
+ */
+export function apartByStore(customer: Customer): Customer[] {
+  const stores = new Map<string, Credit[]>();
+  for (const credit of customer.credits)
+    stores.set(credit.store_id, [
+      ...(stores.get(credit.store_id) ?? []),
+      credit,
+    ]);
+  if (stores.size <= 1) return [customer];
+  return [...stores.values()].map((credits) => {
+    const each = credits.map((credit) => kopecks(credit.owed));
+    return {
+      ...customer,
+      owed: each.every((sum) => sum !== null)
+        ? decimal(each.reduce((all, sum) => all + sum, 0n))
+        : "",
+      open_debts: credits.filter((credit) => credit.status === "OPEN").length,
+      credits,
+    };
+  });
 }
 
 /** What a closed store's customer is found by: their whole phone. */

@@ -12147,3 +12147,79 @@ nothing recorded or sent changes.
 - **The record of «Схожі»'s size** (goods Н4): the stage-2 rule said «ten at
   most»; a proposal reads twenty (`match-preview` answers ten unless
   asked). Decided here: the record is corrected; the limit stays.
+
+## Chosen in chat — 2026-11-23 (audit 2026-11-22, batch 5: «Передане далі» — what the audits passed on and nobody built: every search's answer heard; a debt's history newest first; all of it paid now said with its sum wherever it is refused; «Зарахувати повернення» asking Telegram while a sum is typed; the closed stores' debts never one sum; sale Н1, the observations of the frame, sale, money and orders-cash passes)
+
+Taken as the next after «continue development via project», with nothing of
+the audit's task lists left that waits for no owner's answer: what its
+passes had noted outside their sections — the till's empty search unheard
+since 2026-11-18, passed on by three TZs — and sale's Н1 (financial
+integrity, «before the network has a third store»). No right, check,
+journal or step changes; nothing recorded or sent changes; no server
+change.
+
+- **A search's answer heard as it is drawn** (spec §6.28; the rule of
+  audit 2026-11-18, goods P2-4, which «Моделі», the catalogue's searches,
+  «Постачальникам» and «Повернути постачальнику» already kept): the till's
+  «За «…» на складі «…» нічого немає.», «Повернення»'s «За «…» продажів не
+  знайдено.» (here and in the other stores), «Покупці»'s and «Внесок»'s «За
+  «…» боргів не знайдено.» / «За цим номером у цьому магазині боргів
+  немає.», the closed stores' «За цим номером боргів магазинів, що не
+  працюють, не знайдено.» and «Замовлення»'s «За «…» замовлень не знайдено.
+  Перевірте номер ТТН.» — their line a status, as `Empty` already offers;
+  their words, meta and buttons as before. An empty list that nobody
+  searched (the till with nothing in stock, «Зараз ніхто не винен…») is not
+  an answer, and is not said aloud.
+  - Decided here: in the network owner's «Покупці», a store's block among
+    several keeps its quiet «Нікого не знайдено.» — heard block by block it
+    would say the same line several times, never naming its store.
+- **A debt's history, the newest first** (spec §6.21; money P2-3's twin,
+  noted by the money pass): «Історія боргу» turns the server's order, as an
+  invoice's «Історія» did in batch 3 — the server, its answer and its order
+  unchanged; nothing is counted; each line as before. The comment that
+  said «the newest first, as the server answers it» was wrong and is
+  corrected.
+- **All of it paid now, said with its sum wherever it is refused** (sale
+  P2-1's words; noted by the sale pass): one sentence for the form's own
+  check, the till's refusal and the server's refusal on «Клієнт забрав» —
+  «Покупець сплачує все одразу (3 000,00 грн) — це звичайний продаж.
+  Зніміть «Оплата частинами» або змініть суму.» — the sum the server's
+  `total`. Decided here: a refusal without a sum it can read says the same
+  without the brackets.
+- **«Зарахувати повернення» asks before Бірка closes while a sum is typed**
+  (spec §6, rule 2; В-Т7 (а), «a payment's sum typed»; orders-cash P2-1
+  asked for a sweep of every form with a typed sum): the last one without
+  it. A return chosen with no sum is nothing to lose: not asked. The sheet
+  closed, or its sum cleared, and it no longer asks. The other sums typed
+  — a model's price, a price's change — are not a payment's, and ask
+  nothing, as before.
+- **The closed stores' debts are said by store, never one sum** (sale Н1,
+  `financial-integrity`; spec «Долги клиентов — только по магазинам»,
+  «никогда суммой по сети»; reachable once the network has two stores that
+  do not trade beside one that does):
+  - under a phone at the till and on «Клієнт забрав» in parts: a line a
+    closed store, «Винні 1 000,00 грн магазину «Ринок»», each with what
+    that store is owed — the second line moves what is below, as a closed
+    store's beside this one's already did. This replaces the development's
+    «Винні … магазинам, що не працюють», one line of their sum (2026-10-20,
+    «How they are carried out»), which went against the spec;
+  - in «Магазини, що не працюють» («Покупці» and «Внесок»): a customer who
+    owes in several is a row a store, each with its store's sticker, that
+    store's sum and its own goods or count of debts; a customer owing in
+    one is one row, as the server said them. A row is named with its
+    store («Ірина Коваль, винні 2 500,00 грн, магазин «Ринок»»), as «На
+    який борг вносить?» names a debt's. In «Покупці» either row opens the
+    customer's card, all their debts, as one row did. Decided here
+    (review): at the till a row naming one debt opens that debt; a row of
+    several opens «На який борг вносить?» with all the customer's debts,
+    each naming its store, none added up;
+  - stores by who they are, never by name; each store's sum added in
+    kopecks from its debts' own; a sum that cannot be read leaves its
+    store's unread — said «—», never left out — never less. Nothing else reads the closed stores'
+    customers: the server's sum per customer stays in its answer, unread
+    where it is a sum of stores.
+- **Not in it:** «Зверніться до менеджера.» said to a manager by a spoiled
+  journal entry (money pass, frame's rule, «if it decides»); the result's
+  heading level (no rule); «Повернули постачальнику» in «Брак» (not a task
+  until the glossary asks it). Still owner-held: money P2-5 (Д4, В22-Г1),
+  goods P2-3 (б) (В22-Т1 / Н2), goods P2-5 of 2026-11-20 (В20-Т1).

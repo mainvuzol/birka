@@ -1425,6 +1425,83 @@ test("read slowly, «Зарахувати повернення» holds three ret
   ).toBeLessThanOrEqual(1);
 });
 
+test("«Зарахувати повернення»: a sum typed, Telegram asks before Бірка closes, as «Оплатити» and «Видати з каси» do; the sum cleared or the sheet closed, it no longer asks (audit 2026-11-22, orders-cash P2-1's sweep, forwarded)", async ({
+  page,
+}) => {
+  // Inside Telegram 7.0, what it is told recorded.
+  const closing = async (): Promise<unknown> =>
+    (await told(page, "web_app_setup_closing_behavior")).at(-1) ?? null;
+  const supplier = `Питає ${randomUUID().slice(0, 6)}`;
+  const supplierId = await aSupplier(page, supplier);
+  const headers = await headersOf(page, hanna);
+  const created = await page.request.post("/api/v1/catalog/products", {
+    headers: { ...headers, "Idempotency-Key": randomUUID() },
+    data: {
+      store_id: centre,
+      concept: `Питане ${randomUUID().slice(0, 8)}`,
+      variant: { color: "сірий" },
+      sizes: [{ system: "ALPHA", code: "L" }],
+    },
+  });
+  const product = (await created.json()) as {
+    product_variant_id: string;
+    sizes: { size_id: string }[];
+  };
+  const goods = {
+    product_variant_id: product.product_variant_id,
+    size_id: product.sizes[0]?.size_id ?? "",
+  };
+  const receipt = await page.request.post("/api/v1/inventory/receipts", {
+    headers: { ...headers, "Idempotency-Key": randomUUID() },
+    data: {
+      store_id: centre,
+      location_id: fixture.network_shared_location_id,
+      command_id: randomUUID(),
+      lines: [{ ...goods, quantity: 1, acquisition_type: "PURCHASE" }],
+      notes: null,
+    },
+  });
+  expect(receipt.status()).toBe(201);
+  const returned = await page.request.post("/api/v1/supplier-returns", {
+    headers,
+    data: {
+      command_id: randomUUID(),
+      store_id: centre,
+      location_id: fixture.network_shared_location_id,
+      supplier_id: supplierId,
+      lines: [{ ...goods, quantity: 1 }],
+      note: null,
+    },
+  });
+  expect(returned.status()).toBe(201);
+  await anInvoice(page, supplierId, "4000.00");
+  const counted = posts(page, /\/set-offs$/);
+
+  await invoicesAt(page, hanna, { telegram: true });
+  await open(page, supplier);
+  await act(page, "Зарахувати повернення");
+  const setOff = await sheet(page, "Зарахувати повернення");
+  await setOff
+    .getByRole("radiogroup", { name: "Повернення" })
+    .getByRole("radio")
+    .click();
+  // A return chosen, no sum yet: nothing to lose, nothing asked.
+  expect(await closing()).not.toEqual({ need_confirmation: true });
+  const field = setOff.getByLabel("Скільки зарахував постачальник, грн");
+  await field.fill("1200");
+  await expect.poll(closing).toEqual({ need_confirmation: true });
+  // Cleared, there is nothing to lose.
+  await field.fill("");
+  await expect.poll(closing).toEqual({ need_confirmation: false });
+  await field.fill("1200,");
+  await expect.poll(closing).toEqual({ need_confirmation: true });
+  // The sheet closed unsent: the sum gone with it, nothing asked.
+  await page.keyboard.press("Escape");
+  await expect(setOff).toHaveCount(0);
+  await expect.poll(closing).toEqual({ need_confirmation: false });
+  expect(counted.bodies).toHaveLength(0);
+});
+
 test("a payment or an invoice recorded by mistake is cancelled, saying why", async ({
   page,
 }) => {
