@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import type { JSX, ReactNode } from "react";
+import { ListMore } from "@/shared/ListMore";
 import { BackToMore } from "@/shared/More";
 import type { MoreBack } from "@/shared/More";
 import {
@@ -983,16 +984,13 @@ function Rows({
         />
       ) : (
         customers.hasNextPage && (
-          <button
-            type="button"
-            className="list-more"
-            disabled={customers.isFetching}
-            onClick={() => {
+          <ListMore
+            reading={customers.isFetchingNextPage}
+            held={customers.isFetching}
+            more={() => {
               void customers.fetchNextPage();
             }}
-          >
-            Показати ще
-          </button>
+          />
         )
       )}
     </>

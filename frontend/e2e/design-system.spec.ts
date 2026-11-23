@@ -9,6 +9,7 @@ import {
   section,
   tillWays,
   expectHeldLook,
+  expectPressed,
   expectWarningPlate,
   expectTextLink,
   expectSignedLink,
@@ -1643,6 +1644,93 @@ for (const scheme of ["light", "dark"] as const)
     );
     await probe.scrollIntoViewIfNeeded();
     await probe.screenshot({ path: `test-results/held-kinds-${scheme}.png` });
+  });
+
+/** A press on its way of each kind a read is asked by: «Показати ще», a
+ * plate's «Спробувати ще раз», and a text button's before a store. */
+const pressedKinds = `
+  <button type="button" class="list-more" data-kind="more">Показати ще</button>
+  <div class="notice read-failure">
+    <p>Сервер не відповідає.</p>
+    <button type="button" data-kind="retry">Спробувати ще раз</button>
+  </div>
+  <div class="blank-tag">
+    <button type="button" class="text-button" data-kind="text">Спробувати ще раз</button>
+  </div>
+`;
+
+for (const scheme of ["light", "dark"] as const)
+  test(`in the ${scheme} theme a read asked by a press keeps the press's look while it is answered — «Показати ще» and a plate's «Спробувати ще раз» on their edge in ink, a text button's in the link's colour, the eyelet's ring turning before the words at 4.5:1, nothing moved; where motion is reduced the ring stands, dashed (audit 2026-11-22, frame P2-2)`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ colorScheme: scheme });
+    await page.setViewportSize({ width: 360, height: 844 });
+    await page.goto(
+      `/#${new URLSearchParams({ tgWebAppData: initData(fixture.network_owner_telegram_user_id) }).toString()}`,
+    );
+    await openStore(page, "Центр CENTRE");
+    await page.evaluate((html) => {
+      const probe = document.createElement("section");
+      probe.id = "pressed-probe";
+      probe.style.cssText =
+        "position:fixed;inset:0;z-index:1000;overflow:auto;padding:16px;background:var(--paper)";
+      probe.innerHTML = html;
+      document.body.append(probe);
+    }, pressedKinds);
+    const probe = page.locator("#pressed-probe");
+    for (const [kind, words] of [
+      ["more", "--ink"],
+      ["retry", "--ink"],
+      ["text", "--link"],
+    ] as const) {
+      const button = probe.locator(`[data-kind="${kind}"]`);
+      const was = await button.boundingBox();
+      const edge = await button.evaluate(
+        (node) => getComputedStyle(node).borderTopStyle,
+      );
+      const fill = await button.evaluate(
+        (node) => getComputedStyle(node).backgroundColor,
+      );
+      // Pressed as the app presses it: the class, the ring before the
+      // words, no tap.
+      await button.evaluate((node) => {
+        const ring = document.createElement("span");
+        ring.className = "eyelet eyelet-spin eyelet-20";
+        ring.setAttribute("aria-hidden", "true");
+        node.prepend(ring);
+        node.classList.add("pressed");
+        (node as HTMLButtonElement).disabled = true;
+      });
+      await expectPressed(button, words);
+      await expect(button).toHaveCSS("border-top-style", edge);
+      await expect(button).toHaveCSS("background-color", fill);
+      expect(
+        ratio(...(await wordsAndGround(button))),
+        `${kind}: its words`,
+      ).toBeGreaterThanOrEqual(4.5);
+      const ring = await button.locator(".eyelet-spin").boundingBox();
+      const now = await button.boundingBox();
+      if (!was || !now || !ring) throw new Error(`${kind} not laid out`);
+      // The ring inside, before the words.
+      expect(ring.x).toBeGreaterThanOrEqual(now.x);
+      expect(ring.x + ring.width).toBeLessThanOrEqual(now.x + now.width / 2);
+      // Nothing moved: its height kept, the strip its width; a button at its
+      // words' width takes the ring's room.
+      expect(Math.abs(now.height - was.height), kind).toBeLessThanOrEqual(1);
+      if (kind === "more")
+        expect(Math.abs(now.width - was.width), kind).toBeLessThanOrEqual(1);
+    }
+    // Where motion is reduced, the ring stands, dashed in the words' colour.
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    for (const kind of ["more", "retry", "text"]) {
+      const ring = probe.locator(`[data-kind="${kind}"] .eyelet-spin`);
+      await expect(ring).toHaveCSS("animation-name", "none");
+      await expect(ring).toHaveCSS("border-top-style", "dashed");
+    }
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    await probe.screenshot({
+      path: `test-results/pressed-kinds-${scheme}.png`,
+    });
   });
 
 for (const scheme of ["light", "dark"] as const)

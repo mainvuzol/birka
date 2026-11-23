@@ -27,6 +27,7 @@ import {
   expectOwed,
   expectHeldLook,
   tokenColour,
+  expectPressed,
 } from "./fixtures";
 import type { Locator, Page, Request, Route } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
@@ -742,11 +743,15 @@ test("a kept sale's banner says which sale it was: its sum and way, the part pai
 });
 
 test.describe("1. the seller is told to sell on paper", () => {
-  test("at sign-in, for 503, 502, 504 and no answer at all", async ({
+  test("at sign-in, for 503, 502, 504 and no answer at all: on the paper's banner, read as a status, never a refusal's red; «Спробувати ще раз» pressed keeps its look, its ring turning, and asks once (audit 2026-11-22, frame P2-1, P2-2)", async ({
     page,
   }) => {
     let answer: "502" | "503" | "504" | "lost" = "503";
+    let held: Promise<void> | null = null;
+    let asked = 0;
     await page.route("**/api/v1/auth/telegram", async (route) => {
+      asked += 1;
+      if (held) await held;
       if (answer === "lost") await route.abort("connectionreset");
       else if (answer === "503")
         // The server's own: its database does not answer (ADR-0013 §2).
@@ -762,18 +767,85 @@ test.describe("1. the seller is told to sell on paper", () => {
       // The edge's own: no body, no number.
       else await route.fulfill({ status: Number(answer) });
     });
-    const said = page.getByRole("alert");
+    const paper = page.locator("section.banner-paper");
     const again = page.getByRole("button", { name: "Спробувати ще раз" });
+    // The paper's words on the paper's banner, as in the store and on «Щось
+    // пішло не так», in a status that stands with the screen; no alert.
+    const said = async (): Promise<void> => {
+      await expect(paper).toHaveText(UNREACHABLE);
+      await expect(paper).toHaveAccessibleName("Сервер не відповідає");
+      await expect(page.getByRole("status").filter({ has: paper })).toHaveCount(
+        1,
+      );
+      await expect(page.getByRole("alert")).toHaveCount(0);
+      await expect(page.getByText(UNREACHABLE)).toHaveCount(1);
+    };
+    // The status's children as it first stood: born empty, so its words
+    // are heard as they come (a region born with its words is not read).
+    await page.addInitScript(() => {
+      const host = window as unknown as { bornWith?: number };
+      new MutationObserver((records) => {
+        for (const record of records)
+          for (const node of record.addedNodes) {
+            if (!(node instanceof Element) || host.bornWith !== undefined)
+              continue;
+            const status = node.matches('.before-store [role="status"]')
+              ? node
+              : node.querySelector('.before-store [role="status"]');
+            if (status) host.bornWith = status.childElementCount;
+          }
+      }).observe(document, { childList: true, subtree: true });
+    });
     await page.goto(launch());
     await expect(
       page.getByRole("heading", { name: "Вхід через Telegram" }),
     ).toBeVisible();
-    await expect(said).toHaveText(UNREACHABLE);
+    await said();
+    expect(
+      await page.evaluate(
+        () => (window as unknown as { bornWith?: number }).bornWith,
+      ),
+    ).toBe(0);
     for (const next of ["502", "504", "lost"] as const) {
       answer = next;
+      const sent = asked;
       await again.click();
-      await expect(said).toHaveText(UNREACHABLE);
+      // Answered: the screen stood meanwhile, its words said again.
+      await expect.poll(() => asked).toBe(sent + 1);
+      await expect(again).toBeEnabled();
+      await said();
     }
+    // Pressed, it keeps its look while the server is asked, the ring
+    // turning before its words, the words still said; no second ask.
+    let release = (): void => undefined;
+    held = new Promise<void>((done) => {
+      release = done;
+    });
+    const before = asked;
+    await again.click();
+    await expectPressed(again, "--link");
+    await expect.poll(() => asked).toBe(before + 1);
+    await again.click({ force: true });
+    await said();
+    release();
+    held = null;
+    await expect(again).toBeEnabled();
+    await expect(again).not.toHaveClass(/\bpressed\b/);
+    await expect(again.locator(".eyelet")).toHaveCount(0);
+    await said();
+    expect(asked).toBe(before + 1);
+    // At 360 in both themes, the paper's banner the crash screen's: its
+    // fill and its triangle.
+    await page.setViewportSize({ width: 360, height: 640 });
+    for (const scheme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme: scheme });
+      await expect(paper).toHaveCSS(
+        "background-color",
+        await tokenColour(page, "--warning-bg"),
+      );
+      await expect(paper.locator(".banner-glyph svg")).toBeVisible();
+    }
+    await page.emulateMedia({ colorScheme: "light" });
   });
 
   test("at the till, whose stock read went unanswered, with «Спробувати ще раз»", async ({

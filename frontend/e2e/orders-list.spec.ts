@@ -1,5 +1,6 @@
 import {
   expectListMore,
+  expectPressed,
   test,
   expect,
   expectLinkChevron,
@@ -1355,14 +1356,12 @@ test("more than a hundred open: «Показати ще» reads the rest, a row 
   const done = Array.from({ length: 55 }, (_, index) =>
     order({ status: "COLLECTED", created_at: ago(40 + index / 10) }),
   );
-  await stub(
-    page,
-    server({
-      open: many,
-      closed: done,
-      places: [warehouse(main, "Основний")],
-    }),
-  );
+  const orders = server({
+    open: many,
+    closed: done,
+    places: [warehouse(main, "Основний")],
+  });
+  await stub(page, orders);
   await enter(page);
   const ready = rows(page, "Склад «Основний»");
   await expect(ready).toHaveCount(100);
@@ -1386,8 +1385,23 @@ test("more than a hundred open: «Показати ще» reads the rest, a row 
     page.getByRole("button", { name: "Показати ще" }),
     page.getByRole("list", { name: "Склад «Основний»", exact: true }),
   );
-  await page.getByRole("button", { name: "Показати ще" }).click();
+  // Pressed, it keeps its look while its page is read, the ring turning
+  // before its words, and asks once (audit 2026-11-22, frame P2-2).
+  let release = (): void => undefined;
+  orders.openHeld = new Promise<void>((done) => {
+    release = done;
+  });
+  const showMore = page.getByRole("button", { name: "Показати ще" });
+  await showMore.click();
+  await expectPressed(showMore, "--ink");
+  const pageAsked = (): number =>
+    orders.asked.filter((asked) => asked === "open||100").length;
+  await expect.poll(pageAsked).toBe(1);
+  await showMore.click({ force: true });
+  release();
+  delete orders.openHeld;
   await expect(ready).toHaveCount(105);
+  expect(pageAsked()).toBe(1);
   await expect(page.locator(".order-place-label")).toHaveText([
     "Склад «Основний» · 105",
   ]);
@@ -1655,7 +1669,17 @@ test("a next page that could not be read is one plate where «Показати �
   await page.getByRole("button", { name: "Показати ще" }).click();
   const plate = await pageFailed(page, ready.last());
   await expect(ready).toHaveCount(100);
-  await plate.getByRole("button", { name: "Спробувати ще раз" }).click();
+  // Its retry pressed keeps its look while the page is asked again, the
+  // ring turning before its words (audit 2026-11-22, frame P2-2).
+  let release = (): void => undefined;
+  orders.openHeld = new Promise<void>((done) => {
+    release = done;
+  });
+  const retry = plate.getByRole("button", { name: "Спробувати ще раз" });
+  await retry.click();
+  await expectPressed(retry, "--ink");
+  release();
+  delete orders.openHeld;
   await expect(ready).toHaveCount(105);
   await expect(plate).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Показати ще" })).toHaveCount(

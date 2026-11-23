@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { JSX, ReactNode, RefObject } from "react";
 import { useInfiniteQuery, useQueries } from "@tanstack/react-query";
 import type { InfiniteData } from "@tanstack/react-query";
+import { ListMore } from "@/shared/ListMore";
 import { api } from "@/shared/api";
 import { money } from "@/orders/types";
 import type { StockOption, Store } from "@/orders/types";
@@ -539,18 +540,15 @@ export function StockSearch({
           // Not while the plate over the tags says they were not read
           // again: its retry reads the whole list first, never a page on
           // top of free counts gone stale (review).
-          <button
-            type="button"
-            className="list-more"
-            disabled={
+          <ListMore
+            reading={stock.isFetchingNextPage}
+            held={
               stock.isFetching || stock.isPlaceholderData || readAgainFailed
             }
-            onClick={() => {
+            more={() => {
               void stock.fetchNextPage();
             }}
-          >
-            Показати ще
-          </button>
+          />
         )
       )}
       {/* Found something, but maybe not the coat in hand. */}

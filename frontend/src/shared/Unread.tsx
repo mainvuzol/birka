@@ -1,5 +1,6 @@
 import type { JSX, ReactNode } from "react";
 import { readText } from "./api";
+import { Eyelet } from "./Eyelet";
 
 /** What could not be read, and «Спробувати ще раз», over the rows read: a
  * warning's plate (spec §6.23), never a refusal's red — the one way a read
@@ -8,19 +9,24 @@ import { readText } from "./api";
  * only «Сервер не відповідає.»: the paper banner says the rest once (stage
  * 2, orders task list, P0-3); otherwise what it answered, in the screen's
  * words if it has them. Its retry the secondary button, never the screen's
- * main (frame P1-1). */
+ * main (frame P1-1); pressed, it keeps its look while the read is asked
+ * again, the eyelet's ring turning before its words — never the dashed «not
+ * now» (audit 2026-11-22, frame P2-2). */
 export function Unread({
   error,
   retry,
   said,
   held = false,
+  blocked = false,
   children,
 }: {
   error: unknown;
   retry: () => void;
   said?: (error: unknown) => string;
-  /** Asked again and not answered yet: no second ask. */
+  /** Asked again and not answered yet: no second ask, its ring turning. */
   held?: boolean;
+  /** Another press of the screen's on its way: no ask, nothing turning. */
+  blocked?: boolean;
   /** What the screen must still say under the line — «Каса»'s close while
    * the server does not answer. */
   children?: ReactNode;
@@ -29,7 +35,13 @@ export function Unread({
     <div className="notice read-failure" role="alert">
       <p>{readText(error, said)}</p>
       {children}
-      <button type="button" disabled={held} onClick={retry}>
+      <button
+        type="button"
+        className={held ? "pressed" : undefined}
+        disabled={held || blocked}
+        onClick={retry}
+      >
+        {held && <Eyelet state="spin" size={20} />}
         Спробувати ще раз
       </button>
     </div>

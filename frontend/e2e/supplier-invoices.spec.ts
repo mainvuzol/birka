@@ -56,6 +56,8 @@ interface Fixture {
   network_centre_manager_telegram_user_id: string;
   network_centre_store_id: string;
   network_shared_location_id: string;
+  network_market_seller_telegram_user_id: string;
+  network_market_store_id: string;
 }
 const fixture = JSON.parse(
   readFileSync(
@@ -657,6 +659,12 @@ test("an invoice is recorded on its own screen and paid in parts until it is set
   await expectGlyphBeside(page.locator(".invoice-closed .sticker"));
   await expect(payOnCard(page)).toHaveCount(0);
   await expect(history(page).getByRole("listitem")).toHaveCount(3);
+  // The newest first (audit 2026-11-22, money P2-3).
+  await expect(history(page).locator(".timeline-sum")).toHaveText([
+    "3 000,00 грн",
+    "999,50 грн",
+    "1 000,50 грн",
+  ]);
   // The two refused above, then the same payment as a new command, then
   // the rest.
   expect(paid.bodies).toHaveLength(4);
@@ -3289,6 +3297,265 @@ test("«Зарахувати повернення» says what each return gave b
       await expect(said).toHaveCSS("color", onChosen);
   }
   await page.emulateMedia({ colorScheme: "light" });
+});
+
+test("«Зарахувати повернення» says a unit given back from «Брак» came from it, as «Постачальникам» does: «з «Браку» «…»», never «склад «…»»; a warehouse's return «склад «…»», as before; wrapped within the sheet at 360 × 640, the chosen's lines in its colours (audit 2026-11-22, money P2-1)", async ({
+  page,
+}) => {
+  const supplier = `З браку ${randomUUID().slice(0, 6)}`;
+  const supplierId = await aSupplier(page, supplier);
+  // «Ринок», whose «Брак ринку» takes damaged goods; Центр has none.
+  const petro = fixture.network_market_seller_telegram_user_id;
+  const market = fixture.network_market_store_id;
+  const headers = await headersOf(page, petro);
+  const model = `Брак ${randomUUID().slice(0, 6)}`;
+  const created = await page.request.post("/api/v1/catalog/products", {
+    headers: { ...headers, "Idempotency-Key": randomUUID() },
+    data: {
+      store_id: market,
+      concept: model,
+      variant: { color: "сірий" },
+      sizes: [{ system: "ALPHA", code: "M" }],
+    },
+  });
+  expect(created.status()).toBe(201);
+  const product = (await created.json()) as {
+    product_variant_id: string;
+    sizes: { size_id: string }[];
+  };
+  const coat = {
+    product_variant_id: product.product_variant_id,
+    size_id: product.sizes[0]?.size_id ?? "",
+  };
+  const receipt = await page.request.post("/api/v1/inventory/receipts", {
+    headers: { ...headers, "Idempotency-Key": randomUUID() },
+    data: {
+      store_id: market,
+      location_id: fixture.network_shared_location_id,
+      command_id: randomUUID(),
+      lines: [{ ...coat, quantity: 2, acquisition_type: "PURCHASE" }],
+      notes: null,
+    },
+  });
+  expect(receipt.status()).toBe(201);
+  // One sold and brought back damaged: a unit in «Брак», taken, confirmed
+  // and given back to the supplier from there.
+  const sold = await page.request.post("/api/v1/sales", {
+    headers: { ...headers, "Idempotency-Key": randomUUID() },
+    data: {
+      store_id: market,
+      command_id: randomUUID(),
+      lines: [
+        {
+          ...coat,
+          source_location_id: fixture.network_shared_location_id,
+          quantity: 1,
+          unit_price: "2000.00",
+        },
+      ],
+      payment_method: "CASH",
+    },
+  });
+  expect(sold.status()).toBe(201);
+  const sale = (await sold.json()) as { id: string; items: { id: string }[] };
+  const back = await page.request.post(`/api/v1/sales/${sale.id}/refunds`, {
+    headers: { ...headers, "Idempotency-Key": randomUUID() },
+    data: {
+      command_id: randomUUID(),
+      lines: [
+        {
+          sale_item_id: sale.items[0]?.id,
+          quantity: 1,
+          restock: true,
+          condition: "DAMAGED",
+        },
+      ],
+      payment_method: "CASH",
+    },
+  });
+  expect(back.status(), await back.text()).toBe(201);
+  const units = await page.request.get(
+    `/api/v1/damaged-units?store_id=${market}`,
+    { headers },
+  );
+  expect(units.status()).toBe(200);
+  const unit = (
+    (await units.json()) as { units: { id: string; display_name: string }[] }
+  ).units.find((one) => one.display_name.startsWith(model));
+  if (!unit) throw new Error("the damaged unit not found");
+  for (const [step, data] of [
+    ["take", undefined],
+    ["confirm", { note: null }],
+    ["return-to-supplier", { supplier_id: supplierId, note: null }],
+  ] as const) {
+    const done = await page.request.post(
+      `/api/v1/damaged-units/${unit.id}/${step}`,
+      { headers: { ...headers, "Idempotency-Key": randomUUID() }, data },
+    );
+    expect(done.status(), step).toBe(200);
+  }
+  // And one from the warehouse, the newest.
+  const returned = await page.request.post("/api/v1/supplier-returns", {
+    headers,
+    data: {
+      command_id: randomUUID(),
+      store_id: market,
+      location_id: fixture.network_shared_location_id,
+      supplier_id: supplierId,
+      lines: [{ ...coat, quantity: 1 }],
+      note: null,
+    },
+  });
+  expect(returned.status()).toBe(201);
+  const invoice = await page.request.post("/api/v1/supplier-invoices", {
+    headers,
+    data: {
+      command_id: randomUUID(),
+      store_id: market,
+      supplier_id: supplierId,
+      amount: "1000.00",
+      paid_now: "0",
+      note: null,
+    },
+  });
+  expect(invoice.status()).toBe(201);
+
+  await page.goto(
+    `/#${new URLSearchParams({ tgWebAppData: initData(petro) }).toString()}`,
+  );
+  await openStore(page, /^Ринок MARKET/);
+  await section(page, "Накладні");
+  await open(page, supplier);
+  await act(page, "Зарахувати повернення");
+  const setOff = await sheet(page, "Зарахувати повернення");
+  const returns = setOff
+    .getByRole("radiogroup", { name: "Повернення" })
+    .getByRole("radio");
+  await expect(returns).toHaveCount(2);
+  // Its day, units and where it came back from, as its row in
+  // «Постачальникам» says it.
+  await expect(returns.locator(".t-row")).toHaveText([
+    /^\d\d\.\d\d · 1 шт\. · склад «[^«»]+»$/,
+    /^\d\d\.\d\d · 1 шт\. · з «Браку» «[^«»]+»$/,
+  ]);
+  await expect(returns.nth(1)).toHaveAccessibleName(
+    new RegExp(`^\\d\\d\\.\\d\\d · 1 шт\\. · з «Браку» «[^«»]+»\\s*${model}`),
+  );
+  await expect(setOff).not.toContainText(/склад «[^«»]*Брак/);
+  // At 360 × 640 within the sheet, nothing wider than the screen.
+  await page.setViewportSize({ width: 360, height: 640 });
+  const within = await setOff.boundingBox();
+  if (!within) throw new Error("not laid out");
+  for (const option of await returns.all()) {
+    const box = await option.boundingBox();
+    if (!box) throw new Error("not laid out");
+    expect(box.x + box.width).toBeLessThanOrEqual(within.x + within.width);
+  }
+  expect(
+    await setOff
+      .locator(".sheet-body")
+      .evaluate((node) => node.scrollWidth - node.clientWidth),
+  ).toBeLessThanOrEqual(0);
+  // Chosen, each of its lines in the chosen's colours, in both themes.
+  await returns.nth(1).click();
+  await expect(returns.nth(1)).toBeChecked();
+  for (const scheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    const onChosen = await tokenColour(page, "--on-chosen");
+    for (const said of await returns.nth(1).locator("span").all())
+      await expect(said).toHaveCSS("color", onChosen);
+  }
+  await page.emulateMedia({ colorScheme: "light" });
+});
+
+test("an invoice's history is the newest first, as a customer's and «Продажі й повернення»: the last payment at its top, the first at its bottom; one cancelled where it was recorded, never where it was cancelled (audit 2026-11-22, money P2-3)", async ({
+  page,
+}) => {
+  const supplier = `Нове згори ${randomUUID().slice(0, 6)}`;
+  const invoiceId = await anInvoice(
+    page,
+    await aSupplier(page, supplier),
+    "2000.00",
+    "500.00",
+  );
+  const headers = await headersOf(page, hanna);
+  const entries: { id: string; amount: string }[] = [];
+  for (const amount of ["300.00", "200.00"]) {
+    const paid = await page.request.post(
+      `/api/v1/supplier-invoices/${invoiceId}/payments`,
+      { headers, data: { command_id: randomUUID(), amount } },
+    );
+    expect(paid.status()).toBe(201);
+    entries.splice(
+      0,
+      entries.length,
+      ...((await paid.json()) as { entries: { id: string; amount: string }[] })
+        .entries,
+    );
+  }
+  const middle = entries.find((entry) => entry.amount === "300.00");
+  if (!middle) throw new Error("the payment of 300 not found");
+  const cancelled = await page.request.post(
+    `/api/v1/supplier-invoices/${invoiceId}/entries/${middle.id}/cancel`,
+    { headers, data: { reason: "не ті гроші" } },
+  );
+  expect(cancelled.status()).toBe(200);
+
+  await invoicesAt(page, hanna);
+  await open(page, supplier);
+  await expect(history(page).locator(".timeline-sum")).toHaveText([
+    "200,00 грн",
+    "300,00 грн",
+    "500,00 грн",
+  ]);
+  // The cancelled one in its own place, saying so.
+  await expect(
+    history(page).getByRole("listitem").nth(1).locator(".sticker"),
+  ).toHaveText("Скасовано");
+  await expect(history(page).getByRole("listitem").nth(1)).toContainText(
+    "не ті гроші",
+  );
+  // The newest, cancelled in two taps from its own line at the top.
+  await history(page).getByRole("listitem").first().getByRole("button").click();
+  await sheet(page, "Скасувати: оплата 200,00 грн");
+});
+
+test("«Зарахувати повернення» only for whoever may read the returns: without `supplier:return` no way behind ⋯ and no read of them — «Скасувати накладну» still there; with it, as before (audit 2026-11-22, money P2-4)", async ({
+  page,
+}) => {
+  const supplier = `Без повернень ${randomUUID().slice(0, 6)}`;
+  await anInvoice(page, await aSupplier(page, supplier), "1000.00");
+  for (const reads of [false, true]) {
+    await page.unrouteAll({ behavior: "wait" });
+    if (!reads)
+      await page.route("**/api/v1/me", async (route) => {
+        const response = await route.fetch();
+        const body = (await response.json()) as {
+          stores: { permissions: string[] }[];
+        };
+        for (const store of body.stores)
+          store.permissions = store.permissions.filter(
+            (p) => p !== "supplier:return",
+          );
+        await route.fulfill({ response, json: body });
+      });
+    const returnsRead = readsOf(page, /^\/api\/v1\/supplier-returns$/);
+    await invoicesAt(page, hanna);
+    await open(page, supplier);
+    const actions = await ways(page);
+    await expect(
+      actions.getByRole("button", { name: "Зарахувати повернення" }),
+    ).toHaveCount(reads ? 1 : 0);
+    await expect(
+      actions.getByRole("button", { name: "Скасувати накладну" }),
+    ).toHaveCount(1);
+    await page.keyboard.press("Escape");
+    await expect(actions).toHaveCount(0);
+    if (!reads) {
+      expect(returnsRead()).toBe(0);
+      await expect(page.getByText("Немає доступу")).toHaveCount(0);
+    }
+  }
 });
 
 test("an invoice for borrowed goods sold, of a store that does not trade, says only what it is for — never its cancelling or a batch this store does not keep; this store's own says both (audit 2026-11-20, money P2-4)", async ({

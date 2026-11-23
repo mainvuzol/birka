@@ -3,6 +3,7 @@ import {
   expect,
   countTaps,
   expectStub,
+  expectPressed,
   expectSheetCancel,
   expectTextLink,
   menu,
@@ -1411,7 +1412,11 @@ test("no store to choose: one blank tag, the owner the one to ask, never an admi
   page,
 }) => {
   let none = true;
+  let held: Promise<void> | null = null;
+  let asked = 0;
   await page.route("**/api/v1/me", async (route) => {
+    asked += 1;
+    if (held) await held;
     const response = await route.fetch();
     const me = (await response.json()) as object;
     await route.fulfill({
@@ -1419,7 +1424,17 @@ test("no store to choose: one blank tag, the owner the one to ask, never an admi
       json: none ? { ...me, stores: [] } : me,
     });
   });
+  // The first sign-in unanswered, then answered: the failure it said is
+  // not kept for a later read (audit 2026-11-22, frame P2-2; review).
+  let silent = true;
+  await page.route("**/api/v1/auth/telegram", async (route) => {
+    if (silent) await route.fulfill({ status: 503 });
+    else await route.continue();
+  });
   await openAs(page, hanna);
+  await expect(page.locator("section.banner-paper")).toBeVisible();
+  silent = false;
+  await page.getByRole("button", { name: "Спробувати ще раз" }).click();
   const tag = page.locator(".blank-tag");
   await expect(
     tag.getByRole("heading", { name: "Магазинів поки немає", level: 1 }),
@@ -1439,6 +1454,27 @@ test("no store to choose: one blank tag, the owner the one to ask, never an admi
   // The link underlined (audit 2026-11-18, frame P2-1).
   await expectTextLink(again);
   await expect(page.locator("button.primary")).toHaveCount(0);
+  // Pressed, it keeps its look while the rights are read again, the ring
+  // turning before its words, and asks once (audit 2026-11-22, frame
+  // P2-2).
+  let release = (): void => undefined;
+  held = new Promise<void>((done) => {
+    release = done;
+  });
+  const before = asked;
+  await again.click();
+  await expectPressed(again, "--link");
+  await expect(
+    tag.getByRole("heading", { name: "Магазинів поки немає", level: 1 }),
+  ).toBeVisible();
+  await expect(page.locator("section.banner-paper")).toHaveCount(0);
+  await expect.poll(() => asked).toBe(before + 1);
+  await again.click({ force: true });
+  release();
+  held = null;
+  await expect(again).toBeEnabled();
+  await expect(again.locator(".eyelet")).toHaveCount(0);
+  expect(asked).toBe(before + 1);
   // Added to a store meanwhile: read again, and in.
   none = false;
   await again.click();

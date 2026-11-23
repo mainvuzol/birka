@@ -20,6 +20,7 @@ import {
   refusalStep,
   refusedWrite,
 } from "@/shared/api";
+import { ListMore } from "@/shared/ListMore";
 import { Back } from "@/shared/Back";
 import { Eyelet, RecordedMark } from "@/shared/Eyelet";
 import { Icon } from "@/shared/Icon";
@@ -836,16 +837,13 @@ function Differences({
         pages.hasNextPage && (
           // Its next page under the same list, as «+ ще N» stood: one look,
           // the list's width (audit 2026-11-18, frame P2-4; review).
-          <button
-            type="button"
-            className="list-more"
-            disabled={pages.isFetching || readAgainFailed}
-            onClick={() => {
+          <ListMore
+            reading={pages.isFetchingNextPage}
+            held={pages.isFetching || readAgainFailed}
+            more={() => {
               void pages.fetchNextPage();
             }}
-          >
-            Показати ще
-          </button>
+          />
         )
       )}
     </>
@@ -1390,17 +1388,14 @@ export function Stocktake({
                 // top would cancel that read and be read from where the old
                 // pages ended, past a position that moved up (review,
                 // 2026-11-07); refused, it waits under the plate.
-                <button
-                  type="button"
-                  className="list-more"
-                  disabled={list.isFetching || readAgainFailed}
-                  onClick={() => {
+                <ListMore
+                  reading={list.isFetchingNextPage}
+                  held={list.isFetching || readAgainFailed}
+                  more={() => {
                     setFocusFrom(items.length);
                     void list.fetchNextPage();
                   }}
-                >
-                  Показати ще
-                </button>
+                />
               )
             )}
             {/* Only for whoever may receive: what it searches and the

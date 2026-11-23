@@ -2013,6 +2013,26 @@ export async function expectListMore(
   await expect(button).toHaveCSS("font-weight", "600");
 }
 
+/** A press on its way — «Показати ще», «Спробувати ще раз» — keeps its own
+ * look, never the dashed «not now»: its words in `words`, the eyelet's ring
+ * turning before them, and no second tap (audit 2026-11-22, frame P2-2). */
+export async function expectPressed(
+  button: Locator,
+  words: "--ink" | "--link",
+): Promise<void> {
+  await expect(button).toHaveClass(/\bpressed\b/);
+  await expect(button).toBeDisabled();
+  const ring = button.locator(":scope > .eyelet-spin:first-child");
+  await expect(ring).toBeVisible();
+  await expect(ring).not.toHaveCSS("animation-name", "none");
+  await expect(button).not.toHaveCSS("border-top-style", "dashed");
+  await expect(button).toHaveCSS(
+    "color",
+    await tokenColour(button.page(), words),
+  );
+  await expect(button).toHaveCSS("opacity", "1");
+}
+
 /** A text button with a sign — «←», «+», «×», «ⓘ … ›» — told by its sign,
  * never underlined (audit 2026-11-18, frame P2-1). */
 export async function expectSignedLink(button: Locator): Promise<void> {

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { JSX } from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { ListMore } from "@/shared/ListMore";
 import { BackToMore } from "@/shared/More";
 import type { MoreBack } from "@/shared/More";
 import { api, denied } from "@/shared/api";
@@ -310,17 +311,14 @@ export function Stock({
                       />
                     ) : (
                       stock.hasNextPage && (
-                        <button
-                          type="button"
-                          className="list-more"
-                          disabled={stock.isFetchingNextPage || readAgainFailed}
-                          onClick={() => {
+                        <ListMore
+                          reading={stock.isFetchingNextPage}
+                          held={readAgainFailed}
+                          more={() => {
                             setFocusAt(tags.length);
                             void stock.fetchNextPage();
                           }}
-                        >
-                          Показати ще
-                        </button>
+                        />
                       )
                     )}
                   </>

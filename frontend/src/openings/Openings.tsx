@@ -14,6 +14,7 @@ import {
   errorText,
   unreachable,
 } from "@/shared/api";
+import { ListMore } from "@/shared/ListMore";
 import { Fold } from "@/shared/Fold";
 import { Unread } from "@/shared/Unread";
 import { useNextPageFailed } from "@/shared/nextPage";
@@ -346,18 +347,15 @@ export function Openings({
               />
             ) : (
               lists.hasNextPage && (
-                <button
-                  type="button"
-                  className="list-more"
-                  disabled={lists.isFetching}
-                  onClick={() => {
+                <ListMore
+                  reading={lists.isFetchingNextPage}
+                  held={lists.isFetching}
+                  more={() => {
                     // Kept until the page is read: after its retry too.
                     setFocusAt(items.length);
                     void lists.fetchNextPage();
                   }}
-                >
-                  Показати ще
-                </button>
+                />
               )
             )}
           </>
@@ -1895,16 +1893,13 @@ function ListView({
               />
             ) : (
               lines.hasNextPage && (
-                <button
-                  type="button"
-                  className="list-more"
-                  disabled={lines.isFetching || linesReadAgainFailed}
-                  onClick={() => {
+                <ListMore
+                  reading={lines.isFetchingNextPage}
+                  held={lines.isFetching || linesReadAgainFailed}
+                  more={() => {
                     void lines.fetchNextPage();
                   }}
-                >
-                  Показати ще
-                </button>
+                />
               )
             )}
           </>

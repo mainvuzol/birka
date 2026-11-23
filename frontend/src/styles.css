@@ -3403,6 +3403,12 @@ section.credits.customer-card {
 .crashed .banner {
   margin: 16px 0 0;
 }
+/* The sign-in with the server silent (audit 2026-11-22, frame P2-1): the
+   paper's banner where the refusal's plate stands, as far from the title
+   and from «Спробувати ще раз»; never the crash screen's own (review). */
+.before-store:not(.crashed) .banner {
+  margin: 0 0 16px;
+}
 .crashed .blank-tag > button {
   width: 100%;
   min-height: var(--h-primary);
@@ -8436,6 +8442,12 @@ button:disabled:where(
   border-color: transparent;
   background: transparent;
   color: var(--pencil);
+}
+/* A text button pressed — «Спробувати ще раз» before a store, its read
+   asked and not answered yet — keeps its words' colour, the eyelet's ring
+   before them (audit 2026-11-22, frame P2-2). */
+.text-button.pressed:disabled {
+  color: var(--link);
 }
 /* One chosen keeps its fill and its words, so the choice still reads —
    pencil on its fill would not, at 2:1 — its edge dashed (decided here):

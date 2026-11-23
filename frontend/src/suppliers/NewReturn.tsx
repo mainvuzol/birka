@@ -1,6 +1,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type { JSX } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { ListMore } from "@/shared/ListMore";
 import { ApiError, isConflict } from "@/shared/api";
 import { Back } from "@/shared/Back";
 import { Empty } from "@/shared/Empty";
@@ -701,18 +702,13 @@ export function NewReturn({
                   </ul>
                 )}
                 {stock.hasNextPage && (
-                  <button
-                    type="button"
-                    className="list-more"
-                    disabled={
-                      stock.isFetchingNextPage || stock.isPlaceholderData
-                    }
-                    onClick={() => {
+                  <ListMore
+                    reading={stock.isFetchingNextPage}
+                    held={stock.isPlaceholderData}
+                    more={() => {
                       void stock.fetchNextPage();
                     }}
-                  >
-                    Показати ще
-                  </button>
+                  />
                 )}
               </>
             ))}

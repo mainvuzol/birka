@@ -4,6 +4,7 @@ import { shortTime } from "@/credits/format";
 import { money } from "@/orders/types";
 import { paperText } from "@/sales/paperMark";
 import { markText } from "@/sales/types";
+import { ListMore } from "@/shared/ListMore";
 import { api } from "@/shared/api";
 import {
   isTillMethod,
@@ -241,16 +242,13 @@ export function ReportEntries({
       )}
       {/* A page that failed is asked again by its own retry. */}
       {entries.hasNextPage && !entries.isFetchNextPageError && (
-        <button
-          type="button"
-          className="list-more"
-          disabled={entries.isFetching}
-          onClick={() => {
+        <ListMore
+          reading={entries.isFetchingNextPage}
+          held={entries.isFetching}
+          more={() => {
             void entries.fetchNextPage();
           }}
-        >
-          Показати ще
-        </button>
+        />
       )}
     </>
   );

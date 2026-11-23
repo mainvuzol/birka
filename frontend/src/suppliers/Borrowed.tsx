@@ -9,6 +9,7 @@ import {
   isConflict,
   refusedWrite,
 } from "@/shared/api";
+import { ListMore } from "@/shared/ListMore";
 import { Unread } from "@/shared/Unread";
 import { Placeholder } from "@/shared/Placeholder";
 import { ResultScreen } from "@/shared/ResultScreen";
@@ -398,16 +399,13 @@ export function Borrowed({
             {/* A page that failed is asked again by its own retry, alone
               (money task list after stage 2, P2-1). */}
             {lots.hasNextPage && !lots.isFetchNextPageError && (
-              <button
-                type="button"
-                className="list-more"
-                disabled={lots.isFetching}
-                onClick={() => {
+              <ListMore
+                reading={lots.isFetchingNextPage}
+                held={lots.isFetching}
+                more={() => {
                   void lots.fetchNextPage();
                 }}
-              >
-                Показати ще
-              </button>
+              />
             )}
           </>
         )}

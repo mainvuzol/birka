@@ -5,6 +5,7 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
+import { ListMore } from "@/shared/ListMore";
 import { api } from "@/shared/api";
 import { Unread } from "@/shared/Unread";
 import { decimal, money, typedKopecks } from "@/orders/types";
@@ -726,16 +727,13 @@ function InvoiceList({
             {/* A page that failed is asked again by its own retry, alone
               (money task list after stage 2, P2-1). */}
             {invoices.hasNextPage && !invoices.isFetchNextPageError && (
-              <button
-                type="button"
-                className="list-more"
-                disabled={invoices.isFetching}
-                onClick={() => {
+              <ListMore
+                reading={invoices.isFetchingNextPage}
+                held={invoices.isFetching}
+                more={() => {
                   void invoices.fetchNextPage();
                 }}
-              >
-                Показати ще
-              </button>
+              />
             )}
           </>
         )}
@@ -1152,7 +1150,10 @@ function InvoiceDetail({
             className="timeline invoice-history"
             aria-label="Історія накладної"
           >
-            {invoice.entries.map((entry) => (
+            {/* The newest first, as a customer's history and «Продажі й
+                повернення» are; the server answers the oldest first, and
+                nothing reads its order (audit 2026-11-22, money P2-3). */}
+            {[...invoice.entries].reverse().map((entry) => (
               <EntryRow
                 key={entry.id}
                 entry={entry}
