@@ -4,10 +4,9 @@ import {
   dockOnMenu,
   expectCaption,
   expectSheetCancel,
-  expectLinkChevron,
   test,
   expect,
-  expectSignedLink,
+  expectSignLink,
   menu,
   moveSheet,
   openStore,
@@ -404,20 +403,16 @@ test("the count: the card reads the drawer again, a task's screen with the app's
   ])
     await expect(page.getByText(text, { exact: true })).toBeVisible();
   // The first reminder's way on the set's chevron, never a typed «›» (audit
-  // 2026-11-13, orders-cash P2-1).
-  await expectLinkChevron(
+  // 2026-11-13, orders-cash P2-1); told by its signs, never underlined
+  // (audit 2026-11-18, frame P2-1) — the way of its sentence the other
+  // ways of a sentence took (audit 2026-11-22, money P2-2, orders-cash
+  // P2-2).
+  await expectSignLink(
     page.getByRole("button", {
       name: "Спершу запишіть видане з каси",
       exact: true,
     }),
     "Спершу запишіть видане з каси",
-  );
-  // Told by its signs, never underlined (audit 2026-11-18, frame P2-1).
-  await expectSignedLink(
-    page.getByRole("button", {
-      name: "Спершу запишіть видане з каси",
-      exact: true,
-    }),
   );
   const close = page.getByRole("button", { name: "Закрити касу", exact: true });
   const panel = page.locator(".pay-panel");

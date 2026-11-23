@@ -4,6 +4,7 @@ import {
   test,
   expect,
   expectLinkChevron,
+  expectSignLink,
   expectPlate,
   openStore,
   section,
@@ -1504,6 +1505,60 @@ test("«Клієнт забрав» reads only the collected, «Скасован
     "collected||0",
   ]);
 });
+
+for (const scheme of ["light", "dark"] as const)
+  test(`in the ${scheme} theme at 360 × 640 «Скасовані й повернені на склад ›» under «Показати ще» is a way of its own, told by its sign — nothing round it, the link's colour at 4.5:1, its chevron in pencil, its words' width — and «Показати ще» the list's bar with its edge, so the two never read as two equal buttons (audit 2026-11-22, orders-cash P2-2)`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ colorScheme: scheme });
+    await page.setViewportSize({ width: 360, height: 640 });
+    const collected = Array.from({ length: 55 }, (_, index) =>
+      order({ status: "COLLECTED", created_at: ago(1 + index / 10) }),
+    );
+    await stub(
+      page,
+      server({
+        open: [order({ created_at: ago(0) })],
+        closed: [...collected, cancelled],
+      }),
+    );
+    await enter(page);
+    await knot(page, "Клієнт забрав").click();
+    await expect(rows(page, "Клієнт забрав")).toHaveCount(50);
+    const link = page.getByRole("button", {
+      name: "Скасовані й повернені на склад",
+    });
+    const more = page.getByRole("button", { name: "Показати ще" });
+    await expectSignLink(link, "Скасовані й повернені на склад");
+    expect(await contrast(link)).toBeGreaterThanOrEqual(4.5);
+    // «Показати ще» keeps the list's bar: its edge, the list's width.
+    await expect(more).toHaveCSS("border-top-width", "1px");
+    await expect(more).toHaveCSS("border-top-style", "solid");
+    const [bar, way, list] = await Promise.all([
+      more.boundingBox(),
+      link.boundingBox(),
+      page.getByRole("list", { name: "Клієнт забрав" }).boundingBox(),
+    ]);
+    if (!bar || !way || !list) throw new Error("not laid out");
+    expect(Math.abs(bar.width - list.width)).toBeLessThanOrEqual(1);
+    // The way under the bar, 16 apart, at the list's left edge and
+    // narrower than it.
+    expect(way.y - (bar.y + bar.height)).toBeGreaterThanOrEqual(16);
+    expect(Math.abs(way.x - list.x)).toBeLessThanOrEqual(1);
+    expect(way.width).toBeLessThan(list.width);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(360);
+    await link.scrollIntoViewIfNeeded();
+    await page.screenshot({
+      path: `test-results/orders-gone-way-${scheme}.png`,
+    });
+    // It still leads to its screen.
+    await link.click();
+    await expect(
+      page.getByRole("heading", { name: "Скасовані й повернені на склад" }),
+    ).toBeFocused();
+  });
 
 test("the link to «Скасовані й повернені на склад» comes once their read says there are some, under «Клієнт забрав» as it stands; none, never — and «Клієнт забрав» fifty at a time on its own (audit 2026-11-20, orders-cash Н3 (б))", async ({
   page,

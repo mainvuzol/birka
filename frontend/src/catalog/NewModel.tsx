@@ -29,7 +29,7 @@ import { NameFork, forkedFamilies, useForkedFamilies } from "./NameFork";
 import { Similar } from "./Similar";
 import { lengthWrong, similarFrom } from "./modelTypes";
 import { conflictsText } from "./types";
-import type { Decision } from "./types";
+import type { Candidate, Decision } from "./types";
 
 const base = "/catalog/match-decisions";
 
@@ -50,6 +50,26 @@ const systemLabels = [
   { system: "NUMERIC_EU", label: "Числова EU" },
   { system: "UNSPECIFIED", label: "Інша" },
 ] as const;
+
+/**
+ * A candidate's model, as «Пошук моделі в каталозі» names it — its name,
+ * its source, category and garment type, what tells it apart — never one
+ * of its colours (audit 2026-11-22, goods P2-2). A proposal saved before
+ * the server said a model's names: the candidate's own name, as before.
+ */
+function candidateFamily(candidate: Candidate): Family {
+  const named = candidate.concept_name;
+  return {
+    family_id: candidate.family_id,
+    concept_name: named ?? candidate.display_name,
+    source_name: named ? (candidate.source_name ?? null) : null,
+    business_category_name: named
+      ? (candidate.business_category_name ?? null)
+      : null,
+    garment_type_name: named ? (candidate.garment_type_name ?? null) : null,
+    distinction_note: candidate.distinction_note,
+  };
+}
 
 /** The words the similar-name check reads — the model's name, its source and
  * the variant's words (`typed_words`, backend) — as one value to compare. */
@@ -656,17 +676,10 @@ export function NewModel({
                         onClick={() => {
                           // A choice, felt (audit 2026-11-15, goods P2-3).
                           buzz("selection");
-                          setFamily({
-                            family_id: c.family_id,
-                            concept_name: c.display_name,
-                            source_name: null,
-                            business_category_name: null,
-                            garment_type_name: null,
-                            distinction_note: c.distinction_note,
-                          });
+                          setFamily(candidateFamily(c));
                         }}
                       >
-                        {visible(c.display_name)}
+                        {familyLabel(candidateFamily(c))}
                       </button>
                     ))}
                   </div>

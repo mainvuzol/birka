@@ -84,7 +84,7 @@ _TERM_GUARDS = " AND ".join(
 _QUERY = text(f"""
 WITH labels AS (
  SELECT v.id AS variant_id, v.merged_into_id, f.id AS family_id, c.name AS concept,
-        s.name AS source, g.name AS garment_type,
+        s.name AS source, g.name AS garment_type, cg.name AS concept_garment_type,
         bc.name AS category, f.distinction_note,
         v.status AS variant_status, f.status AS family_status, c.status AS concept_status,
         v.length_cm, v.attributes, {_TERM_COLUMNS},
@@ -103,6 +103,9 @@ WITH labels AS (
  LEFT JOIN source_identity s ON s.id = f.source_identity_id AND s.organization_id = :org
  LEFT JOIN garment_type g ON g.id = f.garment_type_id AND g.organization_id = :org
  LEFT JOIN business_category bc ON bc.id = c.business_category_id AND bc.organization_id = :org
+ -- A model's garment type as the model search says it: its own, else its
+ -- name's (audit 2026-11-22, goods P2-2; review). Named only, never scored.
+ LEFT JOIN garment_type cg ON cg.id = c.garment_type_id AND cg.organization_id = :org
  {_TERM_JOINS}
  -- A merged model's family may be merged too, once the merge emptied it;
  -- its name still leads to the model that stays.
@@ -249,6 +252,13 @@ def _candidate(row: dict[str, Any], parsed: ParsePreview) -> dict[str, Any]:
         "conflicts": conflicts,
         "reasons": reasons,
         "distinction_note": row["distinction_note"],
+        # The candidate's model, named as a model is named everywhere else —
+        # never by one of its colours (audit 2026-11-22, goods P2-2). Read
+        # only: what is chosen is still `family_id`.
+        "concept_name": row["concept"],
+        "source_name": row["source"],
+        "business_category_name": row["category"],
+        "garment_type_name": row["garment_type"] or row["concept_garment_type"],
     }
 
 

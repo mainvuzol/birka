@@ -2355,3 +2355,54 @@ test("«Довжина, см» said wrong in «Нова модель»: its line
   await expect(add).toBeEnabled();
   await leave(page);
 });
+
+test("«Інший колір нашої моделі»: a model added on another phone between two pages moves the next by one — the row it repeats is shown once, the cursor on the first model «Показати ще» brings, no key said twice (audit 2026-11-22, goods Н1)", async ({
+  page,
+}) => {
+  const said: string[] = [];
+  page.on("console", (message) => {
+    said.push(message.text());
+  });
+  const family = (name: string) => ({
+    family_id: randomUUID(),
+    concept_name: name,
+    source_name: null,
+    business_category_name: null,
+    garment_type_name: null,
+    distinction_note: null,
+  });
+  const first = Array.from({ length: 20 }, (_, i) =>
+    family(`Модель ${String(i + 1).padStart(2, "0")}`),
+  );
+  // The next page asked from 20 after one more was added before: it starts
+  // with the first page's last.
+  const second = [first[19], family("Модель 21"), family("Модель 22")];
+  await page.route("**/api/v1/catalog/families?**", async (route) => {
+    const offset = new URL(route.request().url()).searchParams.get("offset");
+    await route.fulfill({
+      json:
+        offset === "0"
+          ? { items: first, has_more: true }
+          : { items: second, has_more: false },
+    });
+  });
+  await enter(page);
+  const sheet = await create(page, `Двічі ${randomUUID().slice(0, 8)}`);
+  await sheet.getByRole("button", { name: "Ні, це нова модель" }).click();
+  await sheet
+    .getByRole("group", { name: "Яка модель" })
+    .getByRole("button", { name: "Інший колір нашої моделі" })
+    .click();
+  const found = sheet
+    .getByRole("group", { name: "Знайдені моделі" })
+    .getByRole("button");
+  await expect(found).toHaveCount(20);
+  await sheet.getByRole("button", { name: "Показати ще" }).click();
+  await expect(found).toHaveCount(22);
+  const names = await found.allTextContents();
+  expect(new Set(names).size).toBe(22);
+  expect(names.filter((name) => name === "Модель 20")).toHaveLength(1);
+  await expect(found.nth(20)).toHaveText("Модель 21");
+  await expect(found.nth(20)).toBeFocused();
+  expect(said.filter((line) => /same key/i.test(line))).toEqual([]);
+});

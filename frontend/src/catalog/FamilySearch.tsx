@@ -132,7 +132,16 @@ export function FamilySearch({
         ? previous
         : undefined,
   });
-  const found = families.data?.pages.flatMap((page) => page.items) ?? [];
+  // A model added on another phone between two pages moves the next page
+  // by one: its last row may come twice — shown once, as «Моделі» show it
+  // (audit 2026-11-22, goods Н1).
+  const found = [
+    ...new Map(
+      (families.data?.pages ?? [])
+        .flatMap((page) => page.items)
+        .map((family) => [family.family_id, family]),
+    ).values(),
+  ];
   // What could not be read, as the catalogue's search says it: never read,
   // the plate in the list's place; read again and refused, the plate over
   // what was found; a next page, the plate where «Показати ще» stood.

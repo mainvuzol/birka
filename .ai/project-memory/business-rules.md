@@ -7155,7 +7155,9 @@ the similar-spelling check stands where it was.
     «Далі» saves the proposal. Left after it, the proposal waits in
     «Перевірка каталогу» › «Чекають», nothing is chosen, and the screen is
     as it was.
-  - **«Схожі»:** the server's candidates (ten at most), rows with «Це вона»,
+  - **«Схожі»:** the server's candidates (twenty at most — corrected
+    2026-11-23, goods Н4 of audit 2026-11-22: a proposal reads twenty,
+    «match-preview» answers ten unless asked), rows with «Це вона»,
     none chosen; «Список кандидатів обмежено…» where the list is cut;
     «Підтвердити: {модель}» once one is chosen, «Оберіть модель» held
     until then; «Ні, це нова модель» under them. No candidate at all: the
@@ -12079,3 +12081,69 @@ its answers are as they were.
   - What, when and how much is read, the cursor after a page, a failed
     page's plate where the strip stood, and «Завантажуємо …» where it is
     said: as before.
+
+## Chosen in chat — 2026-11-23 (audit 2026-11-22, batch 4: «Знак, а не рамка» and «Модель своїм ім’ям» — a way of its sentence told by its sign, never a frame; a similar model's chip named by its model, never by one of its colours; a row repeated across pages shown once; money P2-2, orders-cash P2-2, goods P2-2, Н1, Н4)
+
+Taken as the next after «merged go next»: what was left of the audit that
+waits for no owner's answer. Asked in chat (2026-11-23): goods P2-2 needs
+the server to say a candidate's model's names — four read-only fields, no
+migration; the user agreed. No right, check, journal or step changes;
+nothing recorded or sent changes.
+
+- **The «before» screenshot (money Д1, orders-cash §10), taken here** on the
+  isolated stand from four journeys on the profile's phone (Pixel 7, 412
+  px): «Відкрити накладну ›» on a return's card and on «Продано»'s stub,
+  and «Позичене й під реалізацію ›» on an invoice's card, each a frame of 1
+  with no padding, its words touching the frame's left edge; «Скасовані й
+  повернені на склад ›» under «Показати ще» — two frames of one weight, one
+  under the other. Both tasks' condition held, so both were built.
+- **A way of its sentence, told by its sign** (money P2-2, orders-cash
+  P2-2; spec §5.5 `button-s`, the `link` token; the frame's «a way with
+  the set's chevron is told by its sign»): «Відкрити накладну ›» (a return's
+  card, «Продано»'s stub), «Позичене й під реалізацію ›» (an invoice's card)
+  and «Скасовані й повернені на склад ›» (under «Клієнт забрав») are drawn
+  as «Спершу запишіть видане з каси ›» was: nothing round them, the words
+  in the link's colour 15/600, 44 high, their words' width at their block's
+  left edge, the set's chevron 16 in pencil after them, never underlined.
+  One rule for the four (`.sign-link`) — the till's `.cash-first` folded
+  into it, no third copy. Their words, places, rights and what a tap does:
+  as before.
+  - Decided here: taking no tap (a kept operation on «Накладні» or
+    «Постачальникам»), their words in pencil and nothing round them, as a
+    text button — never the dashed «not now».
+  - Decided here: «Скасовані й повернені на склад ›» 16 under «Показати ще»
+    or under the rows, as its margin was; «Показати ще» keeps the list's
+    bar with its edge, so the two read as a bar and a way.
+  - The order card's rare ways («Змінити доставку ›», «Товар повернувся на
+    склад ›») stay the quiet buttons they were (decided 2026-11-13): the
+    batch does not touch them.
+- **A similar model's chip names its model** (goods P2-2; the law of
+  sequence; 2026-11-22, batch 5 of audit 2026-11-20: a model is its name,
+  then what it is): in «Інший колір нашої моделі» each chip of «Схожі
+  моделі» says its model as «Пошук моделі в каталозі» says it — «Лоран —
+  Понте — Пальто — Пальто — довге» — never the name of one of its colours
+  («Лоран Понте шоколад»); two models of one name and colour are two chips
+  that differ by what tells them apart. Tapped, «Модель: …» says that
+  model with its own names, as after choosing it by the search; what is
+  chosen and sent — its `product_family_id` — as before.
+  - The server's candidate says its model's names (`concept_name`,
+    `source_name`, `business_category_name`, `garment_type_name`), read
+    from what the candidates' query joins — read only; the evidence and
+    what is confirmed: as before. Its garment type is the model's own,
+    else its name's, as the model search says it (review); the matcher
+    still weighs the model's own alone. The knowledge fingerprint now
+    hashes the name's garment type too — nothing compares it.
+  - Decided here: a proposal saved before the server said them (the
+    audit's Д3) — its chip says the candidate's name, as before, and, when
+    the model has it, what tells it apart, as its «Модель: …» line already
+    did; nothing is read again for it.
+- **A row repeated across pages, shown once** (goods Н1): «Пошук у
+  каталозі» (the receipt's, the till's «з каталогу», the found goods', an
+  opening line's) and «Пошук моделі в каталозі» keep each model once by its
+  id, as «Моделі», «Початкові залишки» and the count already do — a model
+  added on another phone between two pages moves the next page by one.
+  The cursor after «Показати ще» goes to the first model it brings, as
+  before.
+- **The record of «Схожі»'s size** (goods Н4): the stage-2 rule said «ten at
+  most»; a proposal reads twenty (`match-preview` answers ten unless
+  asked). Decided here: the record is corrected; the limit stays.

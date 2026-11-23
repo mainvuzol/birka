@@ -2744,3 +2744,155 @@ test("«Довжина, см» said wrong in «Перейменувати мод
   await expect(length).not.toHaveAttribute("aria-invalid");
   await expect(more).not.toHaveAttribute("aria-describedby");
 });
+
+/** Two models of one name and colour — the second told apart by
+ * «довге», with no garment type of its own, so its name's is said, as the
+ * model search says it (review) — of this test's own (audit 2026-11-22,
+ * goods P2-2). */
+async function twins(
+  page: Page,
+  bearer: string,
+): Promise<{ name: string; plain: Made; long: Made }> {
+  const name = `Чип-модель ${randomUUID().slice(0, 8)}`;
+  const named = {
+    concept: name,
+    source: "Понте",
+    business_category: "Пальто",
+    garment_type: "Пальто",
+    variant: { color: "шоколад" },
+  };
+  const plain = await model(page, bearer, named, 0);
+  const long = await model(
+    page,
+    bearer,
+    {
+      concept: name,
+      source: "Понте",
+      variant: { color: "шоколад" },
+      new_model: true,
+      distinction_note: "довге",
+    },
+    0,
+  );
+  return { name, plain, long };
+}
+
+/** «Ні, це нова модель», then «Інший колір нашої моделі»: the similar
+ * models' chips of this test's own. */
+async function similarModels(
+  page: Page,
+  raw: string,
+  name: string,
+): Promise<{ sheet: Locator; chips: Locator }> {
+  const sheet = await proposeNew(page, raw);
+  await sheet
+    .getByRole("group", { name: "Яка модель" })
+    .getByRole("button", { name: "Інший колір нашої моделі" })
+    .click();
+  const chips = sheet
+    .getByRole("group", { name: "Схожі моделі" })
+    .getByRole("button")
+    .filter({ hasText: name });
+  await expect(chips).toHaveCount(2);
+  return { sheet, chips };
+}
+
+test("«Інший колір нашої моделі»: a similar model's chip names the model as «Пошук моделі в каталозі» names it — its name, source, category and garment type, what tells it apart — never one of its colours; two of one name and colour told apart; tapped, «Модель: …» as after choosing it by the search, and that model is the one sent; at 360 nothing wider than the phone (audit 2026-11-22, goods P2-2)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 740 });
+  const bearer = await token(page);
+  const { name, long } = await twins(page, bearer);
+  const plainLabel = `${name} — Понте — Пальто — Пальто`;
+  const longLabel = `${plainLabel} — довге`;
+  await enter(page, "Перевірка каталогу");
+  const { sheet, chips } = await similarModels(page, `${name} шоколад`, name);
+  // The model's names, never the colour «шоколад» of the variant offered.
+  expect((await chips.allTextContents()).sort()).toEqual(
+    [plainLabel, longLabel].sort(),
+  );
+  await expect(chips.filter({ hasText: "шоколад" })).toHaveCount(0);
+  // The search under them names each model the same.
+  await sheet.getByLabel("Пошук моделі в каталозі").fill(name);
+  const found = sheet
+    .getByRole("group", { name: "Знайдені моделі" })
+    .getByRole("button");
+  await expect(found).toHaveCount(2);
+  expect((await found.allTextContents()).sort()).toEqual(
+    [plainLabel, longLabel].sort(),
+  );
+  // Nothing wider than the phone: a long name wraps inside its chip.
+  const group = await sheet
+    .getByRole("group", { name: "Схожі моделі" })
+    .boundingBox();
+  for (const chip of await chips.all()) {
+    const box = await chip.boundingBox();
+    expect(group && box && box.x + box.width <= group.x + group.width + 1).toBe(
+      true,
+    );
+  }
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(360);
+  // Tapped, the model chosen as the search chooses it.
+  const chosen = sheet.getByText(/^Модель: /);
+  await chips.filter({ hasText: "довге" }).click();
+  await expect(chosen).toHaveText(`Модель: ${longLabel}`);
+  await sheet.getByRole("button", { name: "Інша модель" }).click();
+  await sheet.getByLabel("Пошук моделі в каталозі").fill(name);
+  await sheet
+    .getByRole("button", { name: `Обрати модель: ${longLabel}`, exact: true })
+    .click();
+  await expect(chosen).toHaveText(`Модель: ${longLabel}`);
+  // The chip's model is the one sent, as before.
+  await sheet.getByRole("button", { name: "Інша модель" }).click();
+  await chips.filter({ hasText: "довге" }).click();
+  await expect(chosen).toHaveText(`Модель: ${longLabel}`);
+  await sheet.getByLabel("Колір", { exact: true }).fill("бордо");
+  await typeSize(sheet, "S", "ALPHA");
+  const sent = page.waitForRequest(
+    (request) =>
+      request.method() === "POST" && request.url().endsWith("/create-product"),
+  );
+  await addModel(sheet).click();
+  expect(
+    ((await sent).postDataJSON() as { product_family_id?: string })
+      .product_family_id,
+  ).toBe(long.family);
+});
+
+test("a proposal saved before the server said a model's names: its chips say the candidate's name, as before, and what tells the model apart (audit 2026-11-22, goods P2-2, Д3)", async ({
+  page,
+}) => {
+  const bearer = await token(page);
+  const { name } = await twins(page, bearer);
+  // Its candidates as an older proposal kept them: no model's names.
+  const older = (body: unknown): void => {
+    if (Array.isArray(body)) body.forEach(older);
+    else if (body !== null && typeof body === "object") {
+      const node = body as Record<string, unknown>;
+      if ("variant_id" in node && "family_id" in node) {
+        delete node.concept_name;
+        delete node.source_name;
+        delete node.business_category_name;
+        delete node.garment_type_name;
+      }
+      Object.values(node).forEach(older);
+    }
+  };
+  await page.route("**/api/v1/catalog/match-decisions**", async (route) => {
+    const response = await route.fetch();
+    const body = (await response.json()) as unknown;
+    older(body);
+    await route.fulfill({ response, json: body });
+  });
+  await enter(page, "Перевірка каталогу");
+  const { sheet, chips } = await similarModels(page, `${name} шоколад`, name);
+  expect((await chips.allTextContents()).sort()).toEqual(
+    [`${name} Понте шоколад`, `${name} Понте шоколад — довге`].sort(),
+  );
+  await chips.filter({ hasText: "довге" }).click();
+  await expect(sheet.getByText(/^Модель: /)).toHaveText(
+    `Модель: ${name} Понте шоколад — довге`,
+  );
+});

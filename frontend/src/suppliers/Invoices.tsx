@@ -1087,12 +1087,12 @@ function InvoiceDetail({
             {openBorrowed && !elsewhere && (
               <button
                 type="button"
-                className="quiet set-off-open"
+                className="sign-link"
                 disabled={openBorrowed.held}
                 onClick={openBorrowed.go}
               >
                 Позичене й під реалізацію
-                <Icon name="chevron-right" size={16} />
+                <Icon name="chevron-right" size={16} className="link-chevron" />
               </button>
             )}
           </div>

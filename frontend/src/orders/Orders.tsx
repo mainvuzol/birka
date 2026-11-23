@@ -677,13 +677,13 @@ export function Orders({
             (cancelled.length > 0 || goneRead.pages.isError) && (
               <button
                 type="button"
-                className="quiet order-rare orders-gone"
+                className="sign-link orders-gone"
                 ref={goneLink}
                 onClick={() => {
                   change({ ...view, gone: true });
                 }}
               >
-                Скасовані й повернені на склад{" "}
+                Скасовані й повернені на склад
                 <Icon name="chevron-right" size={16} className="link-chevron" />
               </button>
             )}
