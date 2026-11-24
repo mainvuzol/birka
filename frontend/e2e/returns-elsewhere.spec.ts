@@ -600,10 +600,11 @@ test("a kept return of goods from the other store's own warehouse, checked by th
     ),
   ).toBeVisible();
   // The identical attempt, the warehouse chosen included, and the coat is
-  // there.
-  expect(sent.bodies).toHaveLength(2);
-  expect(sent.bodies[1]).toEqual(sent.bodies[0]);
-  expect(sent.keys[1]).toBe(sent.keys[0]);
+  // there. The phone may have checked it by itself while the app was open,
+  // when another read answered (CI, #246): lost too, the same body and key.
+  expect(sent.bodies.length).toBeGreaterThanOrEqual(2);
+  for (const sentBody of sent.bodies) expect(sentBody).toEqual(sent.bodies[0]);
+  for (const key of sent.keys) expect(key).toBe(sent.keys[0]);
   const body = sent.bodies[0] as { lines: { location_id?: string }[] };
   expect(body.lines[0]?.location_id).toBe(fixture.returns_location_id);
   expect(await held(page, fixture.returns_location_id, variant)).toBe(

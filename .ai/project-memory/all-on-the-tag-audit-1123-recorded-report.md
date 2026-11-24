@@ -105,6 +105,13 @@ Runs on the stand (seed of 2026-11-24):
   carries one body and one key. The race was forced on the stand (the
   browser's `online` event before the press): the old journey fails as CI
   did, the new one passes. The whole spec 7/7; the journey 6/6 repeated.
+  The second run: 1266/1267. Red was the same spec's «… checked by the
+  phone itself on reopening …», which counted exactly two sends. Its
+  attempt is lost while the app is open, and the phone had checked it by
+  itself once more meanwhile. All three sends carried the same body, so the
+  app was right. It now asks for at least two, each with the first body and
+  key. Forced the same way: the old journey fails with 3 against 2, the new
+  one passes; both kept journeys 8/8 repeated.
 
 Mutants (mutate89, 25, each against its journey, after the review's
 fixes): 25/25 caught.
