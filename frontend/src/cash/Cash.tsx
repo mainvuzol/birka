@@ -83,7 +83,9 @@ import type {
  * close's difference (G7). They also read the closes.
  *
  * Nothing on this screen lists the seller's sales with their sums or ways
- * before their count (G32): the drawer's answer carries no sum at all.
+ * before their count (G32): the drawer's answer carries no sale's sum and
+ * no «Мало бути» — only the cash moved in and out, each its own sum, which
+ * G32 leaves to be seen (audit 2026-11-23, orders-cash Д2).
  */
 
 /**

@@ -1287,6 +1287,19 @@ export function Sale({
                   searchRef={searchRef}
                   under={paperRow}
                   elsewhere={elsewhere}
+                  // Said over the models alone: under a blank tag, a plate
+                  // or the rows' places nothing is to be found up there
+                  // (audit 2026-11-23, sale P2-2).
+                  hint={
+                    draft.length === 0 &&
+                    (locationId || (searchAll && ready.length > 0)) &&
+                    !waiting &&
+                    !fromCatalog && (
+                      <p className="hint">
+                        Кошик порожній — знайдіть модель угорі.
+                      </p>
+                    )
+                  }
                   {...(openModel
                     ? {
                         open: (model: Opened) => {
@@ -1321,12 +1334,6 @@ export function Sale({
               </>
             )
           )}
-          {draft.length === 0 &&
-            (locationId || (searchAll && ready.length > 0)) &&
-            !waiting &&
-            !fromCatalog && (
-              <p className="hint">Кошик порожній — знайдіть модель угорі.</p>
-            )}
           {sizes.error && (
             <Failure
               error={sizes.error}

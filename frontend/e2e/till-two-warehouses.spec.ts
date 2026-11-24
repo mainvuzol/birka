@@ -285,6 +285,9 @@ test("both waiting, the till says to sell on paper, and lists nothing", async ({
   // The blank tag (audit after stage 2, sale P1-2).
   const empty = page.locator(".orders-empty");
   await expectEmpty(empty, "На складах магазину зараз немає товару в обліку.");
+  // Nothing to find up there: no «Кошик порожній» under the blank tag
+  // (audit 2026-11-23, sale P2-2).
+  await expect(page.getByText("Кошик порожній")).toHaveCount(0);
   await expect(empty.locator(".t-meta")).toHaveText(
     "Поки власник не затвердить початкові залишки, продавайте на папері.",
   );
@@ -343,6 +346,9 @@ test("a coat in hand from the catalogue is asked its warehouse by deciding chips
     page.locator(".orders-empty"),
     "На складах магазину зараз немає товару в обліку.",
   );
+  // Nothing to find up there: no «Кошик порожній» under the blank tag
+  // (audit 2026-11-23, sale P2-2).
+  await expect(page.getByText("Кошик порожній")).toHaveCount(0);
   await page.getByRole("button", { name: "Знайти в каталозі" }).click();
   // No list of the system's: a chip a warehouse, none chosen beforehand.
   await expect(page.locator("select")).toHaveCount(0);

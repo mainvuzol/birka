@@ -15,7 +15,6 @@ import { visible } from "@/shared/visible";
 import { BackToMore } from "@/shared/More";
 import type { MoreBack } from "@/shared/More";
 import { Back } from "@/shared/Back";
-import { Banner } from "@/shared/Banner";
 import { Eyelet } from "@/shared/Eyelet";
 import { Icon } from "@/shared/Icon";
 import { ModeSwitch } from "@/shared/ModeSwitch";
@@ -36,6 +35,7 @@ import { SupplierFilter, SupplierPicker } from "./Picker";
 import { InvoiceActions, EntryCancel } from "./InvoiceActions";
 import { InvoiceOwed, Progress } from "./InvoiceOwed";
 import { InvoicePay } from "./InvoicePay";
+import { OtherStoreInvoice } from "./OtherStoreInvoice";
 import { InvoiceRecorded, useRecordedDone } from "./InvoiceRecorded";
 import { InvoiceSticker } from "./InvoiceSticker";
 import { InvoiceTag } from "./InvoiceTag";
@@ -1099,16 +1099,7 @@ function InvoiceDetail({
             )}
           </div>
         )}
-        {elsewhere && (
-          <Banner kind="blocked" as="div">
-            <p>
-              Накладна магазину «{visible(invoice.store_name)}», який зараз{" "}
-              {invoice.store_state === "ARCHIVED" ? "закрито" : "заблоковано"}.
-              Сплачує цей магазин; борг лишається за «
-              {visible(invoice.store_name)}».
-            </p>
-          </Banner>
-        )}
+        {elsewhere && <OtherStoreInvoice invoice={invoice} />}
         {recorded && (
           // Said over the sum by its filled eyelet, as an order's step
           // (stage 2, money task list, P0-2).

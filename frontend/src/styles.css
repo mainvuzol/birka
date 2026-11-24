@@ -5589,6 +5589,12 @@ span.cash-difference > .difference-sign {
 /* «Продано»'s stub (money task list after stage 2, P2-3): a supplier's long
    name wraps under the sum and in «Борг …», never past the stub — even one
    with no space in it, a shop's Instagram name (review). */
+/* «Продано» / «Повернено постачальнику» a heading now (audit 2026-11-23,
+   frame P2-2): where its paragraph stood, the global h3's top margin
+   aside. */
+.borrowed-done > h3.result-title {
+  margin-top: 1em;
+}
 .borrowed-done :is(.stub-say, .stub-line) {
   overflow-wrap: anywhere;
 }

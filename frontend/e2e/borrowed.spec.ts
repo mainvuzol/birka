@@ -390,8 +390,9 @@ test("jackets borrowed from another shop are taken at a price, marked sold, and 
   // stub; whose and what under it; and its invoice one tap away (money task
   // list after stage 2, P2-3).
   await expect(sheet).toHaveCount(0);
-  const said = page.locator(".result-title");
-  await expect(said).toHaveText("Продано 2 шт.");
+  // A heading, as «Оплату записано» (audit 2026-11-23, frame P2-2).
+  const said = page.getByRole("heading", { name: "Продано 2 шт.", level: 3 });
+  await expect(said).toHaveClass(/result-title/);
   await expect(said).toBeFocused();
   // Heard with the debt it recorded and where it is (review).
   await expect(said).toHaveAccessibleDescription(
@@ -446,8 +447,9 @@ test("unsold borrowed jackets go back to their supplier for nothing", async ({
     .click();
   await expect(sheet).toHaveCount(0);
   await expect(
-    page.getByText(`Повернено постачальнику «${supplier.name}»: 2 шт.`, {
-      exact: true,
+    page.getByRole("heading", {
+      name: `Повернено постачальнику «${supplier.name}»: 2 шт.`,
+      level: 3,
     }),
   ).toBeVisible();
   // No «Відкрити накладну» for goods sent back: no invoice.
@@ -930,7 +932,9 @@ test("one borrowed jacket is marked sold in four taps from «Ще», nothing scr
   });
   await expect(mark).toBeInViewport();
   await mark.click();
-  await expect(page.locator(".result-title")).toHaveText("Продано 1 шт.");
+  await expect(
+    page.getByRole("heading", { name: "Продано 1 шт.", level: 3 }),
+  ).toBeVisible();
   await expect(page.locator(".borrowed-done .stub-sum")).toHaveText(
     "1 500,00 грн",
   );
@@ -977,8 +981,9 @@ test("inside Telegram ±1 of a lot's count is felt both ways, «Менше» hel
     .getByRole("button", { name: "Повернути постачальнику · 2 шт." })
     .click();
   await expect(
-    page.getByText(`Повернено постачальнику «${supplier.name}»: 2 шт.`, {
-      exact: true,
+    page.getByRole("heading", {
+      name: `Повернено постачальнику «${supplier.name}»: 2 шт.`,
+      level: 3,
     }),
   ).toBeFocused();
   await expect(page.locator(".result-screen")).toHaveCount(1);

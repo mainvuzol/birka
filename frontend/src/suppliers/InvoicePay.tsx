@@ -5,7 +5,6 @@ import type { Store } from "@/orders/types";
 import { asInput } from "@/prices/SuggestedPrice";
 import { visible } from "@/shared/visible";
 import { Back } from "@/shared/Back";
-import { Banner } from "@/shared/Banner";
 import { Eyelet } from "@/shared/Eyelet";
 import { Keypad } from "@/shared/Keypad";
 import { usePanelRoom } from "@/shared/panel";
@@ -16,6 +15,7 @@ import { useAskBeforeClosing } from "@/shared/telegram";
 import { shortDay } from "@/credits/format";
 import { InvoiceOwed } from "./InvoiceOwed";
 import { InvoiceRecorded, useRecordedDone } from "./InvoiceRecorded";
+import { OtherStoreInvoice } from "./OtherStoreInvoice";
 import type { Command, Sent } from "./invoiceWords";
 import type { Invoice } from "./types";
 
@@ -146,18 +146,7 @@ export function InvoicePay({
           />
         ) : (
           <>
-            {elsewhere && (
-              <Banner kind="blocked" as="div">
-                <p>
-                  Накладна магазину «{visible(invoice.store_name)}», який зараз{" "}
-                  {invoice.store_state === "ARCHIVED"
-                    ? "закрито"
-                    : "заблоковано"}
-                  . Сплачує цей магазин; борг лишається за «
-                  {visible(invoice.store_name)}».
-                </p>
-              </Banner>
-            )}
+            {elsewhere && <OtherStoreInvoice invoice={invoice} />}
             <InvoiceOwed invoice={invoice} />
             {problem && <p role="alert">{problem}</p>}
             <div

@@ -436,7 +436,7 @@ test("a sale after the list's read again was refused: three taps — the search,
   expect(sent[0]?.payment_method).toBe("CASH");
 });
 
-test("the next page refused: the first hundred kept, the warning's plate under them where «Показати ще» stood, its retry asking offset 100 alone (audit after stage 2, sale P1-4)", async ({
+test("the next page refused: the first hundred kept, the warning's plate under them where «Показати ще» stood, its retry asking offset 100 alone (audit after stage 2, sale P1-4); «Кошик порожній» never under the plate (audit 2026-11-23, sale P2-2; review)", async ({
   page,
 }) => {
   await stubList(page, [...alpacas, laurent]);
@@ -447,10 +447,16 @@ test("the next page refused: the first hundred kept, the warning's plate under t
   );
   await onTheTill(page);
   await expect(chip(page, "Альпака 100", "S, вільно 1")).toBeVisible();
+  const empty = page.getByText("Кошик порожній — знайдіть модель угорі.", {
+    exact: true,
+  });
+  await expect(empty).toBeVisible();
   await page.getByRole("button", { name: "Показати ще" }).click();
   const plate = page.locator(".notice.read-failure");
   await expect(plate).toBeVisible();
   await expectPlate(plate, "unread");
+  // The plate the list's last word: the basket's line not under it.
+  await expect(empty).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Показати ще" })).toHaveCount(
     0,
   );
@@ -469,6 +475,7 @@ test("the next page refused: the first hundred kept, the warning's plate under t
   await expect(chip(page, "Лоран шоколад", "M, вільно 2")).toBeVisible();
   await expect(plate).toHaveCount(0);
   await expect(chip(page, "Альпака 001", "S, вільно 1")).toBeVisible();
+  await expect(empty).toBeVisible();
   expect(offsets).toEqual(["100"]);
 });
 

@@ -214,7 +214,7 @@ export function CardLinePlace({
   return (
     <span className="skeleton-line" aria-hidden="true">
       <span>
-        {!order || order.created_at ? "замовлено 00.00 · " : ""}
+        {!order || order.created_at ? "замовлено\u00a000.00 · " : ""}
         <small className="order-number">№ 00000000</small>
       </span>
     </span>
@@ -508,7 +508,11 @@ function Card({
         // P2-1).
         after={
           <>
-            {order.created_at ? `замовлено ${dayOf(order.created_at)} · ` : ""}
+            {/* The day never torn from its word, as on the row (audit
+                2026-11-23, orders-cash Д1). */}
+            {order.created_at
+              ? `замовлено\u00a0${dayOf(order.created_at)} · `
+              : ""}
             <small className="order-number">№ {order.id.slice(0, 8)}</small>
           </>
         }

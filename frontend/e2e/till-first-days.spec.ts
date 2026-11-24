@@ -343,6 +343,9 @@ test("an empty warehouse names itself, and a coat in hand is found in the catalo
     page.locator(".orders-empty"),
     "На складі «Спільний» зараз немає товару в обліку.",
   );
+  // Nothing to find up there: no «Кошик порожній» under the blank tag
+  // (audit 2026-11-23, sale P2-2).
+  await expect(page.getByText("Кошик порожній")).toHaveCount(0);
   await expect(
     page.getByText("Товар у руках, а в списку його немає?"),
   ).toBeVisible();
@@ -402,6 +405,9 @@ test("a search that finds nothing offers the catalogue; without the rights, or f
   // The blank tag, the catalogue's way under it (sale P1-2).
   const empty = page.locator(".orders-empty");
   await expectEmpty(empty, "За «ябко» на складі «Спільний» нічого немає.");
+  // Nothing to find up there: no «Кошик порожній» under the blank tag
+  // (audit 2026-11-23, sale P2-2).
+  await expect(page.getByText("Кошик порожній")).toHaveCount(0);
   // Heard as it comes, as every search's answer (audit 2026-11-18, goods
   // P2-4; forwarded by the audits since).
   await expect(

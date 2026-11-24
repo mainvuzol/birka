@@ -1840,10 +1840,15 @@ test("a closed store's customer is read among the closed stores: a row a debt wi
   expect(asked.filter((params) => params.get("elsewhere") === "true")).toEqual(
     [],
   );
+  // At 360, where the caption's toolbar is two lines: the field never moves
+  // under the finger, the caption under it, as the return's (audit
+  // 2026-11-23, sale P2-1).
+  await page.setViewportSize({ width: 360, height: 640 });
+  const top = await field(page).boundingBox();
   await ask.click();
   // One field, as it was: the number typed is the one asked — a number's
-  // keys there, and the section's caption over it, as the return's (audit
-  // after stage 2, sale P1-1).
+  // keys there, and the section's caption under it, as the return's (audit
+  // after stage 2, sale P1-1; audit 2026-11-23, sale P2-1).
   await expect(field(page)).toHaveValue("050 765 43 21");
   await expect(field(page)).toHaveAttribute("inputmode", "tel");
   const caption = page.getByRole("heading", {
@@ -1852,6 +1857,15 @@ test("a closed store's customer is read among the closed stores: a row a debt wi
   await expect(caption).toHaveClass(/(?:^|\s)t-label(?:\s|$)/);
   await expect(caption).toHaveCSS("text-transform", "uppercase");
   await expect(caption).toHaveCSS("font-size", "13px");
+  await expect(caption).toBeFocused();
+  const stays = await field(page).boundingBox();
+  const head = await caption.boundingBox();
+  if (!top || !stays || !head) throw new Error("not laid out");
+  expect(Math.abs(stays.y - top.y)).toBeLessThanOrEqual(1);
+  expect(head.y).toBeGreaterThanOrEqual(stays.y + stays.height - 1);
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(360);
   // Their rows' places while they are read, on a list's white block, as
   // the rows to come (audit after stage 2, frame P2-2).
   await expect(page.locator(".placeholder .list-block .debt-row")).toHaveCount(

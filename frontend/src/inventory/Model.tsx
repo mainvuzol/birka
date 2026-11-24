@@ -10,6 +10,7 @@ import { HeroWait } from "@/shared/HeroWait";
 import { Grey } from "@/shared/TableWait";
 import { ScreenHeader } from "@/shared/ScreenHeader";
 import { Sheet } from "@/shared/Sheet";
+import { buzz } from "@/shared/telegram";
 import { Stub } from "@/shared/Stub";
 import { visible } from "@/shared/visible";
 import { money } from "@/orders/types";
@@ -744,7 +745,11 @@ export function Model({
                       aria-disabled={held || undefined}
                       disabled={blocked}
                       onClick={() => {
-                        if (!held) setEditing(row);
+                        if (held) return;
+                        // A cell chosen, felt, as a stocktake's and «Знайшли
+                        // товар…»'s (audit 2026-11-23, goods P2-2).
+                        buzz("selection");
+                        setEditing(row);
                       }}
                     >
                       <span className="size-letter">

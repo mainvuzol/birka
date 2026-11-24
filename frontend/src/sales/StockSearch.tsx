@@ -322,6 +322,7 @@ export function StockSearch({
   under,
   elsewhere,
   open,
+  hint,
 }: {
   text: string;
   type: (text: string) => void;
@@ -368,6 +369,9 @@ export function StockSearch({
    * (spec S23; «Усе на бірці» sections task list, P0-6): the till's alone.
    * With the search its tag was found by. */
   open?: (model: { variantId: string; name: string; query: string }) => void;
+  /** The till's empty basket's line: under the tags only, never under a
+   * blank tag, a plate or the rows' places (audit 2026-11-23, sale P2-2). */
+  hint?: ReactNode;
 }): JSX.Element {
   const models = useMemo(
     () =>
@@ -556,6 +560,13 @@ export function StockSearch({
       )}
       {/* Found something, but maybe not the coat in hand. */}
       {!neverRead && query && models.length > 0 && offer}
+      {/* The tags drawn — the old ones too while a new search reads; never
+          under the next page's plate, an unread list's too (review). */}
+      {!neverRead &&
+        !stock.isPending &&
+        !nextFailed &&
+        models.length > 0 &&
+        hint}
     </>
   );
 }

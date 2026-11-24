@@ -920,6 +920,9 @@ test.describe("1. the seller is told to sell on paper", () => {
     await expect(failed.locator("p")).toHaveText(SILENT);
     await expect(paperBanner(page)).toHaveText(UNREACHABLE);
     await expect(failed).not.toContainText("Не вдалося виконати операцію");
+    // The list unread: nothing to find up there (audit 2026-11-23, sale
+    // P2-2).
+    await expect(page.getByText("Кошик порожній")).toHaveCount(0);
   });
 
   test("three kept operations the phone cannot read: one refusal's plate, each said in it (stage 2, orders task list, P0-2)", async ({
@@ -936,10 +939,14 @@ test.describe("1. the seller is told to sell on paper", () => {
     await openStore(page, /Подільський/);
     const failed = page.getByRole("alert");
     await expect(failed).toHaveCount(1);
+    // Each line in one form, the order's «операцію із замовленням», and
+    // «Створення операцій зупинено.» once, last (audit 2026-11-23, frame
+    // P2-3).
     await expect(failed.locator("p")).toHaveText([
-      "Не вдалося прочитати збережену команду. Створення операцій зупинено. Зверніться до менеджера, не очищайте дані застосунку.",
+      "Не вдалося прочитати збережену операцію із замовленням. Не очищайте дані застосунку; зверніться до менеджера.",
       "Не вдалося прочитати збережений продаж. Не очищайте дані застосунку; зверніться до менеджера.",
       "Не вдалося прочитати збережене приймання. Не очищайте дані застосунку; зверніться до менеджера.",
+      "Створення операцій зупинено.",
     ]);
     await expectPlate(failed, "refused");
     await page.emulateMedia({ colorScheme: "dark" });
@@ -948,6 +955,57 @@ test.describe("1. the seller is told to sell on paper", () => {
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth),
     ).toBeLessThanOrEqual(360);
+  });
+
+  test("one kept sale the phone cannot read: its line, then «Створення операцій зупинено.» (audit 2026-11-23, frame P2-3)", async ({
+    page,
+  }) => {
+    await seed(page, { [saleKey]: "{" });
+    await serve(page);
+    await page.goto(launch());
+    await openStore(page, /Подільський/);
+    const failed = page.getByRole("alert");
+    await expect(failed).toHaveCount(1);
+    await expect(failed.locator("p")).toHaveText([
+      "Не вдалося прочитати збережений продаж. Не очищайте дані застосунку; зверніться до менеджера.",
+      "Створення операцій зупинено.",
+    ]);
+  });
+
+  test("a kept sale unread where «Перевірка каталогу» is open: its line alone, as that check is held by its own journal and the order's only; the order's unread too, «Створення операцій зупинено.» last (frame TZ, Д3; review of audit 2026-11-23)", async ({
+    page,
+  }) => {
+    await seed(page, { [saleKey]: "{" });
+    await serve(page);
+    // A seller's own right: «Перевірка каталогу» in «Ще».
+    await on(page, "/me", async (route) => {
+      await route.fulfill({
+        json: {
+          ...me,
+          stores: me.stores.map((store) => ({
+            ...store,
+            permissions: [...store.permissions, "catalog:confirm"],
+          })),
+        },
+      });
+    });
+    await page.goto(launch());
+    await openStore(page, /Подільський/);
+    const failed = page.getByRole("alert").filter({
+      hasText: "Не вдалося прочитати збережений продаж.",
+    });
+    await expect(failed.locator("p")).toHaveText([
+      "Не вдалося прочитати збережений продаж. Не очищайте дані застосунку; зверніться до менеджера.",
+    ]);
+    // Written with the app closed, which keeps its own journals on leaving.
+    await seed(page, { [orderKey]: "{" });
+    await page.goto(launch());
+    await openStore(page, /Подільський/);
+    await expect(failed.locator("p")).toHaveText([
+      "Не вдалося прочитати збережену операцію із замовленням. Не очищайте дані застосунку; зверніться до менеджера.",
+      "Не вдалося прочитати збережений продаж. Не очищайте дані застосунку; зверніться до менеджера.",
+      "Створення операцій зупинено.",
+    ]);
   });
 
   test("at «Каса», whose drawer read went unanswered, with how to close later", async ({

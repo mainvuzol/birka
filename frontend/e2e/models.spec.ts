@@ -1451,13 +1451,30 @@ test("a similar name refused is not left over the queue after another tab", asyn
   await enter(page, "Перевірка каталогу");
   let sheet = await createFrom(page, raw);
   await fillProduct(sheet, name, colour.typo);
+  const phone = page.viewportSize();
+  await page.setViewportSize({ width: 360, height: 640 });
   await addModel(sheet).click();
   const refused = page.getByText(
     "У каталозі вже є схожа назва. Візьміть її або підтвердьте, що це інша.",
     { exact: true },
   );
-  await expect(refused).toBeVisible();
-  await expect(page.getByText("Схожа назва вже є")).toBeVisible();
+  // Said once, by its block at the form's end where the finger is, as the
+  // rename says it: no plate over the sheet, one alert, the block in view
+  // (audit 2026-11-23, goods P2-1).
+  const block = page
+    .getByRole("alert")
+    .filter({ hasText: "Схожа назва вже є" });
+  await expect(block).toBeVisible();
+  await expect(refused).toHaveCount(0);
+  await expect(sheet.getByRole("alert")).toHaveCount(1);
+  await expect(block).toBeInViewport();
+  expect(
+    await block.evaluate((node) => {
+      const top = node.getBoundingClientRect().top;
+      return top >= 0 && top < window.innerHeight;
+    }),
+  ).toBe(true);
+  if (phone) await page.setViewportSize(phone);
   // A first attempt refused kept nothing: the refusal answered that form,
   // and goes with it.
   await leaveNewModel(sheet);
@@ -1562,7 +1579,9 @@ test("words changed after a similar-name warning are checked, not confirmed", as
     ),
   ).toBeVisible();
   await expect(another).toBeVisible();
-  await expect(advice).toBeVisible();
+  // Said by its block alone, no plate over the sheet (audit 2026-11-23,
+  // goods P2-1).
+  await expect(advice).toHaveCount(0);
   // Another word typed since: «another» would confirm words never checked,
   // and nothing is left saying to take a spelling or confirm.
   await sheet.getByLabel("Колір", { exact: true }).fill(second.typo);
@@ -1952,6 +1971,11 @@ test("a product whose creation answer was lost settles when it was refused", asy
     page.getByRole("heading", { name: "Операцію каталогу ще не підтверджено" }),
   ).toHaveCount(0);
   await expect(kept).toBeVisible();
+  // Its block too, as before: what was not recorded, and what to take —
+  // neither lost (audit 2026-11-23, goods TZ Д3).
+  await expect(
+    page.getByRole("alert").filter({ hasText: "Схожа назва вже є" }),
+  ).toBeVisible();
   expect(attempts).toBe(2);
 });
 

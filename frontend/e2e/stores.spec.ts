@@ -1563,11 +1563,18 @@ test("a kept change the phone cannot read says so, and where to look — never t
   // state with (review, 2026-11-07).
   await page.reload();
   await openStore(page, "Центр CENTRE");
+  // Its line as it was, alone: the owner's «Перевірка каталогу» is held
+  // by its own journal and the order's only, so «Створення операцій
+  // зупинено.» would not be so (audit 2026-11-23, frame P2-3; TZ Д3;
+  // review).
   await expect(
-    page.getByText(
-      "Не вдалося прочитати збережену зміну стану магазину. Не очищайте дані застосунку.",
-    ),
-  ).toBeVisible();
+    page
+      .getByRole("alert")
+      .filter({ hasText: "збережену зміну стану магазину" })
+      .locator("p"),
+  ).toHaveText([
+    "Не вдалося прочитати збережену зміну стану магазину. Не очищайте дані застосунку.",
+  ]);
   await more(page);
   await sections(page)
     .getByRole("button", { name: "Магазини", exact: true })
