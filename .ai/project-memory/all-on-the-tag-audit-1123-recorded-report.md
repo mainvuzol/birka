@@ -95,7 +95,16 @@ Runs on the stand (seed of 2026-11-24):
   150/155 — the five `catalog` journeys waiting for «Це вона: Лоран
   шоколад 70 см», the crowded shared catalogue of three runs that day
   (they had passed in the first); on a fresh seed 5/5.
-- CI runs all 1267.
+- CI runs all 1267. Its first run (#246): 1266/1267. The one red,
+  `returns-elsewhere` «… resent unchanged, and says who pays», is a race
+  in the journey and outside this batch's code. It lost only the refund's
+  first answer, so another read answered meanwhile, the phone checked the
+  return by itself, and the stub with its «Перевірити результат
+  повернення» went before the press. Now every refund answer is lost until
+  the press, which the page marks before its request leaves; every send
+  carries one body and one key. The race was forced on the stand (the
+  browser's `online` event before the press): the old journey fails as CI
+  did, the new one passes. The whole spec 7/7; the journey 6/6 repeated.
 
 Mutants (mutate89, 25, each against its journey, after the review's
 fixes): 25/25 caught.
