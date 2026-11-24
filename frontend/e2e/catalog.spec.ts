@@ -1386,7 +1386,8 @@ test("«Це вона» in «Нова модель»'s fork: another colour of t
   await expect(sheet.getByText(/^Модель: /)).toHaveText(`Модель: ${label}`);
   await expect(sheet.getByLabel("Колір", { exact: true })).toHaveValue(colour);
   await expect(sizeCell(sheet, "XL")).toHaveAttribute("aria-pressed", "true");
-  await expect(addModel(sheet)).toHaveText("Додати модель · 1 розмір");
+  // A colour of that model is added, said so (audit 2026-11-23, goods P1-1).
+  await expect(addModel(sheet)).toHaveText("Додати колір · 1 розмір");
   const sent = page.waitForRequest((r) => r.url().endsWith("/create-product"));
   const made = page.waitForResponse(
     (r) => r.url().endsWith("/create-product") && r.status() === 200,
@@ -1411,6 +1412,10 @@ test("«Це вона» in «Нова модель»'s fork: another colour of t
       new RegExp(`^Збережений товар: ${name}.* ${colour}.*\\. Розміри: XL$`),
     ),
   ).toBeVisible();
+  await expect(page.getByRole("status")).toHaveText(
+    new RegExp(`^Колір додано: ${name}.* ${colour}.*\\.$`),
+  );
+  await expect(page.getByText(/^Модель додано/)).toHaveCount(0);
 });
 
 test("a word of the name changed after «Нова модель»'s fork forgets it and what was chosen in it, as the rename's does: the other way chosen and written, the name changed — no question, «Окрема модель…» unticked, what tells it apart gone, the model creatable as typed; «Це вона» chosen, the name changed under «Нова модель» — that model forgotten for «Інший колір нашої моделі» (audit 2026-11-22, goods P1-2)", async ({
@@ -1854,6 +1859,7 @@ test("search selects an existing family outside preview without creating another
   );
   await sheet.getByLabel("Колір", { exact: true }).fill("зелений");
   await sizeCell(sheet, "L").click();
+  await expect(addModel(sheet)).toHaveText("Додати колір · 1 розмір");
   const response = page.waitForResponse(
     (r) => r.url().endsWith("/create-product") && r.status() === 200,
   );

@@ -488,12 +488,17 @@ test("a return taken elsewhere whose answer is lost is resent unchanged, and say
     fixture.returns_location_id,
   );
   const sent = refunds(page);
-  let first = true;
+  // Every answer lost until the check is pressed: any other answer
+  // meanwhile has the phone check it by itself, and that check, answered,
+  // took the stub and its button away before the press (CI, #246). The
+  // press is known in the page, before its request leaves.
+  const check = "Перевірити результат повернення";
   await page.route("**/api/v1/sales/*/refunds", async (route) => {
-    if (first) {
-      first = false;
-      await route.abort("connectionreset");
-    } else await route.continue();
+    const pressed = await page
+      .evaluate(() => "pressed" in document.body.dataset)
+      .catch(() => false);
+    if (pressed) await route.continue();
+    else await route.abort("connectionreset");
   });
   await findElsewhere(page, model);
   await page.getByRole("button", { name: "Оформити повернення" }).click();
@@ -503,9 +508,17 @@ test("a return taken elsewhere whose answer is lost is resent unchanged, and say
     .click();
 
   await expect(page.getByText("Повернення ще не підтверджено")).toBeVisible();
-  await page
-    .getByRole("button", { name: "Перевірити результат повернення" })
-    .click();
+  await page.evaluate((label) => {
+    document.addEventListener(
+      "click",
+      (event) => {
+        const button = (event.target as Element).closest("button");
+        if (button?.textContent === label) document.body.dataset.pressed = "";
+      },
+      true,
+    );
+  }, check);
+  await page.getByRole("button", { name: check }).click();
   await expect(
     page.getByText(
       "Товар куплено в іншому магазині мережі — гроші віддаєте ви.",
@@ -515,9 +528,11 @@ test("a return taken elsewhere whose answer is lost is resent unchanged, and say
   await expect(
     page.locator(".return-result.kept .hand-back .elsewhere-line"),
   ).toBeVisible();
-  expect(sent.bodies).toHaveLength(2);
-  expect(sent.bodies[1]).toEqual(sent.bodies[0]);
-  expect(sent.keys[1]).toBe(sent.keys[0]);
+  // The first send, any the phone checked by itself, the press: one body,
+  // one key.
+  expect(sent.bodies.length).toBeGreaterThanOrEqual(2);
+  for (const body of sent.bodies) expect(body).toEqual(sent.bodies[0]);
+  for (const key of sent.keys) expect(key).toBe(sent.keys[0]);
   expect((sent.bodies[0] as { store_id: string }).store_id).toBe(
     fixture.store_id,
   );
@@ -585,10 +600,11 @@ test("a kept return of goods from the other store's own warehouse, checked by th
     ),
   ).toBeVisible();
   // The identical attempt, the warehouse chosen included, and the coat is
-  // there.
-  expect(sent.bodies).toHaveLength(2);
-  expect(sent.bodies[1]).toEqual(sent.bodies[0]);
-  expect(sent.keys[1]).toBe(sent.keys[0]);
+  // there. The phone may have checked it by itself while the app was open,
+  // when another read answered (CI, #246): lost too, the same body and key.
+  expect(sent.bodies.length).toBeGreaterThanOrEqual(2);
+  for (const sentBody of sent.bodies) expect(sentBody).toEqual(sent.bodies[0]);
+  for (const key of sent.keys) expect(key).toBe(sent.keys[0]);
   const body = sent.bodies[0] as { lines: { location_id?: string }[] };
   expect(body.lines[0]?.location_id).toBe(fixture.returns_location_id);
   expect(await held(page, fixture.returns_location_id, variant)).toBe(

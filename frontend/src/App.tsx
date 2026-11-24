@@ -331,15 +331,6 @@ function stateTitle(store: Pick<Store, "state" | "state_since">): string {
 }
 
 /**
- * Someone the shop has not added yet (redesign P1-3; spec S03, «Усе на
- * бірці» task list, P1-4). People are added on the server, by their
- * Telegram ID, on the owner's word (owner decision, 2026-10-01); the ID is
- * often taken for a phone number, so it says it is not, stands large in
- * its groups, and is copied — its digits — with one tap where the phone
- * lets the app copy, or selected whole where it does not. No menu, no
- * MainButton: nothing here is anyone's yet.
- */
-/**
  * The paper's words at the door, the server silent (audit 2026-11-22, frame
  * P2-1): a status that stands empty from the sign-in's first showing and is
  * filled just after it — a region born with its words is not read (review)
@@ -361,6 +352,15 @@ function DoorPaper({ paper }: { paper: boolean }): JSX.Element {
   );
 }
 
+/**
+ * Someone the shop has not added yet (redesign P1-3; spec S03, «Усе на
+ * бірці» task list, P1-4). People are added on the server, by their
+ * Telegram ID, on the owner's word (owner decision, 2026-10-01); the ID is
+ * often taken for a phone number, so it says it is not, stands large in
+ * its groups, and is copied — its digits — with one tap where the phone
+ * lets the app copy, or selected whole where it does not. No menu, no
+ * MainButton: nothing here is anyone's yet.
+ */
 function NoAccess({
   checkAgain,
   asking,
@@ -538,7 +538,7 @@ export function App(): JSX.Element {
       setRereading(false);
     });
   }
-  const tryAgain = (
+  const retry = (
     <button
       type="button"
       className={rereading ? "text-button pressed" : "text-button"}
@@ -578,6 +578,21 @@ export function App(): JSX.Element {
     (rereading && (token === undefined ? session : me).isFetching
       ? lastFailure
       : null);
+  // Read again and failed, its answer before on the screen: the plate of
+  // every place unread, its «Спробувати ще раз» the one retry — never the
+  // paper over a place where nothing is sold (audit 2026-11-23, frame P2-1).
+  const tryAgain = failure ? (
+    <Unread error={failure} retry={readAgain} held={rereading} />
+  ) : (
+    retry
+  );
+  // A «Доступу ще немає» answered stands until /me is answered again: a
+  // later read that goes unanswered is never the workplace of the rights
+  // read before it (review).
+  const [refused, setRefused] = useState(false);
+  if (!refused && failure instanceof ApiError && failure.code === "NO_ACCESS")
+    setRefused(true);
+  else if (refused && me.status === "success") setRefused(false);
   // The session ended — the server refused the token, mid-work or at the
   // door, for any reason but `NO_ACCESS` (below): one screen in S02's words
   // instead of the workplace, nothing to press, no menu, no plates (audit
@@ -620,7 +635,13 @@ export function App(): JSX.Element {
   // come, after another failure too; every other failure a refusal, as it
   // was.
   const paper = !over && unreachable(failure);
-  if (failure || over)
+  // /me read again where its answer before stands — a store that does not
+  // trade, no store yet, the owner's change of a store's state — never
+  // the sign-in: the screen it was asked from stays, the failure said on
+  // it, the basket kept (audit 2026-11-23, frame P2-1). TanStack Query
+  // keeps the answer before when a read again fails.
+  const shown = token !== undefined && me.data !== undefined && !refused;
+  if (over || (failure && !shown))
     return (
       <main className="before-store">
         <p className="opened-as app-name">
@@ -655,7 +676,7 @@ export function App(): JSX.Element {
                     )}
             </p>
           )}
-          {!over && tryAgain}
+          {!over && retry}
         </BlankTag>
       </main>
     );
@@ -4140,7 +4161,10 @@ function Workspace({
             store={store}
             token={token}
             journalKey={supplierKey}
-            blocked={otherThanSuppliers}
+            // Its own journal unread, as «Моделі» and «Каса»: the plate at
+            // the top says it, and a press would send nothing (audit
+            // 2026-11-23, money Н1).
+            blocked={otherThanSuppliers || supplierStorageError}
             back={moreBack}
             task={setSupplierTask}
             opened={returnOpen}
@@ -4187,7 +4211,10 @@ function Workspace({
             token={token}
             journalKey={supplierKey}
             invoiceJournalKey={invoiceKey}
-            blocked={otherThanSuppliers}
+            // «Повернути» goes by the returns' journal: unread, it holds the
+            // screen, as the invoices' already does (audit 2026-11-23,
+            // money Н1).
+            blocked={otherThanSuppliers || supplierStorageError}
             back={borrowedBack}
             openInvoice={
               canSeeInvoices
@@ -4221,7 +4248,8 @@ function Workspace({
             store={store}
             token={token}
             journalKey={invoiceKey}
-            blocked={otherThanInvoices}
+            // Its own journal unread holds it (audit 2026-11-23, money Н1).
+            blocked={otherThanInvoices || invoiceStorageError}
             readOnly={!trading}
             networkOwner={me.organization_permissions.includes(
               "supplier:write_off",

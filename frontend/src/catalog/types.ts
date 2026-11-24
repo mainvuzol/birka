@@ -1,3 +1,5 @@
+import { visible } from "@/shared/visible";
+
 export interface Candidate {
   family_id: string;
   variant_id: string;
@@ -32,6 +34,11 @@ export interface Decision {
     sizes: { system: string; code: string; typed?: string | null }[];
     /** A merged model's name: the product is the model that stays. */
     redirected_from?: string | null;
+    /** What the server made: a new model, a new colour of one, or neither
+     * — that one there already, chosen. Absent from creations made before
+     * (audit 2026-11-23, goods P1-1, Д1). */
+    family_created?: boolean;
+    variant_created?: boolean;
   } | null;
 }
 export const statusLabels: Record<Decision["status"], string> = {
@@ -63,6 +70,31 @@ export function conflictsText(conflicts: readonly string[]): string | null {
         .map((f) => fieldLabels[f] ?? "ознака потребує перевірки")
         .join(", ")}`
     : null;
+}
+/** The model a decision ended on: the one made, or the candidate chosen. */
+export function decidedName(decision: Decision): string {
+  const variant = decision.resolved_variant_id;
+  return (
+    decision.creation?.display_name ??
+    decision.preview.candidates.find((c) => c.variant_id === variant)
+      ?.display_name ??
+    ""
+  );
+}
+/** What a decision did, by the server's answer, never guessed: «Модель
+ * додано», «Колір додано», or «Модель обрано» when nothing new was made —
+ * a candidate confirmed, or the model and colour there already (audit
+ * 2026-11-23, goods P1-1). A creation saved before the server said says
+ * «додано», as it did. */
+export function decidedText(decision: Decision): string {
+  const name = visible(decidedName(decision));
+  const made = decision.creation;
+  if (!made) return `Модель обрано: ${name}.`;
+  if (made.family_created === false)
+    return made.variant_created === true
+      ? `Колір додано: ${name}.`
+      : `Модель обрано: ${name}.`;
+  return `Модель додано: ${name}.`;
 }
 export function reviewText(reason: string): string {
   const labels: Record<string, string> = {

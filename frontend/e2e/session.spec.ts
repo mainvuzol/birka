@@ -7,6 +7,8 @@ import {
   menu,
   openStore,
   section,
+  sellsFrom,
+  toTill,
 } from "./fixtures";
 import type { Page } from "@playwright/test";
 import { createHmac, randomUUID } from "node:crypto";
@@ -31,6 +33,7 @@ interface Fixture {
   network_centre_seller_telegram_user_id: string;
   network_market_seller_telegram_user_id: string;
   network_market_store_id: string;
+  network_shared_location_id: string;
 }
 const fixture = JSON.parse(
   readFileSync(
@@ -174,6 +177,80 @@ test("the owner changes a store's state over an hour after opening the app, and 
   }
 });
 
+test("the owner blocks another store and /me, read again after it, is not answered: the store she works in stays — her basket, «Магазини» and its stub — never «Вхід через Telegram», the paper's banner over it (audit 2026-11-23, frame P2-1)", async ({
+  page,
+}) => {
+  await settle(page, market, "ACTIVE");
+  try {
+    const shared = fixture.network_shared_location_id;
+    const variant = randomUUID();
+    const size = randomUUID();
+    await sellsFrom(page, shared);
+    await page.route("**/api/v1/catalog/stock-options?**", async (route) => {
+      await route.fulfill({
+        json: {
+          items: [
+            {
+              location_id: shared,
+              product_variant_id: variant,
+              size_id: size,
+              display_name: "Пальто сесії",
+              size_label: "M",
+              size_is_unknown: false,
+              quantity: 1,
+              reserved_quantity: 0,
+              available_quantity: 1,
+              suggested_price: "1850.00",
+            },
+          ],
+          has_more: false,
+        },
+      });
+    });
+    await openAs(page, owner);
+    await openStore(page, "Центр CENTRE");
+    await toTill(page);
+    await page
+      .locator(`button.size-cell[data-stock="${variant}:${size}"]`)
+      .click();
+    await expect(page.locator(".tray-count")).toHaveText("Кошик · 1");
+    await section(page, "Магазини");
+    await page.getByRole("button", { name: /^Магазин Ринок(, |$)/ }).click();
+    const card = page.getByRole("article", { name: "Магазин Ринок" });
+    await card.getByRole("button", { name: "Заблокувати" }).click();
+    const sheet = page.getByRole("dialog", { name: "Заблокувати «Ринок»?" });
+    await expect(sheet).toHaveAttribute("data-ready", "");
+    await sheet.getByLabel(/^Причина/).fill("Ревізія каси");
+    // What the app knows of the stores is read again after the change: /me
+    // goes unanswered.
+    let lost = 0;
+    await page.route("**/api/v1/me", async (route) => {
+      lost += 1;
+      await route.abort("connectionreset");
+    });
+    await sheet
+      .getByRole("button", { name: "Так, заблокувати «Ринок»" })
+      .click();
+    await expect.poll(() => lost).toBeGreaterThan(0);
+    await expect(card.locator(".store-tag-state")).toHaveText(
+      /^Заблоковано з /,
+    );
+    await expect(
+      card.locator(".stub-recorded p").first(),
+    ).toHaveText("«Ринок»: заблоковано.");
+    await expect(page.locator("section.banner-paper")).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Вхід через Telegram" }),
+    ).toHaveCount(0);
+    // Back at the till: what she put in the basket is there.
+    await page.unroute("**/api/v1/me");
+    await menu(page).getByRole("button", { name: "Продаж", exact: true }).click();
+    await expect(page.locator(".tray-count")).toHaveText("Кошик · 1");
+  } finally {
+    await settle(page, market, "ACTIVE");
+  }
+});
+
 test("a seller at a blocked store reads it again with the token, however the reading goes", async ({
   page,
 }) => {
@@ -186,10 +263,11 @@ test("a seller at a blocked store reads it again with the token, however the rea
     ).toBeVisible();
     const signIns = await launchDataExpired(page);
     // The first reading is lost on the way; the second finds the access
-    // ended; by the third it is back.
+    // ended; the third is lost again; by the fourth it is back. The first
+    // two answered when let go.
     let reads = 0;
     let release = (): void => undefined;
-    const held = new Promise<void>((done) => {
+    let held = new Promise<void>((done) => {
       release = done;
     });
     await page.route("**/api/v1/me", async (route) => {
@@ -197,11 +275,13 @@ test("a seller at a blocked store reads it again with the token, however the rea
       if (reads === 1) {
         await held;
         await route.abort("connectionreset");
-      } else if (reads === 2)
+      } else if (reads === 2) {
+        await held;
         await route.fulfill({
           status: 401,
           json: { code: "NO_ACCESS", message: "No access" },
         });
+      } else if (reads === 3) await route.abort("connectionreset");
       else await route.continue();
     });
 
@@ -212,17 +292,47 @@ test("a seller at a blocked store reads it again with the token, however the rea
     await expectPressed(again, "--link");
     await again.click({ force: true });
     release();
-    // No answer: the shop sells on paper (owner decision, 2026-10-04), on
-    // the paper's banner, never a refusal's red (audit 2026-11-22, frame
-    // P2-1).
-    await expect(page.locator("section.banner-paper")).toHaveText(
-      "Сервер не відповідає. Продавайте на папері: модель, розмір, ціна, як оплачено, час. Коли сервер відповість — внесіть продажі до закриття каси.",
-    );
-    await expect(page.getByRole("alert")).toHaveCount(0);
-    await page.getByRole("button", { name: "Спробувати ще раз" }).click();
+    // No answer: the store's screen stays — nothing is sold here, on paper
+    // or not — the failure said as every place unread says it: its plate,
+    // its «Спробувати ще раз» the one retry; never the sign-in, never the
+    // paper (audit 2026-11-23, frame P2-1).
+    const plate = page.locator(".blank-tag .read-failure");
+    await expect(plate.locator("p")).toHaveText("Сервер не відповідає.");
+    await expect(
+      page.getByRole("heading", { name: /^Магазин заблоковано власником з/ }),
+    ).toBeVisible();
+    await expect(page.locator(".store-line")).toContainText("Ринок");
+    await expect(page.locator("section.banner-paper")).toHaveCount(0);
+    await expect(page.getByText(/Продавайте на папері/)).toHaveCount(0);
+    await expect(
+      page.getByRole("heading", { name: "Вхід через Telegram" }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "Спробувати ще раз" }),
+    ).toHaveCount(1);
+    // The plate's, pressed: its look kept, its ring turning, asked once.
+    held = new Promise<void>((done) => {
+      release = done;
+    });
+    const plateAgain = plate.getByRole("button", { name: "Спробувати ще раз" });
+    await plateAgain.click();
+    await expectPressed(plateAgain, "--ink");
+    await expect.poll(() => reads).toBe(2);
+    await plateAgain.click({ force: true });
+    release();
     await expect(
       page.getByRole("heading", { name: "Доступу ще немає" }),
     ).toBeVisible();
+    // Asked again and unanswered: the access ended stands — never the
+    // store's screen of the rights read before it (review).
+    await page.getByRole("button", { name: "Спробувати ще раз" }).click();
+    await expect(
+      page.getByRole("heading", { name: "Вхід через Telegram" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: /^Магазин заблоковано власником з/ }),
+    ).toHaveCount(0);
+    await expect(menu(page)).toHaveCount(0);
 
     // Meanwhile the owner opened the store again.
     await settle(page, market, "ACTIVE");
@@ -230,7 +340,7 @@ test("a seller at a blocked store reads it again with the token, however the rea
     await expect(
       page.getByRole("button", { name: "Продаж", exact: true }),
     ).toBeVisible();
-    expect(reads).toBe(3);
+    expect(reads).toBe(4);
     expect(signIns.sent).toBe(0);
   } finally {
     await settle(page, market, "ACTIVE");

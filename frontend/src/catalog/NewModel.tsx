@@ -28,7 +28,7 @@ import { KeptCatalog } from "./KeptCatalog";
 import { NameFork, forkedFamilies, useForkedFamilies } from "./NameFork";
 import { Similar } from "./Similar";
 import { lengthWrong, similarFrom } from "./modelTypes";
-import { conflictsText } from "./types";
+import { conflictsText, decidedName, decidedText } from "./types";
 import type { Candidate, Decision } from "./types";
 
 const base = "/catalog/match-decisions";
@@ -326,18 +326,13 @@ export function NewModel({
     void cache.invalidateQueries({ queryKey: ["receive-sizes"] });
     void cache.invalidateQueries({ queryKey: ["catalog-sizes"] });
     // A cancellation that finds the model saved already says so, the model
-    // chosen: it is in the catalogue either way (KeptCatalog).
-    const creation = result.creation?.display_name;
-    const candidate = result.preview.candidates.find(
-      (c) => c.variant_id === variant,
-    )?.display_name;
-    const name = creation ?? candidate ?? "";
+    // chosen: it is in the catalogue either way (KeptCatalog). What was made
+    // is said by the server's answer: a model, a colour, or neither (audit
+    // 2026-11-23, goods P1-1).
     if (!resent) buzz("success");
     done(
-      { product_variant_id: variant, display_name: name },
-      creation !== undefined
-        ? `Модель додано: ${visible(name)}. Кількість впишіть тут.`
-        : `Модель обрано: ${visible(name)}. Кількість впишіть тут.`,
+      { product_variant_id: variant, display_name: decidedName(result) },
+      `${decidedText(result)} Кількість впишіть тут.`,
       result,
     );
   }
@@ -405,9 +400,11 @@ export function NewModel({
         ? chosenName === undefined
           ? "Оберіть модель"
           : `Підтвердити: ${visible(chosenName)}`
-        : picked.length === 0
-          ? "Додати модель"
-          : `Додати модель · ${sizesWord(picked.length)}`;
+        : // «Інший колір нашої моделі» adds a colour, as its name says
+          // (audit 2026-11-23, goods P1-1).
+          `${kind === "colour" ? "Додати колір" : "Додати модель"}${
+            picked.length === 0 ? "" : ` · ${sizesWord(picked.length)}`
+          }`;
   const ready =
     !blocked &&
     (step === "raw"

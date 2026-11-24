@@ -39,7 +39,7 @@ import { InvoicePay } from "./InvoicePay";
 import { InvoiceRecorded, useRecordedDone } from "./InvoiceRecorded";
 import { InvoiceSticker } from "./InvoiceSticker";
 import { InvoiceTag } from "./InvoiceTag";
-import { entryLabels, refusalText } from "./invoiceWords";
+import { cancelledText, entryLabels, refusalText } from "./invoiceWords";
 import type { Command, Sent } from "./invoiceWords";
 import type {
   Invoice,
@@ -1054,7 +1054,9 @@ function InvoiceDetail({
             }}
             cancelled={(current) => {
               setProblem(null);
-              setRecorded(null);
+              // Said over the sum as a record is (audit 2026-11-23, money
+              // P2-1).
+              setRecorded(cancelledText(current));
               changed(current);
             }}
             refused={(text) => {
@@ -1191,7 +1193,13 @@ function InvoiceDetail({
             cancelled={(current) => {
               setCancelling(null);
               setProblem(null);
-              setRecorded(null);
+              setRecorded(
+                cancelledText(
+                  current,
+                  current.entries.find((one) => one.id === cancelling.id) ??
+                    cancelling,
+                ),
+              );
               changed(current);
             }}
             refused={(text) => {

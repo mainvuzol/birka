@@ -4,6 +4,7 @@ import {
   countTaps,
   expectStub,
   expectPressed,
+  expectWarningPlate,
   expectSheetCancel,
   expectTextLink,
   menu,
@@ -1414,9 +1415,14 @@ test("no store to choose: one blank tag, the owner the one to ask, never an admi
   let none = true;
   let held: Promise<void> | null = null;
   let asked = 0;
+  let failing = false;
   await page.route("**/api/v1/me", async (route) => {
     asked += 1;
     if (held) await held;
+    if (failing) {
+      await route.fulfill({ status: 503 });
+      return;
+    }
     const response = await route.fetch();
     const me = (await response.json()) as object;
     await route.fulfill({
@@ -1475,9 +1481,42 @@ test("no store to choose: one blank tag, the owner the one to ask, never an admi
   await expect(again).toBeEnabled();
   await expect(again.locator(".eyelet")).toHaveCount(0);
   expect(asked).toBe(before + 1);
-  // Added to a store meanwhile: read again, and in.
-  none = false;
+  // Read again, the server silent: the screen stays, the plate of every
+  // place unread its one retry — never the sign-in, never the paper, where
+  // nothing is sold (audit 2026-11-23, frame P2-1).
+  failing = true;
   await again.click();
+  const plate = tag.locator(".read-failure");
+  await expect(plate.locator("p")).toHaveText("Сервер не відповідає.");
+  await expect(
+    tag.getByRole("heading", { name: "Магазинів поки немає", level: 1 }),
+  ).toBeVisible();
+  await expect(page.locator("section.banner-paper")).toHaveCount(0);
+  await expect(
+    page.getByRole("heading", { name: "Вхід через Telegram" }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Спробувати ще раз" }),
+  ).toHaveCount(1);
+  // In the blank tag at 360 × 640, in both themes: the warning's plate,
+  // nothing wider than the phone.
+  const size = page.viewportSize();
+  await page.setViewportSize({ width: 360, height: 640 });
+  for (const scheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    await expectWarningPlate(plate, scheme);
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth > innerWidth,
+      ),
+    ).toBe(false);
+  }
+  await page.emulateMedia({ colorScheme: "light" });
+  if (size) await page.setViewportSize(size);
+  // Added to a store meanwhile: read again, and in.
+  failing = false;
+  none = false;
+  await plate.getByRole("button", { name: "Спробувати ще раз" }).click();
   await expect(
     page.getByRole("heading", { name: "Магазинів поки немає" }),
   ).toHaveCount(0);
