@@ -2,6 +2,7 @@ import {
   test,
   expect,
   basketDone,
+  feels,
   gridCell,
   more,
   openModel,
@@ -36,7 +37,7 @@ const fixture = JSON.parse(
     "utf8",
   ),
 ) as Fixture;
-function launch(): string {
+function launch(version?: string): string {
   const fields = new URLSearchParams({
     auth_date: String(Math.floor(Date.now() / 1000)),
     user: `{"id":${fixture.telegram_user_id},"first_name":"Оля"}`,
@@ -49,7 +50,10 @@ function launch(): string {
     .update("123456:TEST-TOKEN-not-a-real-secret")
     .digest();
   fields.set("hash", createHmac("sha256", secret).update(check).digest("hex"));
-  return `/#${new URLSearchParams({ tgWebAppData: fields.toString() }).toString()}`;
+  return `/#${new URLSearchParams({
+    tgWebAppData: fields.toString(),
+    ...(version ? { tgWebAppVersion: version } : {}),
+  }).toString()}`;
 }
 
 const lorans = /^Лоран шоколад 70(?:\.0)? см$/;
@@ -277,6 +281,56 @@ test("the grid: a row a warehouse, what orders hold under it, «Брак» by it
     ),
   ).toBeVisible();
   expect(writes).toEqual([]);
+});
+
+test("inside Telegram a free cell's tap in «Виправити залишок» is felt as a choice, as a stocktake's; one an order holds, nothing (audit 2026-11-23, goods P2-2)", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const host = window as unknown as {
+      TelegramWebviewProxy: {
+        postEvent: (event: string, data: string) => void;
+      };
+      buzzes: unknown[];
+    };
+    host.buzzes = [];
+    host.TelegramWebviewProxy = {
+      postEvent: (event, data) => {
+        if (event === "web_app_trigger_haptic_feedback")
+          host.buzzes.push(JSON.parse(data) as unknown);
+      },
+    };
+  });
+  const buzzes = (): Promise<unknown[]> =>
+    page.evaluate(() => (window as unknown as { buzzes: unknown[] }).buzzes);
+  await shelves(page, {
+    locations: [
+      place(BIN, "Брак", { can_sell: false, damaged_returns: true }),
+      place(MAIN, "Основний"),
+      place(OWN, "Свій"),
+    ],
+    selling: [[row(MAIN, "M", 3, 1), row(OWN, "M", 1)]],
+    at: { [BIN]: [row(BIN, "M", 1)] },
+  });
+  await page.goto(launch("8.0"));
+  await openStore(page, "Основний MAIN");
+  await openModel(page, "кокон", MODEL);
+  await page.getByRole("button", { name: "Виправити залишок" }).click();
+  const sheet = page.getByRole("dialog", { name: MODEL });
+  await expect(sheet).toHaveAttribute("data-ready", "");
+  const cells = sheet
+    .getByRole("group", { name: "Який розмір виправити" })
+    .getByRole("button");
+  await expect(cells).toHaveCount(2);
+  // «M, Основний», an order's: opens nothing, felt as nothing.
+  const form = page.getByRole("dialog", { name: `${MODEL} · M` });
+  await feels(buzzes, () => cells.first().click({ force: true }), []);
+  await expect(form).toHaveCount(0);
+  // «M, Свій»: chosen, felt, the correction's form open.
+  await feels(buzzes, () => cells.nth(1).click(), [
+    { type: "selection_change" },
+  ]);
+  await expect(form.getByRole("group", { name: "Причина" })).toBeVisible();
 });
 
 test("six sizes, «?» and «Разом» fit a 360 phone without the grid scrolling; a paused warehouse is grey, said once under the grid (sections task list, P0-6)", async ({

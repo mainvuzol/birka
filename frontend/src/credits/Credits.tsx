@@ -469,26 +469,6 @@ export function Credits({
       />
       <section className={till ? "credits" : "credits customers"}>
         {mode}
-        {elsewhere && (
-          // Never mixed with this store's: headed, and left in one tap, the
-          // number kept, to read here again. The section's caption, as the
-          // return's (spec §5; audit after stage 2, sale P1-1).
-          <div className="toolbar elsewhere-head">
-            <h3 ref={elsewhereHeading} tabIndex={-1} className="t-label">
-              Магазини, що не працюють
-            </h3>
-            <button
-              type="button"
-              className="quiet"
-              onClick={() => {
-                switched.current = true;
-                setElsewhere(false);
-              }}
-            >
-              <span aria-hidden="true">← </span>У цьому магазині
-            </button>
-          </div>
-        )}
         <form
           className="find"
           role="search"
@@ -517,6 +497,29 @@ export function Credits({
             inputMode={elsewhere ? "tel" : undefined}
           />
         </form>
+        {elsewhere && (
+          // Never mixed with this store's: headed, and left in one tap, the
+          // number kept, to read here again. The section's caption, as the
+          // return's (spec §5; audit after stage 2, sale P1-1): under the
+          // field, as the return's, so the field never moves under the
+          // finger; outside the form, an Enter as before (audit 2026-11-23,
+          // sale P2-1).
+          <div className="toolbar elsewhere-head">
+            <h3 ref={elsewhereHeading} tabIndex={-1} className="t-label">
+              Магазини, що не працюють
+            </h3>
+            <button
+              type="button"
+              className="quiet"
+              onClick={() => {
+                switched.current = true;
+                setElsewhere(false);
+              }}
+            >
+              <span aria-hidden="true">← </span>У цьому магазині
+            </button>
+          </div>
+        )}
         {!till && !elsewhere && (
           <ModeSwitch
             label="Які борги показати"

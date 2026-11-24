@@ -542,7 +542,7 @@ test("an order to send fits the phone: its goods as its title, when it was order
   const line = page.locator(".store-line p:visible");
   await expect(line).toHaveText(
     new RegExp(
-      ` · замовлено ${short(ready.created_at as string)} · № ${ready.id.slice(0, 8)}$`,
+      ` · замовлено\u00a0${short(ready.created_at as string)} · № ${ready.id.slice(0, 8)}$`,
     ),
   );
   await expect(page.locator(".order-context")).toHaveCount(0);

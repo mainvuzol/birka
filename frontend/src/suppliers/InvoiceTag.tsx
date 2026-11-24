@@ -45,9 +45,11 @@ export function InvoiceTag({
     ...(invoice.store_id !== storeId
       ? [`магазин «${visible(invoice.store_name)}»`]
       : []),
+    // A meta line's, lower-case as its others, the card's sentence aside
+    // (audit 2026-11-23, money P2-2 (б)).
     ...(invoice.sold
       ? [
-          `За продане позичене: ${visible(invoice.sold.label)} × ${String(invoice.sold.quantity)}`,
+          `за продане позичене: ${visible(invoice.sold.label)} × ${String(invoice.sold.quantity)}`,
         ]
       : invoice.note
         ? [visible(invoice.note)]

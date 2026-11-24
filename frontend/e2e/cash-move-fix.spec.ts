@@ -359,6 +359,47 @@ function panelButton(page: Page): Locator {
   return page.locator(".pay-panel button");
 }
 
+/** Whether `first` stands before `then` in the page. */
+async function standsBefore(first: Locator, then: Locator): Promise<boolean> {
+  const other = await then.elementHandle();
+  return first.evaluate(
+    (node, next) =>
+      Boolean(
+        node.compareDocumentPosition(next) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ),
+    other,
+  );
+}
+
+/** A refusal over the keys, by the sum, both in view with the cursor in the
+ * sum (audit 2026-11-23, orders-cash P2-1). */
+async function refusedBySum(page: Page, chips: boolean): Promise<void> {
+  const refusal = page.locator(".cash-move [role=alert]");
+  await expect(refusal).toHaveCount(1);
+  expect(await standsBefore(refusal, sum(page))).toBe(true);
+  if (chips)
+    expect(
+      await standsBefore(
+        page.getByRole("group", { name: "Кому чи на що" }),
+        refusal,
+      ),
+    ).toBe(true);
+  else
+    expect(
+      await refusal.evaluate(
+        (node) =>
+          node.parentElement?.querySelector(":scope > :not(.notice)") === node,
+      ),
+    ).toBe(true);
+  await expect(sum(page)).toBeFocused();
+  // Its top too, never under the sheet's head.
+  await expect(refusal).toBeInViewport({ ratio: 1 });
+  await expect(sum(page)).toBeInViewport();
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(360);
+}
+
 /** The take-out sheet's own button, «Видати 150,00 грн»: never Telegram's
  * MainButton, as it moves money. */
 function moveButton(page: Page): Locator {
@@ -778,9 +819,10 @@ test("inside Telegram «Видати з каси» and «Внести в кас�
   expect(server.sent.movements).toHaveLength(2);
 });
 
-test("cash taken out and refused is said over the panel, the sum kept and the cursor in it; pressed again it is a new command (cash task list, P1-2)", async ({
+test("cash taken out and refused is said over the panel, the sum kept and the cursor in it; pressed again it is a new command (cash task list, P1-2); over the keys, by the sum, both in view at 360 × 640, kept while the sum is mended (audit 2026-11-23, orders-cash P2-1; review)", async ({
   page,
 }) => {
+  await page.setViewportSize({ width: 360, height: 640 });
   await record(page);
   const server = await stub(page, {
     now: drawer(),
@@ -803,11 +845,26 @@ test("cash taken out and refused is said over the panel, the sum kept and the cu
     /^Не записано: поки форма була відкрита, касу закрили о \d{2}:\d{2} · Олена\./,
   );
   await expect(sum(page)).toHaveValue("150");
-  await expect(sum(page)).toBeFocused();
+  await refusedBySum(page, true);
   expect(await buzzes(page)).toEqual([
     { type: "selection_change" },
     { type: "notification", notification_type: "error" },
   ]);
+  // The sum mended under the refusal: it stays over the keys, which never
+  // move under the finger (review, audit 2026-11-23).
+  const erase = page
+    .locator(".move-pad")
+    .getByRole("button", { name: "Стерти", exact: true });
+  // Where the finger finds it: in view, as a tap brings it.
+  await erase.scrollIntoViewIfNeeded();
+  const before = await erase.boundingBox();
+  await keyIn(page, ["Стерти"]);
+  await expect(sum(page)).toHaveValue("15");
+  await expect(page.locator(".cash-move [role=alert]")).toHaveCount(1);
+  expect((await erase.boundingBox())?.y).toBe(before?.y);
+  await keyIn(page, ["0"]);
+  await expect(sum(page)).toHaveValue("150");
+  expect((await erase.boundingBox())?.y).toBe(before?.y);
   await moveButton(page).click();
   await expect(
     page.getByText("Записано: Витрати, 150,00 грн.", { exact: true }),
@@ -816,6 +873,60 @@ test("cash taken out and refused is said over the panel, the sum kept and the cu
   expect(server.sent.movements[1]?.command_id).not.toBe(
     server.sent.movements[0]?.command_id,
   );
+});
+
+test("a manager's take-out and pay-in refused: over the keys, by the sum, with three chips and «Коли?» too, both in view at 360 × 640 (audit 2026-11-23, orders-cash P2-1)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  await stub(page, {
+    now: drawer({
+      may_correct: true,
+      movement_kinds: ["OWNER", "EXPENSES", "SUPPLIER_COURIER", "CHANGE"],
+    }),
+    method: sale,
+    answers: [422, 422],
+  });
+  // A close to choose «Коли?» by.
+  await page.route("**/api/v1/cash/closes?**", async (route) => {
+    await route.fulfill({ json: { items: [lastClose], has_more: false } });
+  });
+  await open(page);
+  await cash(page);
+  await page
+    .getByRole("button", { name: "Видати з каси", exact: true })
+    .click();
+  await moveSheet(page, "Видати з каси");
+  const chips = page
+    .getByRole("group", { name: "Кому чи на що" })
+    .getByRole("button");
+  await expect(chips).toHaveCount(3);
+  await expect(page.getByLabel("Коли?")).toBeVisible();
+  await chips.first().click();
+  await sum(page).fill("150");
+  // «Коли?» looked at: the sheet at its end when it is pressed.
+  await page.locator(".sheet-body").evaluate((node) => {
+    node.scrollTop = node.scrollHeight;
+  });
+  await moveButton(page).click();
+  await expect(page.getByRole("alert")).toHaveText(
+    /^Не записано: поки форма була відкрита, касу закрили о \d{2}:\d{2} · Олена\./,
+  );
+  await expect(sum(page)).toHaveValue("150");
+  await refusedBySum(page, true);
+  // «Внести в касу»: no chips, the refusal the sheet's first line.
+  await open(page);
+  await cash(page);
+  await page
+    .getByRole("button", { name: "Внести в касу", exact: true })
+    .click();
+  await moveSheet(page, "Внести в касу");
+  await sum(page).fill("100");
+  await moveButton(page).click();
+  await expect(page.getByRole("alert")).toHaveText(
+    /^Не записано: поки форма була відкрита, касу закрили/,
+  );
+  await refusedBySum(page, false);
 });
 
 test("cash taken out and unanswered: the form held under «Каса»'s banner with what was typed; refused on its check, it is there to record again; confirmed, «Каса» says it was recorded once (cash task list, P1-2; review, 2026-10-22)", async ({

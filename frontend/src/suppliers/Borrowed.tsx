@@ -231,7 +231,7 @@ export function Borrowed({
   );
   // The stub's words take the cursor, the button pressed being gone; and
   // the heading once «Готово» is — never as the screen opens.
-  const said = useRef<HTMLParagraphElement>(null);
+  const said = useRef<HTMLHeadingElement>(null);
   const stub = useId();
   const was = useRef(done);
   useEffect(() => {
@@ -273,7 +273,9 @@ export function Borrowed({
       >
         {heading}
         <section className="receipt receive-done borrowed-done">
-          <p
+          {/* A result's title is a heading, as «Оплату записано» is
+              (audit 2026-11-23, frame P2-2). */}
+          <h3
             className="result-title t-sheet"
             ref={said}
             tabIndex={-1}
@@ -287,7 +289,7 @@ export function Borrowed({
             {done.kind === "sold"
               ? `Продано ${String(done.quantity)} шт.`
               : `Повернено постачальнику «${visible(done.lot.supplier.name)}»: ${String(done.quantity)} шт.`}
-          </p>
+          </h3>
           {done.kind === "sold" ? (
             // A debt recorded is money: its sum large, the server's, as
             // the invoice's own stub (spec §6.30; money task list after

@@ -133,6 +133,18 @@ export function Returns({
   useEffect(() => {
     if (!words) setElsewhere(false);
   }, [words]);
+  // Each switch brings the eye and a screen reader to what it opened, as
+  // «Внесок»'s does: the button tapped is gone (audit 2026-11-23, sale
+  // P2-1). Only a tap: the field emptied below two letters ends the other
+  // stores' search and leaves the cursor in it.
+  const switched = useRef(false);
+  const heading = useRef<HTMLHeadingElement>(null);
+  const elsewhereHeading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    if (!switched.current) return;
+    switched.current = false;
+    (elsewhere ? elsewhereHeading : heading).current?.focus();
+  }, [elsewhere]);
   const offerId = useId();
   const [selected, setSelected] = useState<SaleSummary | null>(null);
   const [done, setDone] = useState<{
@@ -197,6 +209,7 @@ export function Returns({
         className="text-button"
         aria-describedby={offerId}
         onClick={() => {
+          switched.current = true;
           setElsewhere(true);
         }}
       >
@@ -308,7 +321,7 @@ export function Returns({
   // where the till's stands («Усе на бірці» task list, P1-3).
   return (
     <>
-      <ScreenHeader title="Продаж" />
+      <ScreenHeader ref={heading} focusable title="Продаж" />
       <section className="returns">
         {mode}
         <form
@@ -341,11 +354,14 @@ export function Returns({
           // the header, plain to whoever keeps several (audit 2026-11-22,
           // sale P2-3).
           <div className="toolbar elsewhere-head">
-            <h3 className="t-label">В інших магазинах мережі</h3>
+            <h3 ref={elsewhereHeading} tabIndex={-1} className="t-label">
+              В інших магазинах мережі
+            </h3>
             <button
               type="button"
               className="quiet"
               onClick={() => {
+                switched.current = true;
                 setElsewhere(false);
               }}
             >

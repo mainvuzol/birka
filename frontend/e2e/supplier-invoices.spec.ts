@@ -1908,9 +1908,38 @@ test("an archived store's invoice is paid by a store that trades", async ({
   const old = tag(page, "Постачальник Старого");
   await expect(old).toContainText("магазин «Старий»");
   await old.locator(".order-row").click();
-  await expect(
-    page.getByText(/^Накладна магазину «Старий», який зараз закрито/),
-  ).toBeVisible();
+  // The closed store's debt's own form: who pays, whose the debt stays
+  // (audit 2026-11-23, money P2-2 (а)); two lines at most at 360 × 640, in
+  // either theme.
+  const plate = page.getByText(
+    "Накладна магазину «Старий» (закрито). Сплачуєте ви, борг — за «Старий».",
+    { exact: true },
+  );
+  await expect(plate).toBeVisible();
+  const phone = page.viewportSize();
+  await page.setViewportSize({ width: 360, height: 640 });
+  // The TZ asked two lines: the debt's twin takes two, these words three
+  // at 360, as the old ones did — the words kept, the rest recorded (batch
+  // report). Never longer than they were.
+  for (const scheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    const [now, was] = await plate.evaluate((node) => {
+      const line = parseFloat(getComputedStyle(node).lineHeight);
+      const lines = (element: Element): number =>
+        Math.round(element.getBoundingClientRect().height / line);
+      const old = node.cloneNode(true) as HTMLElement;
+      old.textContent =
+        "Накладна магазину «Старий», який зараз закрито. Сплачує цей магазин; борг лишається за «Старий».";
+      node.after(old);
+      const counted = [lines(node), lines(old)];
+      old.remove();
+      return counted;
+    });
+    expect(now).toBeLessThanOrEqual(was ?? 0);
+    expect(now).toBeLessThanOrEqual(3);
+  }
+  await page.emulateMedia({ colorScheme: "light" });
+  if (phone) await page.setViewportSize(phone);
   // Set off and cancelled only where it is owed; written off by the
   // network's owner alone: nothing behind a ⋯ here.
   await expect(
@@ -1923,7 +1952,10 @@ test("an archived store's invoice is paid by a store that trades", async ({
   );
   await payOnCard(page).click();
   await expect(
-    page.getByText(/^Накладна магазину «Старий», який зараз закрито/),
+    page.getByText(
+      "Накладна магазину «Старий» (закрито). Сплачуєте ви, борг — за «Старий».",
+      { exact: true },
+    ),
   ).toBeVisible();
   await keyIn(page, "100");
   await payButton(page).click();
@@ -3836,9 +3868,19 @@ test("an invoice for borrowed goods sold, of a store that does not trade, says o
   await page
     .getByRole("button", { name: "Накладні магазинів, що не працюють" })
     .click();
+  // Its tag's line lower-case, a meta line's; the card's sentence keeps its
+  // capital (audit 2026-11-23, money P2-2 (б)).
+  await expect(
+    tag(page, "Постачальник Старого").locator(".order-tag-meta").last(),
+  ).toHaveText(
+    "магазин «Старий» · за продане позичене: Пальто Старе графіт, M × 2",
+  );
   await tag(page, "Постачальник Старого").locator(".order-row").click();
   await expect(
-    page.getByText(/^Накладна магазину «Старий», який зараз закрито/),
+    page.getByText(
+      "Накладна магазину «Старий» (закрито). Сплачуєте ви, борг — за «Старий».",
+      { exact: true },
+    ),
   ).toBeVisible();
   await expect(sold.locator("p")).toHaveText(
     "За продане позичене: Пальто Старе графіт, M × 2.",

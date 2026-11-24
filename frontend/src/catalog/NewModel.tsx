@@ -235,6 +235,11 @@ export function NewModel({
       ? refused.body.concept
       : "";
   const forkFamilies = useForkedFamilies(store.id, token, sentName, forkIds);
+  // A similar spelling refused by this sheet's own send, nothing kept: said
+  // by its block alone, at the form's end where the finger is, as the
+  // rename says it; a kept operation's refusal keeps its plate (audit
+  // 2026-11-23, goods P2-1).
+  const similarAlone = similar !== null && ours && !kept && pending === null;
   // Read and none of them found by their name — a model under review, past
   // the first fifty: a fork with no model to point at would leave one way
   // alone, so the refusal is said as before (decided here; review).
@@ -489,7 +494,7 @@ export function NewModel({
         {/* The refusal's own words, a similar name's too: what to do with
             it (owner decision, 2026-10-03) — this sheet's only, never a kept
             operation's refused elsewhere (review). */}
-        {error !== null && ours && !forked && (
+        {error !== null && ours && !forked && !similarAlone && (
           <p role="alert" className="new-model-refusal">
             {catalogRefusal(error, kept, pending !== null)}
           </p>
@@ -961,6 +966,7 @@ export function NewModel({
               <>
                 <Similar
                   words={similar}
+                  inView={similarAlone}
                   take={(field, spelling) => {
                     if (field === "concept") setConcept(spelling);
                     else if (field === "source") setSource(spelling);

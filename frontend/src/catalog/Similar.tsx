@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import type { JSX } from "react";
 import { visible } from "@/shared/visible";
 import { similarText } from "./modelTypes";
@@ -13,12 +14,20 @@ import type { SimilarWord } from "./modelTypes";
 export function Similar({
   words,
   take,
+  inView = false,
 }: {
   words: SimilarWord[];
   take: (field: string, spelling: string) => void;
+  /** The refusal said by this block alone: brought into view as it comes,
+   * the cursor left where it is (audit 2026-11-23, goods P2-1). */
+  inView?: boolean;
 }): JSX.Element {
+  const self = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (inView) self.current?.scrollIntoView({ block: "nearest" });
+  }, [inView]);
   return (
-    <section className="notice" role="alert">
+    <section className="notice" role="alert" ref={self}>
       <p className="notice-lead">Схожа назва вже є</p>
       {words.map((word) => (
         <div key={`${word.field}:${word.typed}`}>

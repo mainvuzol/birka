@@ -12301,3 +12301,97 @@ changes; nothing recorded or sent changes; no server change, no migration.
   Owner-held: В23-К1 («Зверніться до менеджера» read by a manager or the
   owner), money P2-5 (Д4, В22-Г1), goods P2-3 (б) (В22-Т1 / Н2), goods P2-5
   of 2026-11-20 (В20-Т1).
+
+## Chosen in chat — 2026-11-24 (audit 2026-11-23, batch 2: the small points — a result's title a heading; one form for the phone's unread memory; the other stores' switch keeps the field still and says where it went; «Кошик порожній» under tags only; a take-out's refusal by its sum; the order's day kept with its word; a closed store's invoice says who pays; a similar name said once; a cell's tap felt; frame P2-2, P2-3, sale P2-1, P2-2, orders-cash P2-1, Д1, Д2, money P2-2, goods P2-1, P2-2)
+
+The user's pick after audit 2026-11-23: «Both batches, money first» — batch
+1 merged as #246; this is the second. No right, check, journal or step
+changes; nothing recorded or sent changes; no server change, no migration.
+
+- **A result's title is a heading** (frame P2-2; spec §6.30), a rule of
+  the frame: where the result is the screen itself, the screen's title;
+  where the screen keeps its own title, an `h3`, as «Оплату записано» and
+  «Клієнт забрав». «Продано N шт.» and «Повернено постачальнику «…»: N
+  шт.» on «Позичене й під реалізацію» are `h3` now — focus, what it is
+  heard with, words and look as before.
+- **The phone's memory unread: one form, «Створення операцій зупинено.»
+  once, last** (frame P2-3): the order's line is said as every other —
+  «Не вдалося прочитати збережену операцію із замовленням. Не очищайте
+  дані застосунку; зверніться до менеджера.» — and «Створення операцій
+  зупинено.» stands once, the plate's last line, whichever journals stand
+  in it: every journal unread holds what creates (the till, returns,
+  «Внесок», and since batch 1 «Постачальникам», «Позичене», «Накладні»).
+  Whom to call stays as it is until the owner answers В23-К1.
+  **Where it is so** (review; frame TZ Д3, decided there): «Перевірка
+  каталогу» is held by its own journal and the order's alone, and it is
+  open to whoever holds `catalog:confirm` — sellers too. So the last line
+  stands for a person who cannot open that check, whatever journal is
+  unread; for one who can, only with the catalogue's or the order's
+  journal unread. A seller's one unread sale, or the owner's store state
+  journal alone, is its line alone. What each journal holds is unchanged;
+  whether every journal should hold «Перевірка каталогу» (and the line
+  then stand always) is a reading for the owner.
+- **The other stores' switch: the field still, the eye where it went**
+  (sale P2-1): in «Повернути», «Шукати там» brings focus to «В інших
+  магазинах мережі», «← У цьому магазині» to the screen's «Продаж» —
+  after a tap only; the field emptied below two letters ends that search
+  and keeps the cursor in the field. In «Внесок» and «Покупці» the
+  closed stores' head «Магазини, що не працюють · ← У цьому магазині»
+  stands under the field, as the return's, outside its search form; the
+  field never moves under the finger. Words, what is asked and sent — as
+  before.
+- **«Кошик порожній — знайдіть модель угорі.» under the models alone**
+  (sale P2-2): said only while the search draws model tags (the old ones
+  too, while a new search reads), never under a blank tag, the plate of a
+  list unread — the next page's too (review) — or the rows' places. Otherwise its conditions, words and
+  place as before; «Нове замовлення» unchanged.
+- **A take-out's refusal by its sum** (orders-cash P2-1;
+  `financial-integrity`: its place only): «Видати з каси» and «Внести в
+  касу» say a refusal over the keypad — after «Кому чи на що» and the
+  courier's hint, first under the kept banner where there are no chips —
+  its top brought into view, then the cursor in the sum without moving
+  the sheet again — once the refusal is drawn (review). The refusal stays
+  while the sum is mended, as the count's: gone at the first key, it
+  would move the keys under the finger (review); the next
+  «Видати»/«Внести» or another chip takes it away. «Вкажіть суму з
+  точністю до копійок.» stays its line under the keys (2026-11-18). The amount, its kind, the note,
+  `after_close_id`, `for_close_id`, `command_id` and «a repeat is a new
+  command» unchanged. This carries «Refused: … why over the panel» of
+  2026-10-22 to the keypad of 2026-11-15, as the count, «Внесок» and an
+  invoice's payment say it.
+- **The order's day kept with its word** (orders-cash Д1): «замовлено»
+  and its day joined by a no-break space on the card and its placeholder,
+  as on the row. **The drawer's comment corrected** (Д2): its answer
+  carries no sale's sum and no «Мало бути» (G32); the cash moved in and
+  out carries its own sums.
+- **A closed store's invoice says who pays as its debt's twin does**
+  (money P2-2): one plate for the card and the payment — «Накладна
+  магазину «Старий» (закрито). Сплачуєте ви, борг — за «Старий».»,
+  «заблоковано» for a blocked store; «ви», as only whoever holds
+  `supplier:debt` at a trading store opens it. Who pays and whose the debt
+  stays — as before. Its tag's line is a meta line: «магазин «Старий» ·
+  за продане позичене: …», lower-case; the card's sentence keeps its
+  capital. Recorded, not met: the TZ asked two lines at most at 360 × 640;
+  the debt's twin takes two, these words three (274 px of text) — as the
+  old ones did. The TZ's words kept; no shorter words made up here.
+- **A similar name is said once in «Нова модель»** (goods P2-1; catalogue
+  identity unchanged — a similar spelling is taken or confirmed as
+  another, owner decision of 2026-10-03): the sheet's own first refusal,
+  nothing kept, is said by its block «Схожа назва вже є» alone at the
+  form's end, brought into view as it comes, the cursor left where it is —
+  as the rename says it; no plate over the sheet. A kept operation's
+  refusal keeps its plate (2026-11-22) — and its block, as before: what
+  was not recorded and what to take, both said (goods TZ Д3, left as it
+  is). This revises stage 2's «the block … and the refusal's own words
+  over it» (an agent's choice then).
+- **A cell's tap in «Виправити залишок» is felt** (goods P2-2; spec §6
+  p. 9): a free cell buzzes `selection`, then its form opens, as a
+  stocktake's cell and «Знайшли товар…»'s; one an order holds, nothing.
+- **«Скасовані й повернені на склад ›» stays without «· N»** (orders-cash
+  TZ §8, §12): S16 №11 gives «· 1», a step from the direction held. The
+  server counts no closed orders (2026-11-01) and their list is read by
+  fifty, as «Клієнт забрав»'s, which has no number either: a number seen
+  only up to fifty would be a third rule of counting.
+- **Not in it** (owner-held): В23-К1 (whom the plate tells to call); money
+  P2-5 (Д4, В22-Г1); goods P2-3 (б) (В22-Т1 / Н2); goods P2-5 of
+  2026-11-20 (В20-Т1).

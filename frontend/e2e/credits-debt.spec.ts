@@ -2503,8 +2503,34 @@ test.describe("«Продаж» › «Внесок»: a payment on a debt from t
       });
     });
     await atTheTill(page);
+    await page.setViewportSize({ width: 360, height: 640 });
     const search = page.getByRole("searchbox", { name: "Ім’я або телефон" });
     await search.fill("0671234567");
+    const top = await search.boundingBox();
+    await page
+      .getByRole("button", {
+        name: "Шукати за цим номером",
+        exact: true,
+      })
+      .click();
+    // The field never moves under the finger: the caption comes under it,
+    // as the return's, and the eye goes to it (audit 2026-11-23, sale P2-1).
+    const caption = page.getByRole("heading", {
+      name: "Магазини, що не працюють",
+    });
+    await expect(caption).toBeFocused();
+    const stays = await search.boundingBox();
+    const head = await caption.boundingBox();
+    if (!top || !stays || !head) throw new Error("not laid out");
+    expect(Math.abs(stays.y - top.y)).toBeLessThanOrEqual(1);
+    expect(head.y).toBeGreaterThanOrEqual(stays.y + stays.height - 1);
+    // Back, the eye on the screen's title, as before; there again.
+    await page
+      .getByRole("button", { name: "У цьому магазині", exact: true })
+      .click();
+    await expect(
+      page.getByRole("heading", { name: "Продаж", level: 1 }),
+    ).toBeFocused();
     await page
       .getByRole("button", {
         name: "Шукати за цим номером",

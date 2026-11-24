@@ -590,9 +590,11 @@ test("the other stores are offered from two letters under this store's results, 
     false,
   );
   await offer.click();
+  // Brought to what it opened, as «Внесок»'s: the tapped link is gone
+  // (audit 2026-11-23, sale P2-1).
   await expect(
     page.getByRole("heading", { name: "В інших магазинах мережі" }),
-  ).toBeVisible();
+  ).toBeFocused();
   await expect
     .poll(() =>
       asked.some(
@@ -633,15 +635,26 @@ test("the other stores are offered from two letters under this store's results, 
   await expect(
     page.getByRole("heading", { name: "В інших магазинах мережі" }),
   ).toHaveCount(0);
+  // Back, the eye on the screen's title, as «Внесок»'s (sale P2-1).
+  await expect(
+    page.getByRole("heading", { name: "Продаж", level: 1 }),
+  ).toBeFocused();
   await expect(field).toHaveValue("лор");
   await expect(offer).toBeVisible();
-  // There again, and one letter left: this store's list.
+  // There again, and one letter left: this store's list, the cursor kept
+  // in the field — the keyboard stays (sale P2-1).
   await offer.click();
-  await field.fill("л");
+  await field.click();
+  await field.press("End");
+  await field.press("Backspace");
+  await field.press("Backspace");
+  await expect(field).toHaveValue("л");
   await expect(
     page.getByRole("heading", { name: "В інших магазинах мережі" }),
   ).toHaveCount(0);
   await expect(page.getByRole("article")).toHaveCount(2);
+  // Settled and read again: the cursor still in the field.
+  await expect(field).toBeFocused();
   // Typed again, it is this store's again, the other stores offered anew.
   await field.fill("лор");
   await expect(page.getByRole("article")).toHaveCount(1);

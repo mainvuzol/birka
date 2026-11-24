@@ -3155,8 +3155,10 @@ function Workspace({
       "Не вдалося прочитати збережену зміну стану магазину. Не очищайте дані застосунку.",
     cashStorageError &&
       "Не вдалося прочитати збережену операцію каси. Не очищайте дані застосунку; зверніться до менеджера.",
+    // The order's line in every line's form, the shop's «операція»
+    // (audit 2026-11-23, frame P2-3).
     storageError &&
-      "Не вдалося прочитати збережену команду. Створення операцій зупинено. Зверніться до менеджера, не очищайте дані застосунку.",
+      "Не вдалося прочитати збережену операцію із замовленням. Не очищайте дані застосунку; зверніться до менеджера.",
     saleStorageError &&
       "Не вдалося прочитати збережений продаж. Не очищайте дані застосунку; зверніться до менеджера.",
     receiptStorageError &&
@@ -3170,6 +3172,18 @@ function Workspace({
     countStorageError &&
       "Не вдалося прочитати збережений підрахунок інвентаризації. Не очищайте дані застосунку; зверніться до менеджера.",
   ].filter((said): said is string => said !== false);
+  // Any journal unread holds what creates, wherever it is (`blocked` and
+  // each screen's own): said once, the plate's last line, whichever
+  // journals stand in it (audit 2026-11-23, frame P2-3). But «Перевірка
+  // каталогу» is held by its own journal and the order's alone (its
+  // `storageError` below), and it is open to whoever holds
+  // `catalog:confirm`, sellers too: where it is open, the line stands with
+  // those two unread only, never saying what is not so (frame TZ, Д3;
+  // review). Whether every journal should hold it is the owner's reading.
+  const everyScreenHeld =
+    !(canConfirmCatalog || catalogKept) || catalogStorageError || storageError;
+  if (unreadKept.length > 0 && everyScreenHeld)
+    unreadKept.push("Створення операцій зупинено.");
   // Each journal's own screens, where its stub stands; a banner over any
   // other («Усе на бірці» task list, P0-2).
   const saleOwn = tab === "sale";

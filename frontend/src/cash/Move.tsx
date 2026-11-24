@@ -1,4 +1,4 @@
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { JSX, ReactNode, RefObject } from "react";
 import { decimal, money, typedKopecks } from "@/orders/types";
 import type { Store } from "@/orders/types";
@@ -67,6 +67,7 @@ export function Move({
   const wrong = useId();
   // The keypad's: the sum, where the cursor goes back after a refusal.
   const pad = useRef<HTMLDivElement>(null);
+  const refused = useRef<HTMLParagraphElement>(null);
   const [sending, setSending] = useState(false);
   const kinds = drawer.movement_kinds.filter(
     (kind) => directionOf(kind) === direction,
@@ -79,6 +80,16 @@ export function Move({
   // Empty: the open period, after the last close.
   const [forClose, setForClose] = useState("");
   const [problem, setProblem] = useState<string | null>(null);
+  // Each refusal told once drawn: its top brought into view, then the
+  // cursor back in the sum without moving the sheet again — after the
+  // render that put it over the keys, never before it (review, audit
+  // 2026-11-23, orders-cash P2-1; as «Внесок»'s).
+  const [told, setTold] = useState(0);
+  useEffect(() => {
+    if (told === 0) return;
+    refused.current?.scrollIntoView({ block: "nearest" });
+    pad.current?.querySelector("input")?.focus({ preventScroll: true });
+  }, [told]);
   // «150,» is a sum still being typed, never said to be wrong; nothing, or
   // nothing at all, is no sum to move. The keypad takes nothing wrong —
   // keys, a computer's keyboard or a paste alike, two figures after the
@@ -121,9 +132,11 @@ export function Move({
       back(movementDone(outcome.result as Movement));
     } else if (outcome.kind === "refused") {
       // Said in the sheet, what was typed kept, the cursor back in it.
+      // Over the keys, where the sum is (audit 2026-11-23, orders-cash
+      // P2-1).
       buzz("error");
       setProblem(cashErrorText(outcome.error, false, "movement"));
-      requestAnimationFrame(() => pad.current?.querySelector("input")?.focus());
+      setTold((n) => n + 1);
     }
     // Unknown: the sheet stays, held under «Каса»'s banner, what was typed
     // kept — refused later, it is there to record again; confirmed, «Каса»
@@ -191,15 +204,25 @@ export function Move({
               : "Накладну й оплату за нею запише менеджер."}
           </p>
         )}
+        {/* A refusal of the sheet's over its keys, by the sum, as the
+            count's, «Внесок»'s and an invoice's payment's (audit
+            2026-11-23, orders-cash P2-1); the sum's own «з точністю до
+            копійок» stays its line under it. */}
+        {problem && (
+          <p role="alert" ref={refused}>
+            {problem}
+          </p>
+        )}
         {/* The next step after a chip: the keys, already in view. */}
         <div className="move-pad" ref={pad}>
           <Keypad
             label="Сума, грн"
             value={amount}
-            change={(next) => {
-              setAmount(next);
-              setProblem(null);
-            }}
+            // The refusal stays while the sum is mended, as the count's:
+            // gone from over the keys at the first press, it would move
+            // them under the finger (review, audit 2026-11-23). The next
+            // «Видати»/«Внести» or another chip takes it away.
+            change={setAmount}
             disabled={disabled}
             invalid={unread}
             {...(unread ? { describedBy: wrong } : {})}
@@ -251,7 +274,6 @@ export function Move({
             </select>
           </label>
         )}
-        {problem && <p role="alert">{problem}</p>}
       </div>
     </Sheet>
   );
