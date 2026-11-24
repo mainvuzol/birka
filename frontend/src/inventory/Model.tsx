@@ -239,7 +239,9 @@ function Count({ size, units }: { size: string; units: number }): JSX.Element {
 }
 
 type Said =
-  | { kind: "corrected"; corrected: Corrected }
+  // With the warehouse its cell and form named (audit 2026-11-24, goods
+  // P2-2): a size may stand on two. None when the cells stand on one (Д5).
+  | { kind: "corrected"; corrected: Corrected; place: string | undefined }
   | { kind: "priced"; name: string };
 
 /**
@@ -442,7 +444,7 @@ export function Model({
             <Stub state="recorded">
               <p>
                 {said.kind === "corrected"
-                  ? `Коригування записано: ${visible(said.corrected.target.name)} · ${visible(said.corrected.target.size)} — ${reasonLabels[said.corrected.reason]}, облік ${String(said.corrected.adjustment.quantity_before)} → ${String(said.corrected.adjustment.quantity_after)}.`
+                  ? `Коригування записано: ${visible(said.corrected.target.name)} · ${visible(said.corrected.target.size)}${said.place === undefined ? "" : ` · склад «${visible(said.place)}»`} — ${reasonLabels[said.corrected.reason]}, облік ${String(said.corrected.adjustment.quantity_before)} → ${String(said.corrected.adjustment.quantity_after)}.`
                   : `Ціну продажу збережено: ${visible(said.name)}.`}
               </p>
             </Stub>
@@ -707,7 +709,19 @@ export function Model({
               onDone={(corrected) => {
                 setSheet(null);
                 setEditing(null);
-                setSaid({ kind: "corrected", corrected });
+                setSaid({
+                  kind: "corrected",
+                  corrected,
+                  // Only where the cells stand on more than one warehouse:
+                  // one alone needs no name, and a long name would take the
+                  // stub past three lines at 360 (goods Д5).
+                  place:
+                    new Set(fixable.map(({ row }) => row.location_id)).size > 1
+                      ? locations.data.find(
+                          (location) => location.id === editing.location_id,
+                        )?.name
+                      : undefined,
+                });
                 readAgain();
               }}
               onRefused={readAgain}

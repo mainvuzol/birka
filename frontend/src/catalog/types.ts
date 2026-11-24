@@ -88,13 +88,25 @@ export function decidedName(decision: Decision): string {
  * «додано», as it did. */
 export function decidedText(decision: Decision): string {
   const name = visible(decidedName(decision));
+  // A model no candidate names any more (an older proposal): the word
+  // alone, never «: .» (audit 2026-11-24, goods Д1).
+  const tail = name ? `: ${name}.` : ".";
   const made = decision.creation;
-  if (!made) return `Модель обрано: ${name}.`;
+  if (!made) return `Модель обрано${tail}`;
   if (made.family_created === false)
     return made.variant_created === true
-      ? `Колір додано: ${name}.`
-      : `Модель обрано: ${name}.`;
-  return `Модель додано: ${name}.`;
+      ? `Колір додано${tail}`
+      : `Модель обрано${tail}`;
+  return `Модель додано${tail}`;
+}
+/** What a command on «Пропозиція» came to, by the status the server read
+ * after it, never by the button pressed: decided — what `decidedText`
+ * says, as the sheet's; rejected; or saved and still open — a kept «Далі»
+ * checked here (audit 2026-11-24, goods P1-1). */
+export function outcomeText(decision: Decision): string {
+  if (decision.status === "APPLIED") return decidedText(decision);
+  if (decision.status === "REJECTED") return "Пропозицію відхилено.";
+  return "Пропозицію збережено.";
 }
 export function reviewText(reason: string): string {
   const labels: Record<string, string> = {

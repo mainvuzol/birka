@@ -119,7 +119,9 @@ export function Receive({
 }): JSX.Element {
   const [locationId, setLocationId] = useState("");
   const [variant, setVariant] = useState<ReceivableVariant | null>(model);
-  // A model added from an empty search: its stub, till another is chosen.
+  // A model added from an empty search: its stub, till another is chosen
+  // or the delivery is recorded — «Прийняти ще» keeps the model, never
+  // what was said of its making (audit 2026-11-24, goods P2-1).
   const [added, setAdded] = useState<string | null>(null);
   // The chosen model's units of each size, by the size's id.
   const [counts, setCounts] = useState<Record<string, number>>({});
@@ -369,6 +371,7 @@ export function Receive({
       void cache.resetQueries({ queryKey: ["inventory-stock"] });
       void cache.invalidateQueries({ queryKey: ["sale-stock"] });
       setReceived({ receipt: outcome.result, names: all, warehouse });
+      setAdded(null);
       setDraft([]);
       setNotes("");
       setCommandId(crypto.randomUUID());

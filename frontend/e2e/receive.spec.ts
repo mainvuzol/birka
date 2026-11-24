@@ -1305,7 +1305,7 @@ test("a coat the catalogue has not is added from the empty search, in the sheet 
   ]);
 });
 
-test("«Інший колір нашої моделі» with the colour the model has already: «Додати колір · 1 розмір», the server makes nothing new and chooses it — «Модель обрано: … Кількість впишіть тут.», never «додано» (audit 2026-11-23, goods P1-1)", async ({
+test("«Інший колір нашої моделі» with the colour the model has already: «Додати колір · 1 розмір», the server makes nothing new and chooses it — «Модель обрано: … Кількість впишіть тут.», never «додано» (audit 2026-11-23, goods P1-1); kept through a refusal, gone once the delivery is received (audit 2026-11-24, goods P2-1)", async ({
   page,
 }) => {
   const model = `Наявна ${randomUUID().slice(0, 8)}`;
@@ -1355,10 +1355,34 @@ test("«Інший колір нашої моделі» with the colour the mode
   expect(decision.creation.variant_created).toBe(false);
   expect(decision.resolved_variant_id).toBe(existing.product_variant_id);
   await expect(sheet).toHaveCount(0);
-  await expect(
-    page.getByRole("status").filter({ hasText: /^Модель обрано/ }),
-  ).toHaveText(`Модель обрано: ${model} графіт. Кількість впишіть тут.`);
+  const stub = page.getByRole("status").filter({ hasText: /^Модель обрано/ });
+  await expect(stub).toHaveText(
+    `Модель обрано: ${model} графіт. Кількість впишіть тут.`,
+  );
   await expect(page.getByText(/додано/)).toHaveCount(0);
+  // Counted and refused, nothing received: the stub stays (audit
+  // 2026-11-24, goods Д4).
+  await receiveInto(page, "Каса-склад");
+  await plus(page, "M", 1);
+  await refuseOnce(page, "**/api/v1/inventory/receipts", 422);
+  await recordReceipt(page, 1).click();
+  await expect(page.getByRole("alert")).toHaveText(
+    "Нічого не прийнято, список збережено. Перевірте рядки.",
+  );
+  await expect(stub).toBeVisible();
+  // Received: «Прийняти ще» keeps the model, never what was said of its
+  // making (audit 2026-11-24, goods P2-1).
+  await recordReceipt(page, 1).click();
+  await expect(
+    page.getByRole("heading", { name: /^Прийшло 1 шт\./ }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Прийняти ще" }).click();
+  await expect(
+    page.getByRole("button", {
+      name: new RegExp(`^Змінити модель ${model} графіт`),
+    }),
+  ).toBeVisible();
+  await expect(stub).toHaveCount(0);
 });
 
 test("without the right to create or to confirm in the catalogue, an empty search only says so: no model is offered to add (stage 2, goods task list, P0-1)", async ({

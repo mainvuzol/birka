@@ -13,7 +13,7 @@ import {
   toTill,
   units,
 } from "./fixtures";
-import type { Page, Response, Route } from "@playwright/test";
+import type { Locator, Page, Response, Route } from "@playwright/test";
 import { createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
 
@@ -331,6 +331,104 @@ test("inside Telegram a free cell's tap in «Виправити залишок»
     { type: "selection_change" },
   ]);
   await expect(form.getByRole("group", { name: "Причина" })).toBeVisible();
+});
+
+/** «Виправити залишок» on the model's detail: «M» on `where` corrected
+ * from 1 to 0 by «Перерахунок», the stub's words back, each body's
+ * warehouse kept in `sent`. */
+async function correctToNothing(
+  page: Page,
+  name: string,
+  where: string,
+  sent: { location_id: string }[],
+): Promise<Locator> {
+  await page.route("**/api/v1/inventory/adjustments", async (route) => {
+    sent.push(route.request().postDataJSON() as { location_id: string });
+    await route.fulfill({
+      json: {
+        id: "20000000-0000-4000-8000-000000000001",
+        movement_id: "20000000-0000-4000-8000-000000000002",
+        quantity_before: 1,
+        quantity_after: 0,
+      },
+    });
+  });
+  await enter(page);
+  await openModel(page, "кокон", name);
+  await page.getByRole("button", { name: "Виправити залишок" }).click();
+  const sheet = page.getByRole("dialog", { name });
+  await expect(sheet).toHaveAttribute("data-ready", "");
+  await sheet
+    .getByRole("group", { name: "Який розмір виправити" })
+    .getByRole("button", { name: `M, ${where}, в обліку 1`, exact: true })
+    .click();
+  const form = page.getByRole("dialog", { name: `${name} · M` });
+  await form
+    .getByRole("group", { name: "Причина" })
+    .getByRole("button", { name: "Перерахунок", exact: true })
+    .click();
+  await form.getByLabel("Фактично, шт.").fill("0");
+  await form
+    .getByRole("button", { name: "Записати · −1 шт.", exact: true })
+    .click();
+  return page.getByText(/^Коригування записано:/);
+}
+
+/** The stub at 360 in both themes: three lines at most, nothing scrolls
+ * sideways. */
+async function threeLinesAtMost(page: Page, stub: Locator): Promise<void> {
+  for (const scheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    expect(
+      await stub.evaluate((node) =>
+        Math.round(
+          node.getBoundingClientRect().height /
+            parseFloat(getComputedStyle(node).lineHeight),
+        ),
+      ),
+    ).toBeLessThanOrEqual(3);
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth > innerWidth,
+      ),
+    ).toBe(false);
+  }
+}
+
+test("a correction recorded on a model's detail names its warehouse on its stub, a size standing on two: «… · M · склад «Свій» — …», three lines at most at 360 in both themes (audit 2026-11-24, goods P2-2)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  await shelves(page, {
+    locations: [place(MAIN, "Основний"), place(OWN, "Свій")],
+    selling: [[row(MAIN, "M", 3, 1), row(OWN, "M", 1)]],
+  });
+  const sent: { location_id: string }[] = [];
+  const stub = await correctToNothing(page, MODEL, "Свій", sent);
+  await expect(stub).toHaveText(
+    `Коригування записано: ${MODEL} · M · склад «Свій» — Перерахунок, облік 1 → 0.`,
+  );
+  expect(sent.map((body) => body.location_id)).toEqual([OWN]);
+  await threeLinesAtMost(page, stub);
+});
+
+test("a correction where the model's cells stand on one warehouse names none: long names, as a shop may give them, keep the stub to three lines at 360 (audit 2026-11-24, goods Д5)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  const long = "Кокон оверсайз графітовий меланж";
+  const away = "Склад біля примірочної, другий поверх";
+  await shelves(page, {
+    locations: [place(OWN, away)],
+    selling: [[row(OWN, "M", 1, 0, fixture.variant_id, long)]],
+  });
+  const sent: { location_id: string }[] = [];
+  const stub = await correctToNothing(page, long, away, sent);
+  await expect(stub).toHaveText(
+    `Коригування записано: ${long} · M — Перерахунок, облік 1 → 0.`,
+  );
+  expect(sent.map((body) => body.location_id)).toEqual([OWN]);
+  await threeLinesAtMost(page, stub);
 });
 
 test("six sizes, «?» and «Разом» fit a 360 phone without the grid scrolling; a paused warehouse is grey, said once under the grid (sections task list, P0-6)", async ({

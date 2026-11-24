@@ -12395,3 +12395,53 @@ changes; nothing recorded or sent changes; no server change, no migration.
 - **Not in it** (owner-held): В23-К1 (whom the plate tells to call); money
   P2-5 (Д4, В22-Г1); goods P2-3 (б) (В22-Т1 / Н2); goods P2-5 of
   2026-11-20 (В20-Т1).
+
+## Chosen in chat — 2026-11-25 (audit 2026-11-24, batch 1: «Корінець каже, що і де» — a proposal's outcome said by the server's answer; the new model's stub gone once its delivery is received; a correction's stub names its warehouse; goods P1-1, P2-1, P2-2)
+
+The user's pick after audit 2026-11-24: «Both, goods first» — this is the
+first batch; the second («В руці — те, що на екрані»: frame P2-1, money
+P2-1, sale P2-1) follows. No right, check, journal, command or step
+changes; nothing recorded or sent changes; no server change, no migration.
+
+- **«Пропозиція» says what a command came to, by the server's answer**
+  (goods P1-1; catalogue identity unchanged — words only from the
+  proposal the server read after the command). Every command on the
+  screen but a name's answer is said by the status it came back with:
+  decided (`APPLIED`) — `decidedText`, as the sheet «Нова модель» says it
+  («Модель обрано: …», «Модель додано: …», «Колір додано: …»); rejected —
+  «Пропозицію відхилено.»; still open — «Пропозицію збережено.» (a kept
+  «Далі» checked here). An unfinished creation cancelled from the sheet on
+  this screen is «Пропозицію відхилено.» too; a sheet merely closed says
+  nothing. A name's answer is said as before. «Рішення збережено.» (from
+  the first catalogue screen, #28) is gone. A confirmed proposal names its
+  model in view — «Обраний товар: …», where a created one says «Збережений
+  товар: …»; none of its candidates named any more, no line and «Модель
+  обрано.» alone (Д1). The fold «Цей опис — назва товару?» as before;
+  felt as before.
+- **The new model's stub goes once its delivery is received** (goods
+  P2-1): «Модель додано: … Кількість впишіть тут.» (or «Колір додано» /
+  «Модель обрано») stands under the model chosen until another is chosen
+  or the delivery is recorded; «Прийняти ще» keeps the warehouse, the
+  model and the way, as decided before. A refused or kept delivery keeps
+  it (Д4).
+- **A correction's stub on a model's detail names its warehouse** (goods
+  P2-2): «Коригування записано: Кокон графіт · M · склад «Свій» —
+  Перерахунок, облік 1 → 0.», as its cell and form name it; a size may
+  stand on two. Only where the model's correction cells stand on more
+  than one warehouse (Д5, taken: long names — «Кокон оверсайз графітовий
+  меланж» on «Склад біля примірочної, другий поверх» — took the stub to
+  five lines at 360); one warehouse alone, the stub without it, three
+  lines at most. Long names on two warehouses still take more than three
+  lines: the warehouse is what tells the two apart, kept. «Інвентаризація»'s
+  entry keeps its words — its warehouse is the chip over the stub.
+- **Review, taken** (2026-11-25): a creation's sheet speaks only when
+  its unfinished creation is cancelled — on «Нова пропозиція» and on
+  «Створити нову» of a proposal's own screen alike; closed or left, it
+  says nothing, whatever its proposal came to meanwhile. The word is the
+  status the server read, so a proposal another reviewer rejected first
+  is «Пропозицію відхилено.» as well — as the TZ chose. A kept correction
+  settled later from the app's notice names nothing on the detail (as
+  before; out of this batch).
+- **Not in it** (owner-held): В24-Т1 (a colour of our model with no
+  colour typed, goods Н1); goods P2-3 (б) (В22-Т1 / Н2); goods P2-5 of
+  2026-11-20 (В20-Т1); Н3 (the detail's pages) waits a measurement.
