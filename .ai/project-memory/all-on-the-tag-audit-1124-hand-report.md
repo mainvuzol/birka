@@ -96,7 +96,12 @@ Runs (local, `mobile-chromium`, the isolated stand):
   times each, 18 passed (58 s).
 - `tsc --noEmit` and eslint clean; prettier on files it owns at HEAD,
   hand-formatted hunks elsewhere (App.tsx, Sale.tsx, credits-debt).
-- The full suite runs in CI (no local full run).
+- The full suite runs in CI (no local full run). CI on #249: 1282/1283 —
+  `today`'s «three stores: a row each…», a journey of no change here,
+  passed in 1.1 s but its page closed under three warehouses' reads still
+  on their way, and the teardown hung. `today.spec` now waits those reads
+  out after each journey: with the reads held 400 ms, 4 of 4 failed before
+  and 4 of 4 pass after; the spec 45/45.
 
 Mutants (`mutate92.py`, each applied, its journey run, the source
 restored) — 28 of 28 caught:
