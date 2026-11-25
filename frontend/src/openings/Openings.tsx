@@ -64,6 +64,7 @@ import { Sheet } from "@/shared/Sheet";
 import { Stub } from "@/shared/Stub";
 import { buzz, buzzRefusal, useMainButton } from "@/shared/telegram";
 import { Sticker } from "@/shared/Sticker";
+import { Toast } from "@/shared/Toast";
 
 /**
  * «Початкові залишки»: the goods already in a shop, entered as a list.
@@ -514,6 +515,22 @@ function OpeningPlaceholder({
       </div>
     </>
   );
+}
+
+/**
+ * A part just added, as its write answered it (audit 2026-11-25, goods
+ * P1-1): lines typed, their count; a file, its lines, and those whose photo
+ * and line another file of the list names too (ADR-0014) — never the
+ * list's own count read after it. The repeats in a word: the whole
+ * sentence took three lines at 360 beside «Файли списку», where the file's
+ * card says it in full (the TZ's Д5).
+ */
+function addedText(part: StockPart): string {
+  if (part.kind === "PASTED") return `Рядки додано: ${number(part.lines)}.`;
+  const added = `Файл додано: рядків ${number(part.lines)}`;
+  return part.photo_lines_elsewhere > 0
+    ? `${added}, повторів ${number(part.photo_lines_elsewhere)}.`
+    : `${added}.`;
 }
 
 /** A list's name, as the shop called it; guarded, since a file may name it. */
@@ -1353,6 +1370,11 @@ function ListView({
   const [screen, setScreen] = useState<ListScreen>("lines");
   // The tag's ⋯, the other lines, the rejection: one sheet at a time.
   const [sheet, setSheet] = useState<"ways" | "others" | "reject" | null>(null);
+  // A file or lines just added: a toast on the list once it is back, from
+  // the write's answer (audit 2026-11-25, goods P1-1).
+  const [added, setAdded] = useState<{ part: StockPart; at: number } | null>(
+    null,
+  );
   // An approval refused, said under the tag.
   const [said, setSaid] = useState<string | null>(null);
   // Why the list is rejected, kept by the list while its sheet is closed
@@ -1435,6 +1457,10 @@ function ListView({
   // screen left for them (review).
   const at: ListScreen =
     (screen === "file" || screen === "typed") && !editable ? "lines" : screen;
+  // The toast is the list's: gone with it, to a line or a screen of its own.
+  useEffect(() => {
+    if (at !== "lines" || editing !== null) setAdded(null);
+  }, [at, editing]);
   useEffect(() => {
     if (!editable && (screen === "file" || screen === "typed")) {
       from.current = "more";
@@ -1631,12 +1657,13 @@ function ListView({
         title={listName(list)}
         warehouse={warehouse}
         blocked={blocked}
-        done={async () => {
+        done={async (part) => {
           // Read again first, under the screen's eyelet: the list comes
           // back with what was added, never a moment of the list before it
-          // — «Затвердити» over a line just added.
+          // — «Затвердити» over a line just added; then said.
           await refresh();
           back();
+          setAdded({ part, at: Date.now() });
         }}
         refresh={refresh}
         leave={() => {
@@ -1652,12 +1679,13 @@ function ListView({
         token={token}
         title={listName(list)}
         blocked={blocked}
-        done={async () => {
+        done={async (part) => {
           // Read again first, under the screen's eyelet: the list comes
           // back with what was added, never a moment of the list before it
-          // — «Затвердити» over a line just added.
+          // — «Затвердити» over a line just added; then said.
           await refresh();
           back();
+          if (part) setAdded({ part, at: Date.now() });
         }}
         refresh={refresh}
         leave={() => {
@@ -2030,6 +2058,27 @@ function ListView({
             setSheet(null);
           }}
           refresh={refresh}
+        />
+      )}
+      {added && (
+        // A file whose lines repeat other files' photos says so at once,
+        // its way to the list's files — where it is removed, if it was
+        // added by mistake (audit 2026-11-25, goods P1-1).
+        <Toast
+          key={added.at}
+          text={addedText(added.part)}
+          {...(added.part.photo_lines_elsewhere > 0 && hasFiles
+            ? {
+                action: "Файли списку",
+                act: () => {
+                  setAdded(null);
+                  go("files");
+                },
+              }
+            : {})}
+          gone={() => {
+            setAdded(null);
+          }}
         />
       )}
     </>

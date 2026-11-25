@@ -644,7 +644,7 @@ test("from paper, the press names both warehouses the lines leave from", async (
   ).toContainText("склади: Спільний, Свій");
 });
 
-test("inside Telegram a model found in the catalogue at the till is felt as a choice; the one chosen, tapped again, nothing — the list stays open here alone (audit 2026-11-15, goods P2-3; review)", async ({
+test("inside Telegram a model found in the catalogue at the till is felt as a choice; the one chosen, tapped again, nothing — the list stays open here alone (audit 2026-11-15, goods P2-3; review); so is the warehouse it leaves from (audit 2026-11-25, sale P2-1 (а))", async ({
   page,
 }) => {
   const felt = await haptics(page);
@@ -671,14 +671,21 @@ test("inside Telegram a model found in the catalogue at the till is felt as a ch
   await openStore(page, "Основний MAIN");
   await toTill(page);
   await page.getByRole("button", { name: "Знайти в каталозі" }).click();
-  await page
-    .getByRole("group", { name: "З якого складу віддаєте?" })
-    .getByRole("button", { name: "Спільний" })
-    .click();
+  const at = page.getByRole("group", { name: "З якого складу віддаєте?" });
+  const sharedChip = at.getByRole("button", { name: "Спільний" });
+  const ownChip = at.getByRole("button", { name: "Свій" });
+  const selection = { type: "selection_change" };
+  // A warehouse chosen — a choice; the same again, nothing; another, a
+  // choice (audit 2026-11-25, sale P2-1 (а)).
+  await feels(felt, () => sharedChip.click(), [selection]);
+  await expect(sharedChip).toHaveAttribute("aria-pressed", "true");
+  await feels(felt, () => sharedChip.click(), []);
+  await feels(felt, () => ownChip.click(), [selection]);
+  await expect(ownChip).toHaveAttribute("aria-pressed", "true");
+  await feels(felt, () => sharedChip.click(), [selection]);
   const panel = page.getByRole("region", { name: "Товар з каталогу" });
   await panel.getByLabel("Пошук у каталозі").fill("лоран");
   const picked = panel.getByRole("radio", { name: "Лоран беж" });
-  const selection = { type: "selection_change" };
   await feels(felt, () => picked.click(), [selection]);
   await expect(picked).toHaveAttribute("aria-checked", "true");
   await feels(felt, () => picked.click(), []);

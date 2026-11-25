@@ -7,7 +7,12 @@ import { ApiError, api } from "@/shared/api";
 import { Eyelet } from "@/shared/Eyelet";
 import { ModeSwitch } from "@/shared/ModeSwitch";
 import { Sheet } from "@/shared/Sheet";
-import { buzz, hideKeyboard, useMainButton } from "@/shared/telegram";
+import {
+  buzz,
+  buzzRefusal,
+  hideKeyboard,
+  useMainButton,
+} from "@/shared/telegram";
 import { enterGoes } from "@/shared/enter";
 import { visible } from "@/shared/visible";
 import { Placeholder } from "@/shared/Placeholder";
@@ -354,8 +359,10 @@ export function NewModel({
     const result = await submitCatalogCommand(journalKey, token, command);
     const after = useCatalogCommand.getState();
     if (result) answered(command, result, resent);
+    // Felt only as the server's refusal: an attempt the phone could not
+    // write down was never sent (audit 2026-11-25, frame P2-1 (б)).
     else if (!resent && after.pending === null && after.error !== null)
-      buzz("error");
+      buzzRefusal(after.error);
   }
   function next(): void {
     if (blocked || !text.trim()) return;

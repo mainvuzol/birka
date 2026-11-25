@@ -1914,7 +1914,7 @@ test("«Клієнт забрав» refused by the server says why as the till's
   expect(server.sent.map((each) => each.step)).toEqual(["collect"]);
 });
 
-test("a collected order in parts seen later: what is owed so far as the receipt shows it, heard as one sentence; nothing owed, nothing in the debt's colour (audit 2026-11-15, orders-cash P2-1)", async ({
+test("a collected order in parts seen later: what is owed so far as the receipt shows it, heard as one sentence; nothing owed, nothing in the debt's colour and no next payment, seen or heard (audit 2026-11-15, orders-cash P2-1; audit 2026-11-25, orders-cash P2-2)", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 360, height: 640 });
@@ -1953,6 +1953,9 @@ test("a collected order in parts seen later: what is owed so far as the receipt 
   await open(page, collected("0.00"));
   await expect(owes).toHaveText(/^Покупець винен 0,00\sгрн$/);
   await expect(page.locator(".owed-left")).toHaveCount(0);
+  // A debt closed has no next payment: «Внесок» takes an open one alone.
+  await expect(page.getByText(/Наступні внески/)).toHaveCount(0);
+  await expect(heard).toHaveText(/^Покупець винен 0,00\sгрн\.$/);
 });
 
 test("a collected order whose way is not given to this person offers no «Змінити спосіб оплати» (G32; review, 2026-10-24)", async ({

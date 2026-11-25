@@ -2,7 +2,9 @@ import {
   changeStore,
   test,
   expect,
+  haptics,
   listWay,
+  loseOnce,
   openStore,
   rejectList,
   removePart,
@@ -706,6 +708,11 @@ test("a file fills a new list: lines show their photo and reading, a split the l
   // screen (P0-1).
   await expect(adding).toHaveCount(0);
   expect(await page.locator(".pay-panel.order-dock").count()).toBe(0);
+  // Said on the list, from the write's answer (audit 2026-11-25, goods
+  // P1-1); the check at 360 under it stands as before.
+  await expect(
+    page.getByRole("status").filter({ hasText: /^Файл додано: рядків 1\.$/ }),
+  ).toBeVisible();
 
   // At 360 × 640, light and dark, a list in work of two files, a line
   // still waiting — no «Затвердити», even for the moment the list is read
@@ -2142,6 +2149,237 @@ async function fitsWidth(page: Page): Promise<boolean> {
       document.documentElement.clientWidth,
   );
 }
+
+test("inside Telegram a file added is felt and said as the list's other records are: a kept command naming a file removed since, one success and one toast for its two sends; no answer — the network lost, a gateway's 503 — nothing; refused, an error; added, one success and «Файл додано: рядків 1.» on the list (audit 2026-11-25, goods P1-1)", async ({
+  page,
+}) => {
+  const felt = await haptics(page);
+  const coat = await model(page);
+  const source = `Зошит у Telegram ${word()}`;
+  const parts = "**/api/v1/snapshots/*/parts?**";
+  const posted: string[] = [];
+  page.on("request", (request) => {
+    if (
+      request.method() === "POST" &&
+      /\/snapshots\/[^/]+\/parts$/.test(new URL(request.url()).pathname)
+    )
+      posted.push(request.url());
+  });
+  await noListWaits(page, fixture.file_lost_location_id);
+  await openings(page);
+  const form = await newFromFile(page, fixture.file_lost_location_id);
+  await choose(
+    form,
+    "перший.json",
+    stockFile(
+      [{ text: `${coat} сірий M 2 шт`, photo: "T1.jpg", photo_line: 1 }],
+      {
+        source,
+      },
+    ),
+  );
+  await form.getByRole("button", { name: "Зберегти список" }).click();
+  await expect(page.getByRole("heading", { name: source })).toBeVisible();
+  // A file added, its answer lost after the server added it; removed since.
+  const second = stockFile([
+    { text: `${coat} сірий L 1 шт`, photo: "T2.jpg", photo_line: 1 },
+  ]);
+  await listWay(page, "Додати файл");
+  let adding = page.getByRole("form", { name: "Додати файл" });
+  await choose(adding, "другий.json", second);
+  const lostAdded = await loseOnce(page, parts, "network", true);
+  await adding.getByRole("button", { name: "Додати до списку" }).click();
+  await lostAdded();
+  await expect(adding.getByRole("alert")).toHaveText(
+    "Невідомо, чи додано файл. Натисніть ще раз — той самий файл не додасться двічі.",
+  );
+  await page.getByRole("button", { name: `Назад до «${source}»` }).click();
+  const reopen = async (): Promise<void> => {
+    await page
+      .getByRole("button", { name: "Назад до «Початкові залишки»" })
+      .click();
+    await page
+      .getByRole("article", { name: `Список ${source}` })
+      .getByRole("button", { name: "Відкрити" })
+      .click();
+    await expect(page.getByRole("heading", { name: source })).toBeVisible();
+  };
+  await reopen();
+  await listWay(page, "Файли списку · 2");
+  const two = page.getByRole("article", { name: "Файл 2" });
+  await removePart(page, two, "Прибрати файл");
+  await expect(two).toContainText(/Прибрано: Оля, /);
+
+  // Inside a Telegram that buzzes, the list opened again.
+  await page.goto("about:blank");
+  await page.goto(
+    `/#${new URLSearchParams({ tgWebAppData: initData(), tgWebAppVersion: "8.0" }).toString()}`,
+  );
+  await openStore(page, "Основний MAIN");
+  await section(page, "Початкові залишки");
+  await page
+    .getByRole("article", { name: `Список ${source}` })
+    .getByRole("button", { name: "Відкрити" })
+    .click();
+  await expect(page.getByRole("heading", { name: source })).toBeVisible();
+  const main = async (): Promise<unknown> =>
+    (
+      await page.evaluate(() =>
+        (window as unknown as { told: [string, unknown][] }).told
+          .filter(([name]) => name === "web_app_setup_main_button")
+          .map(([, data]) => data),
+      )
+    ).at(-1) ?? null;
+  // «Додати до списку» is its MainButton: pressed once it may be.
+  const press = async (): Promise<void> => {
+    await expect.poll(main).toMatchObject({
+      text: "Додати до списку",
+      is_visible: true,
+      is_active: true,
+    });
+    await page.evaluate(() => {
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          data: JSON.stringify({ eventType: "main_button_pressed" }),
+          source: window.parent,
+        }),
+      );
+    });
+  };
+  const start = (await felt()).length;
+  const since = async (): Promise<unknown[]> =>
+    (await felt())
+      .slice(start)
+      .filter((each) => (each as { type: string }).type === "notification");
+  const error = { type: "notification", notification_type: "error" };
+  const success = { type: "notification", notification_type: "success" };
+  const toast = page.getByRole("status").filter({ hasText: /^Файл додано:/ });
+
+  // The same file again: its kept command names the removed file, so it
+  // goes once more as new — two sends, one success, one toast.
+  await listWay(page, "Додати файл");
+  adding = page.getByRole("form", { name: "Додати файл" });
+  await choose(adding, "другий.json", second);
+  const sent = posted.length;
+  await press();
+  await expect(adding).toHaveCount(0);
+  expect(posted.length).toBe(sent + 2);
+  await expect(toast).toHaveText("Файл додано: рядків 1.");
+  await expect.poll(since).toEqual([success]);
+
+  // The list's toast is the list's: gone with it, never back with «←».
+  await listWay(page, "Додати файл");
+  await expect(toast).toHaveCount(0);
+  await page.getByRole("button", { name: `Назад до «${source}»` }).click();
+  await expect(page.getByRole("heading", { name: source })).toBeVisible();
+  // Read at once: a toast come back would go by itself within a retry's
+  // wait (review).
+  expect(await toast.count()).toBe(0);
+
+  // Another file: no answer, nothing; refused, an error.
+  await listWay(page, "Додати файл");
+  adding = page.getByRole("form", { name: "Додати файл" });
+  const third = stockFile([
+    { text: `${coat} сірий S 1 шт`, photo: "T3.jpg", photo_line: 1 },
+  ]);
+  await choose(adding, "третій.json", third);
+  for (const how of ["network", 503] as const) {
+    const lost = await loseOnce(page, parts, how);
+    await press();
+    await lost();
+    await expect(
+      page
+        .getByText(/^(Невідомо, чи додано файл|Сервер не відповідає)/)
+        .first(),
+    ).toBeVisible();
+  }
+  expect(await since()).toEqual([success]);
+  await refuseOnce(page, parts, 422);
+  await press();
+  await expect.poll(since).toEqual([success, error]);
+  await expect(
+    adding.getByText("Файл не додано. Перевірте його.", { exact: true }),
+  ).toBeVisible();
+  // Added: one success, said on the list.
+  await choose(adding, "третій.json", third);
+  await press();
+  await expect(adding).toHaveCount(0);
+  await expect(toast).toHaveText("Файл додано: рядків 1.");
+  await expect.poll(since).toEqual([success, error, success]);
+  await page.waitForTimeout(500);
+  expect(await since()).toEqual([success, error, success]);
+});
+
+test("a file whose lines repeat another file's photo and line says so at once: «Файл додано: рядків 1, повторів 1.» in two lines at 360, its «Файли списку» showing the file's own warning, where it is removed (audit 2026-11-25, goods P1-1, Д5)", async ({
+  page,
+}) => {
+  const coat = await model(page);
+  const source = `Зошит з повтором ${word()}`;
+  await noListWaits(page, fixture.file_lost_location_id);
+  await openings(page);
+  const form = await newFromFile(page, fixture.file_lost_location_id);
+  const line = {
+    text: `${coat} сірий M 2 шт`,
+    photo: "IMG_0001.jpg",
+    photo_line: 1,
+  };
+  await choose(form, "перший.json", stockFile([line], { source }));
+  await form.getByRole("button", { name: "Зберегти список" }).click();
+  await expect(page.getByRole("heading", { name: source })).toBeVisible();
+  await listWay(page, "Додати файл");
+  const adding = page.getByRole("form", { name: "Додати файл" });
+  // The same photo and its line, read otherwise: a file in its own right,
+  // repeating the first.
+  await choose(
+    adding,
+    "повтор.json",
+    stockFile([{ ...line, text: `${coat} сірий L 1 шт` }]),
+  );
+  await adding.getByRole("button", { name: "Додати до списку" }).click();
+  await expect(adding).toHaveCount(0);
+  const toast = page.getByRole("status").filter({ hasText: /^Файл додано:/ });
+  await expect(toast.locator(".toast-text")).toHaveText(
+    "Файл додано: рядків 1, повторів 1.",
+  );
+  // Held while the cursor is in it: measured, it is still there to tap
+  // (review).
+  await toast.getByRole("button", { name: "Файли списку" }).focus();
+  // At 360, light and dark: within the screen, two lines at most.
+  const size360 = page.viewportSize();
+  await page.setViewportSize({ width: 360, height: 640 });
+  for (const scheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    const box = await toast.boundingBox();
+    expect(box).not.toBeNull();
+    expect((box?.x ?? -1) >= 0).toBe(true);
+    expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(360);
+    // The words' line boxes, as the inline text lays them out.
+    const lines = await toast.locator(".toast-text").evaluate((text) => {
+      const range = document.createRange();
+      range.selectNodeContents(text);
+      return new Set(
+        [...range.getClientRects()].map((rect) => Math.round(rect.top)),
+      ).size;
+    });
+    expect(lines).toBeGreaterThan(0);
+    expect(lines).toBeLessThanOrEqual(2);
+    expect(await fitsWidth(page)).toBe(true);
+    await page.screenshot({
+      path: `test-results/openings-file-repeat-toast-360-${scheme}.png`,
+    });
+  }
+  await page.emulateMedia({ colorScheme: "light" });
+  if (size360) await page.setViewportSize(size360);
+  // A tap carried from the press is let go for a moment.
+  await page.waitForTimeout(800);
+  await toast.getByRole("button", { name: "Файли списку" }).click();
+  const two = page.getByRole("article", { name: "Файл 2" });
+  await expect(two).toContainText(
+    "Рядків цього файлу, що вже є в інших файлах списку (те саме фото й рядок): 1. Якщо файл додано помилково, приберіть його.",
+  );
+  await removePart(page, two, "Прибрати файл");
+  await expect(two).toContainText(/Прибрано: Оля, /);
+});
 
 test("on a narrow phone a file's long name breaks, never pushes the page sideways; an answer the list has no room for says so", async ({
   page,

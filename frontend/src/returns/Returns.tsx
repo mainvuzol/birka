@@ -770,7 +770,8 @@ function ReturnForm({
     });
     // A buzz in the hand once the server answers, as at the till (P2-5); a
     // lost answer is its journal's warning (spec §4.4; «Усе на бірці» task
-    // list, P1-2), a kept return confirmed later, none.
+    // list, P1-2); a kept return confirmed later, a success once, felt
+    // where it is confirmed (`checkReturn`; audit 2026-11-24, sale P2-1).
     if (outcome.kind === "done") {
       buzz("success");
       setCommandId(crypto.randomUUID());
@@ -899,6 +900,11 @@ function ReturnForm({
                           data-location={location.id}
                           aria-pressed={places[item.id] === location.id}
                           onClick={() => {
+                            // Another warehouse — a choice; the same one,
+                            // nothing (audit 2026-11-25, sale P2-1 (а)).
+                            if (places[item.id] !== location.id) {
+                              buzz("selection");
+                            }
                             setPlaces({ ...places, [item.id]: location.id });
                           }}
                         >

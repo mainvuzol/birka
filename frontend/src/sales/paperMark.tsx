@@ -7,6 +7,7 @@ import { Banner } from "@/shared/Banner";
 import { Icon } from "@/shared/Icon";
 import { Sheet } from "@/shared/Sheet";
 import { SwitchRow } from "@/shared/SwitchRow";
+import { buzz } from "@/shared/telegram";
 import { visible } from "@/shared/visible";
 import { Unread } from "@/shared/Unread";
 import type { Store } from "@/orders/types";
@@ -143,7 +144,10 @@ export function paperRefusal(reason: unknown, days?: unknown): string | null {
  * Which paper the series is, said once by whoever types it (owner decision,
  * 2026-10-16): the first days', written while a warehouse waited for its
  * opening list, or an outage's. The mark is permanent, so nothing is chosen
- * for them; until one is, nothing typed from paper is sent.
+ * for them; until one is, nothing typed from paper is sent. A radio's
+ * `onChange` runs only when the choice changes, so each is felt as a choice
+ * there and the one chosen, tapped again, as nothing (audit 2026-11-25,
+ * sale P2-1 (а)); the same for who sold or took it in `PaperSheet`.
  */
 export function PaperKind({
   storeId,
@@ -163,6 +167,7 @@ export function PaperKind({
           name={name}
           checked={firstDays === true}
           onChange={() => {
+            buzz("selection");
             setFirstDays(storeId, true);
           }}
         />
@@ -174,6 +179,7 @@ export function PaperKind({
           name={name}
           checked={firstDays === false}
           onChange={() => {
+            buzz("selection");
             setFirstDays(storeId, false);
           }}
         />
@@ -315,6 +321,7 @@ export function PaperSheet({
             name={group}
             checked={chosen === null}
             onChange={() => {
+              buzz("selection");
               name(null);
             }}
           />
@@ -327,6 +334,7 @@ export function PaperSheet({
               name={group}
               checked={chosen === person.user_id}
               onChange={() => {
+                buzz("selection");
                 name(person.user_id);
               }}
             />

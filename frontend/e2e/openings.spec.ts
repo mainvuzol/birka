@@ -851,7 +851,7 @@ test("inside Telegram «Новий список» is felt: a warehouse chosen an
   await noListWaits(page, fixture.opening_location_id);
 });
 
-test("inside Telegram a line's answer, a part removed, an approval and a rejection left without an answer — the network lost, a gateway's 503 — are felt as nothing: each may have been recorded; refused, as an error; recorded, as a success (audit 2026-11-24, frame P2-1)", async ({
+test("inside Telegram a line's answer, a part removed, an approval and a rejection left without an answer — the network lost, a gateway's 503 — are felt as nothing: each may have been recorded; refused, as an error; recorded, as a success (audit 2026-11-24, frame P2-1) — lines added by hand too, said by a toast on the list (audit 2026-11-25, goods P1-1)", async ({
   page,
 }) => {
   const { main, felt, pressMain } = await telegram(page);
@@ -916,14 +916,29 @@ test("inside Telegram a line's answer, a part removed, an approval and a rejecti
   felts.push(success);
   await expect.poll(since).toEqual(felts);
 
-  // A part typed by hand, removed.
+  // A part typed by hand: added as the rest are felt, and said by a toast
+  // on the list, from the write's answer (audit 2026-11-25, goods P1-1).
   await listWay(page, "Додати рядки вручну");
   const typing = page.getByRole("form", { name: "Додати рядки вручну" });
   await typing
     .getByLabel("Рядки — кожен товар з нового рядка, як написано")
     .fill(`${coat} сірий L 1 шт`);
-  await press(/^Додати рядки/);
+  const addIt = (): Promise<void> => press(/^Додати рядки/);
+  await unanswered(
+    "**/api/v1/snapshots/*/parts?**",
+    addIt,
+    page.getByText(/^(Невідомо, чи додано рядки|Сервер не відповідає)/).first(),
+  );
+  await expect(
+    typing.getByText("Рядки не додано. Перевірте їх.", { exact: true }),
+  ).toBeVisible();
+  await addIt();
   await expect(typing).toHaveCount(0);
+  felts.push(success);
+  await expect.poll(since).toEqual(felts);
+  await expect(
+    page.getByRole("status").filter({ hasText: /^Рядки додано: 1\.$/ }),
+  ).toBeVisible();
   await listWay(page, /^Файли списку/);
   const typed = page.getByRole("article", { name: "Файл 2" });
   const removeIt = async (): Promise<void> => {

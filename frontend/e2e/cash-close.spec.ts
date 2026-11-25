@@ -176,6 +176,8 @@ async function stubDrawer(
     answer: Record<string, unknown> | number;
     /** The server out of reach for the drawer's reads. */
     lost?: boolean;
+    /** The drawer's reads answered only once this settles. */
+    hold?: Promise<void>;
   },
 ): Promise<{ closes: Request[]; reads: () => number }> {
   const closes: Request[] = [];
@@ -186,6 +188,7 @@ async function stubDrawer(
       await route.abort("connectionreset");
       return;
     }
+    if (state.hold) await state.hold;
     await route.fulfill({ json: state.now });
   });
   await page.route("**/api/v1/cash/closes?**", async (route, request) => {
@@ -505,6 +508,98 @@ test("the count: the card reads the drawer again, a task's screen with the app's
   ).toBeVisible();
   await expect(menu(page)).toBeVisible();
 });
+
+for (const [name, theme, scheme] of [
+  ["light", { bg_color: "#ffffff", text_color: "#000000" }, "light"],
+  ["dark", { bg_color: "#17212b", text_color: "#f5f5f5" }, "dark"],
+] as const)
+  for (const opening of [false, true]) {
+    const title = opening ? "Перший підрахунок" : "Закрити касу";
+    test(`in the ${name} theme «${title}», pressed, keeps its look while the drawer is read again — its eyelet the turning ring, a second press no second read; where motion is reduced, the ring dashed (audit 2026-11-25, orders-cash P2-1)`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width: 360, height: 640 });
+      const state: {
+        now: Drawer;
+        answer: Record<string, unknown>;
+        hold?: Promise<void>;
+      } = {
+        now: opening
+          ? drawer({ last_close: null, next_is_opening: true })
+          : drawer(),
+        answer: closeOf(),
+      };
+      const server = await stubDrawer(page, state);
+      await cash(page, olya, { theme });
+      expect(
+        await page.evaluate(() => document.documentElement.dataset.theme),
+      ).toBe(scheme);
+      const tag = page.getByRole("button", { name: title, exact: true });
+      await expect(tag).toBeEnabled();
+      const eyelet = tag.locator(".cash-card-eyelet");
+      await expect(eyelet).toHaveCSS("animation-name", "none");
+      // What the tokens paint, read as the tag's are.
+      const tokens = await page.evaluate(() => {
+        const probe = document.createElement("div");
+        probe.style.background = "var(--inverse)";
+        probe.style.color = "var(--thread)";
+        probe.style.borderTop = "1.5px solid var(--inverse-pencil)";
+        document.body.append(probe);
+        const own = getComputedStyle(probe);
+        const said = {
+          face: own.backgroundColor,
+          thread: own.color,
+          rim: own.borderTopColor,
+        };
+        probe.remove();
+        return said;
+      });
+      // Its read answered only when let go: a slow network.
+      let answer: () => void = () => undefined;
+      state.hold = new Promise<void>((resolve) => {
+        answer = resolve;
+      });
+      const before = server.reads();
+      await tag.click();
+      await expect.poll(server.reads).toBe(before + 1);
+      // A second press asks nothing more.
+      await tag.click({ force: true });
+      // Read: the tag as it was, never faded; its eyelet turning, the rim
+      // in pencil, the running part the title's lime.
+      await expect(tag).toBeDisabled();
+      await expect(tag).toHaveCSS("opacity", "1");
+      await expect(tag.locator(".cash-card-face")).toHaveCSS(
+        "background-color",
+        tokens.face,
+      );
+      await expect(tag.locator(".cash-card-title")).toHaveCSS(
+        "color",
+        tokens.thread,
+      );
+      await expect(eyelet).toHaveCSS("animation-name", "eyelet-spin");
+      await expect(eyelet).toHaveCSS("animation-duration", "0.9s");
+      await expect(eyelet).toHaveCSS("border-left-color", tokens.rim);
+      await expect(eyelet).toHaveCSS("border-top-color", tokens.thread);
+      expect(
+        await eyelet.evaluate((node) =>
+          node.getAnimations().some((run) => run.playState === "running"),
+        ),
+      ).toBe(true);
+      // Where motion is reduced: still, a dashed ring.
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      await expect(eyelet).toHaveCSS("animation-name", "none");
+      await expect(eyelet).toHaveCSS("border-top-style", "dashed");
+      await page.emulateMedia({ reducedMotion: "no-preference" });
+      await page.screenshot({
+        path: `test-results/cash-card-reading-${name}-${opening ? "opening" : "close"}.png`,
+      });
+      answer();
+      await expect(
+        page.getByRole("heading", { name: "Підрахунок каси" }),
+      ).toBeFocused();
+      expect(server.reads()).toBe(before + 1);
+    });
+  }
 
 test("cash taken out is recorded from the count in a sheet over it, the count's sum kept («Усе на бірці» sections task list, P1-1)", async ({
   page,

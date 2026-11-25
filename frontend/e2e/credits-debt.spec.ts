@@ -1692,7 +1692,7 @@ test("the owner erases a closed debt's customer behind the ⋯: outside Telegram
   expect(sent).toEqual([{}]);
 });
 
-test("inside a Telegram that has its own popup, «Стерти дані покупця» asks there — «Так, стерти дані покупця» the destructive one — and only that erases (spec S20)", async ({
+test("inside a Telegram that has its own popup, «Стерти дані покупця» asks there — «Так, стерти дані покупця» the destructive one — and only that erases (spec S20); erased, a success; refused, an error; no answer and not pressed, nothing (audit 2026-11-25, sale P2-1 (б))", async ({
   page,
 }) => {
   await page.addInitScript(() => {
@@ -1701,12 +1701,16 @@ test("inside a Telegram that has its own popup, «Стерти дані поку
         postEvent: (event: string, data?: string) => void;
       };
       popups: unknown[];
+      felt: unknown[];
     };
     host.popups = [];
+    host.felt = [];
     host.TelegramWebviewProxy = {
       postEvent: (event, data) => {
         if (event === "web_app_open_popup" && data)
           host.popups.push(JSON.parse(data));
+        if (event === "web_app_trigger_haptic_feedback" && data)
+          host.felt.push(JSON.parse(data));
       },
     };
   });
@@ -1718,10 +1722,27 @@ test("inside a Telegram that has its own popup, «Стерти дані поку
   });
   await serveDebt(page, one);
   const sent: unknown[] = [];
+  // Refused first, then no answer, then erased.
+  const answers = [409, 503];
   await page.route(
     `**/api/v1/credits/${one.id}/erase-customer`,
     async (route) => {
       sent.push(route.request().postDataJSON());
+      const status = answers.shift();
+      if (status !== undefined) {
+        await route.fulfill({
+          status,
+          json:
+            status === 409
+              ? { code: "CONFLICT", message: "Конфлікт.", details: {} }
+              : {
+                  code: "SERVER_UNAVAILABLE",
+                  message: "Сервер недоступний.",
+                  details: {},
+                },
+        });
+        return;
+      }
       await route.fulfill({
         json: {
           erased: 1,
@@ -1739,6 +1760,8 @@ test("inside a Telegram that has its own popup, «Стерти дані поку
   );
   const popups = (): Promise<unknown[]> =>
     page.evaluate(() => (window as unknown as { popups: unknown[] }).popups);
+  const felt = (): Promise<unknown[]> =>
+    page.evaluate(() => (window as unknown as { felt: unknown[] }).felt);
   const closed = async (button?: string): Promise<void> => {
     await page.evaluate((id) => {
       window.dispatchEvent(
@@ -1766,6 +1789,9 @@ test("inside a Telegram that has its own popup, «Стерти дані поку
     ],
   };
   await opened(page, undefined, "7.0");
+  // What the hand feels from here: the sections' switch before it is theirs.
+  const at = (await felt()).length;
+  const hand = async (): Promise<unknown[]> => (await felt()).slice(at);
   await act(page, "Стерти дані покупця");
   await expect.poll(popups).toEqual([asked]);
   // Asked there, not in the page.
@@ -1779,13 +1805,39 @@ test("inside a Telegram that has its own popup, «Стерти дані поку
   await closed();
   await page.waitForTimeout(300);
   expect(sent).toEqual([]);
+  expect(await hand()).toEqual([]);
+  // Refused by the server: an error, in its words.
   await act(page, "Стерти дані покупця");
-  await expect.poll(popups).toEqual([asked, asked, asked]);
+  await expect.poll(popups).toEqual(new Array<unknown>(3).fill(asked));
+  await closed("erase");
+  await expect(
+    page.getByText(
+      "Дані покупця не стерто: борг щойно змінився — перегляньте його.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await expect
+    .poll(hand)
+    .toEqual([{ type: "notification", notification_type: "error" }]);
+  // No answer: nothing in the hand — pressed again, it is safe.
+  await act(page, "Стерти дані покупця");
+  await expect.poll(popups).toEqual(new Array<unknown>(4).fill(asked));
+  await closed("erase");
+  await expect.poll(() => sent.length).toBe(2);
+  await page.waitForTimeout(500);
+  expect(await hand()).toHaveLength(1);
+  await act(page, "Стерти дані покупця");
+  await expect.poll(popups).toEqual(new Array<unknown>(5).fill(asked));
   await closed("erase");
   await expect(page.getByRole("status")).toContainText(
     "Дані покупця стерто із закритих боргів цього магазину: 1.",
   );
-  expect(sent).toEqual([{}]);
+  expect(sent).toEqual([{}, {}, {}]);
+  // Erased: one success, felt once the server has answered.
+  await expect.poll(hand).toEqual([
+    { type: "notification", notification_type: "error" },
+    { type: "notification", notification_type: "success" },
+  ]);
 });
 
 test("written off on her card, «Внесок» waits while the card is read again: nothing is paid on what was owed before (review, 2026-11-01)", async ({

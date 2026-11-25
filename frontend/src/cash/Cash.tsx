@@ -677,9 +677,15 @@ export function Cash({
               // §6.11; «Усе на бірці» sections task list, P1-1): dark in
               // either theme, the whole tag one button. What the drawer
               // should hold is said only after the count (G32).
+              // Its own read keeps the press's look, its eyelet the
+              // turning ring; held by another — a kept command, a send —
+              // it fades, its «не зараз» (audit 2026-11-25, orders-cash
+              // P2-1).
               <button
                 type="button"
-                className="cash-card tag-row"
+                className={`cash-card tag-row${
+                  reading && !working ? " reading" : ""
+                }`}
                 aria-label={opening ? "Перший підрахунок" : "Закрити касу"}
                 aria-describedby={cardHint}
                 disabled={working || reading}

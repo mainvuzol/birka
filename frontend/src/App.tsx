@@ -41,6 +41,7 @@ import {
 import {
   askingBeforeClosing,
   buzz,
+  buzzRefusal,
   connectTelegram,
   telegramInitData,
   telegramUserId,
@@ -1649,8 +1650,10 @@ function Workspace({
     ) {
       // Refused, recorded nowhere: the order and its row as they are now,
       // said so (orders task list, P1-2) — or, a new one short of stock,
-      // its line marked on its screen (P0-5).
-      buzz("error");
+      // its line marked on its screen (P0-5). Felt only as the server's
+      // refusal: an attempt the phone could not write down was never sent,
+      // and is felt as nothing (audit 2026-11-25, frame P2-1 (б)).
+      buzzRefusal(settled.error);
       setStepRefused((count) => count + 1);
       // Pressed on its row, its card or the return's screen, and not kept:
       // said there (audit 2026-11-13, orders P1-1). From its sheet, there —

@@ -556,8 +556,9 @@ export function AddFile({
   title: string;
   warehouse: string;
   blocked: boolean;
-  /** Added: the list is read again, and this screen closes. */
-  done: () => Promise<void>;
+  /** Added: the list is read again, and this screen closes; the part as
+   * the write answered it, for the list to say. */
+  done: (part: StockPart) => Promise<void>;
   /** Not known yet: the list is read again, and this screen stays. */
   refresh: () => Promise<void>;
   leave: () => void;
@@ -609,6 +610,9 @@ export function AddFile({
       file_name: read.name,
     };
     if (bodyBytes(body) > MAX_BODY_BYTES) {
+      // Refused at the press, as «Зберегти список» refuses it (audit
+      // 2026-11-25, goods P1-1).
+      buzz("error");
       setProblems([TOO_LARGE]);
       return;
     }
@@ -625,10 +629,18 @@ export function AddFile({
         { slow: true },
       );
       forget(key);
-      // The kept command named a part removed since: sent again, as new.
+      // The kept command named a part removed since: sent again, as new —
+      // felt and said once, by the answer that added it (audit 2026-11-25,
+      // goods P1-1).
       removed = added.part.removed_at !== null && !again;
-      if (!removed) await done();
+      if (!removed) {
+        buzz("success");
+        await done(added.part);
+      }
     } catch (error) {
+      // A refusal the server said, felt; no answer, nothing: it may have
+      // been added (audit 2026-11-25, goods P1-1).
+      buzzRefusal(error);
       // Answered: a second press is a new command. Not answered, or refused
       // for the person's requests before anything was read (ADR-0020): the
       // same.
@@ -766,7 +778,10 @@ export function AddLines({
   /** The list's name, its «←». */
   title: string;
   blocked: boolean;
-  done: () => Promise<void>;
+  /** Added: the list is read again, and this screen closes; the part as
+   * the write answered it, for the list to say — none where it names a
+   * part removed since (a lost answer's resend). */
+  done: (part: StockPart | null) => Promise<void>;
   refresh: () => Promise<void>;
   leave: () => void;
 }): JSX.Element {
@@ -798,7 +813,7 @@ export function AddLines({
     setBusy(true);
     setProblems([]);
     try {
-      await api(
+      const added = await api<{ part: StockPart }>(
         `/snapshots/${list.snapshot_id}/parts?store_id=${store.id}`,
         token,
         {
@@ -812,8 +827,16 @@ export function AddLines({
         { slow: true },
       );
       saveLines(list.snapshot_id, null);
-      await done();
+      // Added: felt and said, by the write's answer. Answered with a part
+      // removed since — a lost answer's resend — neither, as before (audit
+      // 2026-11-25, goods P1-1; Н1).
+      const part = added.part.removed_at === null ? added.part : null;
+      if (part) buzz("success");
+      await done(part);
     } catch (error) {
+      // A refusal the server said — a conflict of the same command among
+      // them — felt; no answer, nothing (audit 2026-11-25, goods P1-1).
+      buzzRefusal(error);
       if (error instanceof ApiError && error.code === "IDEMPOTENCY_CONFLICT") {
         setDraft({ command_id: crypto.randomUUID() });
         await refresh();

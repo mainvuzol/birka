@@ -140,6 +140,7 @@ export function InvoiceActions({
   cancelled,
   refused,
   stale,
+  lost,
 }: {
   store: Store;
   token: string;
@@ -160,6 +161,9 @@ export function InvoiceActions({
   refused: (text: string) => void;
   /** A set-off refused, said in its sheet: the card is read again. */
   stale: () => void;
+  /** Its cancel left with no answer, the sheet closed: the server may have
+   * recorded it, so the card is read again (audit 2026-11-25, money P2-1). */
+  lost: () => void;
 }): JSX.Element | null {
   const [view, setView] = useState<
     "menu" | "set-off" | "write-off" | "cancel" | null
@@ -200,8 +204,12 @@ export function InvoiceActions({
   );
   if (!setsOff && !writesOff && !cancels) return null;
   const close = (): void => {
+    // Its last press unanswered: whatever way it is closed — «Не
+    // скасовувати», ✕, Telegram's «Назад» — the card is read again.
+    const unanswered = problem === noAnswer;
     setView(null);
     setProblem(null);
+    if (unanswered) lost();
   };
   const writingOff = sending === "write-off";
 
@@ -637,6 +645,10 @@ function SetOff({
                       setEntry(item.id);
                     }}
                     onClick={() => {
+                      // Another return — a choice; the chosen one again,
+                      // nothing, as the section's chips (audit 2026-11-25,
+                      // sale observation for money).
+                      if (chosen !== item.id) buzz("selection");
                       setChosen(item.id);
                       setProblem(null);
                     }}
@@ -733,6 +745,7 @@ export function EntryCancel({
   close,
   cancelled,
   refused,
+  lost,
 }: {
   store: Store;
   token: string;
@@ -743,6 +756,9 @@ export function EntryCancel({
   close: () => void;
   cancelled: (invoice: Invoice) => void;
   refused: (text: string) => void;
+  /** Its last press left with no answer, the sheet closed: the server may
+   * have recorded it (audit 2026-11-25, money P2-1). */
+  lost: () => void;
 }): JSX.Element {
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
@@ -786,7 +802,10 @@ export function EntryCancel({
       busy={busy}
       problem={problem}
       fallback={fallback}
-      close={close}
+      close={() => {
+        close();
+        if (problem === noAnswer) lost();
+      }}
       run={(reason) => {
         void undo(reason);
       }}

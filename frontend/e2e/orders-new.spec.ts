@@ -1005,6 +1005,52 @@ test("a shortfall's screen left: never said over the list, nor on the next new o
   await expect(tray(page)).toHaveCount(0);
 });
 
+test("an order the phone could not write down is felt as nothing: never sent, the app's own words; a refusal the server said, an error (audit 2026-11-25, frame P2-1 (б))", async ({
+  page,
+}) => {
+  const stubbed = server();
+  await open(page, stubbed);
+  await chip(page, `${loran}:${sizeM}`).click();
+  await basketSheet(page);
+  await basketDone(page);
+  await carrier(page, "Міст");
+  // The phone's memory refuses the order's attempt: nothing is sent.
+  await page.evaluate(() => {
+    const set = Reflect.get(Storage.prototype, "setItem");
+    Reflect.set(window, "birkaSetItem", set);
+    Storage.prototype.setItem = function (key: string, value: string) {
+      if (key.startsWith("birka:pending:"))
+        throw new DOMException("full", "QuotaExceededError");
+      set.call(this, key, value);
+    };
+  });
+  await pressMain(page);
+  await expect(page.getByRole("alert")).toHaveText(
+    "Не вдалося виконати операцію. Спробуйте ще раз.",
+  );
+  expect(stubbed.made).toHaveLength(0);
+  await page.waitForTimeout(500);
+  expect(await buzzes(page)).toEqual([]);
+  // Its memory free again, the server refuses: that is felt.
+  await page.evaluate(() => {
+    Storage.prototype.setItem = Reflect.get(
+      window,
+      "birkaSetItem",
+    ) as Storage["setItem"];
+  });
+  stubbed.fail = {
+    status: 409,
+    json: { code: "IDEMPOTENCY_CONFLICT", message: "Conflict", details: {} },
+  };
+  await pressMain(page);
+  await expect(page.getByRole("alert")).toHaveText(
+    "Не записано: дані замовлення змінилися, поки ви працювали. Перевірте замовлення й спробуйте ще раз.",
+  );
+  await expect
+    .poll(() => buzzes(page))
+    .toEqual([{ type: "notification", notification_type: "error" }]);
+});
+
 test("refused for another reason: said over «Куди» and brought to the finger, with its buzz; the lines and the carrier kept (stage 2, orders task list, P0-5)", async ({
   page,
 }) => {

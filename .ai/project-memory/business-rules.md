@@ -12500,3 +12500,68 @@ change.
   out of it.
   Owner-held: В24-К1, В24-Г1, В24-Т1; orders-cash Н1 (a new server read
   field, needs consent); В23-К1.
+
+## Chosen in chat — 2026-11-25 (audit 2026-11-25: owner pack № 5 kept as built; batch A «Сторінка лягла»)
+
+After audit 2026-11-25 the user chose «Keep it, build A».
+
+- **Owner pack № 5 — the «recorded» half built in #249 stays** (the user's
+  choice; the owner's answer still due). Audit 2026-11-25 (sale Н1) found
+  that #249's `success` for a kept sale, shortage, return, payment or
+  write-off confirmed later is half of the pack's «так» for № 5, built
+  before the owner answered; the batch-2 entry above called it «never the
+  owner's», and the pack was not cross-checked. It matches the approved
+  design (S12, «success when recorded once»), so it stays; the pack's
+  item № 5 now says what is felt today and that this half was built ahead
+  of her answer — «ні» takes it back. The rest of «так» is not built: the
+  invoices', supplier returns' and catalog's confirmations later (frame
+  P2-1 (а) 2026-11-25) wait for № 5; «not recorded» at a later check
+  stays as it is until В25-К1.
+
+- **Batch A «Сторінка лягла»** (goods P1-1; money P2-1 and the price
+  sheet's read; orders-cash P2-1, P2-2 and Д2; sale P2-1 and the set-off
+  radio; frame P2-1 (б)). Only the hand, a look, a toast and a read: no
+  word of the server's, no right, no journal, no command, no server change.
+  - **A file or lines added to a list are felt and said** (goods P1-1):
+    recorded — one `success` and, back on the list once it is read again, a
+    toast from the write's own answer: «Рядки додано: N.», «Файл додано:
+    рядків N.»; with lines whose photo and line another file of the list
+    names too, «Файл додано: рядків N, повторів M.» and «Файли списку» to
+    the file's card, where it is removed (the shorter words of Д5: the
+    whole sentence took three lines at 360). No answer, nothing; refused,
+    an `error` and the form's words. A kept file that finds its part
+    removed — one success, one toast, by the second send's answer; lines
+    whose part is removed — neither. The toast is the list's: left, it
+    goes.
+  - **A cancel's sheet closed after no answer reads the card again**
+    (money P2-1): what the server cancelled is said as its answer would
+    have said it, «Скасовано» on its line and the debt as the server has
+    it; not reached, nothing said; the read failed, the card as it was.
+    Never felt: a read, not an answer; «Сплатити» held while it reads. An
+    invoice, a payment or set-off, a supplier return (from «Брак» too). The price sheet the same: closed
+    after no answer, the price and the stock read again.
+  - **The cash tag keeps its look while the drawer is read again**
+    (orders-cash P2-1): «Закрити касу» / «Перший підрахунок» pressed —
+    not faded, its eyelet the turning ring (dashed where motion is
+    reduced), a second press reads nothing. A kept operation waiting
+    (`working`) wins: «не зараз», faded, no ring (Д3).
+  - **A debt of nothing on an order's card says no next payment**
+    (orders-cash P2-2): «Покупець винен 0,00 грн» stays (the order's read
+    cannot tell paid from written off, Д1); «Наступні внески…» neither
+    seen nor heard.
+  - **A choice is felt when it changes** (sale P2-1 (а)): the till's
+    warehouse from the catalogue, a size read off a label, a return's
+    warehouse, «З паперу»'s radios, and — the user's addition — the
+    set-off's return in «Зарахувати повернення»: `selection`; the same
+    again, nothing; a size the basket already holds, an `error` and its
+    words. **«Стерти дані покупця»** (б): erased, a success; refused, an
+    `error`; no answer or «Скасувати» in Telegram's window, nothing.
+  - **The phone's own failure is felt as nothing** (frame P2-1 (б)): an
+    order's, «Перевірка каталогу»'s or a new model's attempt the phone
+    could not write before sending — nothing was sent, the app's words
+    say so; a refusal the server said, an `error` as before.
+  - **Not in it**: frame P2-1 (а) — an invoice's, a supplier return's and
+    a catalog change's kept operations confirmed later still felt as
+    nothing — waits for owner pack № 5 / В25-К1. Money Д3 of 2026-11-24
+    (a closed store's invoice paid at 360) not measured.
+    Owner-held: В25-К1, В24-К1, В24-Г1, В24-Т1; orders-cash Н1; В23-К1.

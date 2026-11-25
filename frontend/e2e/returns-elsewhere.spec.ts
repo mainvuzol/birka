@@ -2,6 +2,8 @@ import {
   test,
   expect,
   expectStub,
+  feels,
+  haptics,
   openStore,
   returnUnits,
   section,
@@ -149,9 +151,16 @@ async function held(
   return items.find((i) => i.product_variant_id === variant)?.quantity ?? 0;
 }
 
-/** «Повернення» at «Основний», looking among the other stores' sales. */
-async function findElsewhere(page: Page, model: string): Promise<void> {
-  await page.goto(launch());
+/** «Повернення» at «Основний», looking among the other stores' sales —
+ * in a Telegram of `version`, when one is named. */
+async function findElsewhere(
+  page: Page,
+  model: string,
+  version?: string,
+): Promise<void> {
+  await page.goto(
+    version ? `${launch()}&tgWebAppVersion=${version}` : launch(),
+  );
   await openStore(page, "Основний MAIN");
   await section(page, "Повернення");
   // Typed first; the other stores offered under this store's results
@@ -359,16 +368,17 @@ test("paid in parts at another store and nothing back: whose money it is the stu
   expect(said.x + said.width).toBeLessThanOrEqual(eyelet.x);
 });
 
-test("goods sold from the other store's own warehouse go to one of this store's, chosen", async ({
+test("goods sold from the other store's own warehouse go to one of this store's, chosen — inside Telegram, another warehouse felt as a choice, the same again as nothing (audit 2026-11-25, sale P2-1 (а))", async ({
   page,
 }) => {
+  const felt = await haptics(page);
   const { model, variant } = await soldAtTheOtherStore(
     page,
     fixture.second_location_id,
   );
   const before = await held(page, fixture.returns_location_id, variant);
   const sent = refunds(page);
-  await findElsewhere(page, model);
+  await findElsewhere(page, model, "8.0");
   await page.getByRole("button", { name: "Оформити повернення" }).click();
   // Asked only once an intact one is counted.
   const place = places(page);
@@ -389,11 +399,26 @@ test("goods sold from the other store's own warehouse go to one of this store's,
   await expect(chip(fixture.bin_location_id)).toHaveCount(0);
   await expect(chip(fixture.second_location_id)).toHaveCount(0);
   await expect(place.locator('[aria-pressed="true"]')).toHaveCount(0);
-  await chip(fixture.returns_location_id).click();
+  // Another warehouse first, then the one it goes to: each a choice; the
+  // one chosen, tapped again, nothing.
+  const other = place
+    .locator("[data-location]")
+    .and(
+      place.locator(`:not([data-location="${fixture.returns_location_id}"])`),
+    )
+    .first();
+  const selection = { type: "selection_change" };
+  await feels(felt, () => other.click(), [selection]);
+  await expect(other).toHaveAttribute("aria-pressed", "true");
+  await feels(felt, () => other.click(), []);
+  await feels(felt, () => chip(fixture.returns_location_id).click(), [
+    selection,
+  ]);
   await expect(chip(fixture.returns_location_id)).toHaveAttribute(
     "aria-pressed",
     "true",
   );
+  await expect(other).toHaveAttribute("aria-pressed", "false");
   await page
     .getByRole("button", { name: "Повернути покупцю 3 000,00 грн готівкою" })
     .click();

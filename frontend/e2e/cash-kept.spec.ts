@@ -535,6 +535,17 @@ for (const kept of [
     await expect(check).toBeEnabled();
     expect(sent).toHaveLength(1);
     await expect(check).toHaveClass(/\bquiet\b/);
+    if (kept.name === "money taken out") {
+      // Held by what is kept, the tag is «не зараз»: faded, its eyelet
+      // still — the ring is its own read's alone (audit 2026-11-25,
+      // orders-cash P2-1).
+      await expect(card(page)).toBeDisabled();
+      await expect(card(page)).toHaveCSS("opacity", "0.45");
+      await expect(card(page).locator(".cash-card-eyelet")).toHaveCSS(
+        "animation-name",
+        "none",
+      );
+    }
     // Telegram asks before Бірка closes while it is kept (stage 2, orders
     // task list, P0-1).
     await expect
