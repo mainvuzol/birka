@@ -12,6 +12,7 @@ import {
   expectStub,
   fillLine,
   fromPaper,
+  haptics,
   namedFromPaper,
   paperSheet,
   menu,
@@ -1320,6 +1321,73 @@ test.describe("2. a kept sale is checked by the phone itself", () => {
     expect(server.sales).toHaveLength(1);
   });
 
+  test("inside Telegram a kept sale the phone confirms by itself on opening is felt once, a success; the till left and come back to, nothing more (audit 2026-11-24, sale P2-1)", async ({
+    page,
+  }) => {
+    await seed(page, { [saleKey]: keptSale("CASH") });
+    const felt = await haptics(page);
+    const server = await serve(page);
+    await page.goto(`${launch()}&tgWebAppVersion=8.0`);
+    await openStore(page, /Подільський/);
+    await expect(
+      page.getByRole("heading", { name: "Продаж записано один раз" }),
+    ).toBeVisible();
+    const success = { type: "notification", notification_type: "success" };
+    const told = async (): Promise<unknown[]> =>
+      (await felt()).filter(
+        (one) => (one as { type?: string }).type === "notification",
+      );
+    await expect.poll(told).toEqual([success]);
+    expect(server.sales).toHaveLength(1);
+    await more(page);
+    await menu(page)
+      .getByRole("button", { name: "Продаж", exact: true })
+      .click();
+    await expect(
+      page.getByRole("heading", { name: "Продаж записано один раз" }),
+    ).toBeVisible();
+    expect(await told()).toEqual([success]);
+  });
+
+  test("inside Telegram a kept sale checked with no answer is felt as nothing; confirmed — by «Перевірити результат продажу», or by the phone first — once, a success (audit 2026-11-24, sale P2-1)", async ({
+    page,
+  }) => {
+    await seed(page, { [saleKey]: keptSale("CASH") });
+    const felt = await haptics(page);
+    const server = await serve(page);
+    // The phone's own checks go unanswered until the button is pressed.
+    let lost = true;
+    server.sale = async (route, body) => {
+      if (lost) await route.abort("failed");
+      else await route.fulfill({ status: 201, json: receiptOf(body) });
+    };
+    await page.goto(`${launch()}&tgWebAppVersion=8.0`);
+    await openStore(page, /Подільський/);
+    const check = page
+      .getByRole("button", { name: "Перевірити результат продажу" })
+      .first();
+    await expect.poll(() => server.sales.length).toBeGreaterThan(0);
+    await expect(check).toBeEnabled();
+    const told = async (): Promise<unknown[]> =>
+      (await felt()).filter(
+        (one) => (one as { type?: string }).type === "notification",
+      );
+    expect(await told()).toEqual([]);
+    // Pressed — unless the phone, its reads answered, checks it by itself
+    // first: either way it is confirmed once, and felt once.
+    lost = false;
+    const settled = page
+      .getByRole("heading", { name: "Продаж записано один раз" })
+      .first();
+    const pressed = check.click().catch(() => undefined);
+    await Promise.race([pressed, settled.waitFor()]);
+    await expect(settled).toBeVisible();
+    const success = { type: "notification", notification_type: "success" };
+    await expect.poll(told).toEqual([success]);
+    await page.waitForTimeout(500);
+    expect(await told()).toEqual([success]);
+  });
+
   test("a card sale in parts it confirms says not to charge the part paid now twice", async ({
     page,
   }) => {
@@ -1473,6 +1541,45 @@ test.describe("3. a kept sale refused on resend settles the phone", () => {
       await page.waitForTimeout(1000);
       expect(server.sales).toHaveLength(2);
     });
+
+  test("inside Telegram a kept sale refused on its check is felt as its warning alone: the refusal said, never buzzed (audit 2026-11-24, sale P2-1)", async ({
+    page,
+  }) => {
+    const felt = await haptics(page);
+    const server = await serve(page);
+    await page.goto(`${launch()}&tgWebAppVersion=8.0`);
+    await openStore(page, /Подільський/);
+    await page.getByRole("button", { name: "Продаж", exact: true }).click();
+    await basket(page);
+    await soldWithNoAnswer(page, server);
+    const told = async (): Promise<unknown[]> =>
+      (await felt()).filter(
+        (one) => (one as { type?: string }).type === "notification",
+      );
+    const warning = { type: "notification", notification_type: "warning" };
+    await expect.poll(told).toEqual([warning]);
+
+    server.sale = async (route) => {
+      await route.fulfill({
+        status: 409,
+        json: {
+          code: "CONFLICT",
+          message: "Conflict",
+          details: { recorded: false },
+        },
+      });
+    };
+    await page
+      .getByRole("button", { name: "Перевірити результат продажу" })
+      .click();
+    await expect(
+      page.getByText(
+        "Продаж не записано (дані змінилися, поки сервер не відповідав). Якщо товар віддали покупцю — внесіть його з паперу з позначкою «Вношу продаж з паперу». Кошик треба зібрати знову.",
+      ),
+    ).toBeVisible();
+    await page.waitForTimeout(500);
+    expect(await told()).toEqual([warning]);
+  });
 });
 
 test("4. an offline phone never leaves «Спробувати ще раз» waiting, and reads again by itself once online", async ({

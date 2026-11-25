@@ -23,6 +23,7 @@ import {
   supplierList,
   holdReads,
   haptics,
+  loseOnce,
   feels as feelsAs,
   rowTitle,
   tokenColour,
@@ -379,7 +380,7 @@ test("a return's result keeps «← Постачальникам» and Telegram'
   await expect(returnRow(page, supplier)).toHaveCount(3);
 });
 
-test("goods go back to a supplier from a warehouse, and come back when it is cancelled", async ({
+test("goods go back to a supplier from a warehouse, and come back when it is cancelled — once, whatever a gateway answered (audit 2026-11-24, money P2-1)", async ({
   page,
 }) => {
   const coat = await received(page, hanna, fixture.network_centre_store_id, 4);
@@ -565,6 +566,26 @@ test("goods go back to a supplier from a warehouse, and come back when it is can
   await page.getByRole("button", { name: "Скасувати повернення" }).click();
   await expect(ask).toHaveAttribute("data-ready", "");
   await ask.getByLabel("Чому скасовуємо").fill("постачальник не взяв");
+  // A gateway's 504 after the server cancelled it is no answer: the sheet
+  // stays with its reason and says so; pressed again, answered as it is —
+  // cancelled once, the goods back once (audit 2026-11-24, money P2-1).
+  const lost = await loseOnce(
+    page,
+    "**/api/v1/supplier-returns/*/cancel",
+    504,
+    true,
+  );
+  await ask.getByRole("button", { name: "Так, скасувати повернення" }).click();
+  await lost();
+  await expect(ask.getByRole("alert")).toHaveText(
+    "Немає відповіді сервера. Натисніть ще раз — повторне натискання безпечне.",
+  );
+  await expect(ask.getByLabel("Чому скасовуємо")).toHaveValue(
+    "постачальник не взяв",
+  );
+  await expect(
+    page.getByRole("alert").filter({ hasText: /Продавайте на папері/ }),
+  ).toHaveCount(0);
   await ask.getByRole("button", { name: "Так, скасувати повернення" }).click();
   await expect(ask).toHaveCount(0);
   await expect(page.locator(".supplier-return-cancelled")).toContainText(
@@ -865,6 +886,115 @@ test("in Telegram the supplier's sheet over «Повернути постача�
   await sheet.getByRole("button", { name: "Додати постачальника" }).click();
   await expect(sheet).toHaveCount(0);
   await expect.poll(mainShown).toBe(true);
+});
+
+test("inside Telegram a supplier added or changed and left without an answer — the network lost, a gateway's 503 — is felt as nothing: it may have been saved; refused, as an error; «… уже є у списку — обрано його.», nothing; saved, as a success (audit 2026-11-24, frame P2-1; money P2-1 (б))", async ({
+  page,
+}) => {
+  const known = `Відомий ${randomUUID().slice(0, 6)}`;
+  await aSupplier(page, known);
+  const felt = await haptics(page);
+  const error = { type: "notification", notification_type: "error" };
+  const success = { type: "notification", notification_type: "success" };
+  await page.goto(
+    `/#${new URLSearchParams({ tgWebAppData: initData(hanna), tgWebAppVersion: "8.0" }).toString()}`,
+  );
+  await openStore(page, "Центр CENTRE");
+  await section(page, "Постачальникам");
+  await page
+    .locator(".screen-title")
+    .getByRole("button", { name: "Повернути товар постачальнику" })
+    .click();
+  let start = (await felt()).length;
+  const since = async (): Promise<unknown[]> => (await felt()).slice(start);
+  const felts: unknown[] = [];
+  /** No answer twice, then a refusal: the error alone felt since. */
+  const unanswered = async (
+    pattern: string,
+    act: () => Promise<void>,
+    said: Locator,
+  ): Promise<void> => {
+    for (const how of ["network", 503] as const) {
+      const lost = await loseOnce(page, pattern, how);
+      await act();
+      await lost();
+      await expect(said).toBeVisible();
+    }
+    expect(await since()).toEqual(felts);
+    await refuseOnce(page, pattern, 422);
+    await act();
+    felts.push(error);
+    await expect.poll(since).toEqual(felts);
+  };
+
+  // «Додати постачальника».
+  await returnForm(page)
+    .getByRole("button", { name: /^Постачальник / })
+    .click();
+  let sheet = page.getByRole("dialog", { name: "Постачальник" });
+  await expect(sheet).toHaveAttribute("data-ready", "");
+  await sheet
+    .getByRole("button", { name: "Новий постачальник", exact: true })
+    .click();
+  const added = `Новий ${randomUUID().slice(0, 6)}`;
+  await sheet.getByLabel("Назва постачальника").fill(added);
+  const add = sheet.getByRole("button", { name: "Додати постачальника" });
+  const addIt = async (): Promise<void> => {
+    await expect(add).toBeEnabled();
+    await add.click();
+  };
+  await unanswered("**/api/v1/suppliers", addIt, sheet.getByRole("alert"));
+  // One the list has already: picked, nothing felt.
+  await sheet.getByLabel("Назва постачальника").fill(known);
+  await addIt();
+  await expect(sheet).toHaveCount(0);
+  await expect(
+    page.getByText(`«${known}» уже є у списку — обрано його.`, {
+      exact: true,
+    }),
+  ).toBeVisible();
+  expect(await since()).toEqual(felts);
+  // Added: felt.
+  await returnForm(page)
+    .getByRole("button", { name: /^Постачальник / })
+    .click();
+  sheet = page.getByRole("dialog", { name: "Постачальник" });
+  await expect(sheet).toHaveAttribute("data-ready", "");
+  await sheet
+    .getByRole("button", { name: "Новий постачальник", exact: true })
+    .click();
+  await sheet.getByLabel("Назва постачальника").fill(added);
+  await addIt();
+  await expect(sheet).toHaveCount(0);
+  felts.push(success);
+  await expect.poll(since).toEqual(felts);
+
+  // «Змінити постачальника», the app opened again.
+  await page.reload();
+  await openStore(page, "Центр CENTRE");
+  await section(page, "Постачальникам");
+  start = (await felt()).length;
+  felts.length = 0;
+  await page.getByRole("button", { name: "Список постачальників" }).click();
+  await page
+    .getByRole("searchbox", { name: "Пошук постачальника" })
+    .fill(added);
+  const list = page.getByRole("list", { name: "Постачальники" });
+  await expect(list.locator(".supplier-row")).toHaveCount(1);
+  await list.locator(".supplier-row").click();
+  const edit = page.getByRole("dialog", { name: "Змінити постачальника" });
+  await expect(edit).toHaveAttribute("data-ready", "");
+  await edit.getByLabel("Телефон").fill("067 000 00 02");
+  const save = edit.getByRole("button", { name: "Зберегти" });
+  const saveIt = async (): Promise<void> => {
+    await expect(save).toBeEnabled();
+    await save.click();
+  };
+  await unanswered("**/api/v1/suppliers/*", saveIt, edit.getByRole("alert"));
+  await saveIt();
+  await expect(edit).toHaveCount(0);
+  felts.push(success);
+  await expect.poll(since).toEqual(felts);
 });
 
 test("read slowly, the suppliers' sheet and «Список постачальників» hold three rows in grey under a search that stands, «Повернути постачальнику» two warehouses in grey; the words to a reader alone (money task list after stage 2, P1-3)", async ({

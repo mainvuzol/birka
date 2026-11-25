@@ -1226,7 +1226,7 @@ test("a warehouse to choose, for goods from another store's own, is brought abov
   await expect(chip).toHaveCSS("color", colours.fore);
 });
 
-test("Telegram buzzes once the server answers a return: an error refused, a success recorded; a kept one a warning, confirmed later nothing — and its banner and notice name it", async ({
+test("Telegram buzzes once the server answers a return: an error refused, a success recorded; a kept one a warning, confirmed later a success (audit 2026-11-24, sale P2-1) — and its banner and notice name it", async ({
   page,
 }) => {
   await page.addInitScript(() => {
@@ -1307,7 +1307,8 @@ test("Telegram buzzes once the server answers a return: an error refused, a succ
   ]);
 
   // Another, its answer lost: the banner names it, it is felt once, a
-  // warning, and its confirmation later buzzes nothing.
+  // warning, and its confirmation later once, a success (audit 2026-11-24,
+  // sale P2-1).
   await page.getByRole("button", { name: "Ще повернення" }).click();
   await page.getByRole("button", { name: /^Оформити повернення: / }).click();
   await returnUnits(page, { intact: 1, line: "Лоран шоколад · M" });
@@ -1330,7 +1331,8 @@ test("Telegram buzzes once the server answers a return: an error refused, a succ
     { type: "notification", notification_type: "warning" },
   ]);
   // Hours later, the app opened again: the phone confirms it by itself,
-  // and buzzes nothing either.
+  // felt once as a success (audit 2026-11-24, sale P2-1) — the count read
+  // afresh after the reload.
   lose = false;
   await page.reload();
   await openStore(page, "Основний MAIN");
@@ -1338,7 +1340,9 @@ test("Telegram buzzes once the server answers a return: an error refused, a succ
     has: page.getByRole("heading", { name: "Повернення записано один раз" }),
   });
   await expect(notice).toBeVisible();
-  expect(await buzzes()).toEqual([]);
+  await expect
+    .poll(buzzes)
+    .toEqual([{ type: "notification", notification_type: "success" }]);
   // The way alone over the sum: «Поверніть» only where it is conditional.
   await expect(notice.locator(".way-pill")).toHaveText("Готівка");
   await expect(notice.getByText(/^Поверніть|· Поверніть/)).toHaveCount(0);

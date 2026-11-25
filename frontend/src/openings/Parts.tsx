@@ -10,7 +10,7 @@ import { usePanelRoom } from "@/shared/panel";
 import { Placeholder } from "@/shared/Placeholder";
 import { ScreenHeader } from "@/shared/ScreenHeader";
 import { Sheet } from "@/shared/Sheet";
-import { buzz, useMainButton } from "@/shared/telegram";
+import { buzz, buzzRefusal, useMainButton } from "@/shared/telegram";
 import { enterGoes } from "@/shared/enter";
 import { Unread } from "@/shared/Unread";
 import { visible } from "@/shared/visible";
@@ -223,7 +223,9 @@ export function PartsScreen({
       );
       buzz("success");
     } catch (error) {
-      buzz("error");
+      // A refusal the server said, felt; no answer, nothing: it may have
+      // been recorded (audit 2026-11-24, frame P2-1).
+      buzzRefusal(error);
       const reason =
         error instanceof ApiError ? error.details.reason : undefined;
       setProblem(

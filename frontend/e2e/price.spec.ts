@@ -5,6 +5,8 @@ import {
   basketDone,
   basketSheet,
   countTaps,
+  haptics,
+  loseOnce,
   openModel,
   openStore,
   readsOf,
@@ -649,6 +651,67 @@ test("in Telegram the price sheet's one button is its MainButton, «Зберег
     notification_type: "success",
   });
   await expect.poll(shown).toBe(false);
+});
+
+test("inside Telegram a price left without an answer — the network lost, a gateway's 503 — is felt as nothing: it may have been saved; refused, as an error; saved, as a success (audit 2026-11-24, frame P2-1)", async ({
+  page,
+}) => {
+  const priced = await model(page, await token(page));
+  const felt = await haptics(page);
+  await page.goto(
+    `/#${new URLSearchParams({
+      tgWebAppData: initData(seller.id, seller.name),
+      tgWebAppVersion: "8.0",
+    }).toString()}`,
+  );
+  await openStore(page, "Основний MAIN");
+  const hero = await detail(page, priced.name);
+  const sheet = await priceSheet(page, priced.name);
+  await keys(sheet, "1", "8", "5", "0");
+  const main = async (): Promise<unknown> =>
+    (
+      await page.evaluate(() =>
+        (window as unknown as { told: [string, unknown][] }).told
+          .filter(([name]) => name === "web_app_setup_main_button")
+          .map(([, data]) => data),
+      )
+    ).at(-1) ?? null;
+  // Pressed once the last answer is in: its MainButton active again.
+  const press = async (): Promise<void> => {
+    await expect.poll(main).toMatchObject({ is_active: true });
+    await page.evaluate(() => {
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          data: JSON.stringify({ eventType: "main_button_pressed" }),
+          source: window.parent,
+        }),
+      );
+    });
+  };
+  const start = (await felt()).length;
+  const since = async (): Promise<unknown[]> => (await felt()).slice(start);
+  for (const how of ["network", 503] as const) {
+    const lost = await loseOnce(page, "**/api/v1/catalog/prices", how);
+    await press();
+    await lost();
+    await expect(
+      sheet.getByText(
+        "Немає відповіді сервера. Натисніть ще раз — повторне збереження безпечне.",
+        { exact: true },
+      ),
+    ).toBeVisible();
+  }
+  // Refused: the error, and the only buzz since the first press.
+  const error = { type: "notification", notification_type: "error" };
+  await refuseOnce(page, "**/api/v1/catalog/prices", 422);
+  await press();
+  await expect.poll(since).toEqual([error]);
+  await press();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(hero).toContainText("Ціна продажу 1 850,00 грн");
+  await expect
+    .poll(since)
+    .toEqual([error, { type: "notification", notification_type: "success" }]);
 });
 
 test("a price someone else changed meanwhile is not overwritten unseen", async ({

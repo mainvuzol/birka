@@ -62,7 +62,7 @@ import { CARRIED_TAP, usePanelRoom } from "@/shared/panel";
 import { ScreenHeader } from "@/shared/ScreenHeader";
 import { Sheet } from "@/shared/Sheet";
 import { Stub } from "@/shared/Stub";
-import { buzz, useMainButton } from "@/shared/telegram";
+import { buzz, buzzRefusal, useMainButton } from "@/shared/telegram";
 import { Sticker } from "@/shared/Sticker";
 
 /**
@@ -897,7 +897,7 @@ function NewList({
       const conflict =
         error instanceof ApiError && error.code === "IDEMPOTENCY_CONFLICT";
       const unanswered = !(error instanceof ApiError) || unreachable(error);
-      if (!unanswered) buzz("error");
+      buzzRefusal(error);
       if (unanswered) setDraft({ unsettled: true });
       if (conflict) setDraft({ unsettled: false });
       if (error instanceof SlowAnswer || conflict || listConflict(error))
@@ -2237,7 +2237,9 @@ function Approval({
       );
       buzz("success");
     } catch (error) {
-      buzz("error");
+      // A refusal the server said, felt; no answer, nothing: it may have
+      // been recorded (audit 2026-11-24, frame P2-1).
+      buzzRefusal(error);
       // Refused: said under the tag at once, the list read again behind it.
       said(decisionRefusal(error, "approve", list, warehouse));
       setAsking(false);
@@ -2346,7 +2348,7 @@ function RejectSheet({
       );
       buzz("success");
     } catch (error) {
-      buzz("error");
+      buzzRefusal(error);
       // Refused: said in the sheet at once, its reason free to change; the
       // list read again behind it.
       setProblem(decisionRefusal(error, "reject", list, warehouse));

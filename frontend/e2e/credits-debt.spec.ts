@@ -834,7 +834,7 @@ test("a way on S21 tapped twice, the server quick: «Внесок записан
   ).toHaveAttribute("aria-current", "page");
 });
 
-test("Telegram buzzes once the server has answered a payment: success when recorded, error when refused; a lost answer a warning, its confirmation later nothing", async ({
+test("Telegram buzzes once the server has answered a payment: success when recorded, error when refused; a lost answer a warning, its confirmation later a success (audit 2026-11-24, sale P2-1)", async ({
   page,
 }) => {
   await page.addInitScript(() => {
@@ -920,7 +920,7 @@ test("Telegram buzzes once the server has answered a payment: success when recor
 
   // A lost answer is not an answer, but a payment kept on the phone: felt
   // once, a warning (spec §4.4; «Усе на бірці» task list, P1-2); confirmed
-  // later, nothing.
+  // later, a success (audit 2026-11-24, sale P2-1).
   refuse = false;
   lose = true;
   await key(page, "Стерти").click();
@@ -938,10 +938,80 @@ test("Telegram buzzes once the server has answered a payment: success when recor
   await expect(
     page.getByRole("heading", { name: "Внесок записано один раз" }),
   ).toBeVisible();
-  expect(await buzzes()).toEqual([
-    ...twice,
-    { type: "notification", notification_type: "warning" },
-  ]);
+  await expect
+    .poll(buzzes)
+    .toEqual([
+      ...twice,
+      { type: "notification", notification_type: "warning" },
+      { type: "notification", notification_type: "success" },
+    ]);
+});
+
+test("inside Telegram a write-off whose answer is lost is felt as a warning, a check with no answer as nothing, and its confirmation later as a success, once (audit 2026-11-24, sale P2-1)", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const host = window as unknown as {
+      TelegramWebviewProxy: {
+        postEvent: (event: string, data: string) => void;
+      };
+      buzzes: string[];
+    };
+    host.buzzes = [];
+    host.TelegramWebviewProxy = {
+      postEvent: (event, data) => {
+        if (event === "web_app_trigger_haptic_feedback") host.buzzes.push(data);
+      },
+    };
+  });
+  const one = debt();
+  await serveDebt(page, one);
+  let calls = 0;
+  await page.route(`**/api/v1/credits/${one.id}/write-off`, async (route) => {
+    calls += 1;
+    if (calls < 3) {
+      await route.abort("connectionreset");
+      return;
+    }
+    await route.fulfill({
+      json: {
+        ...one,
+        status: "WRITTEN_OFF",
+        owed: "0.00",
+        written_off: "1234.56",
+        closed_at: `${String(thisYear)}-10-16T09:00:00Z`,
+      },
+    });
+  });
+  await opened(page, undefined, "8.0");
+  const buzzes = async (): Promise<object[]> =>
+    (
+      await page.evaluate(
+        () => (window as unknown as { buzzes: string[] }).buzzes,
+      )
+    )
+      .map((data) => JSON.parse(data) as { type: string })
+      .filter((buzz) => buzz.type === "notification");
+  const warning = { type: "notification", notification_type: "warning" };
+  await writeOff(page, "1 234,56 грн");
+  await expect(
+    page.getByRole("heading", { name: "Списання ще не підтверджено" }),
+  ).toBeVisible();
+  await expect.poll(buzzes).toEqual([warning]);
+  const check = page.getByRole("button", {
+    name: "Перевірити результат списання",
+  });
+  await check.click();
+  await expect.poll(() => calls).toBe(2);
+  await expect(check).toBeEnabled();
+  expect(await buzzes()).toEqual([warning]);
+  await check.click();
+  await expect(
+    page.getByRole("heading", { name: "Списання записано один раз" }),
+  ).toBeVisible();
+  await expect
+    .poll(buzzes)
+    .toEqual([warning, { type: "notification", notification_type: "success" }]);
 });
 
 test("a debt of more goods than one names the first, and all of them on a tap", async ({

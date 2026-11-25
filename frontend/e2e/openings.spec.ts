@@ -9,6 +9,7 @@ import {
   feels,
   holdReads,
   listWay,
+  loseOnce,
   rejectList,
   removePart,
   menu,
@@ -848,6 +849,142 @@ test("inside Telegram «Новий список» is felt: a warehouse chosen an
   await expect(page.getByRole("heading", { name: source })).toBeVisible();
   // The warehouse free for the journeys after.
   await noListWaits(page, fixture.opening_location_id);
+});
+
+test("inside Telegram a line's answer, a part removed, an approval and a rejection left without an answer — the network lost, a gateway's 503 — are felt as nothing: each may have been recorded; refused, as an error; recorded, as a success (audit 2026-11-24, frame P2-1)", async ({
+  page,
+}) => {
+  const { main, felt, pressMain } = await telegram(page);
+  const coat = await model(page);
+  await noListWaits(page, fixture.opening_location_id);
+  await openings(page, "8.0");
+  await pressMain();
+  await warehouse(page, fixture.opening_location_id);
+  await aboutList(page);
+  const source = `Зошит без відповіді ${word()}`;
+  await page.getByLabel("Звідки список (необов’язково)").fill(source);
+  await page
+    .getByLabel("Рядки списку — кожен товар з нового рядка, як написано")
+    .fill(`${coat} сірий 2 шт`);
+  await expect.poll(main).toMatchObject({ is_active: true });
+  await pressMain();
+  await expect(page.getByRole("heading", { name: source })).toBeVisible();
+  const editor = await answer(page, 1);
+  await pick(page, "Розбір рядка 1", coat);
+  await size(editor, "M");
+
+  const error = { type: "notification", notification_type: "error" };
+  const success = { type: "notification", notification_type: "success" };
+  const start = (await felt()).length;
+  const since = async (): Promise<unknown[]> => (await felt()).slice(start);
+  const felts: unknown[] = [];
+  // Pressed once the last answer is in: its MainButton active again.
+  const press = async (text: RegExp): Promise<void> => {
+    await expect
+      .poll(async () => ((await main()) as { text?: string } | null)?.text)
+      .toMatch(text);
+    await expect
+      .poll(main)
+      .toMatchObject({ is_visible: true, is_active: true });
+    await pressMain();
+  };
+  /** `act` left unanswered twice, then refused: the error alone felt. */
+  const unanswered = async (
+    pattern: string,
+    act: () => Promise<void>,
+    said: Locator,
+  ): Promise<void> => {
+    for (const how of ["network", 503] as const) {
+      const lost = await loseOnce(page, pattern, how);
+      await act();
+      await lost();
+      await expect(said).toBeVisible();
+    }
+    expect(await since()).toEqual(felts);
+    await refuseOnce(page, pattern, "form");
+    await act();
+    felts.push(error);
+    await expect.poll(since).toEqual(felts);
+  };
+
+  // A line's answer.
+  const lines = "**/api/v1/snapshots/*/lines/*";
+  const answerIt = (): Promise<void> => press(/^Зберегти/);
+  await unanswered(lines, answerIt, editor.getByRole("alert"));
+  await answerIt();
+  await expect(editor).toHaveCount(0);
+  felts.push(success);
+  await expect.poll(since).toEqual(felts);
+
+  // A part typed by hand, removed.
+  await listWay(page, "Додати рядки вручну");
+  const typing = page.getByRole("form", { name: "Додати рядки вручну" });
+  await typing
+    .getByLabel("Рядки — кожен товар з нового рядка, як написано")
+    .fill(`${coat} сірий L 1 шт`);
+  await press(/^Додати рядки/);
+  await expect(typing).toHaveCount(0);
+  await listWay(page, /^Файли списку/);
+  const typed = page.getByRole("article", { name: "Файл 2" });
+  const removeIt = async (): Promise<void> => {
+    await typed.getByRole("button", { name: "Прибрати рядки" }).click();
+    await expect(
+      page.getByRole("dialog", { name: "Прибрати рядки?" }),
+    ).toHaveAttribute("data-ready", "");
+    await press(/^Так, прибрати/);
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+  };
+  await unanswered(
+    "**/api/v1/snapshots/*/parts/*/remove?**",
+    removeIt,
+    // A gateway's 503 is said by the paper's plate too.
+    page
+      .getByText(/^(Невідомо, чи рядки прибрано|Сервер не відповідає)/)
+      .first(),
+  );
+  await removeIt();
+  await expect(typed).toContainText(/Прибрано: Оля, /);
+  felts.push(success);
+  await expect.poll(since).toEqual(felts);
+  await page.getByRole("button", { name: `Назад до «${source}»` }).click();
+
+  // The approval: its answer this journey's own, so the warehouse stays
+  // free for the journeys after.
+  await page.route("**/api/v1/snapshots/*/approve?**", async (route) => {
+    await route.fulfill({ json: {} });
+  });
+  const approveIt = async (): Promise<void> => {
+    await press(/^Затвердити · /);
+    await expect(page.getByRole("dialog")).toHaveAttribute("data-ready", "");
+    await press(/^Так, затвердити$/);
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+  };
+  await unanswered(
+    "**/api/v1/snapshots/*/approve?**",
+    approveIt,
+    page.locator(".opening-said"),
+  );
+  await approveIt();
+  felts.push(success);
+  await expect.poll(since).toEqual(felts);
+
+  // The rejection.
+  await listWay(page, "Відхилити список");
+  const rejecting = page.getByRole("dialog", {
+    name: `Відхилити «${source}»?`,
+  });
+  await expect(rejecting).toHaveAttribute("data-ready", "");
+  await rejecting.getByLabel("Чому відхиляємо").fill("без відповіді");
+  const rejectIt = (): Promise<void> => press(/^Так, відхилити$/);
+  await unanswered(
+    "**/api/v1/snapshots/*/reject?**",
+    rejectIt,
+    rejecting.getByRole("alert"),
+  );
+  await rejectIt();
+  await expect(rejecting).toHaveCount(0);
+  felts.push(success);
+  await expect.poll(since).toEqual(felts);
 });
 
 test("lines answered where they wait: the line answered leaves its filter and the next opens, past the page read too; the last that waits says «Зберегти», back to the list's tag (stage 2, goods task list, P0-5)", async ({

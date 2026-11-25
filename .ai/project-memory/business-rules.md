@@ -12445,3 +12445,58 @@ changes; nothing recorded or sent changes; no server change, no migration.
 - **Not in it** (owner-held): В24-Т1 (a colour of our model with no
   colour typed, goods Н1); goods P2-3 (б) (В22-Т1 / Н2); goods P2-5 of
   2026-11-20 (В20-Т1); Н3 (the detail's pages) waits a measurement.
+
+## Chosen in chat — 2026-11-25 (audit 2026-11-24, batch 2: «В руці — те, що на екрані» — `error` only for a refusal the server said; a cancel's gateway answer keeps its sheet; «Продажу немає» and a kept operation confirmed later felt as recorded; frame P2-1, money P2-1, sale P2-1)
+
+The user's pick after audit 2026-11-24: «Both, goods first» — this is the
+second batch. Only the hand changes, and one sheet's place: nothing sent,
+when or how often, no word, no right, no journal, no command, no server
+change.
+
+- **`error` only for a refusal the server said** (frame P2-1). One rule in
+  one place: `serverRefused(error)` (`shared/api.ts`) — an `ApiError`
+  whose status is not a gateway's 502–504 — and `buzzRefusal(error)`
+  (`shared/telegram.ts`) feels it. With no answer — the network lost, a
+  gateway's 502–504, a slow answer that never came (`SlowAnswer`, Д1) —
+  nothing: it may have been recorded, and the words say so. The nine
+  direct sends that buzzed on any failure now go through it: the price,
+  «Змінити постачальника», a «Брак» step, a stocktake's start and finish,
+  a list's «Затвердити» and «Відхилити», a part removed, a line's answer;
+  so do «Новий список» and the three cancels that held the rule already.
+  Every other `buzz("error")` is a journal's «refused» or a wrong entry
+  (Д2, checked: 22 places). `success` and the words as before; the words
+  for no answer in «Брак» and the stocktake wait В13-Т1 (package № 22).
+- **A cancel's gateway answer keeps its sheet** (money P2-1 (а)). An
+  invoice's cancel, a payment's or set-off's, and a return's (from «Брак»
+  too): a 502–504 is no answer, as the network's loss — the sheet stays,
+  its reason in it, «Немає відповіді сервера. Натисніть ще раз — повторне
+  натискання безпечне.», nothing felt, nothing on the card; the paper's
+  words only on the plate, once. Pressed again, the server answers as it
+  is: one line «… скасовано», one success. A refusal the server said — as
+  before: the sheet closes, the refusal on the card, `error`.
+- **«Додати постачальника» refused, felt** (money P2-1 (б)): an `error`, as
+  «Змінити постачальника»; one on the list already («… уже є у списку —
+  обрано його.») and no answer — nothing. The words as before (package
+  № 22).
+- **A sale's, a return's and a debt's record is felt, whenever the server
+  says it** (sale P2-1; the agent's choice of 2026-10-18, «none for a kept
+  one confirmed later», reconsidered — never the owner's). «Продажу немає» — one `success` when
+  the server records the shortage; the shelf's question, nothing. A kept
+  sale or shortage («Продаж записано один раз», «Продажу не було»), return
+  and payment or write-off confirmed later — one `success`, by its check
+  button or by the phone itself, as a delivery, a correction, a count and
+  «Каса» already were. A check left unanswered, nothing; a refusal on a
+  later check, nothing, as a delivery's (Д4). Felt with the answer, never
+  on entering a screen: a tab left and come back to adds nothing.
+- **Not in it**: «Додати рядки» on a list (a part typed by hand) records
+  without a buzz — seen while building, left for the next audit. Kept
+  operations confirmed later and still felt as nothing — an invoice's and a
+  supplier return's (`checkInvoice`, `checkSupplierReturn`) and a catalog
+  change's (`catalog/Models.tsx`) — sale P2-1 named the four above alone;
+  left for the next audit (review). An `error` still felt for the app's own
+  failure — an attempt the phone could not write before sending (orders,
+  «Перевірка каталогу», a new model) — and for an order's or a store's
+  later check refused, unlike the sale's group (Д4): before this batch,
+  out of it.
+  Owner-held: В24-К1, В24-Г1, В24-Т1; orders-cash Н1 (a new server read
+  field, needs consent); В23-К1.

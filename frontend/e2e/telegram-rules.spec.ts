@@ -263,7 +263,7 @@ test("the till: a cell puts the keyboard away and is felt, ± too; while the bas
   );
 });
 
-test("a sale kept on the phone is felt once, a warning, and Telegram asks before closing until it is checked", async ({
+test("a sale kept on the phone is felt once, a warning, and Telegram asks before closing until it is checked; confirmed, a success once", async ({
   page,
 }) => {
   await hear(page);
@@ -324,7 +324,8 @@ test("a sale kept on the phone is felt once, a warning, and Telegram asks before
   expect(await answers()).toEqual([]);
 
   // Pressed — unless the phone checks it by itself first: either way, the
-  // question goes once it is settled, and the confirmation is not felt.
+  // question goes once it is settled, and the confirmation is felt as
+  // recorded, once (audit 2026-11-24, sale P2-1).
   lose = false;
   const settled = page.getByRole("heading", {
     name: "Продаж записано один раз",
@@ -335,7 +336,9 @@ test("a sale kept on the phone is felt once, a warning, and Telegram asks before
   await expect
     .poll(() => only(page, asks(true)[0]))
     .toEqual([asks(true)[1], asks(false)[1]]);
-  expect(await answers()).toEqual([]);
+  await expect.poll(answers).toEqual([notified("success")[1]]);
+  await page.waitForTimeout(500);
+  expect(await answers()).toEqual([notified("success")[1]]);
 });
 
 for (const [version, turns, asked] of [

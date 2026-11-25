@@ -1778,12 +1778,16 @@ function Workspace({
     if (!attempt) return;
     void resolve(saleKey, token, attempt).then((outcome) => {
       // Its words stand over any tab; the till is turned to only for
-      // whoever may sell («Усе на бірці» task list, P2-1).
+      // whoever may sell («Усе на бірці» task list, P2-1). Confirmed — a
+      // sale or the shortage — felt once, as a delivery's is (audit
+      // 2026-11-24, sale P2-1).
       if (outcome.kind === "sold") {
+        buzz("success");
         setSettled(outcome.sale);
         setSaleEpoch((epoch) => epoch + 1);
         if (canSellNow.current) setTab("sale");
       } else if (outcome.kind === "nothing-sold") {
+        buzz("success");
         setShelfSettled(true);
         setSaleEpoch((epoch) => epoch + 1);
         if (canSellNow.current) setTab("sale");
@@ -1830,8 +1834,9 @@ function Workspace({
     void cache.invalidateQueries({ queryKey: ["sale-stock"] });
   }
   // The invoices' and the suppliers' kept operations, checked by their
-  // button alone (G11; stage 2, money task list, P0-6): confirmed later, as
-  // the sale's, felt as nothing.
+  // button alone (G11; stage 2, money task list, P0-6): confirmed later,
+  // felt as nothing — not yet as the sale's, return's and payment's are
+  // (audit 2026-11-24, sale P2-1, named those four alone).
   function checkInvoice(): void {
     const attempt = invoiceCommand.pending;
     if (!attempt) return;
@@ -1883,6 +1888,8 @@ function Workspace({
     if (!attempt) return;
     void resolveReturn(returnKey, token, attempt).then((outcome) => {
       if (outcome.kind === "done") {
+        // Confirmed, felt once (audit 2026-11-24, sale P2-1).
+        buzz("success");
         // The attempt's own lines, as the phone kept them: the form that
         // chose a warehouse is gone after a reopen.
         setReturnSettled({ refund: outcome.result, sent: attempt.body.lines });
@@ -1912,6 +1919,9 @@ function Workspace({
     if (!attempt) return;
     void resolveCreditCommand(creditKey, token, attempt).then((outcome) => {
       if (outcome.kind === "done") {
+        // A payment or a write-off confirmed, felt once (audit 2026-11-24,
+        // sale P2-1).
+        buzz("success");
         const body = attempt.body;
         setCreditSettled(
           body.kind === "payment"

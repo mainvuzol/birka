@@ -9,7 +9,7 @@ import { SearchField } from "@/shared/SearchField";
 import { Sheet } from "@/shared/Sheet";
 import { Unread } from "@/shared/Unread";
 import { Placeholder } from "@/shared/Placeholder";
-import { buzz } from "@/shared/telegram";
+import { buzz, buzzRefusal } from "@/shared/telegram";
 import { enterGoes } from "@/shared/enter";
 import { visible } from "@/shared/visible";
 import { Empty } from "@/shared/Empty";
@@ -195,7 +195,9 @@ function SupplierEdit({
       ]);
       close();
     } catch (error) {
-      buzz("error");
+      // A refusal the server said, felt; no answer, nothing: it may have
+      // been recorded (audit 2026-11-24, frame P2-1).
+      buzzRefusal(error);
       if (isConflict(error))
         await cache.invalidateQueries({ queryKey: ["suppliers", store.id] });
       setProblem(

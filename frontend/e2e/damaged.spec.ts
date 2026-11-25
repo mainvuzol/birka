@@ -4,6 +4,7 @@ import {
   comeBack,
   more,
   openStore,
+  loseOnce,
   refuseOnce,
   section,
 } from "./fixtures";
@@ -811,7 +812,7 @@ test("«Брак»'s warehouses read slowly: two choices in grey, 44 high and th
   await expect(grey).toHaveCount(0);
 });
 
-test("inside Telegram a decision's yes is its MainButton — for a unit sold from another store's own warehouse, inactive until one of this store's is chosen as a chip —, felt when recorded; «Назад» closes the sheet, nothing recorded (stage 2, goods task list, P0-4)", async ({
+test("inside Telegram a decision's yes is its MainButton — for a unit sold from another store's own warehouse, inactive until one of this store's is chosen as a chip —, felt when recorded, refused as an error, unanswered as nothing (audit 2026-11-24, frame P2-1); «Назад» closes the sheet, nothing recorded (stage 2, goods task list, P0-4)", async ({
   page,
 }) => {
   const { main, buzzes, pressMain, pressBack } = await telegram(page);
@@ -892,7 +893,34 @@ test("inside Telegram a decision's yes is its MainButton — for a unit sold fro
     places.getByRole("button", { name: "Склад повернень", exact: true }),
   ).toHaveAttribute("aria-pressed", "true");
   expect(await selections()).toBe(before + 1);
-  await pressMain();
+  // No answer — the network lost, a gateway's 503 — felt as nothing: it may
+  // have been recorded; refused, the error, the only buzz since (audit
+  // 2026-11-24, frame P2-1).
+  const start = (await buzzes()).length;
+  const since = async (): Promise<unknown[]> => (await buzzes()).slice(start);
+  const press = async (): Promise<void> => {
+    await expect.poll(main).toMatchObject({ is_active: true });
+    await pressMain();
+  };
+  for (const how of ["network", 503] as const) {
+    const lost = await loseOnce(
+      page,
+      "**/api/v1/damaged-units/*/return-to-sale",
+      how,
+    );
+    await press();
+    await lost();
+    await expect(
+      sheet.getByRole("alert").filter({
+        hasText: /Повторне натискання безпечне\.$/,
+      }),
+    ).toBeVisible();
+  }
+  const error = { type: "notification", notification_type: "error" };
+  await refuseOnce(page, "**/api/v1/damaged-units/*/return-to-sale", 422);
+  await press();
+  await expect.poll(since).toEqual([error]);
+  await press();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   expect(sent).toEqual([
     { destination_location_id: fixture.returns_location_id },
@@ -900,10 +928,9 @@ test("inside Telegram a decision's yes is its MainButton — for a unit sold fro
   await expect(said(page)).toHaveText(
     "Повернули в продаж: Чужа · M → «Склад повернень»",
   );
-  expect(await buzzes()).toContainEqual({
-    type: "notification",
-    notification_type: "success",
-  });
+  await expect
+    .poll(since)
+    .toEqual([error, { type: "notification", notification_type: "success" }]);
   await expect
     .poll(
       async () =>

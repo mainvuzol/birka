@@ -216,6 +216,16 @@ export function unreachable(error: unknown): boolean {
       (error.status === 502 || error.status === 503 || error.status === 504))
   );
 }
+
+/**
+ * A refusal the server said — a 4xx, a conflict, a 500 — and not its
+ * silence: the network gone, a gateway's 502–504, a slow answer that never
+ * came (`SlowAnswer`) are no answer, and what was sent may have been
+ * recorded (audit 2026-11-24, frame P2-1).
+ */
+export function serverRefused(error: unknown): error is ApiError {
+  return error instanceof ApiError && !unreachable(error);
+}
 /**
  * A refusal the server raised after looking the command up under its lock,
  * so it proves the command recorded nothing (`details.recorded === false`):
