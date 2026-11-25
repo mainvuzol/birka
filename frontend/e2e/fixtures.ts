@@ -586,6 +586,48 @@ export async function refuseOnce(
   });
 }
 
+/**
+ * The next command sent to `pattern` — never a read of it — left without
+ * an answer once: the network lost, or a gateway's 502, 503 or 504; after
+ * the server recorded it, when `reached` (audit 2026-11-24, frame P2-1;
+ * money P2-1). What is returned waits until it was: a function, since a
+ * promise returned by an async one would be waited for at once.
+ */
+export async function loseOnce(
+  page: Page,
+  pattern: string,
+  how: "network" | 502 | 503 | 504,
+  reached = false,
+): Promise<() => Promise<void>> {
+  let used = false;
+  let lost: () => void = () => undefined;
+  const done = new Promise<void>((resolve) => {
+    lost = resolve;
+  });
+  await page.route(pattern, async (route) => {
+    if (used || route.request().method() === "GET") {
+      await route.fallback();
+      return;
+    }
+    used = true;
+    // Lost whatever the server did: a fetch that throws still leaves the
+    // request answered as lost, never hanging, and says why.
+    try {
+      if (reached) await route.fetch();
+    } finally {
+      if (how === "network") await route.abort("failed");
+      else
+        await route.fulfill({
+          status: how,
+          contentType: "text/html",
+          body: "<html><body>Bad Gateway</body></html>",
+        });
+      lost();
+    }
+  });
+  return () => done;
+}
+
 /** «Прийшов товар»: the warehouse's chip, where two or more take
  * deliveries and none is chosen (sections task list, P1-4). */
 export async function receiveInto(page: Page, name: string): Promise<void> {

@@ -35,6 +35,7 @@ import { Sheet } from "@/shared/Sheet";
 import { Stub } from "@/shared/Stub";
 import {
   buzz,
+  buzzRefusal,
   useAskBeforeClosing,
   useLockPortrait,
   useMainButton,
@@ -558,7 +559,9 @@ function StartSheet({
       buzz("success");
       if (live.current) started(record);
     } catch (error) {
-      buzz("error");
+      // A refusal the server said, felt; no answer, nothing: it may have
+      // been recorded (audit 2026-11-24, frame P2-1).
+      buzzRefusal(error);
       if (isConflict(error)) conflict();
       if (live.current) setFailure(error);
     } finally {
@@ -1086,7 +1089,7 @@ export function Stocktake({
       setAsked(false);
       setDone(finished);
     } catch (error) {
-      buzz("error");
+      buzzRefusal(error);
       if (isConflict(error)) void current.refetch();
       setFailure(error);
     } finally {

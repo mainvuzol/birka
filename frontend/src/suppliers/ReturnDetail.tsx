@@ -1,11 +1,11 @@
 import { useRef, useState } from "react";
 import type { JSX } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ApiError, api, isConflict, unreachable } from "@/shared/api";
+import { api, isConflict, serverRefused } from "@/shared/api";
 import { Back } from "@/shared/Back";
 import { Icon } from "@/shared/Icon";
 import { ScreenHeader } from "@/shared/ScreenHeader";
-import { buzz } from "@/shared/telegram";
+import { buzz, buzzRefusal } from "@/shared/telegram";
 import { visible } from "@/shared/visible";
 import { Sticker } from "@/shared/Sticker";
 import { money } from "@/orders/types";
@@ -116,10 +116,11 @@ export function ReturnDetail({
       await changed();
       setAsking(false);
     } catch (error) {
-      if (error instanceof ApiError) {
-        // No answer — a gateway's 502–504 among it — is not felt as a
-        // refusal (audit 2026-11-23, money P2-1's review).
-        if (!unreachable(error)) buzz("error");
+      // Refused: on the card, the sheet gone. No answer — a gateway's
+      // 502–504 as the network's loss — keeps the sheet and its reason, to
+      // press again, and is not felt (audit 2026-11-24, money P2-1).
+      if (serverRefused(error)) {
+        buzzRefusal(error);
         if (isConflict(error)) void changed();
         setAsking(false);
         setProblem(refusalText(error));

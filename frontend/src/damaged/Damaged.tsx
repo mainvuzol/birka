@@ -26,7 +26,7 @@ import { ScreenHeader } from "@/shared/ScreenHeader";
 import { Sheet } from "@/shared/Sheet";
 import { Stub } from "@/shared/Stub";
 import { CARRIED_TAP } from "@/shared/panel";
-import { buzz, useMainButton } from "@/shared/telegram";
+import { buzz, buzzRefusal, useMainButton } from "@/shared/telegram";
 import { Empty } from "@/shared/Empty";
 import type { DamagedStatus, DamagedUnit } from "./types";
 import { useDamagedUnits } from "./units";
@@ -279,7 +279,9 @@ export function Damaged({
       );
       return answer;
     } catch (error) {
-      buzz("error");
+      // A refusal the server said, felt; no answer, nothing: it may have
+      // been recorded (audit 2026-11-24, frame P2-1).
+      buzzRefusal(error);
       setProblem(refusalText(error));
       return null;
     } finally {

@@ -640,26 +640,36 @@ async function stocktakes(
   );
 }
 
+// The warehouses' reads still on their way to the server as a journey ends:
+// waited out before its page closes — one closed under a read mid-answer
+// never tears down («Tearing down "context"», CI of #249).
+let reading: Promise<void>[] = [];
+
 // Nothing waits but what a journey says: «Брак» empty, no list to approve,
 // no warehouse awaiting its stock, no close and no stocktake to tell of, the
 // backups in order. A journey's own stubs, set later, come first.
 test.beforeEach(async ({ page }) => {
+  reading = [];
   await page.route("**/api/v1/damaged-units?**", async (route) => {
     await route.fulfill({ json: { units: [] } });
   });
   await page.route("**/api/v1/stock-locations?**", async (route) => {
-    const response = await route.fetch();
-    const places = (await response.json()) as Record<string, unknown>[];
-    // A journey's clock run on lets the read go before it is answered.
-    await route
-      .fulfill({
-        response,
-        json: places.map((place) => ({
-          ...place,
-          awaiting_first_stock: false,
-        })),
-      })
-      .catch(() => undefined);
+    const read = (async () => {
+      const response = await route.fetch();
+      const places = (await response.json()) as Record<string, unknown>[];
+      // A journey's clock run on lets the read go before it is answered.
+      await route
+        .fulfill({
+          response,
+          json: places.map((place) => ({
+            ...place,
+            awaiting_first_stock: false,
+          })),
+        })
+        .catch(() => undefined);
+    })();
+    reading.push(read);
+    await read;
   });
   await page.route("**/api/v1/snapshots?**", async (route) => {
     await route.fulfill({ json: { items: [], has_more: false } });
@@ -669,6 +679,10 @@ test.beforeEach(async ({ page }) => {
     await route.fulfill({ json: { items: [] } });
   });
   await backups(page);
+});
+
+test.afterEach(async () => {
+  await Promise.allSettled(reading);
 });
 
 /** «Центр» and «Ринок», S04's day: «Центр»'s drawer open, «Ринок»'s

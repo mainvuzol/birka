@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import type { JSX, ReactNode, RefObject } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { ListMore } from "@/shared/ListMore";
-import { ApiError, api, unreachable } from "@/shared/api";
+import { api, serverRefused } from "@/shared/api";
 import { Unread } from "@/shared/Unread";
 import { useNextPageFailed } from "@/shared/nextPage";
 import { Placeholder } from "@/shared/Placeholder";
@@ -14,7 +14,7 @@ import { Icon } from "@/shared/Icon";
 import { SendingLine } from "@/shared/Sending";
 import { Sheet } from "@/shared/Sheet";
 import { radioArrows } from "@/shared/radioKeys";
-import { buzz, useAskBeforeClosing } from "@/shared/telegram";
+import { buzz, buzzRefusal, useAskBeforeClosing } from "@/shared/telegram";
 import { shortDay } from "@/credits/format";
 import {
   doneText,
@@ -221,8 +221,11 @@ export function InvoiceActions({
       setView(null);
       cancelled(current);
     } catch (error) {
-      if (error instanceof ApiError) {
-        if (!unreachable(error)) buzz("error");
+      // Refused: on the card, the sheet gone. No answer — a gateway's
+      // 502–504 as the network's loss — keeps the sheet and its reason, to
+      // press again (audit 2026-11-24, money P2-1).
+      if (serverRefused(error)) {
+        buzzRefusal(error);
         setView(null);
         refused(refusalText(error));
       } else setProblem(noAnswer);
@@ -762,8 +765,9 @@ export function EntryCancel({
       buzz("success");
       cancelled(current);
     } catch (error) {
-      if (error instanceof ApiError) {
-        if (!unreachable(error)) buzz("error");
+      // As the invoice's cancel (audit 2026-11-24, money P2-1).
+      if (serverRefused(error)) {
+        buzzRefusal(error);
         refused(refusalText(error));
       } else setProblem(noAnswer);
     } finally {

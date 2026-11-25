@@ -4,6 +4,7 @@ import {
   dockOnMenu,
   expectStub,
   fillLine,
+  haptics,
   menu,
   more,
   openStore,
@@ -114,10 +115,14 @@ async function model(page: Page, held: number): Promise<Model> {
   };
 }
 
-async function till(page: Page): Promise<void> {
+/** The till; `version`: inside Telegram of that version. */
+async function till(page: Page, version?: string): Promise<void> {
   await sellsFrom(page, fixture.returns_location_id);
   await page.goto(
-    `/#${new URLSearchParams({ tgWebAppData: initData() }).toString()}`,
+    `/#${new URLSearchParams({
+      tgWebAppData: initData(),
+      ...(version === undefined ? {} : { tgWebAppVersion: version }),
+    }).toString()}`,
   );
   await openStore(page, "Основний MAIN");
   await page.getByRole("button", { name: "Продаж", exact: true }).click();
@@ -383,6 +388,80 @@ test("an empty shelf whose answer was lost is checked, and not recorded twice; k
   ).toHaveCount(0);
   await expect(page.locator(".under-header")).toHaveCount(0);
   expect(calls).toBe(2);
+});
+
+test("inside Telegram «Продажу немає» is felt as a sale is: the shortage's question nothing, its record a success; its answer lost, a warning, a check unanswered nothing, and confirmed later — «Продажу не було» — a success, once, never again as the till is left and come back to (audit 2026-11-24, sale P2-1)", async ({
+  page,
+}) => {
+  const felt = await haptics(page);
+  const success = { type: "notification", notification_type: "success" };
+  const warning = { type: "notification", notification_type: "warning" };
+  const first = await model(page, 1);
+  const second = await model(page, 1);
+  await till(page, "8.0");
+  const start = (await felt()).length;
+  // What the till tells: a coat's light tap into the basket aside.
+  const since = async (): Promise<unknown[]> =>
+    (await felt())
+      .slice(start)
+      .filter((one) => (one as { type?: string }).type === "notification");
+  const record = (): Promise<void> =>
+    page
+      .getByRole("button", {
+        name: "На полиці немає жодної — записати нестачу",
+        exact: true,
+      })
+      .click();
+
+  // Recorded at once: one success.
+  await add(page, first, 2);
+  await page.getByRole("button", { name: "Готівка", exact: true }).click();
+  await shortage(page);
+  // The shelf's question asks, it does not fail: nothing.
+  expect(await since()).toEqual([]);
+  await record();
+  await expect(
+    page.getByRole("heading", { name: "Продажу немає" }),
+  ).toBeFocused();
+  await expect.poll(since).toEqual([success]);
+  await page.getByRole("button", { name: "Новий продаж" }).click();
+
+  // Recorded, its answer lost: kept, a warning.
+  let calls = 0;
+  await page.route("**/api/v1/shelf-shortages", async (route) => {
+    calls += 1;
+    if (calls === 1) {
+      await route.fetch();
+      await route.abort("failed");
+    } else if (calls === 2) await route.abort("failed");
+    else await route.continue();
+  });
+  await add(page, second, 2);
+  await page.getByRole("button", { name: "Готівка", exact: true }).click();
+  await shortage(page);
+  await record();
+  await expect(
+    page.getByRole("heading", { name: "Запис нестачі ще не підтверджено" }),
+  ).toBeVisible();
+  await expect.poll(since).toEqual([success, warning]);
+  const check = page.getByRole("button", {
+    name: "Перевірити результат продажу",
+  });
+  // Checked with no answer: still kept, nothing felt.
+  await check.click();
+  await expect.poll(() => calls).toBe(2);
+  await expect(check).toBeEnabled();
+  expect(await since()).toEqual([success, warning]);
+  // Confirmed: «Продажу не було», a success.
+  await check.click();
+  await ownStub(page, "Продаж", "Продажу не було");
+  await expect.poll(since).toEqual([success, warning, success]);
+  expect(calls).toBe(3);
+  // Left and come back to: nothing more.
+  await more(page);
+  await menu(page).getByRole("button", { name: "Продаж", exact: true }).click();
+  await ownStub(page, "Продаж", "Продажу не було");
+  expect(await since()).toEqual([success, warning, success]);
 });
 
 test("whoever may not report goods missing is not offered the empty shelf", async ({

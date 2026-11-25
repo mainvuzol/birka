@@ -750,6 +750,9 @@ export function Sale({
         buzz("success");
         setDropped(empty.map((d) => `${visible(d.name)} · ${visible(d.size)}`));
       } else {
+        // The shortage is the server's record: felt as a sale is (audit
+        // 2026-11-24, sale P2-1).
+        buzz("success");
         setNothingSold(outcome.shelf);
       }
       setDraft([]);

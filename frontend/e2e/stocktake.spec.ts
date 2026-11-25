@@ -10,6 +10,7 @@ import {
   expectSheetCancel,
   feels,
   leaveNewModel,
+  loseOnce,
   menu,
   more,
   newModelSheet,
@@ -1347,6 +1348,73 @@ test("inside Telegram «Інвентаризація» entered feels nothing; a 
   await feels(buzzes, () => place.click(), [selection]);
   await expect(place).toHaveAttribute("aria-pressed", "true");
   await feels(buzzes, () => place.click(), []);
+});
+
+test("inside Telegram a stocktake started or finished without an answer — the network lost, a gateway's 503 — is felt as nothing: it may have been recorded; refused, as an error; recorded, as a success (audit 2026-11-24, frame P2-1)", async ({
+  page,
+}) => {
+  const { main, buzzes, pressMain } = await telegram(page);
+  await stubbed(page);
+  await enter(page, "Склад інвентаризації", "8.0");
+  const error = { type: "notification", notification_type: "error" };
+  const success = { type: "notification", notification_type: "success" };
+  const start = (await buzzes()).length;
+  const since = async (): Promise<unknown[]> => (await buzzes()).slice(start);
+  // Pressed once the last answer is in: its MainButton active again.
+  const press = async (text: string): Promise<void> => {
+    await expect
+      .poll(main)
+      .toMatchObject({ is_visible: true, is_active: true, text });
+    await pressMain();
+  };
+  /** No answer twice, then a refusal: the error alone felt since. */
+  const unanswered = async (
+    pattern: string,
+    sheet: Locator,
+    text: string,
+    felt: unknown[],
+  ): Promise<void> => {
+    for (const how of ["network", 503] as const) {
+      const lost = await loseOnce(page, pattern, how);
+      await press(text);
+      await lost();
+      await expect(sheet.getByRole("alert")).toBeVisible();
+    }
+    expect(await since()).toEqual(felt);
+    await refuseOnce(page, pattern, 422);
+    await press(text);
+    await expect.poll(since).toEqual([...felt, error]);
+  };
+
+  await press("Почати інвентаризацію");
+  const starting = page.getByRole("dialog", {
+    name: "Почати інвентаризацію складу «Склад інвентаризації»?",
+  });
+  await expect(starting).toHaveAttribute("data-ready", "");
+  await unanswered("**/api/v1/stocktakes", starting, "Почати", []);
+  await press("Почати");
+  await expect(
+    page.getByRole("heading", {
+      level: 1,
+      name: "Інвентаризація · «Склад інвентаризації»",
+    }),
+  ).toBeVisible();
+  await expect.poll(since).toEqual([error, success]);
+
+  await page.getByRole("button", { name: "Завершити", exact: true }).click();
+  const end = page.getByRole("dialog", {
+    name: "Завершити інвентаризацію складу «Склад інвентаризації»?",
+  });
+  await expect(end).toHaveAttribute("data-ready", "");
+  await unanswered("**/api/v1/stocktakes/*/finish", end, "Так, завершити", [
+    error,
+    success,
+  ]);
+  await press("Так, завершити");
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Інвентаризацію завершено" }),
+  ).toBeVisible();
+  await expect.poll(since).toEqual([error, success, error, success]);
 });
 
 test("inside Telegram a model of four sizes is one tag, its cells in the sizes' order, counted in five taps and four numbers: the sheet goes on to the next cell, round from the one tapped, and closes after the last; the menu aside, kept upright, closing asked only while a number is typed (stage 2, goods task list, P0-2, P0-3)", async ({

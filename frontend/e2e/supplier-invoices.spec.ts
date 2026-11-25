@@ -20,6 +20,7 @@ import {
   ownStub,
   pickSupplier,
   readsOf,
+  loseOnce,
   refuseOnce,
   rowNamed,
   section,
@@ -1628,19 +1629,43 @@ test("a payment or an invoice recorded by mistake is cancelled, saying why", asy
   expect(await owed(page, invoiceId)).toBe("0.00");
 });
 
-test("inside Telegram a cancel is felt as a record is: answered, a buzz of success and its line over the sum; refused, a buzz of the error and no line; no answer, neither — the sheet says so (audit 2026-11-23, money P2-1)", async ({
+test("inside Telegram a cancel is felt as a record is: answered, a buzz of success and its line over the sum; refused, a buzz of the error and no line; no answer — the network lost, a gateway's 502–504, one after the server recorded it — neither: the sheet stays with its reason and says so, the paper's words only on the plate; pressed again, one line and one success (audit 2026-11-23, money P2-1; audit 2026-11-24, money P2-1)", async ({
   page,
 }) => {
+  await page.setViewportSize({ width: 360, height: 640 });
   const supplier = `Скасування ${randomUUID().slice(0, 6)}`;
   await anInvoice(page, await aSupplier(page, supplier), "2000.00", "500.00");
   await invoicesAt(page, hanna, { telegram: true });
   await open(page, supplier);
   const buzzes = async (kind: string): Promise<number> =>
     (await told(page, "web_app_trigger_haptic_feedback")).filter(
-      (each) =>
-        each.type === "notification" && each.notification_type === kind,
+      (each) => each.type === "notification" && each.notification_type === kind,
     ).length;
   const undone = page.locator(".invoice-done");
+  const noAnswer =
+    "Немає відповіді сервера. Натисніть ще раз — повторне натискання безпечне.";
+  /** Left without an answer: the sheet as it was, its reason in it, the
+   * paper's words once — the plate's —, nothing felt, nothing «скасовано». */
+  const unanswered = async (
+    why: Locator,
+    reason: string,
+    lost: () => Promise<void>,
+    felt: { error: number; success: number },
+  ): Promise<void> => {
+    await lost();
+    await expect(why.getByRole("alert")).toHaveText(noAnswer);
+    await expect(why.getByLabel("Чому скасовуємо")).toHaveValue(reason);
+    // Said once, by the plate, while the server is no answer; never in the
+    // sheet nor as its alert.
+    await expect(page.getByText(/Продавайте на папері/)).toHaveCount(1);
+    await expect(why.getByText(/Продавайте на папері/)).toHaveCount(0);
+    await expect(
+      page.getByRole("alert").filter({ hasText: /Продавайте на папері/ }),
+    ).toHaveCount(0);
+    expect(await buzzes("error")).toBe(felt.error);
+    expect(await buzzes("success")).toBe(felt.success);
+    await expect(undone).toHaveCount(0);
+  };
   const cancelPayment = async (): Promise<Locator> => {
     await line(page, "Оплата 500,00 грн").getByRole("button").click();
     const why = await sheet(page, "Скасувати: оплата 500,00 грн");
@@ -1649,61 +1674,43 @@ test("inside Telegram a cancel is felt as a record is: answered, a buzz of succe
     return why;
   };
   // Refused: the error felt, the refusal said, nothing «скасовано».
-  await refuseOnce(
-    page,
-    "**/api/v1/supplier-invoices/*/entries/*/cancel",
-    409,
-  );
+  await refuseOnce(page, "**/api/v1/supplier-invoices/*/entries/*/cancel", 409);
   await cancelPayment();
   await expect(page.getByRole("alert")).toBeVisible();
   await expect.poll(() => buzzes("error")).toBe(1);
   await expect(undone).toHaveCount(0);
-  // A gateway's 503 is no answer: not felt as a refusal (review).
-  let gateway = false;
-  await page.route(
-    "**/api/v1/supplier-invoices/*/entries/*/cancel",
-    async (route) => {
-      if (gateway) {
-        await route.fallback();
-        return;
-      }
-      gateway = true;
-      await route.fulfill({ status: 503 });
-    },
-  );
-  const gone = await cancelPayment();
-  // Answered by the gateway, the sheet closes — its answer taken.
-  await expect(gone).toHaveCount(0);
-  await expect(page.getByRole("alert")).toBeVisible();
-  expect(gateway).toBe(true);
-  expect(await buzzes("error")).toBe(1);
-  expect(await buzzes("success")).toBe(0);
-  await expect(undone).toHaveCount(0);
-  // No answer: nothing felt, the sheet says so and stays.
-  let lost = false;
-  await page.route(
-    "**/api/v1/supplier-invoices/*/entries/*/cancel",
-    async (route) => {
-      if (lost) {
-        await route.fallback();
-        return;
-      }
-      lost = true;
-      await route.abort("connectionreset");
-    },
-  );
+  // A gateway's 503 is no answer, as the network's loss: the sheet stays
+  // with its reason, nothing felt (review; audit 2026-11-24, money P2-1).
+  const entries = "**/api/v1/supplier-invoices/*/entries/*/cancel";
+  let lost = await loseOnce(page, entries, 503);
   const why = await cancelPayment();
-  await expect(why).toContainText("Немає відповіді сервера.");
-  expect(await buzzes("success")).toBe(0);
-  expect(await buzzes("error")).toBe(1);
-  await expect(undone).toHaveCount(0);
+  await unanswered(why, "гроші не віддали", lost, { error: 1, success: 0 });
+  // At 360 in both themes the sheet keeps to the screen, its yes in view.
+  for (const scheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    await expect(
+      why.getByRole("button", { name: "Так, скасувати" }),
+    ).toBeInViewport();
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth > innerWidth,
+      ),
+    ).toBe(false);
+  }
+  await page.emulateMedia({ colorScheme: "light" });
+  // The network lost, pressed again in the same sheet: the same.
+  lost = await loseOnce(page, entries, "network");
+  await why.getByRole("button", { name: "Так, скасувати" }).click();
+  await unanswered(why, "гроші не віддали", lost, { error: 1, success: 0 });
   // Pressed again, answered: success felt, its line over the sum.
   await why.getByRole("button", { name: "Так, скасувати" }).click();
+  await expect(why).toHaveCount(0);
   await expect(undone).toHaveText(
     "Оплату 500,00 грн скасовано. Залишок 2 000,00 грн.",
   );
   await expect.poll(() => buzzes("success")).toBe(1);
-  // The whole invoice: the same — refused, unanswered, then answered.
+  // The whole invoice: the same — refused, a gateway's 502, a 504 after the
+  // server cancelled it, then answered as it is: one line, one success.
   const cancelInvoice = async (): Promise<Locator> => {
     await act(page, "Скасувати накладну");
     const cancelling = await sheet(page, "Скасувати накладну");
@@ -1713,33 +1720,32 @@ test("inside Telegram a cancel is felt as a record is: answered, a buzz of succe
       .click();
     return cancelling;
   };
-  await refuseOnce(page, "**/api/v1/supplier-invoices/*/cancel", 409);
+  const invoices = "**/api/v1/supplier-invoices/*/cancel";
+  await refuseOnce(page, invoices, 409);
   await cancelInvoice();
   await expect(page.getByRole("alert")).toBeVisible();
   await expect.poll(() => buzzes("error")).toBe(2);
   await expect(undone).toHaveCount(0);
-  let dropped = false;
-  await page.route("**/api/v1/supplier-invoices/*/cancel", async (route) => {
-    if (dropped) {
-      await route.fallback();
-      return;
-    }
-    dropped = true;
-    await route.abort("connectionreset");
-  });
+  lost = await loseOnce(page, invoices, 502);
   const cancelling = await cancelInvoice();
-  await expect(cancelling).toContainText("Немає відповіді сервера.");
-  expect(await buzzes("success")).toBe(1);
-  expect(await buzzes("error")).toBe(2);
-  await expect(undone).toHaveCount(0);
+  await unanswered(cancelling, "не та сума", lost, { error: 2, success: 1 });
+  lost = await loseOnce(page, invoices, 504, true);
   await cancelling
     .getByRole("button", { name: "Так, скасувати накладну" })
     .click();
+  await unanswered(cancelling, "не та сума", lost, { error: 2, success: 1 });
+  await cancelling
+    .getByRole("button", { name: "Так, скасувати накладну" })
+    .click();
+  await expect(cancelling).toHaveCount(0);
   await expect(undone).toHaveText(
     `Накладну «${supplier}» на 2 000,00 грн скасовано.`,
   );
   await expect.poll(() => buzzes("success")).toBe(2);
   expect(await buzzes("error")).toBe(2);
+  await expect(page.locator(".invoice-closed .sticker")).toHaveText(
+    "Скасовано",
+  );
 });
 
 test("what is left is written off by the owner, never by a manager", async ({

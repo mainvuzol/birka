@@ -6,6 +6,7 @@ import {
   postEvent,
   supports,
 } from "@telegram-apps/sdk-react";
+import { serverRefused } from "./api";
 import { carried } from "./panel";
 
 /** Launch credentials stay in memory: the SDK launch reader persists them. */
@@ -292,7 +293,8 @@ function pressBack(): void {
 /**
  * A buzz in the hand (redesign P1-1; spec §4.4; «Усе на бірці» task list,
  * P1-2): `success` once the server records a sale, a payment, a step;
- * `error` once it refuses; `warning` for an operation kept on the phone and
+ * `error` once it refuses — with no answer, nothing (`buzzRefusal`);
+ * `warning` for an operation kept on the phone and
  * a drawer's difference; `selection` for a choice — a segment, a store, a
  * size picked; `light` for a coat into the basket, ±1, a tag's verb. Never
  * on a scroll, a key or a screen opening. Only inside Telegram, and only
@@ -323,6 +325,16 @@ export function buzz(kind: Buzz): void {
   } catch {
     /* No Telegram host to buzz. */
   }
+}
+
+/**
+ * A send that failed, felt: `error` only for a refusal the server said.
+ * With no answer — the network gone, a gateway's 502–504, a slow answer
+ * that never came — nothing: it may have been recorded, and the words say
+ * so (audit 2026-11-24, frame P2-1).
+ */
+export function buzzRefusal(error: unknown): void {
+  if (serverRefused(error)) buzz("error");
 }
 
 /** Telegram's version, inside Telegram: told nothing where it names none,

@@ -18,7 +18,7 @@ import { Icon } from "@/shared/Icon";
 import { SendingLine } from "@/shared/Sending";
 import { SearchField } from "@/shared/SearchField";
 import { Sheet } from "@/shared/Sheet";
-import { buzz } from "@/shared/telegram";
+import { buzz, buzzRefusal } from "@/shared/telegram";
 import { enterGoes } from "@/shared/enter";
 import type { Supplier } from "./types";
 
@@ -361,6 +361,9 @@ export function SupplierPicker({
         );
         take(String(error.details.supplier_id));
       } else {
+        // Refused, felt as «Змінити постачальника»'s; no answer, nothing
+        // (audit 2026-11-24, money P2-1 (б)).
+        buzzRefusal(error);
         // Changed meanwhile: the list it says to look at is read again.
         if (isConflict(error))
           await cache.invalidateQueries({ queryKey: ["suppliers", store.id] });

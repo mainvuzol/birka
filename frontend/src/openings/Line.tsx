@@ -9,7 +9,12 @@ import { Back } from "@/shared/Back";
 import { Eyelet } from "@/shared/Eyelet";
 import { usePanelRoom } from "@/shared/panel";
 import { ScreenHeader } from "@/shared/ScreenHeader";
-import { buzz, hideKeyboard, useMainButton } from "@/shared/telegram";
+import {
+  buzz,
+  buzzRefusal,
+  hideKeyboard,
+  useMainButton,
+} from "@/shared/telegram";
 import { enterGoes } from "@/shared/enter";
 import { Unread } from "@/shared/Unread";
 import { Placeholder } from "@/shared/Placeholder";
@@ -524,7 +529,9 @@ export function LineTask({
       buzz("success");
       saved = true;
     } catch (error) {
-      buzz("error");
+      // A refusal the server said, felt; no answer, nothing: it may have
+      // been recorded (audit 2026-11-24, frame P2-1).
+      buzzRefusal(error);
       const why = error instanceof ApiError ? error.details.reason : undefined;
       // A record made a possible range since the line was read: read it
       // again, so the record named is asked about here.

@@ -16,7 +16,7 @@ import { Placeholder } from "@/shared/Placeholder";
 import { Sheet } from "@/shared/Sheet";
 import { Toast } from "@/shared/Toast";
 import { Unread } from "@/shared/Unread";
-import { buzz, useMainButton } from "@/shared/telegram";
+import { buzz, buzzRefusal, useMainButton } from "@/shared/telegram";
 import { visible } from "@/shared/visible";
 import { decimal, kopecks, money, typedKopecks } from "@/orders/types";
 import type { Store } from "@/orders/types";
@@ -313,7 +313,9 @@ function Form({
       buzz("success");
       onDone(result);
     } catch (error) {
-      buzz("error");
+      // A refusal the server said, felt; no answer, nothing: it may have
+      // been recorded (audit 2026-11-24, frame P2-1).
+      buzzRefusal(error);
       if (error instanceof ApiError && error.code === "PRICE_CHANGED") {
         const now = error.details.current;
         setProblem(
