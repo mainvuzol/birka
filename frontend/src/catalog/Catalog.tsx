@@ -27,7 +27,14 @@ import {
 import type { Command } from "./commands";
 import { KeptCatalog } from "./KeptCatalog";
 import { NewModel } from "./NewModel";
-import { conflictsText, decidedText, reviewText, statusLabels } from "./types";
+import {
+  conflictsText,
+  decidedName,
+  decidedText,
+  outcomeText,
+  reviewText,
+  statusLabels,
+} from "./types";
 import type { Decision } from "./types";
 import { BackToMore } from "@/shared/More";
 import type { MoreBack } from "@/shared/More";
@@ -168,8 +175,10 @@ export function Catalog({
   });
   async function run(command: Command): Promise<void> {
     setSuccess("");
-    // Said of the proposal as it was read before the answer.
-    const said = command.path.endsWith("/alias-feedback")
+    // A name's answer is said of the proposal as it was read before it;
+    // every other command by what the server answered (audit 2026-11-24,
+    // goods P1-1).
+    const named = command.path.endsWith("/alias-feedback")
       ? feedbackSaid(
           command,
           cache.getQueryData<Decision>([
@@ -178,7 +187,7 @@ export function Catalog({
             command.decisionId,
           ]),
         )
-      : "Рішення збережено.";
+      : null;
     // A kept operation was felt once, as it was kept: its later checks are
     // felt nothing (spec §4.4; «Усе на бірці» task list, P1-2).
     const resent = useCatalogCommand.getState().pending !== null;
@@ -190,7 +199,7 @@ export function Catalog({
         result,
       );
       setSelected(result.decision_id);
-      setSuccess(said);
+      setSuccess(named ?? outcomeText(result));
       if (!resent) buzz("success");
       await cache.invalidateQueries({
         queryKey: ["catalog-decisions", journalKey],
@@ -294,11 +303,16 @@ export function Catalog({
         <NewModel
           store={store}
           token={token}
-          close={(made) => {
+          close={(made, cancelled) => {
             setCreating(false);
             // A proposal made and left: its own screen, never a page of the
             // queue to look for it on.
             if (made) setSelected(made.decision_id);
+            // An unfinished creation cancelled: said by its answer, as
+            // «Відхилити»'s; a sheet merely closed says nothing, whatever its
+            // proposal came to meanwhile (audit 2026-11-24, goods P1-1;
+            // review).
+            if (cancelled && made) setSuccess(outcomeText(made));
             void cache.invalidateQueries({
               queryKey: ["catalog-decisions", journalKey],
             });
@@ -335,7 +349,7 @@ export function Catalog({
             making={making}
             make={setMaking}
             made={(decision) => {
-              setSuccess(decidedText(decision));
+              setSuccess(outcomeText(decision));
             }}
           />
         )
@@ -561,6 +575,13 @@ function Detail({
   const others = candidates.filter(
     (c) => c.variant_id !== decision.resolved_variant_id,
   );
+  // A candidate confirmed names its model in view, where a creation names
+  // what was saved; none of them named any more, no line (audit
+  // 2026-11-24, goods P1-1, Д1).
+  const confirmed =
+    decision.status === "APPLIED" && !decision.creation
+      ? decidedName(decision)
+      : "";
   function action(suffix: string, body: Record<string, unknown>): void {
     void run({
       path: `${base}/${decision.decision_id}/${suffix}`,
@@ -633,6 +654,7 @@ function Detail({
           {decision.creation.sizes.map((s) => visible(s.code)).join(", ")}
         </p>
       )}
+      {confirmed && <p>Обраний товар: {visible(confirmed)}</p>}
       {/* One size, one spelling (owner decision, 2026-10-03): whoever typed
           «м» sees that it is the size «M». */}
       {decision.creation?.sizes
@@ -742,8 +764,10 @@ function Detail({
               store={store}
               token={token}
               decision={decision}
-              close={() => {
+              // Its cancel said as «Нова пропозиція»'s is (review).
+              close={(result, cancelled) => {
                 make(false);
+                if (cancelled && result) made(result);
               }}
               done={(_variant, _said, result) => {
                 make(false);

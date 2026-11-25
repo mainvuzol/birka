@@ -287,9 +287,17 @@ test("reject proposal and retrieve its preserved reason from history", async ({
   await reject.click();
   await response;
   await expect(sheet).toHaveCount(0);
-  await expect(
-    page.getByText("Причина відхилення: Це інша модель", { exact: true }),
-  ).toBeVisible();
+  const why = page.getByText("Причина відхилення: Це інша модель", {
+    exact: true,
+  });
+  await expect(why).toBeVisible();
+  // Its stub says what came of it, by the server's answer, over the reason
+  // (audit 2026-11-24, goods P1-1).
+  const said = page.locator(".stub-notice").getByRole("status");
+  await expect(said).toHaveText("Пропозицію відхилено.");
+  expect((await said.boundingBox())?.y ?? Infinity).toBeLessThan(
+    (await why.boundingBox())?.y ?? 0,
+  );
   await page.reload();
   await openStore(page, "Основний MAIN");
   await section(page, "Перевірка каталогу");
@@ -413,6 +421,11 @@ test("lost proposal response survives reopening with the same UUID", async ({
     reopened.getByRole("heading", { name: "Пропозиція" }),
   ).toBeVisible();
   await expect(itIs(reopened)).toBeVisible();
+  // Saved, nothing decided: said so, never a decision (audit 2026-11-24,
+  // goods P1-1).
+  await expect(reopened.locator(".stub-notice").getByRole("status")).toHaveText(
+    "Пропозицію збережено.",
+  );
   expect(ids).toHaveLength(2);
   expect(ids[1]).toBe(ids[0]);
 });
@@ -1696,11 +1709,15 @@ test("lost product rejection can be explicitly cancelled without leaving blocked
   await sheet
     .getByRole("button", { name: "Скасувати незавершене створення" })
     .click();
-  // Cancelled: the sheet goes, its proposal's screen says why.
+  // Cancelled: the sheet goes, its proposal's screen says why — rejected,
+  // as «Відхилити» says it (audit 2026-11-24, goods P1-1).
   await expect(sheet).toHaveCount(0);
   await expect(
     page.getByText("Причина відхилення:", { exact: false }),
   ).toBeVisible();
+  await expect(page.locator(".stub-notice").getByRole("status")).toHaveText(
+    "Пропозицію відхилено.",
+  );
   // Back to the queue, read again as it comes (no «Оновити» by the title, audit
   // 2026-11-13; review).
   const queue = page.waitForRequest("**/api/v1/catalog/match-decisions?**");
@@ -1711,6 +1728,41 @@ test("lost product rejection can be explicitly cancelled without leaving blocked
   await expect(
     page.getByRole("button", { name: "Нова пропозиція", exact: true }),
   ).toBeEnabled();
+});
+
+test("an unfinished creation cancelled from «Створити нову» on a proposal's own screen says «Пропозицію відхилено.», as from «Нова пропозиція»; the sheet merely closed says nothing (audit 2026-11-24, goods P1-1; review)", async ({
+  page,
+  context,
+}) => {
+  await enter(page);
+  await create(page, `Лоран зі свого екрана ${randomUUID().slice(0, 8)}`);
+  await leave(page);
+  // Opened and closed: nothing said.
+  await page.getByRole("button", { name: "Створити нову" }).click();
+  await leaveNewModel(await newModelSheet(page));
+  await expect(page.locator(".stub-notice")).toHaveCount(0);
+  await page.getByRole("button", { name: "Створити нову" }).click();
+  const making = await newModelSheet(page);
+  await making.getByLabel("Назва моделі", { exact: true }).fill("Лоран");
+  await typeSize(making, "M", "ALPHA");
+  await context.route(
+    "**/api/v1/catalog/match-decisions/*/create-product",
+    async (route) => {
+      await route.fetch();
+      await route.abort("failed");
+    },
+  );
+  await addModel(making).click();
+  await making
+    .getByRole("button", { name: "Скасувати незавершене створення" })
+    .click();
+  await expect(making).toHaveCount(0);
+  await expect(
+    page.getByText("Причина відхилення:", { exact: false }),
+  ).toBeVisible();
+  await expect(page.locator(".stub-notice").getByRole("status")).toHaveText(
+    "Пропозицію відхилено.",
+  );
 });
 
 test("cancelling a lost committed creation shows its saved product", async ({
@@ -1785,6 +1837,11 @@ test("creation cancellation accepts another reviewer's terminal rejection", asyn
       exact: true,
     }),
   ).toBeVisible();
+  // Said by the answer, whoever rejected it (audit 2026-11-24, goods P1-1;
+  // review).
+  await expect(page.locator(".stub-notice").getByRole("status")).toHaveText(
+    "Пропозицію відхилено.",
+  );
   await page
     .getByRole("button", { name: "Назад до «Перевірка каталогу»" })
     .click();
@@ -2088,7 +2145,7 @@ test("«Інший колір нашої моделі»: every model at once, as
   await expect(sheet.getByText(/Нічого не знайшли/)).toHaveCount(0);
 });
 
-test("at 360 px a proposal is its own screen: its words large, the models offered with «Це вона», none chosen, «Підтвердити: …» docked once one is, «Створити нову» and «Відхилити» — in sight, nothing past the width, in both themes; refused as changed meanwhile, it is read again (stage 2, goods task list, P1-1; audit 2026-11-13)", async ({
+test("at 360 px a proposal is its own screen: its words large, the models offered with «Це вона», none chosen, «Підтвердити: …» docked once one is, «Створити нову» and «Відхилити» — in sight, nothing past the width, in both themes; refused as changed meanwhile, it is read again (stage 2, goods task list, P1-1; audit 2026-11-13); confirmed, «Модель обрано: …» and «Обраний товар: …» in view, there when it is opened again (audit 2026-11-24, goods P1-1)", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 360, height: 640 });
@@ -2196,6 +2253,72 @@ test("at 360 px a proposal is its own screen: its words large, the models offere
   await expect
     .poll(() => reads.includes("/api/v1/catalog/match-decisions"))
     .toBe(true);
+  // Confirmed: the stub names the model chosen, as the sheet's does, and the
+  // proposal names it in view, the fold about its name shut (audit
+  // 2026-11-24, goods P1-1).
+  await page.setViewportSize({ width: 360, height: 640 });
+  const confirmed = page.waitForRequest(
+    (r) => r.method() === "POST" && r.url().endsWith("/confirm"),
+  );
+  await confirmAs(page).click();
+  const id = /match-decisions\/([^/]+)\/confirm$/.exec(
+    (await confirmed).url(),
+  )?.[1];
+  await expect(page.locator(".stub-notice").getByRole("status")).toHaveText(
+    `Модель обрано: ${loran}.`,
+  );
+  const chosen = page.getByText(`Обраний товар: ${loran}`, { exact: true });
+  await expect(chosen).toBeVisible();
+  // Under its sticker, where a created one's «Збережений товар» stands.
+  expect((await chosen.boundingBox())?.y ?? 0).toBeGreaterThan(
+    (await page.getByText("Підтверджено", { exact: true }).boundingBox())?.y ??
+      Infinity,
+  );
+  await expect(
+    page.getByRole("button", { name: "Цей опис — назва товару?" }),
+  ).toHaveAttribute("aria-expanded", "false");
+  for (const scheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    await expect(chosen).toBeVisible();
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth > innerWidth,
+      ),
+    ).toBe(false);
+  }
+  // Come back to from «Підтверджені»: the model in view, no stub. The
+  // list answers this proposal alone, whatever else the store confirmed
+  // (review).
+  await page.route(
+    "**/api/v1/catalog/match-decisions?**status=APPLIED**",
+    async (route) => {
+      const one = await page.request.get(
+        `/api/v1/catalog/match-decisions/${id ?? ""}`,
+        {
+          headers: {
+            Authorization: route.request().headers()["authorization"] ?? "",
+          },
+        },
+      );
+      await route.fulfill({
+        json: { items: [await one.json()], has_more: false },
+      });
+    },
+  );
+  await page
+    .getByRole("button", { name: "Назад до «Перевірка каталогу»" })
+    .click();
+  await page
+    .getByRole("group", { name: "Стан пропозицій" })
+    .getByRole("button", { name: "Підтверджені" })
+    .click();
+  await page
+    .getByRole("list", { name: "Пропозиції" })
+    .getByRole("button", { name: new RegExp(raw) })
+    .click();
+  await expect(page.getByRole("heading", { name: "Пропозиція" })).toBeVisible();
+  await expect(chosen).toBeVisible();
+  await expect(page.locator(".stub-notice")).toHaveCount(0);
 });
 
 test("a new model's sizes read slowly: a row of four cells in grey, 60 × 60 and the cell's corner, «Завантажуємо розміри…» said to a reader alone; come, the cells where they stood (audit after stage 2, frame P1-4)", async ({

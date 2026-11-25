@@ -240,8 +240,10 @@ test("a stocktake states what the shelf holds, and the ledger takes the differen
   // The sheet closes; a stub over the grid says it, and the grid is read
   // again.
   await expect(page.getByRole("dialog")).toHaveCount(0);
+  // With the warehouse the cell and the form named (audit 2026-11-24, goods
+  // P2-2).
   await expect(page.getByRole("status")).toContainText(
-    `Перерахунок, облік ${String(system)} → ${String(system - 2)}.`,
+    ` · M · склад «Склад перерахунку» — Перерахунок, облік ${String(system)} → ${String(system - 2)}.`,
   );
   await expect(here(page)).toHaveText(String(system - 2));
   // The count travels as a change *and* the balance it was worked out from:

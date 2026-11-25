@@ -114,8 +114,10 @@ export function NewModel({
   raw?: string;
   /** A proposal already made: straight to the new model. */
   decision?: Decision;
-  /** Closed: with the proposal, if one was made — its screen may open it. */
-  close: (decision?: Decision) => void;
+  /** Closed: with the proposal, if one was made — its screen may open it;
+   * `cancelled` when an unfinished creation was cancelled, its proposal
+   * rejected (audit 2026-11-24, goods P1-1; review). */
+  close: (decision?: Decision, cancelled?: boolean) => void;
   /** Recorded: the model the proposal resolved to, and its stub's words. */
   done: (variant: ReceivableVariant, said: string, decision: Decision) => void;
 }): JSX.Element {
@@ -321,7 +323,7 @@ export function NewModel({
     const variant = result.resolved_variant_id;
     if (variant === null) {
       // The creation cancelled: nothing is chosen, the screen as it was.
-      close(result);
+      close(result, true);
       return;
     }
     // A model in the catalogue now: the screen under the sheet reads its
