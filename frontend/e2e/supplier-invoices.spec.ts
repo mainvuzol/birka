@@ -13,6 +13,7 @@ import {
   expectSheetCancel,
   expectSignLink,
   expectSumRole,
+  feels,
   grn,
   menu,
   more,
@@ -1430,7 +1431,7 @@ test("read slowly, «Зарахувати повернення» holds three ret
   ).toBeLessThanOrEqual(1);
 });
 
-test("«Зарахувати повернення»: a sum typed, Telegram asks before Бірка closes, as «Оплатити» and «Видати з каси» do; the sum cleared or the sheet closed, it no longer asks (audit 2026-11-22, orders-cash P2-1's sweep, forwarded)", async ({
+test("«Зарахувати повернення»: a sum typed, Telegram asks before Бірка closes, as «Оплатити» and «Видати з каси» do; the sum cleared or the sheet closed, it no longer asks (audit 2026-11-22, orders-cash P2-1's sweep, forwarded); the return chosen felt as a choice, tapped again as nothing (audit 2026-11-25, the sale pass's note)", async ({
   page,
 }) => {
   // Inside Telegram 7.0, what it is told recorded.
@@ -1486,10 +1487,13 @@ test("«Зарахувати повернення»: a sum typed, Telegram asks 
   await open(page, supplier);
   await act(page, "Зарахувати повернення");
   const setOff = await sheet(page, "Зарахувати повернення");
-  await setOff
+  const hand = () => told(page, "web_app_trigger_haptic_feedback");
+  const return_ = setOff
     .getByRole("radiogroup", { name: "Повернення" })
-    .getByRole("radio")
-    .click();
+    .getByRole("radio");
+  await feels(hand, () => return_.click(), [{ type: "selection_change" }]);
+  await expect(return_).toHaveAttribute("aria-checked", "true");
+  await feels(hand, () => return_.click(), []);
   // A return chosen, no sum yet: nothing to lose, nothing asked.
   expect(await closing()).not.toEqual({ need_confirmation: true });
   const field = setOff.getByLabel("Скільки зарахував постачальник, грн");
@@ -1746,6 +1750,137 @@ test("inside Telegram a cancel is felt as a record is: answered, a buzz of succe
   await expect(page.locator(".invoice-closed .sticker")).toHaveText(
     "Скасовано",
   );
+});
+
+test("inside Telegram a cancel left with no answer, its sheet closed, reads the card again: what the server cancelled said as its answer would have said it, «Скасовано» on its line and the debt as the server has it; not reached, nothing said, the line pressed again; the read lost too, the card as it was; the invoice's own, closed by Telegram's «Назад», «Скасовано» and no «Сплатити»; closed with nothing pressed, nothing read; «Сплатити» held while it reads; never felt (audit 2026-11-25, money P2-1; review)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  const supplier = `Перечитано ${randomUUID().slice(0, 6)}`;
+  await anInvoice(page, await aSupplier(page, supplier), "2000.00", "500.00");
+  await invoicesAt(page, hanna, { telegram: true });
+  await open(page, supplier);
+  const felt = async (): Promise<number> =>
+    (await told(page, "web_app_trigger_haptic_feedback")).filter(
+      (each) => each.type === "notification",
+    ).length;
+  const noAnswer =
+    "Немає відповіді сервера. Натисніть ще раз — повторне натискання безпечне.";
+  const undone = page.locator(".invoice-done");
+  const reads = readsOf(page, /^\/api\/v1\/supplier-invoices$/);
+  const entries = "**/api/v1/supplier-invoices/*/entries/*/cancel";
+  const payment = line(page, "Оплата 500,00 грн");
+  const cancelPayment = async (): Promise<Locator> => {
+    await payment.getByRole("button").click();
+    const why = await sheet(page, "Скасувати: оплата 500,00 грн");
+    await why.getByLabel("Чому скасовуємо").fill("гроші не віддали");
+    await why.getByRole("button", { name: "Так, скасувати" }).click();
+    return why;
+  };
+  const keep = async (why: Locator): Promise<void> => {
+    await why.getByRole("button", { name: "Не скасовувати" }).click();
+    await expect(why).toHaveCount(0);
+  };
+  // Closed with nothing pressed: nothing read, as before.
+  await payment.getByRole("button").click();
+  let why = await sheet(page, "Скасувати: оплата 500,00 грн");
+  let before = reads();
+  await keep(why);
+  await page.waitForTimeout(300);
+  expect(reads()).toBe(before);
+  // Not reached: read again, nothing said, the line as it was.
+  let lost = await loseOnce(page, entries, 502);
+  why = await cancelPayment();
+  await lost();
+  await expect(why.getByRole("alert")).toHaveText(noAnswer);
+  before = reads();
+  await keep(why);
+  await expect.poll(reads).toBeGreaterThan(before);
+  await expect(undone).toHaveCount(0);
+  await expect(payment.locator(".sticker")).toHaveCount(0);
+  await expect(owes(page).locator(".invoice-owed-sum")).toHaveText(
+    "1 500,00 грн",
+  );
+  // The read lost too: the card as it was, no alert, the paper's plate
+  // once.
+  lost = await loseOnce(page, entries, 502);
+  why = await cancelPayment();
+  await lost();
+  await expect(why.getByRole("alert")).toHaveText(noAnswer);
+  let failing = true;
+  await page.route("**/api/v1/supplier-invoices?**", async (route) => {
+    if (failing) await route.abort("failed");
+    else await route.fallback();
+  });
+  before = reads();
+  await keep(why);
+  await expect.poll(reads).toBeGreaterThan(before);
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(page.getByText(/Продавайте на папері/)).toHaveCount(1);
+  await expect(undone).toHaveCount(0);
+  await expect(payment.locator(".sticker")).toHaveCount(0);
+  failing = false;
+  // Recorded before its answer was lost: said as the answer would have
+  // said it, the debt as the server has it. While it is read, «Сплатити»
+  // is held: pressed, nothing opens on a payment the read may undo
+  // (review).
+  lost = await loseOnce(page, entries, 504, true);
+  why = await cancelPayment();
+  await lost();
+  await expect(why.getByRole("alert")).toHaveText(noAnswer);
+  let release = (): void => undefined;
+  const reading = new Promise<void>((done) => {
+    release = done;
+  });
+  await page.route("**/api/v1/supplier-invoices?**", async (route) => {
+    await reading;
+    await route.fallback();
+  });
+  await keep(why);
+  await expect
+    .poll(() => mainButton(page))
+    .toMatchObject({ is_visible: true, is_active: false });
+  await telegramSays(page, "main_button_pressed");
+  release();
+  await expect
+    .poll(() => mainButton(page))
+    .toMatchObject({ is_visible: true, is_active: true });
+  await expect(undone).toHaveText(
+    "Оплату 500,00 грн скасовано. Залишок 2 000,00 грн.",
+  );
+  await expect(payment.locator(".sticker")).toHaveText("Скасовано");
+  await expect(owes(page).locator(".invoice-owed-sum")).toHaveText(
+    "2 000,00 грн",
+  );
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  // The invoice itself, its sheet closed by Telegram's «Назад».
+  lost = await loseOnce(
+    page,
+    "**/api/v1/supplier-invoices/*/cancel",
+    504,
+    true,
+  );
+  await act(page, "Скасувати накладну");
+  const cancelling = await sheet(page, "Скасувати накладну");
+  await cancelling.getByLabel("Чому скасовуємо").fill("не та сума");
+  await cancelling
+    .getByRole("button", { name: "Так, скасувати накладну" })
+    .click();
+  await lost();
+  await expect(cancelling.getByRole("alert")).toHaveText(noAnswer);
+  await telegramSays(page, "back_button_pressed");
+  await expect(cancelling).toHaveCount(0);
+  await expect(undone).toHaveText(
+    `Накладну «${supplier}» на 2 000,00 грн скасовано.`,
+  );
+  await expect(page.locator(".invoice-closed .sticker")).toHaveText(
+    "Скасовано",
+  );
+  await expect
+    .poll(() => mainButton(page))
+    .toMatchObject({ is_visible: false });
+  // A read, never an answer to a press: nothing felt.
+  expect(await felt()).toBe(0);
 });
 
 test("what is left is written off by the owner, never by a manager", async ({

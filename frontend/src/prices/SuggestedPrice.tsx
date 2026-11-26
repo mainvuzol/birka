@@ -7,6 +7,7 @@ import {
   api,
   isConflict,
   refusedWrite,
+  serverRefused,
   unreachable,
 } from "@/shared/api";
 import { Eyelet } from "@/shared/Eyelet";
@@ -167,11 +168,27 @@ export function PriceSheet({
 }): JSX.Element {
   const [foot, setFoot] = useState<HTMLDivElement | null>(null);
   const [saving, setSaving] = useState(false);
+  // Its last save left with no answer: the server may have recorded it.
+  const [unanswered, setUnanswered] = useState(false);
+  const cache = useQueryClient();
   return (
     <Sheet
       title={visible(name)}
       close={() => {
-        if (!saving) close();
+        if (saving) return;
+        close();
+        // Closed after a save with no answer, whatever way: the price and
+        // the till's search read again, as a recorded save reads them —
+        // the model shows the price that stands (audit 2026-11-25, money
+        // P2-1's note for the goods).
+        if (unanswered)
+          void Promise.all([
+            cache.invalidateQueries({
+              queryKey: priceKey(scopeKey, store.id, variantId),
+            }),
+            cache.invalidateQueries({ queryKey: ["sale-stock"] }),
+            cache.invalidateQueries({ queryKey: ["inventory-stock"] }),
+          ]);
       }}
       {...(fallback ? { fallback } : {})}
       // The form's own button, outside Telegram, kept in view under it.
@@ -185,6 +202,7 @@ export function PriceSheet({
         blocked={blocked}
         foot={foot}
         onSaving={setSaving}
+        onUnanswered={setUnanswered}
         onDone={done}
       />
     </Sheet>
@@ -209,6 +227,7 @@ function PriceEditor({
   blocked,
   foot,
   onSaving,
+  onUnanswered,
   onDone,
 }: {
   store: Store;
@@ -221,6 +240,8 @@ function PriceEditor({
   foot: HTMLElement | null;
   /** Whether a price is being saved: the sheet keeps it open till it is. */
   onSaving: (saving: boolean) => void;
+  /** Whether the last save was left with no answer. */
+  onUnanswered: (unanswered: boolean) => void;
   onDone: (prices: Prices) => void;
 }): JSX.Element {
   const prices = usePrices(store, token, scopeKey, variantId);
@@ -248,6 +269,7 @@ function PriceEditor({
       }}
       foot={foot}
       onSaving={onSaving}
+      onUnanswered={onUnanswered}
       onDone={onDone}
     />
   );
@@ -263,6 +285,7 @@ function Form({
   refetch,
   foot,
   onSaving,
+  onUnanswered,
   onDone,
 }: {
   store: Store;
@@ -274,6 +297,7 @@ function Form({
   refetch: () => Promise<void>;
   foot: HTMLElement | null;
   onSaving: (saving: boolean) => void;
+  onUnanswered: (unanswered: boolean) => void;
   onDone: (prices: Prices) => void;
 }): JSX.Element {
   const cache = useQueryClient();
@@ -296,6 +320,7 @@ function Form({
   async function save(price: string | null): Promise<void> {
     setBusy(true);
     onSaving(true);
+    onUnanswered(false);
     setProblem("");
     try {
       const result = await api<Prices>("/catalog/prices", token, {
@@ -314,8 +339,10 @@ function Form({
       onDone(result);
     } catch (error) {
       // A refusal the server said, felt; no answer, nothing: it may have
-      // been recorded (audit 2026-11-24, frame P2-1).
+      // been recorded (audit 2026-11-24, frame P2-1) — read again once the
+      // sheet is closed (audit 2026-11-25).
       buzzRefusal(error);
+      onUnanswered(!serverRefused(error));
       if (error instanceof ApiError && error.code === "PRICE_CHANGED") {
         const now = error.details.current;
         setProblem(

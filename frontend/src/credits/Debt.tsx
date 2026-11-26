@@ -38,6 +38,7 @@ import { usePanelRoom } from "@/shared/panel";
 import {
   askPopup,
   buzz,
+  buzzRefusal,
   popupHere,
   useAskBeforeClosing,
   useMainButton,
@@ -428,7 +429,9 @@ export function Debt({
     });
     // A buzz in the hand once the server answers, as at the till and in
     // «Повернення» (P0-5); a lost answer is its journal's warning (spec
-    // §4.4; «Усе на бірці» task list, P1-2), one confirmed later, none.
+    // §4.4; «Усе на бірці» task list, P1-2); one confirmed later, a success
+    // once, felt where it is confirmed (`checkCredit`; audit 2026-11-24,
+    // sale P2-1).
     if (outcome.kind === "done") {
       buzz("success");
       setRecorded((count) => count + 1);
@@ -1070,9 +1073,14 @@ export function DebtActions({
         token,
         {},
       );
+      // Felt once the server has erased, as «Списати борг» beside it; a
+      // refusal the server said, an error; no answer, nothing — the words
+      // say to press again (audit 2026-11-25, sale P2-1 (б)).
+      buzz("success");
       setView(null);
       erased(result);
     } catch (error) {
+      buzzRefusal(error);
       setView(null);
       // What was not done, then the step — never «спробуйте ще раз» on a
       // write; the server's own failure, pressed again, which is safe

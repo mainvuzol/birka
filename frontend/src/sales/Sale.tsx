@@ -611,7 +611,10 @@ export function Sale({
 
   /**
    * The size read off a coat held with its size not known: it is sold with
-   * that size (ADR-0005 §11). "" takes the reading back.
+   * that size (ADR-0005 §11). "" takes the reading back. A reading that
+   * makes a line the basket already has is refused at the press, felt as
+   * an error; another size, a choice; the same one again, nothing (audit
+   * 2026-11-25, sale P2-1 (а)).
    */
   function relabel(index: number, sizeId: string): void {
     const d = draft[index];
@@ -624,9 +627,11 @@ export function Sale({
       )
     ) {
       setValidation("Такий рядок уже є в кошику — змініть кількість у ньому.");
+      buzz("error");
       return;
     }
     setValidation("");
+    if (line.size_id !== d.line.size_id) buzz("selection");
     replaceDraft(
       draft.map((other, i) =>
         i === index
@@ -1195,6 +1200,9 @@ export function Sale({
                       data-location={location.id}
                       aria-pressed={catalogAt === location.id}
                       onClick={() => {
+                        // Another warehouse — a choice; the same one,
+                        // nothing (audit 2026-11-25, sale P2-1 (а)).
+                        if (catalogAt !== location.id) buzz("selection");
                         setCatalogAt(location.id);
                       }}
                     >

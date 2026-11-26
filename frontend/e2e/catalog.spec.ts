@@ -497,6 +497,81 @@ test("a proposal kept on the phone is felt once, a warning; its later checks, lo
   expect(await buzzes()).toEqual(warned);
 });
 
+test("inside Telegram a catalogue operation the phone could not write down is felt as nothing — in «Нова модель»'s sheet and on «Пропозиція»'s screen; a refusal the server said, an error (audit 2026-11-25, frame P2-1 (б))", async ({
+  page,
+}) => {
+  const felt = await haptics(page);
+  const told = async (): Promise<unknown[]> =>
+    (await felt()).filter(
+      (one) => (one as { type?: string }).type === "notification",
+    );
+  const error = { type: "notification", notification_type: "error" };
+  /** The phone's memory refuses the catalogue's attempts, or no longer. */
+  const memoryFull = (full: boolean): Promise<void> =>
+    page.evaluate((on) => {
+      const host = window as unknown as { birkaSetItem?: Storage["setItem"] };
+      host.birkaSetItem ??= Reflect.get(Storage.prototype, "setItem");
+      const set = host.birkaSetItem;
+      Storage.prototype.setItem = on
+        ? function (this: Storage, key: string, value: string) {
+            if (key.startsWith("birka:catalog-pending:"))
+              throw new DOMException("full", "QuotaExceededError");
+            set.call(this, key, value);
+          }
+        : set;
+    }, full);
+  // Each catalogue send that leaves the phone, whoever answers it.
+  let sent = 0;
+  page.on("request", (request) => {
+    const path = new URL(request.url()).pathname;
+    if (
+      request.method() === "POST" &&
+      /^\/api\/v1\/catalog\/match-decisions(\/[^/]+\/reject)?$/.test(path)
+    )
+      sent += 1;
+  });
+  await page.goto(launch("8.0"));
+  await openStore(page, "Основний MAIN");
+  await section(page, "Перевірка каталогу");
+  const sheet = await draft(page, `Пам’ять повна ${randomUUID().slice(0, 8)}`);
+  // «Далі», Telegram's MainButton here, with the memory full: never sent,
+  // the app's own failure said, nothing felt.
+  await memoryFull(true);
+  await pressMain(page);
+  await expect(sheet.getByRole("alert")).toBeVisible();
+  await page.waitForTimeout(500);
+  expect(sent).toBe(0);
+  expect(await told()).toEqual([]);
+  // The memory free, the server refuses: an error.
+  await memoryFull(false);
+  await refuseOnce(page, "**/api/v1/catalog/match-decisions", 409);
+  await pressMain(page);
+  await expect.poll(told).toEqual([error]);
+  // Answered: the proposal, then its own screen.
+  await pressMain(page);
+  await expect(sheet.getByText("Може, це модель, що вже є?")).toBeVisible();
+  // Each send counted: the refused one and the one answered.
+  expect(sent).toBe(2);
+  await leave(page);
+  // «Відхилити»'s sheet, its MainButton: the same.
+  await page.getByRole("button", { name: "Відхилити", exact: true }).click();
+  const rejecting = page.getByRole("dialog", { name: "Відхилити пропозицію" });
+  await expect(rejecting).toHaveAttribute("data-ready", "");
+  await rejecting.getByLabel("Причина відхилення").fill("Це інша модель");
+  const before = sent;
+  await memoryFull(true);
+  await pressMain(page);
+  await expect(rejecting.getByRole("alert")).toBeVisible();
+  await page.waitForTimeout(500);
+  expect(sent).toBe(before);
+  expect(await told()).toEqual([error]);
+  await memoryFull(false);
+  await refuseOnce(page, "**/api/v1/catalog/match-decisions/*/reject", 409);
+  await pressMain(page);
+  await expect.poll(told).toEqual([error, error]);
+  expect(sent).toBe(before + 1);
+});
+
 test("inside Telegram a model offered, chosen, is felt as a choice — never the one chosen tapped again — in «Нова модель»'s sheet and on «Пропозиція»'s screen; for «Інший колір нашої моделі» a similar model's chip and a model found felt too (audit 2026-11-15, goods P2-3); a typed size's system felt as it changes (audit 2026-11-18, goods P2-5 (в))", async ({
   page,
 }) => {

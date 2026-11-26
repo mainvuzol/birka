@@ -3658,6 +3658,25 @@ section.cash {
   line-height: 19px;
   color: var(--inverse-pencil);
 }
+/* Pressed, it reads the drawer again: the tag keeps its look, never the
+   fade of «не зараз», and its eyelet is the app's one spinner, the rim in
+   `inverse-pencil`, the running part the title's lime, 900 ms a turn (§1,
+   §5; audit 2026-11-25, orders-cash P2-1). Its own rule, not
+   `button.pressed`, which would lay the tag out in a row. */
+.cash-card.reading:disabled {
+  opacity: 1;
+}
+.cash-card.reading .cash-card-eyelet {
+  border-color: var(--inverse-pencil);
+  border-top-color: currentColor;
+  animation: eyelet-spin var(--dur-spinnerTurn) linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cash-card.reading .cash-card-eyelet {
+    animation: none;
+    border: 1.5px dashed currentColor;
+  }
+}
 /* Its rows (spec §6.8): 64 high, the title 17/600 in ink, what it is for
    under it in pencil, the chevron 16 in pencil. */
 .cash-rows .cash-row {

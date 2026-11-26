@@ -32,12 +32,18 @@ export function chargeOnce(amount: string): string {
 /** Where the next payments are taken, as the till's receipt says it. */
 const nextPayments = "Наступні внески — у «Продажі» › «Внесок».";
 
+/** Something is still owed: only then is there a next payment to make —
+ * «Внесок» takes an open debt alone (audit 2026-11-25, orders-cash P2-2). */
+function stillOwed(owed: string): boolean {
+  return (kopecks(owed) ?? 0n) > 0n;
+}
+
 /** What is owed after it, in parts: from the server's answer. Heard so,
- * in one sentence. */
+ * in one sentence; where the next payments go, only while one is owed. */
 export function owedText(order: Order): string | null {
-  return order.credit
-    ? `Покупець винен ${money(order.credit.owed)}. ${nextPayments}`
-    : null;
+  if (!order.credit) return null;
+  const owed = `Покупець винен ${money(order.credit.owed)}.`;
+  return stillOwed(order.credit.owed) ? `${owed} ${nextPayments}` : owed;
 }
 
 /**
@@ -45,7 +51,7 @@ export function owedText(order: Order): string | null {
  * orders-cash P2-1): «Покупець винен» with the sum in the debt's colour and
  * its arrow, and where the next payments go on a line of its own — the words
  * as they were, the sum the server's. What is owed so far: once nothing is
- * left, nothing in the debt's colour (as S22's).
+ * left, nothing in the debt's colour (as S22's), and no next payment.
  */
 function OwedLines({
   owed,
@@ -58,11 +64,13 @@ function OwedLines({
     <>
       <p className={className} aria-hidden="true">
         Покупець винен{" "}
-        {(kopecks(owed) ?? 0n) > 0n ? <OwedSum value={owed} /> : money(owed)}
+        {stillOwed(owed) ? <OwedSum value={owed} /> : money(owed)}
       </p>
-      <p className={className} aria-hidden="true">
-        {nextPayments}
-      </p>
+      {stillOwed(owed) && (
+        <p className={className} aria-hidden="true">
+          {nextPayments}
+        </p>
+      )}
     </>
   );
 }

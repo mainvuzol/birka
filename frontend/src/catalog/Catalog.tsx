@@ -14,7 +14,7 @@ import { Icon } from "@/shared/Icon";
 import { ModeSwitch } from "@/shared/ModeSwitch";
 import { Sheet } from "@/shared/Sheet";
 import { Stub } from "@/shared/Stub";
-import { buzz, useMainButton } from "@/shared/telegram";
+import { buzz, buzzRefusal, useMainButton } from "@/shared/telegram";
 import { visible } from "@/shared/visible";
 import type { Store } from "@/orders/types";
 import {
@@ -205,8 +205,10 @@ export function Catalog({
         queryKey: ["catalog-decisions", journalKey],
       });
     } else {
+      // Felt only as the server's refusal: an attempt the phone could not
+      // write down was never sent (audit 2026-11-25, frame P2-1 (б)).
       if (!resent && after.pending === null && after.error !== null)
-        buzz("error");
+        buzzRefusal(after.error);
       // Refused as changed meanwhile: the proposal and the queue are read
       // again, the refusal over them — «Оновити» is gone from the title (audit
       // 2026-11-13; review).

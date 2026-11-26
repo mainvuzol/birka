@@ -380,7 +380,7 @@ test("a return's result keeps «← Постачальникам» and Telegram'
   await expect(returnRow(page, supplier)).toHaveCount(3);
 });
 
-test("goods go back to a supplier from a warehouse, and come back when it is cancelled — once, whatever a gateway answered (audit 2026-11-24, money P2-1)", async ({
+test("goods go back to a supplier from a warehouse, and come back when it is cancelled — once, whatever a gateway answered (audit 2026-11-24, money P2-1); not reached, its sheet closed, the return read again as it was (audit 2026-11-25, money P2-1)", async ({
   page,
 }) => {
   const coat = await received(page, hanna, fixture.network_centre_store_id, 4);
@@ -563,6 +563,28 @@ test("goods go back to a supplier from a warehouse, and come back when it is can
     }),
   ).toBeVisible();
   await expect.poll(cancelReads).toBeGreaterThan(0);
+  await page.getByRole("button", { name: "Скасувати повернення" }).click();
+  await expect(ask).toHaveAttribute("data-ready", "");
+  await ask.getByLabel("Чому скасовуємо").fill("постачальник не взяв");
+  // Not reached, its sheet closed: the return read again, as it was — its
+  // button there, the goods where they were (audit 2026-11-25, money
+  // P2-1).
+  const notReached = await loseOnce(
+    page,
+    "**/api/v1/supplier-returns/*/cancel",
+    502,
+  );
+  await ask.getByRole("button", { name: "Так, скасувати повернення" }).click();
+  await notReached();
+  await expect(ask.getByRole("alert")).toHaveText(
+    "Немає відповіді сервера. Натисніть ще раз — повторне натискання безпечне.",
+  );
+  const readsBefore = cancelReads();
+  await ask.getByRole("button", { name: "Не скасовувати" }).click();
+  await expect(ask).toHaveCount(0);
+  await expect.poll(cancelReads).toBeGreaterThan(readsBefore);
+  await expect(page.locator(".supplier-return-cancelled")).toHaveCount(0);
+  expect(await available(page, coat)).toBe(2);
   await page.getByRole("button", { name: "Скасувати повернення" }).click();
   await expect(ask).toHaveAttribute("data-ready", "");
   await ask.getByLabel("Чому скасовуємо").fill("постачальник не взяв");
@@ -1789,145 +1811,180 @@ test("the returns are narrowed to a supplier from its sheet: «Усі поста
   );
 });
 
-test("a confirmed unit goes back to its supplier from «Брак», and comes back there when cancelled", async ({
-  page,
-}) => {
-  const coat = await received(page, petro, fixture.network_market_store_id, 1);
-  const headers = await headersOf(page, petro);
-  const sold = await page.request.post("/api/v1/sales", {
-    headers: { ...headers, "Idempotency-Key": randomUUID() },
-    data: {
-      store_id: fixture.network_market_store_id,
-      command_id: randomUUID(),
-      lines: [
-        {
-          product_variant_id: coat.variant,
-          size_id: coat.size,
-          source_location_id: fixture.network_shared_location_id,
-          quantity: 1,
-          unit_price: "2000.00",
-        },
-      ],
-      payment_method: "CASH",
-    },
-  });
-  const sale = (await sold.json()) as { id: string; items: { id: string }[] };
-  const back = await page.request.post(`/api/v1/sales/${sale.id}/refunds`, {
-    headers: { ...headers, "Idempotency-Key": randomUUID() },
-    data: {
-      command_id: randomUUID(),
-      lines: [
-        {
-          sale_item_id: sale.items[0]?.id,
-          quantity: 1,
-          restock: true,
-          condition: "DAMAGED",
-        },
-      ],
-      payment_method: "CASH",
-    },
-  });
-  expect(back.status()).toBe(201);
-
-  const supplier = `Брак-постачальник ${randomUUID().slice(0, 6)}`;
-  await openAs(page, petro);
-  await openStore(page, /^Ринок MARKET/);
-  await section(page, "Брак");
-  const unit = page.getByRole("article", { name: coat.model });
-  await unit.getByRole("button", { name: "Взяти на перевірку" }).click();
-  const sheet = page.getByRole("dialog", { name: new RegExp(coat.model) });
-  await expect(sheet).toHaveAttribute("data-ready", "");
-  await sheet.getByRole("button", { name: "Брак підтверджений" }).click();
-  const confirmed = sheet.getByRole("button", {
-    name: "Так, брак підтверджений",
-  });
-  await expect(confirmed).toHaveAttribute("data-ready", "");
-  await confirmed.click();
-  await expect(sheet).toHaveCount(0);
-  await page
-    .getByRole("group", { name: "Які речі" })
-    .getByRole("button", { name: /^Підтверджений/ })
-    .click();
-  await unit.getByRole("button", { name: "Вирішити" }).click();
-  await expect(sheet).toHaveAttribute("data-ready", "");
-  await sheet.getByRole("button", { name: "Повернути постачальнику" }).click();
-  await expect(
-    sheet.getByLabel("Примітка для постачальника (необов’язково)"),
-  ).toHaveAccessibleDescription("Без імен і телефонів покупців.");
-  const toSupplier = sheet.getByRole("button", {
-    name: "Так, повернути постачальнику",
-  });
-  await expect(toSupplier).toBeDisabled();
-  // The supplier's field, its list in place in the unit's sheet: never a
-  // native list, never a sheet over a sheet (stage 2, money task list,
-  // P0-3).
-  await expect(
-    sheet.getByRole("combobox", { name: /Постачальник/ }),
-  ).toHaveCount(0);
-  await addSupplier(page, supplier, "067 123 45 67", { inside: sheet });
-  await expect(toSupplier).toHaveAttribute("data-ready", "");
-  await toSupplier.click();
-  await expect(sheet).toHaveCount(0);
-  await expect(page.locator(".stub-notice p")).toHaveText(
-    `Повернули постачальнику «${supplier}»: ${coat.model} беж · M`,
-  );
-  await expect(unit).toHaveCount(0);
-
-  // The return's own read of its supplier's: fifty others the newest, this
-  // one on the next page (audit 2026-11-20, money Н1).
-  const ofSupplier: string[] = [];
-  await page.route(
-    (url) =>
-      url.pathname === "/api/v1/supplier-returns" &&
-      url.searchParams.has("supplier_id"),
-    async (route, request) => {
-      const url = new URL(request.url());
-      const offset = Number(url.searchParams.get("offset") ?? "0");
-      ofSupplier.push(String(offset));
-      if (offset === 0) {
-        const real = (await (await route.fetch()).json()) as {
-          items: { id: string }[];
-        };
-        await route.fulfill({
-          json: {
-            items: real.items.map((item) => ({ ...item, id: randomUUID() })),
-            has_more: true,
+// Its cancel answered, and answered by no one with the sheet closed: the
+// only journey that cancels a return from «Брак» keeps its answer proven
+// (review).
+for (const lostAnswer of [false, true]) {
+  test(`a confirmed unit goes back to its supplier from «Брак», and comes back there when cancelled${lostAnswer ? " — cancelled before its answer was lost, by the sheet closed (audit 2026-11-25, money P2-1)" : ""}`, async ({
+    page,
+  }) => {
+    const coat = await received(
+      page,
+      petro,
+      fixture.network_market_store_id,
+      1,
+    );
+    const headers = await headersOf(page, petro);
+    const sold = await page.request.post("/api/v1/sales", {
+      headers: { ...headers, "Idempotency-Key": randomUUID() },
+      data: {
+        store_id: fixture.network_market_store_id,
+        command_id: randomUUID(),
+        lines: [
+          {
+            product_variant_id: coat.variant,
+            size_id: coat.size,
+            source_location_id: fixture.network_shared_location_id,
+            quantity: 1,
+            unit_price: "2000.00",
           },
-        });
-        return;
-      }
-      url.searchParams.set("offset", String(offset - 50));
-      await route.fallback({ url: url.toString() });
-    },
-  );
-  await section(page, "Постачальникам");
-  const row = returnRow(page, supplier);
-  await expect(row).toContainText("з «Браку» «Брак ринку»");
-  await row.click();
-  await expect.poll(() => ofSupplier).toEqual(["0", "50"]);
-  await page.getByRole("button", { name: "Скасувати повернення" }).click();
-  const ask = page.getByRole("dialog", { name: "Скасувати повернення" });
-  await expect(ask).toHaveAttribute("data-ready", "");
-  await expect(ask).toContainText("Товар повернеться у «Брак» «Брак ринку».");
-  await ask.getByLabel("Чому скасовуємо").fill("постачальник відмовив");
-  await ask.getByRole("button", { name: "Так, скасувати повернення" }).click();
-  // Its cancel answered by «Брак»'s unit: the return read again, found on
-  // its page — «Скасовано», never «Скасувати повернення» again.
-  await expect(ask).toHaveCount(0);
-  await expect(page.locator(".supplier-return-cancelled")).toContainText(
-    /^Скасовано.* · постачальник відмовив · /,
-  );
-  await expect(
-    page.getByRole("button", { name: "Скасувати повернення" }),
-  ).toHaveCount(0);
+        ],
+        payment_method: "CASH",
+      },
+    });
+    const sale = (await sold.json()) as { id: string; items: { id: string }[] };
+    const back = await page.request.post(`/api/v1/sales/${sale.id}/refunds`, {
+      headers: { ...headers, "Idempotency-Key": randomUUID() },
+      data: {
+        command_id: randomUUID(),
+        lines: [
+          {
+            sale_item_id: sale.items[0]?.id,
+            quantity: 1,
+            restock: true,
+            condition: "DAMAGED",
+          },
+        ],
+        payment_method: "CASH",
+      },
+    });
+    expect(back.status()).toBe(201);
 
-  await section(page, "Брак");
-  await page
-    .getByRole("group", { name: "Які речі" })
-    .getByRole("button", { name: /^Підтверджений/ })
-    .click();
-  await expect(unit).toHaveAttribute("data-status", "CONFIRMED");
-});
+    const supplier = `Брак-постачальник ${randomUUID().slice(0, 6)}`;
+    await openAs(page, petro);
+    await openStore(page, /^Ринок MARKET/);
+    await section(page, "Брак");
+    const unit = page.getByRole("article", { name: coat.model });
+    await unit.getByRole("button", { name: "Взяти на перевірку" }).click();
+    const sheet = page.getByRole("dialog", { name: new RegExp(coat.model) });
+    await expect(sheet).toHaveAttribute("data-ready", "");
+    await sheet.getByRole("button", { name: "Брак підтверджений" }).click();
+    const confirmed = sheet.getByRole("button", {
+      name: "Так, брак підтверджений",
+    });
+    await expect(confirmed).toHaveAttribute("data-ready", "");
+    await confirmed.click();
+    await expect(sheet).toHaveCount(0);
+    await page
+      .getByRole("group", { name: "Які речі" })
+      .getByRole("button", { name: /^Підтверджений/ })
+      .click();
+    await unit.getByRole("button", { name: "Вирішити" }).click();
+    await expect(sheet).toHaveAttribute("data-ready", "");
+    await sheet
+      .getByRole("button", { name: "Повернути постачальнику" })
+      .click();
+    await expect(
+      sheet.getByLabel("Примітка для постачальника (необов’язково)"),
+    ).toHaveAccessibleDescription("Без імен і телефонів покупців.");
+    const toSupplier = sheet.getByRole("button", {
+      name: "Так, повернути постачальнику",
+    });
+    await expect(toSupplier).toBeDisabled();
+    // The supplier's field, its list in place in the unit's sheet: never a
+    // native list, never a sheet over a sheet (stage 2, money task list,
+    // P0-3).
+    await expect(
+      sheet.getByRole("combobox", { name: /Постачальник/ }),
+    ).toHaveCount(0);
+    await addSupplier(page, supplier, "067 123 45 67", { inside: sheet });
+    await expect(toSupplier).toHaveAttribute("data-ready", "");
+    await toSupplier.click();
+    await expect(sheet).toHaveCount(0);
+    await expect(page.locator(".stub-notice p")).toHaveText(
+      `Повернули постачальнику «${supplier}»: ${coat.model} беж · M`,
+    );
+    await expect(unit).toHaveCount(0);
+
+    // The return's own read of its supplier's: fifty others the newest, this
+    // one on the next page (audit 2026-11-20, money Н1).
+    const ofSupplier: string[] = [];
+    await page.route(
+      (url) =>
+        url.pathname === "/api/v1/supplier-returns" &&
+        url.searchParams.has("supplier_id"),
+      async (route, request) => {
+        const url = new URL(request.url());
+        const offset = Number(url.searchParams.get("offset") ?? "0");
+        ofSupplier.push(String(offset));
+        if (offset === 0) {
+          const real = (await (await route.fetch()).json()) as {
+            items: { id: string }[];
+          };
+          await route.fulfill({
+            json: {
+              items: real.items.map((item) => ({ ...item, id: randomUUID() })),
+              has_more: true,
+            },
+          });
+          return;
+        }
+        url.searchParams.set("offset", String(offset - 50));
+        await route.fallback({ url: url.toString() });
+      },
+    );
+    await section(page, "Постачальникам");
+    const row = returnRow(page, supplier);
+    await expect(row).toContainText("з «Браку» «Брак ринку»");
+    await row.click();
+    await expect.poll(() => ofSupplier).toEqual(["0", "50"]);
+    await page.getByRole("button", { name: "Скасувати повернення" }).click();
+    const ask = page.getByRole("dialog", { name: "Скасувати повернення" });
+    await expect(ask).toHaveAttribute("data-ready", "");
+    await expect(ask).toContainText("Товар повернеться у «Брак» «Брак ринку».");
+    await ask.getByLabel("Чому скасовуємо").fill("постачальник відмовив");
+    if (lostAnswer) {
+      // Cancelled before its answer was lost, the sheet closed: the return
+      // read again, as an answer would have it (audit 2026-11-25, money
+      // P2-1).
+      const lost = await loseOnce(
+        page,
+        "**/api/v1/damaged-units/*/cancel-supplier-return",
+        504,
+        true,
+      );
+      await ask
+        .getByRole("button", { name: "Так, скасувати повернення" })
+        .click();
+      await lost();
+      await expect(ask.getByRole("alert")).toHaveText(
+        "Немає відповіді сервера. Натисніть ще раз — повторне натискання безпечне.",
+      );
+      await ask.getByRole("button", { name: "Не скасовувати" }).click();
+    } else {
+      // Its cancel answered by «Брак»'s unit.
+      await ask
+        .getByRole("button", { name: "Так, скасувати повернення" })
+        .click();
+    }
+    // Read again, found on its page — «Скасовано», never «Скасувати
+    // повернення» again; the unit back in «Брак».
+    await expect(ask).toHaveCount(0);
+    await expect(page.locator(".supplier-return-cancelled")).toContainText(
+      /^Скасовано.* · постачальник відмовив · /,
+    );
+    await expect(
+      page.getByRole("button", { name: "Скасувати повернення" }),
+    ).toHaveCount(0);
+
+    await section(page, "Брак");
+    await page
+      .getByRole("group", { name: "Які речі" })
+      .getByRole("button", { name: /^Підтверджений/ })
+      .click();
+    await expect(unit).toHaveAttribute("data-status", "CONFIRMED");
+  });
+}
 
 test("a return whose answer is lost is resent unchanged, and takes the goods once", async ({
   page,

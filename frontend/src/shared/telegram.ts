@@ -293,8 +293,10 @@ function pressBack(): void {
 /**
  * A buzz in the hand (redesign P1-1; spec §4.4; «Усе на бірці» task list,
  * P1-2): `success` once the server records a sale, a payment, a step;
- * `error` once it refuses — with no answer, nothing (`buzzRefusal`);
- * `warning` for an operation kept on the phone and
+ * `error` once it refuses, or for a wrong entry refused at the press (a size
+ * the basket holds, a file too large) — with no answer, and for the phone's
+ * own failure (an attempt it could not write down, never sent), nothing
+ * (`buzzRefusal`); `warning` for an operation kept on the phone and
  * a drawer's difference; `selection` for a choice — a segment, a store, a
  * size picked; `light` for a coat into the basket, ±1, a tag's verb. Never
  * on a scroll, a key or a screen opening. Only inside Telegram, and only

@@ -237,8 +237,13 @@ export function ReturnDetail({
           problem={problem}
           fallback={name}
           close={() => {
+            // Its last press unanswered, the server may have cancelled it:
+            // the return, the stock and «Брак» read again, whatever way it
+            // is closed (audit 2026-11-25, money P2-1).
+            const unanswered = problem === noAnswer;
             setAsking(false);
             setProblem(null);
+            if (unanswered) void changed();
           }}
           run={(reason) => {
             void undo(reason);

@@ -994,6 +994,10 @@ function InvoiceDetail({
   const [problem, setProblem] = useState<string | null>(null);
   // A sheet over the card: «Сплатити» steps aside.
   const [acting, setActing] = useState(false);
+  // The card read again after a cancel left with no answer: «Сплатити»
+  // waits for what the server has, never a payment on a cancelled invoice
+  // (audit 2026-11-25, money P2-1; review).
+  const [rereading, setRereading] = useState(false);
   const [cancelling, setCancelling] = useState<InvoiceEntry | null>(null);
   const name = useRef<HTMLHeadingElement>(null);
   // Another store's invoice, paid here because that one does not trade.
@@ -1002,7 +1006,7 @@ function InvoiceDetail({
   const takes = open && !readOnly;
   const main = useMainButton("Сплатити", pay, {
     shown: takes && !acting && cancelling === null,
-    active: !held,
+    active: !held && !rereading,
   });
   const dock = useRef<HTMLDivElement>(null);
   usePanelRoom(dock, takes && !main);
@@ -1015,6 +1019,29 @@ function InvoiceDetail({
   async function shownAgain(): Promise<void> {
     const current = await readAgain(invoice);
     if (current) changed(current);
+  }
+
+  /**
+   * A cancel pressed and left with no answer, its sheet closed: the server
+   * may have recorded it, so the card is read again. What it recorded is
+   * said over the sum as its answer would have said it; not recorded, the
+   * card as read, without words; not read, as it was — the banner says its
+   * own (audit 2026-11-25, money P2-1). Never felt: a read, not an answer
+   * to a press.
+   */
+  async function readAfterLost(
+    said: (current: Invoice) => string | null,
+  ): Promise<void> {
+    setRereading(true);
+    const current = await readAgain(invoice);
+    setRereading(false);
+    if (!current) return;
+    const text = said(current);
+    if (text !== null) {
+      setProblem(null);
+      setRecorded(text);
+    }
+    changed(current);
   }
 
   return (
@@ -1066,6 +1093,11 @@ function InvoiceDetail({
             }}
             stale={() => {
               void shownAgain();
+            }}
+            lost={() => {
+              void readAfterLost((current) =>
+                current.status === "CANCELLED" ? cancelledText(current) : null,
+              );
             }}
           />
         }
@@ -1199,6 +1231,14 @@ function InvoiceDetail({
               setProblem(text);
               void shownAgain();
             }}
+            lost={() => {
+              void readAfterLost((current) => {
+                const now = current.entries.find(
+                  (one) => one.id === cancelling.id,
+                );
+                return now?.cancelled ? cancelledText(current, now) : null;
+              });
+            }}
           />
         )}
         {takes && !main && (
@@ -1207,7 +1247,7 @@ function InvoiceDetail({
             <button
               type="button"
               className="main-mimic"
-              disabled={held}
+              disabled={held || rereading}
               onClick={pay}
             >
               Сплатити

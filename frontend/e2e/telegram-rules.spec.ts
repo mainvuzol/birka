@@ -3,6 +3,7 @@ import {
   expect,
   basketDone,
   basketSheet,
+  feels,
   fromPaper,
   menu,
   more,
@@ -385,7 +386,7 @@ test("held sideways as the first coat goes in, the screen is not locked so: turn
     .toEqual([upright(true)[1]]);
 });
 
-test("«З паперу» at the till: never a MainButton, and Telegram's «Назад» closes the sheet, not the till (stage 2, orders task list, P0-4)", async ({
+test("«З паперу» at the till: never a MainButton, and Telegram's «Назад» closes the sheet, not the till (stage 2, orders task list, P0-4); each choice in it felt as one, the one chosen, tapped again, as nothing (audit 2026-11-25, sale P2-1 (а))", async ({
   page,
 }) => {
   await hear(page);
@@ -394,7 +395,27 @@ test("«З паперу» at the till: never a MainButton, and Telegram's «На
   await page.getByLabel("Вношу продаж з паперу").check();
   const sheet = page.getByRole("dialog", { name: "З паперу" });
   await expect(sheet).toHaveAttribute("data-ready", "");
-  await sheet.getByRole("radio", { name: "Сервер не відповідав" }).check();
+  // Which paper, and who sold it: radios felt as choices when they change
+  // (the return's and the payment's sheet is this one).
+  const hand = () => only(page, haptic);
+  const radio = (name: string) => sheet.getByRole("radio", { name });
+  await feels(
+    hand,
+    () => radio("Перші дні, до затвердження залишків").click(),
+    [selection[1]],
+  );
+  await feels(hand, () => radio("Сервер не відповідав").click(), [
+    selection[1],
+  ]);
+  await feels(hand, () => radio("Сервер не відповідав").click(), []);
+  await expect(radio("Не вказано")).toBeChecked();
+  // The last of «Хто продав», once the sellers are read.
+  const seller = sheet.locator(".paper-option").last().getByRole("radio");
+  await expect(seller).not.toHaveAccessibleName("Не вказано");
+  await feels(hand, () => seller.click(), [selection[1]]);
+  await expect(seller).toBeChecked();
+  await feels(hand, () => seller.click(), []);
+  await feels(hand, () => radio("Не вказано").click(), [selection[1]]);
   // The app's own «Готово», quiet, in the sheet's foot.
   await expect(sheet.getByRole("button", { name: "Готово" })).toHaveClass(
     /\bquiet\b/,

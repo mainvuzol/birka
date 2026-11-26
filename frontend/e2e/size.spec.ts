@@ -3,7 +3,9 @@ import {
   expect,
   basketDone,
   basketSheet,
+  feels,
   fillLine,
+  haptics,
   openStore,
   tapSize,
   sellsFrom,
@@ -264,6 +266,72 @@ test("a coat held with its size not known is sold with the size on its label", a
     "aria-label",
     `розмір невідомий, вільно ${String(unknown.available_quantity - 1)}`,
   );
+});
+
+test("inside Telegram the size read off a label is felt as a choice; the same again, nothing; a size the basket already holds, an error, and the reading stays (audit 2026-11-25, sale P2-1 (а))", async ({
+  page,
+}) => {
+  const felt = await haptics(page);
+  const unknownSize = randomUUID();
+  const sizeL = randomUUID();
+  const row = (sizeId: string, unknown: boolean) => ({
+    product_variant_id: fixture.variant_id,
+    size_id: sizeId,
+    display_name: "Лоран шоколад",
+    size_label: unknown ? "UNKNOWN" : "M",
+    size_is_unknown: unknown,
+    quantity: 3,
+    reserved_quantity: 0,
+    available_quantity: 3,
+  });
+  await page.route("**/api/v1/catalog/stock-options?**", (route) =>
+    route.fulfill({
+      json: {
+        items: [row(fixture.size_id, false), row(unknownSize, true)],
+        has_more: false,
+      },
+    }),
+  );
+  await page.route("**/api/v1/catalog/sizes?**", (route) =>
+    route.fulfill({
+      json: [
+        { size_id: fixture.size_id, code: "M", system: "ALPHA" },
+        { size_id: sizeL, code: "L", system: "ALPHA" },
+      ],
+    }),
+  );
+  await sellsFrom(page, fixture.legacy_location_id);
+  await page.goto(`${launch()}&tgWebAppVersion=8.0`);
+  await openStore(page, "Основний MAIN");
+  await page.getByRole("button", { name: "Продаж", exact: true }).click();
+  // An M held as an M, and a coat held with its size not known.
+  await tapSize(page, fixture.variant_id, fixture.size_id);
+  await addToBasket(page, 1);
+  await tapSize(page, fixture.variant_id, unknownSize);
+  await addToBasket(page, 1);
+  const sheet = await basketSheet(page);
+  const label = sheet.getByRole("group", { name: "Розмір з етикетки" });
+  const notRead = label.getByRole("button", {
+    name: "Не читали — продати як «розмір невідомий»",
+    exact: true,
+  });
+  const chipL = label.getByRole("button", { name: "L", exact: true });
+  const chipM = label.getByRole("button", { name: "M", exact: true });
+  const selection = { type: "selection_change" };
+  await feels(felt, () => chipL.click(), [selection]);
+  await expect(chipL).toHaveAttribute("aria-pressed", "true");
+  await feels(felt, () => chipL.click(), []);
+  await feels(felt, () => notRead.click(), [selection]);
+  await expect(notRead).toHaveAttribute("aria-pressed", "true");
+  // Read as M, it would be the line the basket holds: refused at the press.
+  await feels(felt, () => chipM.click(), [
+    { type: "notification", notification_type: "error" },
+  ]);
+  await expect(
+    page.getByText("Такий рядок уже є в кошику — змініть кількість у ньому."),
+  ).toBeVisible();
+  await expect(notRead).toHaveAttribute("aria-pressed", "true");
+  await expect(chipM).toHaveAttribute("aria-pressed", "false");
 });
 
 test("a sized line short of stock is answered from the coats without a size", async ({

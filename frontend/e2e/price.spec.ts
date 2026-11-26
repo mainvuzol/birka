@@ -779,6 +779,48 @@ test("no answer to a price saved is one text whoever lost it — the network, or
   await expect(hero).toContainText("Ціна продажу 1 850,00 грн");
 });
 
+test("a price saved and left with no answer, its sheet closed, is read again: recorded before its answer was lost, the model shows the price that stands; not reached, the price as it was; closed with nothing pressed, nothing read (audit 2026-11-25, money P2-1's note for the goods)", async ({
+  page,
+}) => {
+  const priced = await model(page, await token(page));
+  await enter(page, seller);
+  const hero = await detail(page, priced.name);
+  await expect(hero).toContainText("Ціна продажу не задана");
+  // The model's rows, where its price stands.
+  const reads = readsOf(page, /^\/api\/v1\/catalog\/stock-options$/);
+  const said =
+    "Немає відповіді сервера. Натисніть ще раз — повторне збереження безпечне.";
+  // Closed with nothing pressed: nothing read.
+  let sheet = await priceSheet(page, priced.name);
+  let before = reads();
+  await page.keyboard.press("Escape");
+  await expect(sheet).toHaveCount(0);
+  await page.waitForTimeout(300);
+  expect(reads()).toBe(before);
+  // Not reached: read again, the price as it was.
+  sheet = await priceSheet(page, priced.name);
+  await sheet.getByLabel("Нова ціна, грн").fill("1850");
+  let lost = await loseOnce(page, "**/api/v1/catalog/prices", 502);
+  await save(sheet, "1 850,00").click();
+  await lost();
+  await expect(sheet.getByRole("alert")).toHaveText(said);
+  before = reads();
+  await page.keyboard.press("Escape");
+  await expect(sheet).toHaveCount(0);
+  await expect.poll(reads).toBeGreaterThan(before);
+  await expect(hero).toContainText("Ціна продажу не задана");
+  // Recorded before its answer was lost: the price that stands.
+  sheet = await priceSheet(page, priced.name);
+  await sheet.getByLabel("Нова ціна, грн").fill("1900");
+  lost = await loseOnce(page, "**/api/v1/catalog/prices", 504, true);
+  await save(sheet, "1 900,00").click();
+  await lost();
+  await expect(sheet.getByRole("alert")).toHaveText(said);
+  await page.keyboard.press("Escape");
+  await expect(sheet).toHaveCount(0);
+  await expect(hero).toContainText("Ціна продажу 1 900,00 грн");
+});
+
 test("whoever may set only this store's price is told so, and sets that", async ({
   page,
 }) => {
