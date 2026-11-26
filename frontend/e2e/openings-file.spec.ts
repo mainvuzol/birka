@@ -1992,21 +1992,27 @@ test("a slow answer is no outage: a file and an approval wait 60 s, say so, and 
   }
 });
 
-test("answers lost on their way back: a file removed since comes back as a new one, and lines changed before they are sent again go as new", async ({
+test("answers lost on their way back: a file removed since comes back as a new one, and lines changed before they are sent again go as new; lines removed since, the same text sent again, come back as new ones too (audit 2026-11-25, goods Н1)", async ({
   page,
 }) => {
   const coat = await model(page);
   // A name of this run's own: the lists of runs before stay in the overview.
   const source = `Зошит загублених відповідей ${word()}`;
   await noListWaits(page, fixture.file_lost_location_id);
-  // The server records the next `lose` additions, and their answers are lost.
+  // The server records the next `lose` additions, and their answers are
+  // lost — after the next `spare` answered.
   const posted: string[] = [];
   let lose = 0;
+  let spare = 0;
   await page.route("**/api/v1/snapshots/*/parts?*", async (route) => {
     if (route.request().method() !== "POST") return route.continue();
     posted.push(
       (route.request().postDataJSON() as { command_id: string }).command_id,
     );
+    if (spare > 0) {
+      spare -= 1;
+      return route.continue();
+    }
     if (lose === 0) return route.continue();
     lose -= 1;
     await route.fetch();
@@ -2139,6 +2145,73 @@ test("answers lost on their way back: a file removed since comes back as a new o
   await expect(twice).toContainText(
     "Такий самий рядок у списку — 2 рази: це може бути по рядку на кожну одиницю, або помилка переписування.",
   );
+  await page.getByRole("button", { name: "Назад до списку" }).click();
+
+  // Lines typed by hand, their answer lost; removed in «Файли списку»
+  // meanwhile; the same text sent again: its kept command names the removed
+  // lines, so they go once more as new ones and join, said once — never
+  // the screen closed on lines the list no longer has (audit 2026-11-25,
+  // goods Н1).
+  lose = 1;
+  await listWay(page, "Додати рядки вручну");
+  const retyping = page.getByRole("form", { name: "Додати рядки вручну" });
+  const lost = `${coat} сірий S 2 шт`;
+  await retyping.getByLabel(/Рядки — кожен товар/).fill(lost);
+  await retyping.getByRole("button", { name: "Додати рядки" }).click();
+  await expect(retyping.getByRole("alert")).toHaveText(
+    "Невідомо, чи додано рядки. Натисніть ще раз — ті самі рядки не додадуться двічі.",
+  );
+  await page.getByRole("button", { name: `Назад до «${source}»` }).click();
+  // Read again, the list has them; they are removed.
+  await page
+    .getByRole("button", { name: "Назад до «Початкові залишки»" })
+    .click();
+  await page
+    .getByRole("article", { name: `Список ${source}` })
+    .getByRole("button", { name: "Відкрити" })
+    .click();
+  await listWay(page, "Файли списку · 5");
+  const six = page.getByRole("article", { name: "Файл 6" });
+  await expect(six).toContainText("6. Рядки, внесені вручну");
+  await removePart(page, six, "Прибрати рядки");
+  await expect(six).toContainText(/Прибрано: Оля, /);
+  await page.getByRole("button", { name: `Назад до «${source}»` }).click();
+  await listWay(page, "Додати рядки вручну");
+  // The text kept, as its command is. Sent again, the kept command answered
+  // with the removed lines, the new one's answer lost too: the text and the
+  // new command kept — pressed again, added once, never twice.
+  await expect(retyping.getByLabel(/Рядки — кожен товар/)).toHaveValue(lost);
+  spare = 1;
+  lose = 1;
+  await retyping.getByRole("button", { name: "Додати рядки" }).click();
+  await expect(retyping.getByRole("alert")).toHaveText(
+    "Невідомо, чи додано рядки. Натисніть ще раз — ті самі рядки не додадуться двічі.",
+  );
+  await expect(retyping.getByLabel(/Рядки — кожен товар/)).toHaveValue(lost);
+  // Kept on the phone, not only on the screen: left and opened again, the
+  // press repeats the new command (review).
+  await page.getByRole("button", { name: `Назад до «${source}»` }).click();
+  await listWay(page, "Додати рядки вручну");
+  await expect(retyping.getByLabel(/Рядки — кожен товар/)).toHaveValue(lost);
+  await retyping.getByRole("button", { name: "Додати рядки" }).click();
+  await expect(retyping).toHaveCount(0);
+  await expect(
+    page.getByRole("status").filter({ hasText: /^Рядки додано: 1\.$/ }),
+  ).toBeVisible();
+  expect(posted).toHaveLength(10);
+  expect(posted[7]).toBe(posted[6]);
+  expect(posted[8]).not.toBe(posted[6]);
+  expect(posted[9]).toBe(posted[8]);
+  await listWay(page, "Файли списку · 5");
+  const seven = page.getByRole("article", { name: "Файл 7" });
+  await expect(seven).toContainText("7. Рядки, внесені вручну");
+  await expect(seven).toContainText("розібрано 0 з 1");
+  await expect(seven).not.toContainText("Прибрано");
+  // Sent again with nothing left to send: the draft is gone, a new one
+  // empty.
+  await page.getByRole("button", { name: `Назад до «${source}»` }).click();
+  await listWay(page, "Додати рядки вручну");
+  await expect(retyping.getByLabel(/Рядки — кожен товар/)).toHaveValue("");
 });
 
 /** Whether the page fits the phone's width: nothing scrolls it sideways. */
