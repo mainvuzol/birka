@@ -12565,3 +12565,24 @@ After audit 2026-11-25 the user chose «Keep it, build A».
     nothing — waits for owner pack № 5 / В25-К1. Money Д3 of 2026-11-24
     (a closed store's invoice paid at 360) not measured.
     Owner-held: В25-К1, В24-К1, В24-Г1, В24-Т1; orders-cash Н1; В23-К1.
+
+## Chosen in chat — 2026-11-26 (audit 2026-11-25, goods Н1: typed lines removed since come back as new ones, as a file does)
+
+After #250 the user chose «Fix goods Н1» over a new audit.
+
+- **«Додати рядки вручну» after a lost answer, its lines removed
+  meanwhile.** The kept command, sent again with the same text, is answered
+  by the server with the part as it is now — removed (ADR-0014 §8). The
+  phone used to take that as added: the draft cleared, the screen closed,
+  nothing in the list. Now it sends the lines once more under a new
+  command, kept with the text until the server has it, as «Додати файл»
+  has done since the review of 2026-10-09 («a removed file comes back only
+  as a new one»): added once, felt and said once, by the answer that adds
+  them. The person pressed «Додати рядки» with the lines still typed — the
+  press is the intent to add them.
+- A team decision on the file's precedent, not the owner's. If she sees it
+  as a rule of her own, the question in her words: «Рядки прибрали, а ви
+  натиснули “Додати рядки” з тим самим текстом — додати їх знову як
+  нові?» — «ні» would keep the text and say they were removed instead.
+- Batch A's Д3 for this answer (no toast, no `success`) no longer applies:
+  the lines are added, and the answer that adds them is felt and said.

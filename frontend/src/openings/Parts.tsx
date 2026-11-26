@@ -760,7 +760,10 @@ function saveLines(listId: string, draft: LinesDraft | null): void {
  * Sent again after a lost answer, with the text changed meanwhile, the same
  * command is refused as another one (`IDEMPOTENCY_CONFLICT`): what was sent
  * first is in the list, so the text is kept and goes as a new command at the
- * next press (review, 2026-10-09).
+ * next press (review, 2026-10-09). Sent again with the same text after the
+ * lines it added were removed, the server answers with that part, removed:
+ * the lines go once more as a new command, as a file does — removed lines
+ * come back only as new ones (audit 2026-11-25, goods Н1; ADR-0014).
  */
 export function AddLines({
   list,
@@ -779,8 +782,8 @@ export function AddLines({
   title: string;
   blocked: boolean;
   /** Added: the list is read again, and this screen closes; the part as
-   * the write answered it, for the list to say — none where it names a
-   * part removed since (a lost answer's resend). */
+   * the write answered it, for the list to say — none where even the lines
+   * sent again as new name a part removed. */
   done: (part: StockPart | null) => Promise<void>;
   refresh: () => Promise<void>;
   leave: () => void;
@@ -809,15 +812,18 @@ export function AddLines({
     });
   }
 
-  async function send(): Promise<void> {
+  /** `fresh`: the command the lines go under once more, the kept one having
+   * named lines removed since. */
+  async function send(fresh: string | null = null): Promise<void> {
     setBusy(true);
     setProblems([]);
+    let again: string | null = null;
     try {
       const added = await api<{ part: StockPart }>(
         `/snapshots/${list.snapshot_id}/parts?store_id=${store.id}`,
         token,
         {
-          command_id: draft.command_id,
+          command_id: fresh ?? draft.command_id,
           lines,
           source: draft.source.trim() || null,
           counted_on: draft.counted.trim() || null,
@@ -826,13 +832,25 @@ export function AddLines({
         "POST",
         { slow: true },
       );
-      saveLines(list.snapshot_id, null);
-      // Added: felt and said, by the write's answer. Answered with a part
-      // removed since — a lost answer's resend — neither, as before (audit
-      // 2026-11-25, goods P1-1; Н1).
-      const part = added.part.removed_at === null ? added.part : null;
-      if (part) buzz("success");
-      await done(part);
+      if (added.part.removed_at !== null && fresh === null) {
+        // The kept command named lines removed since its answer was lost:
+        // they go once more under a new command, kept with the text until
+        // the server has it — felt and said once, by the answer that adds
+        // them (audit 2026-11-25, goods Н1).
+        again = crypto.randomUUID();
+        // Kept before it is sent: recorded, and the phone closed before the
+        // screen is drawn again, the next press repeats it — never a third
+        // copy (review).
+        saveLines(list.snapshot_id, { ...draft, command_id: again });
+        setDraft({ command_id: again });
+      } else {
+        saveLines(list.snapshot_id, null);
+        // Added: felt and said, by the write's answer (audit 2026-11-25,
+        // goods P1-1).
+        const part = added.part.removed_at === null ? added.part : null;
+        if (part) buzz("success");
+        await done(part);
+      }
     } catch (error) {
       // A refusal the server said — a conflict of the same command among
       // them — felt; no answer, nothing (audit 2026-11-25, goods P1-1).
@@ -857,6 +875,7 @@ export function AddLines({
     } finally {
       setBusy(false);
     }
+    if (again !== null) await send(again);
   }
 
   // The screen's one action, Telegram's (spec §6.4; P0-1).

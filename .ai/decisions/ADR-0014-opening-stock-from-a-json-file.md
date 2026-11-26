@@ -1144,7 +1144,13 @@ Neither value can be used before 0037 commits, so no constraint or index in
   phone keeps the text, takes a new command, reads the list again and says
   «Рядки, надіслані перед цим, уже є в списку, а ці відрізняються від них.
   Натисніть «Додати рядки» ще раз — ці буде додано як нові, окремо від
-  тих.» (review, 2026-10-09; before, it stayed refused for good).
+  тих.» (review, 2026-10-09; before, it stayed refused for good). Sent
+  again with the same text after the lines it added were removed, the
+  server replays that part, removed, and the phone sends the lines once
+  more as a new command, kept with the text until the server has it:
+  removed lines come back only as new ones, as a file does (audit
+  2026-11-25, goods Н1, chosen in chat 2026-11-26; before, the draft was
+  cleared and the screen closed on nothing added).
 - **The approval** shows the files and each basis, `STATED_BY_SIZE`
   included. Its panel shows to whoever may approve or add files (§12).
 - **The room**: «Місце у списку: рядків 1 840 з 5 000 · відповідей 3 120 з
