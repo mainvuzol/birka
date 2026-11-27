@@ -12586,3 +12586,66 @@ After #250 the user chose «Fix goods Н1» over a new audit.
   нові?» — «ні» would keep the text and say they were removed instead.
 - Batch A's Д3 for this answer (no toast, no `success`) no longer applies:
   the lines are added, and the answer that adds them is felt and said.
+
+## Chosen in chat — 2026-11-27 (goods Н1's review leftovers: «Додати рядки вручну» keeps nothing under a command answered; a conflict never says the list has what went first; «Звідки» or «Коли» changed alone never offered as new)
+
+After #252 the user chose «Fix the two leftover «Додати рядки вручну»
+problems» over a new audit, then «Fix notes case first» for the case the
+review found. Only the phone: no right, no journal, no
+server change, no migration.
+
+- **Typed into after the lines are added, nothing is kept.** The server
+  answered the command; the screen reads the list again before it closes,
+  and a keystroke in that moment saved the draft back under the answered
+  command. The next «Додати рядки вручну» showed the text, and its press
+  was answered with the lines added before: «Рядки додано» and a success
+  for nothing new. Now the command answered is never kept again: the next
+  form is empty, and what is typed there goes under a new command. Typing
+  while the answer is still awaited is kept, as before (the answer may be
+  lost).
+- **A conflict never says the list has what went first** (decided here;
+  the words were the review's of 2026-10-09, not the owner's). Sent again
+  after a lost answer with the text changed, the same command is a
+  different request (`IDEMPOTENCY_CONFLICT`). On this route a conflict
+  means a part under that command, so the lines sent first were added; but
+  the conflict names no part and a part's read names no command, so the
+  phone cannot tell whether they were removed since. «Рядки, надіслані
+  перед цим, уже є в списку…» was false when they were; now «Рядки,
+  надіслані перед цим, уже додано, а ці відрізняються від них. Натисніть
+  «Додати рядки» ще раз — ці буде додано як нові, окремо від тих.» — as
+  «Рядки додано: N.» says it. What happens is unchanged: the text kept, a
+  new command, the next press adds it as new.
+- **«Звідки» or «Коли» changed alone: never offered as new** (the user's
+  choice, «Fix notes case first», on the rule proposed in chat). The
+  server's request for typed lines also holds «Звідки» and «Коли»: after a
+  lost answer, a change of only those is a conflict too, and «ці
+  відрізняються» was false — the next press added the same lines a second
+  time (typed lines have no content check). Now the phone keeps with a
+  command every body it sent, once each, on the phone before it leaves:
+  whichever reached the server first is what it recorded, and the phone
+  cannot tell which. A conflict with the same lines sends what it sent
+  before with these lines again under the same command, one at a time; a
+  conflict again means another body, and the next is asked; the server's
+  replay of one says what it recorded and what became of its part:
+  - Live: «Ці рядки вже додано — вдруге їх не додають. «Звідки ці рядки» і
+    «Коли перелічено» лишилися такими, як їх надіслали першого разу. Щоб
+    змінити «Звідки» чи «Коли», приберіть ці рядки у «Файлах списку» й
+    додайте їх знову.», the draft gone, the form empty. The lines stay as
+    the press that recorded them sent them.
+  - Removed since: the lines go at once as a new command with «Звідки» and
+    «Коли» as they are now — as goods Н1 does for the same text, nothing
+    said but «Рядки додано: N.».
+  - No answer to that ask: «Невідомо, чи додано рядки…», the command and
+    its bodies kept, so the next press asks again; a refusal: its own
+    words — a server's error as everywhere (owner's В-П1 (б)): «Рядки не
+    додано. Натисніть ще раз — повторити безпечно.», and the next press
+    asks again; none of them answered (each another body): the changed
+    lines' words above, and a new command.
+  A body refused for what it says (422, before the server looks for the
+  command) is never what the command records: it is dropped, never asked
+  again. Any other refusal keeps it: asked, it is answered as another
+  body. A draft kept before this change has no record of what it sent: its
+  conflict says the changed lines' words, as before.
+- Text typed while a notes-alone press is answered is erased with the form
+  (accepted): kept under a new command, the lines already added could be
+  added a second time; the window is one press.

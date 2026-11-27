@@ -721,11 +721,42 @@ export function AddFile({
   );
 }
 
+/** Typed lines as a command sends them. */
+interface LinesSent {
+  lines: string[];
+  source: string | null;
+  counted_on: string | null;
+}
+
 interface LinesDraft {
   command_id: string;
   text: string;
   source: string;
   counted: string;
+  /** Each body `command_id` has sent, once each and in order, kept with it
+   * until the server has answered: any of them may be what it recorded, and
+   * a conflict then tells lines changed from «Звідки» or «Коли» changed
+   * alone. None before it is sent — nor in a draft kept before 2026-11-27. */
+  sent?: LinesSent[] | null;
+}
+
+/** The same command sent before with another body. */
+function conflicted(error: unknown): error is ApiError {
+  return error instanceof ApiError && error.code === "IDEMPOTENCY_CONFLICT";
+}
+
+function sameLines(one: string[], other: string[]): boolean {
+  return (
+    one.length === other.length && one.every((line, at) => line === other[at])
+  );
+}
+
+function sameBody(one: LinesSent, other: LinesSent): boolean {
+  return (
+    sameLines(one.lines, other.lines) &&
+    one.source === other.source &&
+    one.counted_on === other.counted_on
+  );
 }
 
 function linesKey(listId: string): string {
@@ -759,11 +790,17 @@ function saveLines(listId: string, draft: LinesDraft | null): void {
  *
  * Sent again after a lost answer, with the text changed meanwhile, the same
  * command is refused as another one (`IDEMPOTENCY_CONFLICT`): what was sent
- * first is in the list, so the text is kept and goes as a new command at the
- * next press (review, 2026-10-09). Sent again with the same text after the
- * lines it added were removed, the server answers with that part, removed:
- * the lines go once more as a new command, as a file does — removed lines
- * come back only as new ones (audit 2026-11-25, goods Н1; ADR-0014).
+ * first was added — in the list, or removed since — so the text is kept and
+ * goes as a new command at the next press (review, 2026-10-09). The lines
+ * the same, «Звідки» or «Коли» changed alone: what the command sent before
+ * with these lines goes again under it, and the answer decides — in the
+ * list, the lines are never offered as new (they would be added twice) and
+ * the draft is gone; removed since, they go as new with what was typed now
+ * (2026-11-27).
+ * Sent again with the same text after the lines it added were removed, the
+ * server answers with that part, removed: the lines go once more as a new
+ * command, as a file does — removed lines come back only as new ones
+ * (audit 2026-11-25, goods Н1; ADR-0014).
  */
 export function AddLines({
   list,
@@ -801,15 +838,48 @@ export function AddLines({
   // (audit 2026-11-20, frame P2-2).
   const tooLongId = useId();
   const tooMuchId = useId();
+  // The command the server added the lines under. Typing on while the list
+  // is read again, before this screen closes, never keeps the draft back
+  // under it: the next «Додати рядки вручну» would send it again and be
+  // answered with the lines added before — «Рядки додано» for nothing new
+  // (review of audit 2026-11-25, goods Н1).
+  const answered = useRef<string | null>(null);
 
   function setDraft(change: Partial<LinesDraft>): void {
     // From the draft as it is now: typing may go on while an answer is
     // awaited, and a new command id must not undo it.
     setDraftState((current) => {
       const next = { ...current, ...change };
-      saveLines(list.snapshot_id, next);
+      if (next.command_id !== answered.current)
+        saveLines(list.snapshot_id, next);
       return next;
     });
+  }
+
+  /** One send of typed lines under a command. */
+  function addPart(
+    commandId: string,
+    sent: LinesSent,
+  ): Promise<{ part: StockPart }> {
+    return api<{ part: StockPart }>(
+      `/snapshots/${list.snapshot_id}/parts?store_id=${store.id}`,
+      token,
+      { command_id: commandId, ...sent },
+      undefined,
+      "POST",
+      { slow: true },
+    );
+  }
+
+  /** The new command the lines go once more under, the kept one naming
+   * lines removed since. Kept before it is sent: recorded, and the phone
+   * closed before the screen is drawn again, the next press repeats it —
+   * never a third copy (review of goods Н1). */
+  function sendAgain(): string {
+    const next = crypto.randomUUID();
+    saveLines(list.snapshot_id, { ...draft, command_id: next, sent: null });
+    setDraft({ command_id: next, sent: null });
+    return next;
   }
 
   /** `fresh`: the command the lines go under once more, the kept one having
@@ -818,32 +888,33 @@ export function AddLines({
     setBusy(true);
     setProblems([]);
     let again: string | null = null;
+    const command = fresh ?? draft.command_id;
+    const body: LinesSent = {
+      lines,
+      source: draft.source.trim() || null,
+      counted_on: draft.counted.trim() || null,
+    };
+    // Each body the command sends, kept with it on the phone before it leaves
+    // (the phone may close before the screen is drawn again): whichever
+    // reached the server first is what it recorded.
+    const before = fresh === null ? (draft.sent ?? []) : [];
+    const sent = before.some((one) => sameBody(one, body))
+      ? before
+      : [...before, body];
+    if (sent !== before) {
+      saveLines(list.snapshot_id, { ...draft, command_id: command, sent });
+      setDraft({ sent });
+    }
     try {
-      const added = await api<{ part: StockPart }>(
-        `/snapshots/${list.snapshot_id}/parts?store_id=${store.id}`,
-        token,
-        {
-          command_id: fresh ?? draft.command_id,
-          lines,
-          source: draft.source.trim() || null,
-          counted_on: draft.counted.trim() || null,
-        },
-        undefined,
-        "POST",
-        { slow: true },
-      );
+      const added = await addPart(command, body);
       if (added.part.removed_at !== null && fresh === null) {
         // The kept command named lines removed since its answer was lost:
         // they go once more under a new command, kept with the text until
         // the server has it — felt and said once, by the answer that adds
         // them (audit 2026-11-25, goods Н1).
-        again = crypto.randomUUID();
-        // Kept before it is sent: recorded, and the phone closed before the
-        // screen is drawn again, the next press repeats it — never a third
-        // copy (review).
-        saveLines(list.snapshot_id, { ...draft, command_id: again });
-        setDraft({ command_id: again });
+        again = sendAgain();
       } else {
+        answered.current = command;
         saveLines(list.snapshot_id, null);
         // Added: felt and said, by the write's answer (audit 2026-11-25,
         // goods P1-1).
@@ -852,26 +923,85 @@ export function AddLines({
         await done(part);
       }
     } catch (error) {
-      // A refusal the server said — a conflict of the same command among
-      // them — felt; no answer, nothing (audit 2026-11-25, goods P1-1).
-      buzzRefusal(error);
-      if (error instanceof ApiError && error.code === "IDEMPOTENCY_CONFLICT") {
-        setDraft({ command_id: crypto.randomUUID() });
-        await refresh();
+      let said = error;
+      let notesAlone = false;
+      // Bodies this command sent before with the lines as they are now:
+      // «Звідки» or «Коли» changed alone, as far as the phone knows. Each
+      // goes again under it until the server answers one — the one it
+      // recorded; the lines are never dropped on the phone's word alone
+      // (review of audit 2026-11-25, goods Н1).
+      if (conflicted(error)) {
+        for (const held of before) {
+          if (!sameLines(held.lines, lines) || sameBody(held, body)) continue;
+          try {
+            const answer = await addPart(command, held);
+            // Removed since: the lines go once more as new, with «Звідки»
+            // and «Коли» as typed now — as goods Н1 sends the same text.
+            if (answer.part.removed_at !== null) again = sendAgain();
+            else notesAlone = true;
+            break;
+          } catch (asked) {
+            // Another body: not the one recorded.
+            if (conflicted(asked)) continue;
+            // No answer, or refused: said as it is.
+            said = asked;
+            break;
+          }
+        }
       }
-      setProblems(
-        refusal(
-          error,
-          list,
-          "Невідомо, чи додано рядки. Натисніть ще раз — ті самі рядки не додадуться двічі.",
-          "Рядки, надіслані перед цим, уже є в списку, а ці відрізняються від них. Натисніть «Додати рядки» ще раз — ці буде додано як нові, окремо від тих.",
-          // What was not done, then the step (owner, В-П1 (б),
-          // 2026-11-11).
-          ["Рядки не додано.", "Перевірте їх."],
-        ),
-      );
-      // Changed in a way it does not name: read again (review, 2026-10-24).
-      if (error instanceof SlowAnswer || listConflict(error)) await refresh();
+      if (again === null) {
+        // A refusal the server said — a conflict of the same command among
+        // them — felt; no answer, nothing (audit 2026-11-25, goods P1-1).
+        buzzRefusal(said);
+        if (notesAlone) {
+          // The lines are in the list under the kept command. Never offered
+          // as new: they would be added twice (typed lines have no content
+          // check). The draft is gone, the form empty.
+          answered.current = command;
+          saveLines(list.snapshot_id, null);
+          setDraftState({
+            command_id: crypto.randomUUID(),
+            text: "",
+            source: "",
+            counted: "",
+          });
+        } else if (conflicted(said)) {
+          setDraft({ command_id: crypto.randomUUID(), sent: null });
+        } else if (
+          said === error &&
+          said instanceof ApiError &&
+          said.status === 422
+        ) {
+          // Refused for what it sent, before the server looked for the
+          // command: never what it records, nor asked again.
+          setDraft({ sent: sent.filter((one) => !sameBody(one, body)) });
+        }
+        setProblems(
+          refusal(
+            said,
+            list,
+            "Невідомо, чи додано рядки. Натисніть ще раз — ті самі рядки не додадуться двічі.",
+            notesAlone
+              ? "Ці рядки вже додано — вдруге їх не додають. «Звідки ці рядки» і «Коли перелічено» лишилися такими, як їх надіслали першого разу. Щоб змінити «Звідки» чи «Коли», приберіть ці рядки у «Файлах списку» й додайте їх знову."
+              : // A conflict means a part under this command: what went
+                // first was added, and may have been removed since — the
+                // conflict names no part, so the words never say the list
+                // has it (review of audit 2026-11-25, goods Н1).
+                "Рядки, надіслані перед цим, уже додано, а ці відрізняються від них. Натисніть «Додати рядки» ще раз — ці буде додано як нові, окремо від тих.",
+            // What was not done, then the step (owner, В-П1 (б),
+            // 2026-11-11).
+            ["Рядки не додано.", "Перевірте їх."],
+          ),
+        );
+        // Changed in a way it does not name — a conflict among them: read
+        // again (review, 2026-10-24).
+        if (
+          said instanceof SlowAnswer ||
+          conflicted(said) ||
+          listConflict(said)
+        )
+          await refresh();
+      }
     } finally {
       setBusy(false);
     }
