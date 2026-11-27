@@ -1142,9 +1142,30 @@ Neither value can be used before 0037 commits, so no constraint or index in
   them. Sent again after a lost answer with the text changed meanwhile, the
   same command is a different request (409 `IDEMPOTENCY_CONFLICT`): the
   phone keeps the text, takes a new command, reads the list again and says
-  «Рядки, надіслані перед цим, уже є в списку, а ці відрізняються від них.
+  «Рядки, надіслані перед цим, уже додано, а ці відрізняються від них.
   Натисніть «Додати рядки» ще раз — ці буде додано як нові, окремо від
-  тих.» (review, 2026-10-09; before, it stayed refused for good). Sent
+  тих.» (review, 2026-10-09; before, it stayed refused for good). A conflict
+  means a part under that command, so what went first was added; it may
+  have been removed since, and the conflict names no part: the words never
+  say the list has it (2026-11-27; before, «…уже є в списку…»). The phone
+  keeps with a command every body it sent, but one refused for what it
+  says (422); the lines the same and only «Звідки» or «Коли» changed, the
+  conflict is told apart: the phone sends what it sent before with these
+  lines again under the same command, one at a time, until the server's
+  replay answers one — what it recorded and what became of its part. Live:
+  «Ці рядки вже додано — вдруге їх не додають. «Звідки ці рядки» і «Коли
+  перелічено» лишилися такими, як їх надіслали першого разу. Щоб змінити
+  «Звідки» чи «Коли», приберіть ці рядки у «Файлах списку» й додайте їх
+  знову.», the draft gone, the form empty — never offered as new, which
+  would add them twice. Removed since: the lines go at once as a new
+  command with «Звідки» and «Коли» as they are now, as below for the same
+  text. That ask unanswered: «Невідомо, чи додано рядки…», all kept for
+  the next press (2026-11-27). Text typed
+  while an answer is awaited is kept with the command, as before. Once the
+  lines are added, typing on while the list is read
+  again keeps nothing under the command answered: the next form is empty
+  (2026-11-27; before, the draft came back and its press replayed the old
+  part, «Рядки додано» for nothing new). Sent
   again with the same text after the lines it added were removed, the
   server replays that part, removed, and the phone sends the lines once
   more as a new command, kept with the text until the server has it:
