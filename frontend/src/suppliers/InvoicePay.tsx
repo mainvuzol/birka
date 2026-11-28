@@ -1,4 +1,4 @@
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { JSX } from "react";
 import { decimal, kopecks, money, typedKopecks } from "@/orders/types";
 import type { Store } from "@/orders/types";
@@ -32,8 +32,11 @@ function overText(owed: string): string {
  * amount, store_id?}`), and money is never paid by Telegram's MainButton.
  * More than is owed is never pressed. The menu stands aside, and Telegram
  * asks before Бірка closes while a sum is typed. Recorded, its stub;
- * refused, the words over the keypad, the sum kept; its answer lost, the
- * journal's stub over the screen.
+ * refused, the words over the keypad — brought there each time they are
+ * said —, the sum kept; its answer lost, the journal's stub over the screen.
+ * Another store's invoice: what is owed first, its state's plate under it,
+ * last over the keypad — over «Винні» it would push the sum under the dock
+ * on a short phone (audit 2026-11-28, money P2-1).
  */
 export function InvoicePay({
   store,
@@ -82,6 +85,14 @@ export function InvoicePay({
   const overLine = useId();
   const dock = useRef<HTMLDivElement>(null);
   usePanelRoom(dock, paid === null);
+  // A refusal is seen where it is said, over the keypad — each time it is
+  // said, the same words again included, as «Внесок»'s (audit 2026-11-28,
+  // money P2-1 (б)).
+  const said = useRef<HTMLParagraphElement>(null);
+  const [told, setTold] = useState(0);
+  useEffect(() => {
+    if (told > 0) said.current?.scrollIntoView({ block: "nearest" });
+  }, [told]);
   // A sum typed and not yet paid: Telegram asks before Бірка closes (spec
   // §4.4; «Усе на бірці» task list, P1-2).
   useAskBeforeClosing(paid === null && amount !== "");
@@ -105,9 +116,15 @@ export function InvoicePay({
       }
       if (sent.kind !== "refused") return;
       setProblem(sent.text);
-      // Refused because the invoice moved on: shown as it is now.
+      setTold((n) => n + 1);
+      // Refused because the invoice moved on: shown as it is now — the
+      // refusal brought over the keypad again, what is paid may take
+      // another line.
       const current = await readAgain(invoice);
-      if (current) changed(current);
+      if (current) {
+        changed(current);
+        setTold((n) => n + 1);
+      }
     });
   }
 
@@ -146,9 +163,13 @@ export function InvoicePay({
           />
         ) : (
           <>
-            {elsewhere && <OtherStoreInvoice invoice={invoice} />}
             <InvoiceOwed invoice={invoice} />
-            {problem && <p role="alert">{problem}</p>}
+            {problem && (
+              <p role="alert" ref={said}>
+                {problem}
+              </p>
+            )}
+            {elsewhere && <OtherStoreInvoice invoice={invoice} />}
             <div
               className="pay-panel till-dock"
               role="group"

@@ -611,17 +611,6 @@ export function Debt({
               orders task list, P0-4). */}
           {takes && <PaperBanner mark={paperMark} what="payment" />}
           {goods}
-          {elsewhere && (
-            // The store's state, as «Накладні» say it: the grey plate and its
-            // «і» (audit 2026-11-15, goods' observation; frame P2-8).
-            <Banner kind="blocked" as="div">
-              <p>
-                Продано в «{visible(credit.store_name)}» (
-                {credit.store_state === "ARCHIVED" ? "закрито" : "заблоковано"}
-                ). Внесок приймаєте ви, борг — за «{visible(credit.store_name)}».
-              </p>
-            </Banner>
-          )}
           {credit.status === "OPEN" ? (
             <div className="owed-card" role="group" aria-label="Скільки винні">
               <p className="owed-what">
@@ -678,6 +667,21 @@ export function Debt({
             <p role="alert" ref={said}>
               {problem}
             </p>
+          )}
+          {elsewhere && (
+            // The store's state, as «Накладні» say it: the grey plate and its
+            // «і» (audit 2026-11-15, goods' observation; frame P2-8). Under
+            // what is owed, last over the keypad: over «Винні» it pushed the
+            // sum under the dock on a short phone — «Внесок приймаєте ви»
+            // over what takes it (audit 2026-11-28, sale P2-2; one order with
+            // an invoice's payment, money P2-1).
+            <Banner kind="blocked" as="div">
+              <p>
+                Продано в «{visible(credit.store_name)}» (
+                {credit.store_state === "ARCHIVED" ? "закрито" : "заблоковано"}
+                ). Внесок приймаєте ви, борг — за «{visible(credit.store_name)}».
+              </p>
+            </Banner>
           )}
           {takes && (
             <div

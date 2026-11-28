@@ -1,6 +1,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type { JSX, RefObject } from "react";
 import {
+  infiniteQueryOptions,
   useInfiniteQuery,
   useQuery,
   useQueryClient,
@@ -1386,25 +1387,29 @@ function ListView({
   useEffect(() => {
     setSaid(null);
   }, [list.status, answering]);
-  const linesKey = [
-    "stock-list-lines",
-    scopeKey,
-    list.snapshot_id,
-    filter,
-    partFilter?.part_id ?? null,
-  ] as const;
-  const lines = useInfiniteQuery({
-    queryKey: linesKey,
-    queryFn: ({ pageParam }) =>
-      api<LinePage>(
-        `/snapshots/${list.snapshot_id}/lines?store_id=${store.id}&limit=${String(linesPerPage)}&offset=${String(pageParam)}${filter ? `&status=${filter}` : ""}${partFilter ? `&part_id=${partFilter.part_id}` : ""}`,
-        token,
-      ),
-    initialPageParam: 0,
-    getNextPageParam: (last, _all, lastParam) =>
-      last.has_more ? lastParam + last.items.length : undefined,
-    retry: false,
-  });
+  /** The list's lines of one kind, or one file's. */
+  function linesOf(status: LineStatus | null, part: StockPart | null) {
+    return infiniteQueryOptions({
+      queryKey: [
+        "stock-list-lines",
+        scopeKey,
+        list.snapshot_id,
+        status,
+        part?.part_id ?? null,
+      ] as const,
+      queryFn: ({ pageParam }) =>
+        api<LinePage>(
+          `/snapshots/${list.snapshot_id}/lines?store_id=${store.id}&limit=${String(linesPerPage)}&offset=${String(pageParam)}${status ? `&status=${status}` : ""}${part ? `&part_id=${part.part_id}` : ""}`,
+          token,
+        ),
+      initialPageParam: 0,
+      getNextPageParam: (last: LinePage, _all, lastParam: number) =>
+        last.has_more ? lastParam + last.items.length : undefined,
+      retry: false,
+    });
+  }
+  const linesKey = linesOf(filter, partFilter).queryKey;
+  const lines = useInfiniteQuery(linesOf(filter, partFilter));
   // Never read: the plate in the lines' place; read again and refused,
   // over the lines read; a next page, where «Показати ще» stood (audit
   // 2026-11-13, goods P1-1).
@@ -1587,6 +1592,39 @@ function ListView({
     setEditing(null);
   }
 
+  /**
+   * Lines just added: the list read again, back where they wait — «Потребують
+   * уваги» if any of them does, else «Чекають»; every file's — never «Тут
+   * рядків немає.» under «Рядки додано» (audit 2026-11-28, goods P2-1). By
+   * the write's answer, as the toast's numbers; set before the list is read
+   * again, and those lines read under the form's eyelet, so the list never
+   * comes back on the kind it was, nor waiting for its lines. Not the
+   * person's choice: nothing felt, the cursor where it goes.
+   */
+  async function addedBack(part: StockPart | null): Promise<void> {
+    const to: LineStatus | null =
+      part === null || part.removed_at !== null
+        ? null
+        : part.progress.needs_review > 0
+          ? "NEEDS_REVIEW"
+          : part.progress.pending > 0
+            ? "PENDING"
+            : null;
+    if (to !== null) {
+      setFilter(to);
+      setPartFilter(null);
+    }
+    await Promise.all([
+      refresh(),
+      // Not read: the list's plate over its lines, as any read that failed
+      // — never the write's refusal (the lines are added).
+      to === null
+        ? null
+        : cache.infiniteQuery(linesOf(to, null)).catch(() => undefined),
+    ]);
+    back();
+  }
+
   const back = (to: "more" | "file" = "more"): void => {
     from.current = to;
     setScreen("lines");
@@ -1661,8 +1699,7 @@ function ListView({
           // Read again first, under the screen's eyelet: the list comes
           // back with what was added, never a moment of the list before it
           // — «Затвердити» over a line just added; then said.
-          await refresh();
-          back();
+          await addedBack(part);
           setAdded({ part, at: Date.now() });
         }}
         refresh={refresh}
@@ -1683,8 +1720,7 @@ function ListView({
           // Read again first, under the screen's eyelet: the list comes
           // back with what was added, never a moment of the list before it
           // — «Затвердити» over a line just added; then said.
-          await refresh();
-          back();
+          await addedBack(part);
           if (part) setAdded({ part, at: Date.now() });
         }}
         refresh={refresh}

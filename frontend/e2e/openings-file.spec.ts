@@ -2079,13 +2079,23 @@ test("answers lost on their way back: a file removed since comes back as a new o
   await expect(two).toContainText(/Прибрано: Оля, /);
   await page.getByRole("button", { name: `Назад до «${source}»` }).click();
 
+  // On a kind its line is not under, «Розібрані».
+  const modes = page.getByRole("group", { name: "Які рядки" });
+  const pressed = modes.getByRole("button", { pressed: true });
+  await modes.getByRole("button", { name: /^Розібрані/ }).click();
+  await expect(pressed).toHaveText(/^Розібрані \d+$/);
+
   // Added again: the command kept for it names the removed file, so it is
-  // sent once more as a new one, and a new file joins.
+  // sent once more as a new one, and a new file joins — the list where its
+  // line waits, by the answer of the send that added it (audit 2026-11-28,
+  // goods P2-1).
   await listWay(page, "Додати файл");
   adding = page.getByRole("form", { name: "Додати файл" });
   await choose(adding, "другий.json", second);
   await adding.getByRole("button", { name: "Додати до списку" }).click();
   await expect(adding).toHaveCount(0);
+  await expect(pressed).toHaveText(/^Потребують уваги \d+$/);
+  await expect(card(page, 4)).toBeVisible();
   await listWay(page, "Файли списку · 2");
   await expect(page.getByRole("article", { name: "Файл 3" })).toContainText(
     "Рядки 4–4 · розібрано 0 з 1",
@@ -2537,6 +2547,188 @@ test("«Звідки» changed alone after a lost answer: what the command sent 
   await expect(five).toContainText("Рядки 5–5 · розібрано 0 з 1");
   await expect(five).toContainText("Звідки: Зошит 5");
   await expect(page.getByRole("article", { name: "Файл 6" })).toHaveCount(0);
+});
+
+test("lines added go where they wait: the list comes back on the kind the write's answer names, every file's lines, read before the form closes — never «Тут рядків немає.» under the toast, nor «Завантажуємо рядки…»; a form left, refused or unanswered leaves the kind and the file shown as they were (audit 2026-11-28, goods P2-1)", async ({
+  page,
+}) => {
+  const coat = await model(page);
+  const source = `Зошит на виду ${word()}`;
+  const parts = "**/api/v1/snapshots/*/parts?**";
+  await noListWaits(page, fixture.file_lost_location_id);
+  // While `slow`, the lines of a kind that waits, every file's, are read
+  // late: never read before the form closes, the list would wait for them.
+  let slow = false;
+  await page.route("**/api/v1/snapshots/*/lines?**", async (route) => {
+    const url = new URL(route.request().url());
+    const status = url.searchParams.get("status");
+    if (
+      slow &&
+      (status === "NEEDS_REVIEW" || status === "PENDING") &&
+      !url.searchParams.has("part_id")
+    )
+      await new Promise((resolve) => setTimeout(resolve, 800));
+    await route.fallback();
+  });
+  await openings(page);
+  const form = await newFromFile(page, fixture.file_lost_location_id);
+  await choose(
+    form,
+    "перший.json",
+    stockFile(
+      [{ text: `${coat} сірий M 2 шт`, photo: "V1.jpg", photo_line: 1 }],
+      { source },
+    ),
+  );
+  await form.getByRole("button", { name: "Зберегти список" }).click();
+  await expect(page.getByRole("heading", { name: source })).toBeVisible();
+
+  const pressed = page
+    .getByRole("group", { name: "Які рядки" })
+    .getByRole("button", { pressed: true });
+  const empty = page.getByText("Тут рядків немає.", { exact: true });
+  const whose = page.locator(".opening-file-line p");
+  const back = page.getByRole("button", { name: `Назад до «${source}»` });
+  // «Завантажуємо рядки…» drawn at any moment since `unseen`.
+  await page.evaluate(() => {
+    const host = window as unknown as { flashed: boolean };
+    host.flashed = false;
+    new MutationObserver((records) => {
+      for (const record of records)
+        for (const node of record.addedNodes)
+          if (node.textContent?.includes("Завантажуємо рядки…"))
+            host.flashed = true;
+    }).observe(document.body, { childList: true, subtree: true });
+  });
+  const unseen = (): Promise<void> =>
+    page.evaluate(() => {
+      (window as unknown as { flashed: boolean }).flashed = false;
+    });
+  const flashed = (): Promise<boolean> =>
+    page.evaluate(() => (window as unknown as { flashed: boolean }).flashed);
+  interface Added {
+    first_line_no: number;
+    progress: { needs_review: number; pending: number };
+  }
+  /** The next part the server adds, as its answer says it. */
+  const answer = async (): Promise<Added> => {
+    const response = await page.waitForResponse(
+      (each) =>
+        each.request().method() === "POST" &&
+        /\/snapshots\/[^/]+\/parts$/.test(new URL(each.url()).pathname) &&
+        each.ok(),
+    );
+    return ((await response.json()) as { part: Added }).part;
+  };
+  /** The kind its lines wait under: any of them needing attention, that. */
+  const kindOf = (part: Added): RegExp =>
+    part.progress.needs_review > 0 ? /^Потребують уваги \d+$/ : /^Чекають \d+$/;
+
+  // One file's lines shown; «Додати файл» left unsent — as they were.
+  await listWay(page, "Файли списку · 1");
+  await page
+    .getByRole("article", { name: "Файл 1" })
+    .getByRole("button", { name: "Показати рядки" })
+    .click();
+  await expect(whose).toHaveText("Рядки файлу «1. перший.json»");
+  await listWay(page, "Додати файл");
+  const adding = page.getByRole("form", { name: "Додати файл" });
+  await expect(adding).toBeVisible();
+  await back.click();
+  await expect(whose).toHaveText("Рядки файлу «1. перший.json»");
+
+  // A file added: one line with the parser's note, one it reads whole —
+  // one needs attention, one waits; the list on «Потребують уваги», every
+  // file's lines, the first of the file in view.
+  await listWay(page, "Додати файл");
+  await choose(
+    adding,
+    "другий.json",
+    stockFile([
+      {
+        text: "M 3 шт",
+        photo: "V2.jpg",
+        photo_line: 1,
+        note: "Почерк нерозбірливий",
+      },
+      { text: "L 2 шт", photo: "V2.jpg", photo_line: 2 },
+    ]),
+  );
+  await unseen();
+  slow = true;
+  const file = answer();
+  await adding.getByRole("button", { name: "Додати до списку" }).click();
+  const second = await file;
+  expect(second.progress.needs_review).toBeGreaterThan(0);
+  expect(second.progress.pending).toBeGreaterThan(0);
+  await expect(adding).toHaveCount(0);
+  slow = false;
+  await expect(
+    page.getByRole("status").filter({ hasText: /^Файл додано: рядків 2\.$/ }),
+  ).toBeVisible();
+  await expect(whose).toHaveCount(0);
+  await expect(pressed).toHaveText(/^Потребують уваги \d+$/);
+  await expect(card(page, second.first_line_no)).toBeVisible();
+  await expect(empty).toHaveCount(0);
+  expect(await flashed()).toBe(false);
+
+  // On a kind nothing is under: «Розібрані 0», said empty. Lines typed,
+  // refused, lost on their way, a gateway's 503 — back, as they were.
+  await page
+    .getByRole("group", { name: "Які рядки" })
+    .getByRole("button", { name: /^Розібрані/ })
+    .click();
+  await expect(pressed).toHaveText("Розібрані 0");
+  await expect(empty).toBeVisible();
+  await listWay(page, "Додати рядки вручну");
+  const typing = page.getByRole("form", { name: "Додати рядки вручну" });
+  const text = typing.getByLabel(/Рядки — кожен товар/);
+  // Read whole by the parser: it waits.
+  const typed = "L 1 шт";
+  await text.fill(typed);
+  await refuseOnce(page, parts, 422);
+  await typing.getByRole("button", { name: "Додати рядки" }).click();
+  await expect(
+    typing.getByText("Рядки не додано. Перевірте їх.", { exact: true }),
+  ).toBeVisible();
+  await back.click();
+  await expect(pressed).toHaveText("Розібрані 0");
+  await expect(empty).toBeVisible();
+  for (const how of ["network", 503] as const) {
+    await listWay(page, "Додати рядки вручну");
+    await expect(text).toHaveValue(typed);
+    const lost = await loseOnce(page, parts, how);
+    await typing.getByRole("button", { name: "Додати рядки" }).click();
+    await lost();
+    await expect(
+      typing
+        .getByText(/^(Невідомо, чи додано рядки|Сервер не відповідає)/)
+        .first(),
+    ).toBeVisible();
+    await back.click();
+    await expect(pressed).toHaveText("Розібрані 0");
+    await expect(empty).toBeVisible();
+  }
+
+  // Added: the kind its answer names, the line in view, no «Тут рядків
+  // немає.» under «Рядки додано».
+  await listWay(page, "Додати рядки вручну");
+  await expect(text).toHaveValue(typed);
+  await unseen();
+  slow = true;
+  const lines = answer();
+  await typing.getByRole("button", { name: "Додати рядки" }).click();
+  const third = await lines;
+  await expect(typing).toHaveCount(0);
+  slow = false;
+  await expect(
+    page.getByRole("status").filter({ hasText: /^Рядки додано: 1\.$/ }),
+  ).toBeVisible();
+  expect(third.progress).toMatchObject({ needs_review: 0, pending: 1 });
+  await expect(pressed).toHaveText(kindOf(third));
+  await expect(card(page, third.first_line_no)).toBeVisible();
+  await expect(empty).toHaveCount(0);
+  expect(await flashed()).toBe(false);
 });
 
 /** Whether the page fits the phone's width: nothing scrolls it sideways. */
