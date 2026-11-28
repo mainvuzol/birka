@@ -1371,6 +1371,20 @@ test("another store's debt says once where it was sold and who takes the payment
   await expect(state).toBeVisible();
   await expect(state.locator(".banner-glyph .icon")).toHaveCount(1);
   await expect(page.getByText(/Ринок/)).toHaveCount(1);
+  // Here, no keypad: over «Винні», as on an invoice's card — under it only
+  // on «Внесок» (audit 2026-11-28, sale P2-2).
+  expect(
+    await state.evaluate((plate) => {
+      const owed = document.querySelector(".owed-card");
+      return (
+        owed !== null &&
+        Boolean(
+          plate.compareDocumentPosition(owed) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+        )
+      );
+    }),
+  ).toBe(true);
 });
 
 /** The WCAG contrast of an element's text against what it is drawn on. */
@@ -2270,6 +2284,184 @@ test.describe("«Продаж» › «Внесок»: a payment on a debt from t
       expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
       expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
     }
+  });
+
+  /** A debt sold at «Ринок», blocked: its payment is taken here. */
+  function sold(): Debt {
+    return debt({
+      store_id: randomUUID(),
+      store_name: "Ринок",
+      store_state: "BLOCKED",
+    });
+  }
+
+  const market =
+    "Продано в «Ринок» (заблоковано). Внесок приймаєте ви, борг — за «Ринок».";
+
+  /** The plate that says who takes the payment and for whom. */
+  function plate(page: Page): Locator {
+    return page.locator(".banner-blocked", { hasText: "Продано в «Ринок»" });
+  }
+
+  /** Whether `first` comes before `then` in the document. */
+  async function before(first: Locator, then: Locator): Promise<boolean> {
+    const handle = await then.elementHandle();
+    return first.evaluate(
+      (node, other) =>
+        Boolean(
+          node.compareDocumentPosition(other) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+        ),
+      handle,
+    );
+  }
+
+  /** S21 of another store's debt as it opened: «Винні» and the sum over the
+   * dock unscrolled; under them the plate, last before the dock, over it
+   * once brought into view. */
+  async function owedOverDock(page: Page, shot?: string): Promise<void> {
+    expect(await page.evaluate(() => window.scrollY)).toBe(0);
+    const owed = page.getByRole("group", { name: "Скільки винні" });
+    const dock = page.locator(".till-dock");
+    await expect(dock).toBeVisible();
+    const top = (await dock.boundingBox())?.y ?? Number.NaN;
+    for (const part of [
+      owed.locator(".owed-what"),
+      owed.locator(".owed-sum"),
+    ]) {
+      await expect(part).toBeInViewport({ ratio: 1 });
+      const box = await part.boundingBox();
+      if (!box) throw new Error("not laid out");
+      expect(box.y + box.height).toBeLessThanOrEqual(top);
+    }
+    await expect(owed.locator(".owed-sum")).toHaveText("1 234,56 грн");
+    // The plate's words and look as before: the grey plate and its «і».
+    await expect(plate(page)).toHaveText(market);
+    await expect(plate(page).locator(".banner-glyph .icon")).toHaveCount(1);
+    // The header's line names the store too, as on any debt's S21.
+    await expect(page.locator(".store-line .t-meta")).toHaveText(
+      "Оксана Петренко · «Ринок» · з 01.10",
+    );
+    // Under what is owed, last over the keypad.
+    expect(await before(page.locator(".owed-card"), plate(page))).toBe(true);
+    expect(await before(plate(page), dock)).toBe(true);
+    if (shot) await page.screenshot({ path: `test-results/${shot}` });
+    await plate(page).evaluate((node) => {
+      node.scrollIntoView({ block: "nearest" });
+    });
+    await expect(plate(page)).toBeInViewport({ ratio: 1 });
+    const box = await plate(page).boundingBox();
+    const docked = await dock.boundingBox();
+    if (!box || !docked) throw new Error("not laid out");
+    expect(box.y + box.height).toBeLessThanOrEqual(docked.y);
+  }
+
+  test("another store's debt on S21 at 360 × 640, light and dark: «Винні» and what is owed over the dock unscrolled, the store's plate under them, last over the keypad; at 390 × 844 the whole card over the dock; inside Telegram the same (audit 2026-11-28, sale P2-2)", async ({
+    page,
+  }) => {
+    await serveDebt(page, sold());
+    for (const [name, theme] of [
+      ["light", { bg_color: "#ffffff", text_color: "#000000" }],
+      ["dark", { bg_color: "#17212b", text_color: "#f5f5f5" }],
+    ] as const) {
+      await page.setViewportSize({ width: 360, height: 640 });
+      // Another hash alone never loads the app again.
+      await page.goto("about:blank");
+      await opened(page, theme);
+      await deposit(page).click();
+      await expect(page.getByLabel("Сума, грн")).toBeVisible();
+      await owedOverDock(page, `debt-till-elsewhere-360x640-${name}.png`);
+    }
+
+    // Taller: the whole card over the dock, nothing scrolled.
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("about:blank");
+    await opened(page);
+    await deposit(page).click();
+    await expect(page.getByLabel("Сума, грн")).toBeVisible();
+    expect(await page.evaluate(() => window.scrollY)).toBe(0);
+    const card = page.locator(".owed-card");
+    await expect(card).toBeInViewport({ ratio: 1 });
+    const box = await card.boundingBox();
+    const dock = await page.locator(".till-dock").boundingBox();
+    if (!box || !dock) throw new Error("not laid out");
+    expect(box.y + box.height).toBeLessThanOrEqual(dock.y);
+    expect(await before(card, plate(page))).toBe(true);
+
+    // Inside Telegram: the debt's «Внесок» is its MainButton; on S21 the
+    // ways are the dock's, the MainButton put away, the same order.
+    await page.setViewportSize({ width: 360, height: 640 });
+    await page.goto("about:blank");
+    await opened(page, undefined, "8.0");
+    await expect(deposit(page)).toHaveCount(0);
+    await page.evaluate(() => {
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          data: JSON.stringify({ eventType: "main_button_pressed" }),
+          source: window.parent,
+        }),
+      );
+    });
+    await expect(page.getByLabel("Сума, грн")).toBeVisible();
+    await owedOverDock(page);
+  });
+
+  test("another store's debt refused on S21 at 360 × 640 — the store that sold trades again: the refusal over the dock, before the plate, and over it again each time it is said (audit 2026-11-28, sale P2-2)", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 360, height: 640 });
+    const one = sold();
+    const sent = await serveDebt(page, one);
+    let refused = 0;
+    await page.route(`**/api/v1/credits/${one.id}/payments`, async (route) => {
+      refused += 1;
+      await route.fulfill({
+        status: 422,
+        json: {
+          code: "VALIDATION_ERROR",
+          message: "The store that sold takes the payments while it trades",
+          details: {
+            reason: "PAID_WHERE_SOLD",
+            store_id: one.store_id,
+            recorded: false,
+          },
+        },
+      });
+    });
+    await opened(page);
+    await deposit(page).click();
+    await keyIn(page, "400");
+    const dock = page.locator(".till-dock");
+    const said = page.getByRole("alert");
+    // How far the refusal's foot is under the dock's top: ≤ 0 over it.
+    const under = async (): Promise<number> => {
+      const box = await said.boundingBox();
+      const top = await dock.boundingBox();
+      return box && top ? box.y + box.height - top.y : Number.POSITIVE_INFINITY;
+    };
+    for (const time of [1, 2]) {
+      const answered = page.waitForResponse((response) =>
+        response.url().includes(`/credits/${one.id}/payments`),
+      );
+      await panel(page).getByRole("button", { name: "Готівка" }).click();
+      await answered;
+      expect(refused).toBe(time);
+      await expect(said).toHaveText(
+        "Магазин, де продали, знову працює — внесок приймає він. Передайте папір менеджеру.",
+      );
+      await expect.poll(under).toBeLessThanOrEqual(0);
+      await expect(said).toBeInViewport({ ratio: 1 });
+      expect(await before(said, plate(page))).toBe(true);
+      expect(await before(plate(page), dock)).toBe(true);
+      // Back to the top, as if read again: the words under the dock; the
+      // next refusal brings them over it once more.
+      await page.evaluate(() => {
+        window.scrollTo(0, 0);
+      });
+      expect(await under()).toBeGreaterThan(0);
+    }
+    // The route above answers every press: nothing reached `serve`'s.
+    expect(sent).toHaveLength(0);
   });
 
   test("three taps from the till — «Внесок», the row, a way: S21 names the goods, the menu steps aside, the sum is keyed in, and S22's stub says what the customer owes the store in all", async ({

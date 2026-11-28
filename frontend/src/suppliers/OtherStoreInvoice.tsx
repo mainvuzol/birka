@@ -8,7 +8,8 @@ import type { Invoice } from "./types";
  * payment alike): whose it is and in what state, then who pays and whose
  * the debt stays — the closed store's debt's own form (audit 2026-11-23,
  * money P2-2). «Ви»: only whoever holds `supplier:debt` at a trading store
- * opens it.
+ * opens it. Over «Винні» on the card; on the payment, under what is owed,
+ * last over the keypad (audit 2026-11-28, money P2-1).
  */
 export function OtherStoreInvoice({
   invoice,

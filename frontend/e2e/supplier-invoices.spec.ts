@@ -278,6 +278,78 @@ function owes(page: Page): Locator {
   return page.getByRole("group", { name: "Скільки винні" });
 }
 
+/** Another store's grey plate: whose the invoice, who pays. */
+function closedPlate(page: Page): Locator {
+  return page.locator(".banner-blocked", { hasText: /^Накладна магазину / });
+}
+
+/** Whether `first` comes before `then` in the document. */
+async function precedes(first: Locator, then: Locator): Promise<boolean> {
+  const handle = await then.elementHandle();
+  return first.evaluate(
+    (node, other) =>
+      Boolean(
+        node.compareDocumentPosition(other) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ),
+    handle,
+  );
+}
+
+/** How far `part`'s foot is under the payment's dock: ≤ 0 over it. With
+ * `words`, the foot of its words — not the spacing its last line keeps
+ * under them, which the dock may cover by a fraction of a pixel. */
+async function underDock(
+  page: Page,
+  part: Locator,
+  words = false,
+): Promise<number> {
+  const foot = await part.evaluate((node, text) => {
+    if (!text) return node.getBoundingClientRect().bottom;
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    return Math.max(...[...range.getClientRects()].map((rect) => rect.bottom));
+  }, words);
+  const dock = await page.locator(".pay-panel").boundingBox();
+  return dock ? foot - dock.y : Number.POSITIVE_INFINITY;
+}
+
+/** «Винні», what is owed and what is paid: the payment's first look —
+ * what is paid by its words, as it may take two lines (money Д2). */
+function owedParts(page: Page): [Locator, boolean][] {
+  return [
+    [owes(page).locator(".owed-what"), false],
+    [owes(page).locator(".invoice-owed-sum"), false],
+    [owes(page).locator(".owed-count").first(), true],
+  ];
+}
+
+/** Another store's invoice's payment as it opened: what is owed over the
+ * dock unscrolled; the plate under it, last over the keypad, over it once
+ * brought into view (audit 2026-11-28, money P2-1 (а)). */
+async function owedOverDock(page: Page, shot?: string): Promise<void> {
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
+  for (const [part, words] of owedParts(page)) {
+    await expect(part).toBeInViewport({ ratio: 1 });
+    expect(
+      await underDock(page, part, words),
+      String(await part.getAttribute("class")),
+    ).toBeLessThanOrEqual(0);
+  }
+  expect(await precedes(owes(page), closedPlate(page))).toBe(true);
+  expect(await precedes(closedPlate(page), page.locator(".pay-panel"))).toBe(
+    true,
+  );
+  if (shot) await page.screenshot({ path: `test-results/${shot}` });
+  await closedPlate(page).evaluate((node) => {
+    node.scrollIntoView({ block: "nearest" });
+  });
+  await expect(closedPlate(page)).toBeInViewport({ ratio: 1 });
+  expect(await underDock(page, closedPlate(page))).toBeLessThanOrEqual(0);
+  await page.evaluate(() => {
+    window.scrollTo(0, 0);
+  });
+}
+
 /** A key of the app's keypad: a digit, «Кома» or «Стерти». */
 function key(page: Page, name: string): Locator {
   return page.locator(".keypad").getByRole("button", { name, exact: true });
@@ -2091,6 +2163,8 @@ test("an archived store's invoice is paid by a store that trades", async ({
       .replace(/[^\d,]/g, "")
       .replace(",", "."),
   );
+  // On the card the plate over «Винні», as before.
+  expect(await precedes(closedPlate(page), owes(page))).toBe(true);
   await payOnCard(page).click();
   await expect(
     page.getByText(
@@ -2098,7 +2172,41 @@ test("an archived store's invoice is paid by a store that trades", async ({
       { exact: true },
     ),
   ).toBeVisible();
+  // On the payment, what is owed first, the plate under it, last over the
+  // keypad: on a short phone, in either theme; taller, all of it over the
+  // dock (audit 2026-11-28, money P2-1 (а)).
+  await page.setViewportSize({ width: 360, height: 640 });
+  for (const scheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    await owedOverDock(page, `invoice-pay-elsewhere-360x640-${scheme}.png`);
+  }
+  await page.emulateMedia({ colorScheme: "light" });
+  await page.setViewportSize({ width: 390, height: 844 });
+  for (const [part, words] of owedParts(page)) {
+    await expect(part).toBeInViewport({ ratio: 1 });
+    expect(await underDock(page, part, words)).toBeLessThanOrEqual(0);
+  }
+  // The plate stands on the dock: its foot at the dock's top, but for the
+  // layout's fraction of a pixel.
+  await expect(closedPlate(page)).toBeInViewport({ ratio: 1 });
+  expect(await underDock(page, closedPlate(page))).toBeLessThan(1);
+  await page.setViewportSize({ width: 360, height: 640 });
   await keyIn(page, "100");
+  // Refused: the store whose invoice it is trades again. The words over
+  // the keypad, before the plate (money P2-1 (б)).
+  await refuseOnce(page, "**/api/v1/supplier-invoices/*/payments", 422, {
+    reason: "PAID_WHERE_OWED",
+    store_id: randomUUID(),
+  });
+  await payButton(page).click();
+  const refused = page.getByRole("alert").filter({
+    hasText: "Магазин, чия це накладна, знову працює — сплачує він.",
+  });
+  await expect(refused).toBeVisible();
+  await expect.poll(() => underDock(page, refused)).toBeLessThanOrEqual(0);
+  await expect(refused).toBeInViewport({ ratio: 1 });
+  expect(await precedes(refused, closedPlate(page))).toBe(true);
+  if (phone) await page.setViewportSize(phone);
   await payButton(page).click();
   await expect(result(page).locator(".stub-line")).toHaveText(
     `Залишок ${grn((before - 100).toFixed(2))}.`,
@@ -2115,13 +2223,13 @@ test("an archived store's invoice is paid by a store that trades", async ({
       .getByRole("button")
       .locator("svg.timeline-open"),
   ).toBeVisible();
-  expect(paid.bodies).toEqual([
-    {
-      command_id: expect.any(String) as string,
-      amount: "100.00",
-      store_id: centre,
-    },
-  ]);
+  // The refused one, then the one recorded: the same payment.
+  const body = {
+    command_id: expect.any(String) as string,
+    amount: "100.00",
+    store_id: centre,
+  };
+  expect(paid.bodies).toEqual([body, body]);
   await back(page, "Накладні").click();
   await expect(
     page.getByRole("heading", {
@@ -2129,6 +2237,30 @@ test("an archived store's invoice is paid by a store that trades", async ({
       level: 1,
     }),
   ).toBeVisible();
+});
+
+test("inside Telegram another store's invoice is paid by the app's own button: at 360 × 640 what is owed over the dock unscrolled, the store's plate under it, last over the keypad (audit 2026-11-28, money P2-1 (а))", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  await invoicesAt(page, hanna, { telegram: true });
+  await page
+    .getByRole("button", { name: "Накладні магазинів, що не працюють" })
+    .click();
+  await tag(page, "Постачальник Старого").locator(".order-row").click();
+  // The card: the plate over «Винні», «Сплатити» Telegram's MainButton.
+  await expect(closedPlate(page)).toBeVisible();
+  expect(await precedes(closedPlate(page), owes(page))).toBe(true);
+  await expect(payOnCard(page)).toHaveCount(0);
+  await expect
+    .poll(() => mainButton(page))
+    .toMatchObject({ is_visible: true, text: "Сплатити" });
+  await telegramSays(page, "main_button_pressed");
+  await expect(payButton(page)).toBeVisible();
+  await expect
+    .poll(() => mainButton(page))
+    .toMatchObject({ is_visible: false });
+  await owedOverDock(page);
 });
 
 test("a payment whose answer is lost is resent unchanged, and paid once", async ({
@@ -2456,6 +2588,9 @@ test("a payment refused as another phone paid meanwhile shows the invoice as it 
   await invoicesAt(page, hanna);
   await open(page, supplier);
   await payOnCard(page).click();
+  // A short phone: the refusal is said under what is owed, where the dock
+  // may hide it unless brought over it (audit 2026-11-28, money P2-1 (б)).
+  await page.setViewportSize({ width: 360, height: 640 });
   await keyIn(page, "400");
   // 500,00 paid on another phone meanwhile: 300,00 left.
   const elsewhere = await page.request.post(
@@ -2467,16 +2602,45 @@ test("a payment refused as another phone paid meanwhile shows the invoice as it 
   );
   expect(elsewhere.status()).toBe(201);
   await payButton(page).click();
-  await expect(
-    page
-      .getByRole("alert")
-      .filter({ hasText: "Це більше, ніж винні: залишок 300,00 грн." }),
-  ).toBeVisible();
+  const refused = page
+    .getByRole("alert")
+    .filter({ hasText: "Це більше, ніж винні: залишок 300,00 грн." });
+  await expect(refused).toBeVisible();
   // Read again to its page: what is left, as it is now.
   await expect(
     page.getByRole("button", { name: "Увесь залишок 300,00 грн" }),
   ).toBeVisible();
   expect(offsets).toEqual(["0", "50"]);
+  // Over the keypad, once what is paid is read again too.
+  await expect.poll(() => underDock(page, refused)).toBeLessThanOrEqual(0);
+  await expect(refused).toBeInViewport({ ratio: 1 });
+  // Back to the top, as if read again: the words under the dock; the same
+  // refusal said again brings them over it once more.
+  await page.evaluate(() => {
+    window.scrollTo(0, 0);
+  });
+  expect(await underDock(page, refused)).toBeGreaterThan(0);
+  await page.getByRole("button", { name: "Увесь залишок 300,00 грн" }).click();
+  await refuseOnce(
+    page,
+    `**/api/v1/supplier-invoices/${invoiceId}/payments`,
+    422,
+    {
+      reason: "MORE_THAN_OWED",
+      owed: "300.00",
+    },
+  );
+  const answered = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      response.url().endsWith(`/supplier-invoices/${invoiceId}/payments`),
+  );
+  await payButton(page).click();
+  await answered;
+  await expect(refused).toBeVisible();
+  await expect.poll(() => underDock(page, refused)).toBeLessThanOrEqual(0);
+  await expect(refused).toBeInViewport({ ratio: 1 });
+  await expect.poll(() => offsets).toEqual(["0", "50", "0", "50"]);
   await back(page, "Накладна").click();
   await expect(owes(page).locator(".invoice-owed-sum")).toHaveText(
     "300,00 грн",
@@ -3402,6 +3566,11 @@ test("inside Telegram «Сплатити» is its MainButton on the card, never 
       const box = await part.boundingBox();
       expect((box?.y ?? 0) + (box?.height ?? 999)).toBeLessThanOrEqual(dockTop);
     }
+    // What is paid too, by its words, as the rule names it (audit
+    // 2026-11-28, money P2-1).
+    const count = owes(page).locator(".owed-count").first();
+    await expect(count).toBeInViewport({ ratio: 1 });
+    expect(await underDock(page, count, true)).toBeLessThanOrEqual(0);
     if (height === 640) {
       await expect(key(page, "0")).toHaveCSS("height", "44px");
       await expect(page.locator(".pay-panel .keypad-sum")).toHaveCSS(

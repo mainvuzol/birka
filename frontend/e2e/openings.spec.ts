@@ -1607,6 +1607,9 @@ test("a list's refusals the server does not name are said in the list's words, n
   await removePart(page, typed, "Прибрати рядки");
   await expect(typed).toContainText(/Прибрано: Оля, /);
   await page.getByRole("button", { name: "Назад до «Зошит відмов»" }).click();
+  // The lines added took the list where they waited (audit 2026-11-28,
+  // goods P2-1): every line again, line 1 answered among them.
+  await showLines(page, "Усі");
 
   // The decision: an approval refused said under the tag; a rejection
   // refused in its sheet, its reason kept (P0-1).

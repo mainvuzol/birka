@@ -12649,3 +12649,47 @@ server change, no migration.
 - Text typed while a notes-alone press is answered is erased with the form
   (accepted): kept under a new command, the lines already added could be
   added a second time; the window is one press.
+
+## Chosen in chat — 2026-11-28 (audit 2026-11-28, batch «Над доком»: another store's invoice paid and another store's debt's «Внесок» — what is owed first, the store's plate last over the keypad, a refusal brought over the dock each time it is said; lines added, the list on the kind their answer names; money P2-1, sale P2-2, goods P2-1, sale Н1)
+
+After #253 the user chose audit 2026-11-28 with Д3 measured, then «Both,
+«Над доком» first». Only the phone: no right, no journal, no server change,
+no migration; who pays or takes the payment, for whom, and what is sent are
+as before.
+
+- **Another store's invoice paid: «Винні», what is owed and what is paid
+  first; the plate «Накладна магазину «…» (закрито|заблоковано). Сплачуєте
+  ви, борг — за «…».» under them, last over the keypad** (the TZ's order,
+  money P2-1 (а); Д3 measured at 360 × 640: over «Винні» the plate pushed
+  the sum under the dock). The order on the payment: what is owed, the
+  refusal if one is said, the plate, the dock — at any height, one order
+  to check. On the card, with no keypad, the plate stays over «Винні».
+  The plate's words, its look and the dock's sizes are unchanged.
+- **Another store's debt's «Внесок» (S21): the same order** (sale P2-2):
+  «Винні» and the progress, «Історія · N», the paper's fields, the refusal,
+  then «Продано в «…» (…). Внесок приймаєте ви, борг — за «…».», then the
+  dock. On the debt's detail, with no keypad, the plate stays over «Винні».
+- **A refusal on an invoice's payment is brought over the keypad each time
+  it is said** (money P2-1 (б)), the same words again included. «Внесок»
+  already did. Once more after the invoice is read again, as what is paid
+  may take another line (decided here, not in the TZ; «Внесок» does not
+  scroll again after its read — a twin left as it was).
+- **Lines added: the list on the kind where they wait** (goods P2-1). Added
+  by «Додати файл» or «Додати рядки вручну», the list comes back on
+  «Потребують уваги» if any of the new lines needs attention, else on
+  «Чекають» if any waits — the write's answer says it (`part.progress`), as
+  the toast's numbers; every file's lines (one file's shown no more). None
+  of either (a part removed, or every line already answered): the kind and
+  the file shown stay (decided here; the TZ says «else «Чекають»», which
+  would show an empty kind). Set before the list is read again, and those lines
+  read while the form's eyelet turns: the list never comes back on the kind
+  it was, nor waits for its lines. Not the person's choice: nothing felt,
+  no scroll; the cursor where it went. The form left without a write,
+  refused, or unanswered: the kind and the file shown stay.
+- **Owner pack № 76 and the developers' table (sale Н1):** «…три рядки (на
+  боргу покупця закритого магазину — теж три, на ширших телефонах —
+  два)»; rows 1, 5, 6, 7, 8 cite the quoted words and their lines at
+  c799fdd6.
+- The notes' words «Ці рядки вже додано — вдруге їх не додають. …» (7 lines
+  at 360) stay as chosen on 2026-11-27; a two-sentence version (4 lines)
+  was measured and is offered — not changed until the user chooses.
